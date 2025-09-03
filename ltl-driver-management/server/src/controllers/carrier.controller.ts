@@ -2,7 +2,6 @@ import { Request, Response } from 'express';
 import { prisma } from '../index';
 import { Prisma } from '@prisma/client';
 import fs from 'fs/promises';
-import path from 'path';
 
 export const getCarriers = async (req: Request, res: Response) => {
   try {
@@ -37,7 +36,7 @@ export const getCarriers = async (req: Request, res: Response) => {
       }
     });
 
-    res.json({
+    return res.json({
       carriers,
       pagination: {
         page: pageNum,
@@ -48,7 +47,7 @@ export const getCarriers = async (req: Request, res: Response) => {
     });
   } catch (error) {
     console.error('Get carriers error:', error);
-    res.status(500).json({ message: 'Failed to fetch carriers' });
+    return res.status(500).json({ message: 'Failed to fetch carriers' });
   }
 };
 
@@ -69,10 +68,10 @@ export const searchCarriers = async (req: Request, res: Response) => {
       take: 10
     });
 
-    res.json(carriers);
+    return res.json(carriers);
   } catch (error) {
     console.error('Search carriers error:', error);
-    res.status(500).json({ message: 'Search failed' });
+    return res.status(500).json({ message: 'Search failed' });
   }
 };
 
@@ -105,10 +104,10 @@ export const getCarrierById = async (req: Request, res: Response) => {
       return res.status(404).json({ message: 'Carrier not found' });
     }
 
-    res.json(carrier);
+    return res.json(carrier);
   } catch (error) {
     console.error('Get carrier by id error:', error);
-    res.status(500).json({ message: 'Failed to fetch carrier' });
+    return res.status(500).json({ message: 'Failed to fetch carrier' });
   }
 };
 
@@ -147,10 +146,10 @@ export const createCarrier = async (req: Request, res: Response) => {
       }
     });
 
-    res.status(201).json(carrier);
+    return res.status(201).json(carrier);
   } catch (error) {
     console.error('Create carrier error:', error);
-    res.status(500).json({ message: 'Failed to create carrier' });
+    return res.status(500).json({ message: 'Failed to create carrier' });
   }
 };
 
@@ -200,10 +199,10 @@ export const updateCarrier = async (req: Request, res: Response) => {
       }
     });
 
-    res.json(carrier);
+    return res.json(carrier);
   } catch (error) {
     console.error('Update carrier error:', error);
-    res.status(500).json({ message: 'Failed to update carrier' });
+    return res.status(500).json({ message: 'Failed to update carrier' });
   }
 };
 
@@ -215,10 +214,10 @@ export const deleteCarrier = async (req: Request, res: Response) => {
       where: { id: parseInt(id) }
     });
 
-    res.status(204).send();
+    return res.status(204).send();
   } catch (error) {
     console.error('Delete carrier error:', error);
-    res.status(500).json({ message: 'Failed to delete carrier' });
+    return res.status(500).json({ message: 'Failed to delete carrier' });
   }
 };
 
@@ -242,7 +241,7 @@ export const uploadDocument = async (req: Request, res: Response) => {
       }
     });
 
-    res.status(201).json(document);
+    return res.status(201).json(document);
   } catch (error) {
     console.error('Upload document error:', error);
     // Clean up uploaded file if database operation fails
@@ -253,6 +252,6 @@ export const uploadDocument = async (req: Request, res: Response) => {
         console.error('Failed to delete uploaded file:', e);
       }
     }
-    res.status(500).json({ message: 'Failed to upload document' });
+    return res.status(500).json({ message: 'Failed to upload document' });
   }
 };

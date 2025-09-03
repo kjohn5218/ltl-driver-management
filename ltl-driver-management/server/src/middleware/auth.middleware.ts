@@ -40,7 +40,7 @@ export const authenticate = async (
     }
 
     req.user = user;
-    next();
+    return next();
   } catch (error) {
     return res.status(401).json({ message: 'Invalid token' });
   }
@@ -56,6 +56,6 @@ export const authorize = (...roles: UserRole[]) => {
       return res.status(403).json({ message: 'Forbidden' });
     }
 
-    next();
+    return next();
   };
 };

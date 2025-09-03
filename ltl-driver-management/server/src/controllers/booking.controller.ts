@@ -48,7 +48,7 @@ export const getBookings = async (req: Request, res: Response) => {
       }
     });
 
-    res.json({
+    return res.json({
       bookings,
       pagination: {
         page: pageNum,
@@ -59,7 +59,7 @@ export const getBookings = async (req: Request, res: Response) => {
     });
   } catch (error) {
     console.error('Get bookings error:', error);
-    res.status(500).json({ message: 'Failed to fetch bookings' });
+    return res.status(500).json({ message: 'Failed to fetch bookings' });
   }
 };
 
@@ -84,10 +84,10 @@ export const getBookingById = async (req: Request, res: Response) => {
       return res.status(404).json({ message: 'Booking not found' });
     }
 
-    res.json(booking);
+    return res.json(booking);
   } catch (error) {
     console.error('Get booking by id error:', error);
-    res.status(500).json({ message: 'Failed to fetch booking' });
+    return res.status(500).json({ message: 'Failed to fetch booking' });
   }
 };
 
@@ -148,10 +148,10 @@ export const createBooking = async (req: Request, res: Response) => {
       }
     });
 
-    res.status(201).json(booking);
+    return res.status(201).json(booking);
   } catch (error) {
     console.error('Create booking error:', error);
-    res.status(500).json({ message: 'Failed to create booking' });
+    return res.status(500).json({ message: 'Failed to create booking' });
   }
 };
 
@@ -174,10 +174,10 @@ export const updateBooking = async (req: Request, res: Response) => {
       }
     });
 
-    res.json(booking);
+    return res.json(booking);
   } catch (error) {
     console.error('Update booking error:', error);
-    res.status(500).json({ message: 'Failed to update booking' });
+    return res.status(500).json({ message: 'Failed to update booking' });
   }
 };
 
@@ -213,10 +213,10 @@ export const confirmBooking = async (req: Request, res: Response) => {
     // Send confirmation notification
     await sendBookingConfirmation(updatedBooking);
 
-    res.json(updatedBooking);
+    return res.json(updatedBooking);
   } catch (error) {
     console.error('Confirm booking error:', error);
-    res.status(500).json({ message: 'Failed to confirm booking' });
+    return res.status(500).json({ message: 'Failed to confirm booking' });
   }
 };
 
@@ -248,10 +248,10 @@ export const completeBooking = async (req: Request, res: Response) => {
       }
     });
 
-    res.json(updatedBooking);
+    return res.json(updatedBooking);
   } catch (error) {
     console.error('Complete booking error:', error);
-    res.status(500).json({ message: 'Failed to complete booking' });
+    return res.status(500).json({ message: 'Failed to complete booking' });
   }
 };
 
@@ -291,9 +291,9 @@ export const cancelBooking = async (req: Request, res: Response) => {
     // Send cancellation notification
     await sendBookingCancellation(updatedBooking, reason);
 
-    res.json(updatedBooking);
+    return res.json(updatedBooking);
   } catch (error) {
     console.error('Cancel booking error:', error);
-    res.status(500).json({ message: 'Failed to cancel booking' });
+    return res.status(500).json({ message: 'Failed to cancel booking' });
   }
 };

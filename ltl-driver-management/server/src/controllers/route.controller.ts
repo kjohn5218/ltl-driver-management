@@ -32,7 +32,7 @@ export const getRoutes = async (req: Request, res: Response) => {
       }
     });
 
-    res.json({
+    return res.json({
       routes,
       pagination: {
         page: pageNum,
@@ -43,7 +43,7 @@ export const getRoutes = async (req: Request, res: Response) => {
     });
   } catch (error) {
     console.error('Get routes error:', error);
-    res.status(500).json({ message: 'Failed to fetch routes' });
+    return res.status(500).json({ message: 'Failed to fetch routes' });
   }
 };
 
@@ -73,10 +73,10 @@ export const getRouteById = async (req: Request, res: Response) => {
       return res.status(404).json({ message: 'Route not found' });
     }
 
-    res.json(route);
+    return res.json(route);
   } catch (error) {
     console.error('Get route by id error:', error);
-    res.status(500).json({ message: 'Failed to fetch route' });
+    return res.status(500).json({ message: 'Failed to fetch route' });
   }
 };
 
@@ -104,13 +104,13 @@ export const getRouteCarriers = async (req: Request, res: Response) => {
       distinct: ['carrierId']
     });
 
-    res.json({
+    return res.json({
       preferred: preferredCarriers.map(pc => pc.carrier),
       experienced: experiencedCarriers.map(ec => ec.carrier)
     });
   } catch (error) {
     console.error('Get route carriers error:', error);
-    res.status(500).json({ message: 'Failed to fetch route carriers' });
+    return res.status(500).json({ message: 'Failed to fetch route carriers' });
   }
 };
 
@@ -136,10 +136,10 @@ export const createRoute = async (req: Request, res: Response) => {
       }
     });
 
-    res.status(201).json(route);
+    return res.status(201).json(route);
   } catch (error) {
     console.error('Create route error:', error);
-    res.status(500).json({ message: 'Failed to create route' });
+    return res.status(500).json({ message: 'Failed to create route' });
   }
 };
 
@@ -165,10 +165,10 @@ export const updateRoute = async (req: Request, res: Response) => {
       }
     });
 
-    res.json(route);
+    return res.json(route);
   } catch (error) {
     console.error('Update route error:', error);
-    res.status(500).json({ message: 'Failed to update route' });
+    return res.status(500).json({ message: 'Failed to update route' });
   }
 };
 
@@ -180,9 +180,9 @@ export const deleteRoute = async (req: Request, res: Response) => {
       where: { id: parseInt(id) }
     });
 
-    res.status(204).send();
+    return res.status(204).send();
   } catch (error) {
     console.error('Delete route error:', error);
-    res.status(500).json({ message: 'Failed to delete route' });
+    return res.status(500).json({ message: 'Failed to delete route' });
   }
 };

@@ -15,5 +15,5 @@ export const validateRequest = (
     });
   }
   
-  next();
+  return next();
 };
