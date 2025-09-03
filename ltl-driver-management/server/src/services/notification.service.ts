@@ -2,7 +2,7 @@ import nodemailer from 'nodemailer';
 import { Booking, Carrier, Route } from '@prisma/client';
 
 // Create transporter
-const transporter = nodemailer.createTransporter({
+const transporter = nodemailer.createTransport({
   host: process.env.EMAIL_HOST || 'smtp.gmail.com',
   port: parseInt(process.env.EMAIL_PORT || '587'),
   secure: false,
