@@ -77,11 +77,8 @@ export const NewBooking: React.FC = () => {
   // Update fuel surcharge rate when settings load
   React.useEffect(() => {
     const rate = settingsData?.fuelSurchargeRate;
-    if (typeof rate === 'number') {
-      setFuelSurchargeRate(rate);
-    } else if (rate !== undefined) {
-      setFuelSurchargeRate(0); // Fallback to 0 if rate is not a number
-    }
+    const numericRate = Number(rate);
+    setFuelSurchargeRate(isNaN(numericRate) ? 0 : numericRate);
   }, [settingsData]);
 
   // Get unique origins and destinations for filter dropdowns
@@ -544,7 +541,7 @@ export const NewBooking: React.FC = () => {
                               className="flex-1 px-2 py-1 text-sm border border-gray-300 rounded focus:ring-1 focus:ring-blue-500 focus:border-blue-500"
                             >
                               <option value="MILE">Mile</option>
-                              <option value="MILE_FSC">Mile + FSC ({(fuelSurchargeRate || 0).toFixed(1)}%)</option>
+                              <option value="MILE_FSC">Mile + FSC ({Number(fuelSurchargeRate || 0).toFixed(1)}%)</option>
                               <option value="FLAT_RATE">Flat Rate</option>
                             </select>
                           </div>
@@ -568,7 +565,7 @@ export const NewBooking: React.FC = () => {
                               </div>
                               {leg.rateType === 'MILE_FSC' && (
                                 <span className="text-xs text-gray-500">
-                                  +{(fuelSurchargeRate || 0).toFixed(1)}%
+                                  +{Number(fuelSurchargeRate || 0).toFixed(1)}%
                                 </span>
                               )}
                             </div>
