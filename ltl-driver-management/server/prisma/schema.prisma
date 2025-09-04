@@ -68,11 +68,13 @@ model Route {
   name          String
   origin        String
   destination   String
-  distance      Int
-  standardRate  Decimal                  @db.Decimal(5, 2)
+  distance      Decimal                  @db.Decimal(6, 1)
+  miles         Decimal?                 @db.Decimal(6, 1) // From spreadsheet
+  active        Boolean                  @default(true)
+  standardRate  Decimal?                 @db.Decimal(5, 2)
   frequency     String?
-  departureTime DateTime?                @db.Time()
-  arrivalTime   DateTime?                @db.Time()
+  departureTime String?                  // Store as time string (HH:mm:ss)
+  arrivalTime   String?                  // Store as time string (HH:mm:ss)
   createdAt     DateTime                 @default(now())
   updatedAt     DateTime                 @updatedAt
 

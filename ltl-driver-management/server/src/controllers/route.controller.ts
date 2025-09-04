@@ -118,21 +118,15 @@ export const createRoute = async (req: Request, res: Response) => {
   try {
     const routeData = req.body;
 
-    // Parse time strings if provided
-    const departureTime = routeData.departureTime 
-      ? new Date(`1970-01-01T${routeData.departureTime}:00`)
-      : undefined;
-    const arrivalTime = routeData.arrivalTime 
-      ? new Date(`1970-01-01T${routeData.arrivalTime}:00`)
-      : undefined;
-
     const route = await prisma.route.create({
       data: {
         ...routeData,
-        distance: parseInt(routeData.distance),
-        standardRate: parseFloat(routeData.standardRate),
-        departureTime,
-        arrivalTime
+        distance: routeData.distance ? parseFloat(routeData.distance) : undefined,
+        miles: routeData.miles ? parseFloat(routeData.miles) : undefined,
+        standardRate: routeData.standardRate ? parseFloat(routeData.standardRate) : undefined,
+        active: routeData.active !== undefined ? routeData.active : true,
+        departureTime: routeData.departureTime || undefined,
+        arrivalTime: routeData.arrivalTime || undefined
       }
     });
 
@@ -148,19 +142,12 @@ export const updateRoute = async (req: Request, res: Response) => {
     const { id } = req.params;
     const updateData = req.body;
 
-    // Parse time strings if provided
-    if (updateData.departureTime) {
-      updateData.departureTime = new Date(`1970-01-01T${updateData.departureTime}:00`);
-    }
-    if (updateData.arrivalTime) {
-      updateData.arrivalTime = new Date(`1970-01-01T${updateData.arrivalTime}:00`);
-    }
-
     const route = await prisma.route.update({
       where: { id: parseInt(id) },
       data: {
         ...updateData,
-        distance: updateData.distance ? parseInt(updateData.distance) : undefined,
+        distance: updateData.distance ? parseFloat(updateData.distance) : undefined,
+        miles: updateData.miles ? parseFloat(updateData.miles) : undefined,
         standardRate: updateData.standardRate ? parseFloat(updateData.standardRate) : undefined
       }
     });

@@ -84,138 +84,107 @@ async function main() {
   ]);
   console.log(`✅ ${carriers.length} carriers created`);
 
-  // Create sample routes
-  const routes = await Promise.all([
-    prisma.route.create({
-      data: {
-        name: 'Atlanta to Charlotte',
-        origin: 'Atlanta, GA',
-        destination: 'Charlotte, NC',
-        distance: 244,
-        standardRate: 2.45,
-        frequency: 'Daily',
-        departureTime: new Date('1970-01-01T06:00:00Z'),
-        arrivalTime: new Date('1970-01-01T10:30:00Z')
-      }
-    }),
-    prisma.route.create({
-      data: {
-        name: 'Dallas to Houston',
-        origin: 'Dallas, TX',
-        destination: 'Houston, TX',
-        distance: 239,
-        standardRate: 2.35,
-        frequency: 'Daily',
-        departureTime: new Date('1970-01-01T08:00:00Z'),
-        arrivalTime: new Date('1970-01-01T12:00:00Z')
-      }
-    }),
-    prisma.route.create({
-      data: {
-        name: 'Miami to Orlando',
-        origin: 'Miami, FL',
-        destination: 'Orlando, FL',
-        distance: 235,
-        standardRate: 2.55,
-        frequency: 'Monday, Wednesday, Friday',
-        departureTime: new Date('1970-01-01T07:30:00Z'),
-        arrivalTime: new Date('1970-01-01T11:45:00Z')
-      }
-    })
-  ]);
-  console.log(`✅ ${routes.length} routes created`);
+  // Skip creating sample routes since we imported them from Excel
+  console.log('✅ Routes already imported from Excel spreadsheet');
 
-  // Create carrier preferred routes
-  await Promise.all([
-    prisma.carrierPreferredRoute.create({
-      data: {
-        carrierId: carriers[0].id,
-        routeId: routes[0].id
-      }
-    }),
-    prisma.carrierPreferredRoute.create({
-      data: {
-        carrierId: carriers[0].id,
-        routeId: routes[1].id
-      }
-    }),
-    prisma.carrierPreferredRoute.create({
-      data: {
-        carrierId: carriers[1].id,
-        routeId: routes[1].id
-      }
-    }),
-    prisma.carrierPreferredRoute.create({
-      data: {
-        carrierId: carriers[1].id,
-        routeId: routes[2].id
-      }
-    })
-  ]);
-  console.log('✅ Carrier preferred routes created');
+  // Get some routes for sample data
+  const existingRoutes = await prisma.route.findMany({
+    take: 3
+  });
 
-  // Create sample bookings
-  const bookings = await Promise.all([
-    prisma.booking.create({
-      data: {
-        carrierId: carriers[0].id,
-        routeId: routes[0].id,
-        bookingDate: new Date('2024-03-15'),
-        rate: 598.00,
-        status: 'COMPLETED',
-        billable: true,
-        notes: 'On-time delivery, excellent service'
-      }
-    }),
-    prisma.booking.create({
-      data: {
-        carrierId: carriers[1].id,
-        routeId: routes[1].id,
-        bookingDate: new Date('2024-03-16'),
-        rate: 561.65,
-        status: 'COMPLETED',
-        billable: true
-      }
-    }),
-    prisma.booking.create({
-      data: {
-        carrierId: carriers[0].id,
-        routeId: routes[1].id,
-        bookingDate: new Date('2024-03-18'),
-        rate: 575.00,
-        status: 'CONFIRMED',
-        billable: false
-      }
-    }),
-    prisma.booking.create({
-      data: {
-        carrierId: carriers[1].id,
-        routeId: routes[2].id,
-        bookingDate: new Date('2024-03-20'),
-        rate: 599.25,
-        status: 'PENDING',
-        billable: false
-      }
-    })
-  ]);
-  console.log(`✅ ${bookings.length} bookings created`);
-
-  // Create sample invoices for completed bookings
-  const completedBookings = bookings.filter(b => b.status === 'COMPLETED');
-  const invoices = await Promise.all(
-    completedBookings.map((booking, index) =>
-      prisma.invoice.create({
+  if (existingRoutes.length > 0) {
+    // Create carrier preferred routes
+    await Promise.all([
+      prisma.carrierPreferredRoute.create({
         data: {
-          bookingId: booking.id,
-          invoiceNumber: `INV-${String(index + 1).padStart(6, '0')}`,
-          amount: booking.rate,
-          status: index === 0 ? 'PAID' : 'PENDING',
-          ...(index === 0 && { paidAt: new Date() })
+          carrierId: carriers[0].id,
+          routeId: existingRoutes[0].id
+        }
+      }),
+      prisma.carrierPreferredRoute.create({
+        data: {
+          carrierId: carriers[0].id,
+          routeId: existingRoutes[1]?.id || existingRoutes[0].id
+        }
+      }),
+      prisma.carrierPreferredRoute.create({
+        data: {
+          carrierId: carriers[1].id,
+          routeId: existingRoutes[1]?.id || existingRoutes[0].id
+        }
+      }),
+      prisma.carrierPreferredRoute.create({
+        data: {
+          carrierId: carriers[1].id,
+          routeId: existingRoutes[2]?.id || existingRoutes[0].id
         }
       })
-    )
-  );
-  console.log(`✅ ${invoices.length} invoices created`);
+    ]);
+    console.log('✅ Carrier preferred routes created');
+
+    // Create sample bookings
+    const bookings = await Promise.all([
+      prisma.booking.create({
+        data: {
+          carrierId: carriers[0].id,
+          routeId: existingRoutes[0].id,
+          bookingDate: new Date('2024-03-15'),
+          rate: 598.00,
+          status: 'COMPLETED',
+          billable: true,
+          notes: 'On-time delivery, excellent service'
+        }
+      }),
+      prisma.booking.create({
+        data: {
+          carrierId: carriers[1].id,
+          routeId: existingRoutes[1]?.id || existingRoutes[0].id,
+          bookingDate: new Date('2024-03-16'),
+          rate: 561.65,
+          status: 'COMPLETED',
+          billable: true
+        }
+      }),
+      prisma.booking.create({
+        data: {
+          carrierId: carriers[0].id,
+          routeId: existingRoutes[1]?.id || existingRoutes[0].id,
+          bookingDate: new Date('2024-03-18'),
+          rate: 575.00,
+          status: 'CONFIRMED',
+          billable: false
+        }
+      }),
+      prisma.booking.create({
+        data: {
+          carrierId: carriers[1].id,
+          routeId: existingRoutes[2]?.id || existingRoutes[0].id,
+          bookingDate: new Date('2024-03-20'),
+          rate: 599.25,
+          status: 'PENDING',
+          billable: false
+        }
+      })
+    ]);
+    console.log(`✅ ${bookings.length} bookings created`);
+
+    // Create sample invoices for completed bookings
+    const completedBookings = bookings.filter(b => b.status === 'COMPLETED');
+    const invoices = await Promise.all(
+      completedBookings.map((booking, index) =>
+        prisma.invoice.create({
+          data: {
+            bookingId: booking.id,
+            invoiceNumber: `INV-${String(index + 1).padStart(6, '0')}`,
+            amount: booking.rate,
+            status: index === 0 ? 'PAID' : 'PENDING',
+            ...(index === 0 && { paidAt: new Date() })
+          }
+        })
+      )
+    );
+    console.log(`✅ ${invoices.length} invoices created`);
+  }
 
   console.log('🎉 Database seed completed successfully!');
   console.log('');

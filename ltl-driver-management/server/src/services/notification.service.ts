@@ -34,8 +34,8 @@ export const sendBookingConfirmation = async (booking: BookingWithRelations) => 
           <li><strong>Date:</strong> ${booking.bookingDate.toLocaleDateString()}</li>
           <li><strong>Distance:</strong> ${booking.route.distance} miles</li>
           <li><strong>Rate:</strong> $${booking.rate}</li>
-          ${booking.route.departureTime ? `<li><strong>Departure Time:</strong> ${booking.route.departureTime.toLocaleTimeString()}</li>` : ''}
-          ${booking.route.arrivalTime ? `<li><strong>Arrival Time:</strong> ${booking.route.arrivalTime.toLocaleTimeString()}</li>` : ''}
+          ${booking.route.departureTime ? `<li><strong>Departure Time:</strong> ${booking.route.departureTime}</li>` : ''}
+          ${booking.route.arrivalTime ? `<li><strong>Arrival Time:</strong> ${booking.route.arrivalTime}</li>` : ''}
         </ul>
         ${booking.notes ? `<p><strong>Notes:</strong> ${booking.notes}</p>` : ''}
         <p>Please ensure all required documentation is up to date.</p>

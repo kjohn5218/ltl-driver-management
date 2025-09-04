@@ -45,8 +45,8 @@ export const Sidebar: React.FC<SidebarProps> = ({ isOpen, onClose }) => {
       {/* Sidebar */}
       <div
         className={clsx(
-          'fixed inset-y-0 left-0 z-50 w-56 bg-white shadow-lg transform transition-transform lg:translate-x-0 lg:static lg:inset-0 border-r border-gray-200',
-          isOpen ? 'translate-x-0' : '-translate-x-full'
+          'fixed inset-y-0 left-0 z-50 w-56 bg-white shadow-lg transform transition-transform lg:translate-x-0 lg:static lg:inset-0 lg:flex-shrink-0 border-r border-gray-200',
+          isOpen ? 'translate-x-0' : '-translate-x-full lg:translate-x-0'
         )}
       >
         {/* Mobile header */}

@@ -13,10 +13,10 @@ export const Layout: React.FC<LayoutProps> = ({ children }) => {
     <div className="min-h-screen bg-gray-50">
       <Header onMenuClick={() => setSidebarOpen(!sidebarOpen)} />
       
-      <div className="lg:flex">
+      <div className="flex">
         <Sidebar isOpen={sidebarOpen} onClose={() => setSidebarOpen(false)} />
         
-        <main className="flex-1 lg:ml-56">
+        <main className="flex-1">
           <div className="p-4 lg:p-6">
             {children}
           </div>

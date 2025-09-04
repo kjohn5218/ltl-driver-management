@@ -40,7 +40,9 @@ export interface Route {
   origin: string;
   destination: string;
   distance: number;
-  standardRate: number;
+  miles?: number;
+  active: boolean;
+  standardRate?: number;
   frequency?: string;
   departureTime?: string;
   arrivalTime?: string;
