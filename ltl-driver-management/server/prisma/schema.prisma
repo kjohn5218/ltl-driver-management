@@ -103,20 +103,31 @@ model Route {
 
 // Booking model
 model Booking {
-  id          Int           @id @default(autoincrement())
-  carrierId   Int
-  routeId     Int
-  bookingDate DateTime
-  rate        Decimal       @db.Decimal(8, 2)
-  status      BookingStatus @default(PENDING)
-  billable    Boolean       @default(false)
-  notes       String?       @db.Text
-  createdAt   DateTime      @default(now())
-  updatedAt   DateTime      @updatedAt
+  id            Int           @id @default(autoincrement())
+  carrierId     Int
+  routeId       Int
+  bookingDate   DateTime
+  rate          Decimal       @db.Decimal(8, 2)
+  status        BookingStatus @default(PENDING)
+  billable      Boolean       @default(false)
+  notes         String?       @db.Text
+  
+  // Multi-leg booking support
+  parentBookingId Int?        // For multi-leg bookings, points to parent booking
+  legNumber       Int         @default(1) // Sequence number for legs (1, 2, 3, etc.)
+  isParent        Boolean     @default(true) // True if this is the main booking record
+  bookingGroupId  String?     // UUID to group related bookings together
+  
+  createdAt     DateTime      @default(now())
+  updatedAt     DateTime      @updatedAt
 
   // Relations
-  carrier     Carrier       @relation(fields: [carrierId], references: [id])
-  route       Route         @relation(fields: [routeId], references: [id])
+  carrier       Carrier       @relation(fields: [carrierId], references: [id])
+  route         Route         @relation(fields: [routeId], references: [id])
+  
+  // Self-referencing for multi-leg bookings
+  parentBooking Booking?      @relation("BookingLegs", fields: [parentBookingId], references: [id])
+  childBookings Booking[]     @relation("BookingLegs")
   invoice     Invoice?
 
   @@map("bookings")

@@ -93,7 +93,19 @@ export const getBookingById = async (req: Request, res: Response) => {
 
 export const createBooking = async (req: Request, res: Response) => {
   try {
-    const { carrierId, routeId, bookingDate, rate, notes } = req.body;
+    const { 
+      carrierId, 
+      routeId, 
+      bookingDate, 
+      rate, 
+      notes, 
+      billable = false, 
+      status = 'PENDING',
+      bookingGroupId,
+      legNumber = 1,
+      isParent = true,
+      parentBookingId
+    } = req.body;
 
     // Check if carrier exists and is active
     const carrier = await prisma.carrier.findUnique({
@@ -140,11 +152,18 @@ export const createBooking = async (req: Request, res: Response) => {
         bookingDate: new Date(bookingDate),
         rate: parseFloat(rate),
         notes,
-        status: 'PENDING'
+        status: status as any,
+        billable,
+        bookingGroupId,
+        legNumber,
+        isParent,
+        parentBookingId: parentBookingId ? parseInt(parentBookingId) : undefined
       },
       include: {
         carrier: true,
-        route: true
+        route: true,
+        childBookings: true,
+        parentBooking: true
       }
     });
 

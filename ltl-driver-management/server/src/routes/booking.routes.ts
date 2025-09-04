@@ -47,7 +47,13 @@ router.post(
     body('routeId').isInt(),
     body('bookingDate').isISO8601(),
     body('rate').isDecimal({ decimal_digits: '0,2' }),
-    body('notes').optional().trim()
+    body('notes').optional().trim(),
+    body('billable').optional().isBoolean(),
+    body('status').optional().isIn(['PENDING', 'CONFIRMED', 'IN_PROGRESS', 'COMPLETED', 'CANCELLED']),
+    body('bookingGroupId').optional().trim(),
+    body('legNumber').optional().isInt({ min: 1 }),
+    body('isParent').optional().isBoolean(),
+    body('parentBookingId').optional().isInt()
   ],
   validateRequest,
   createBooking

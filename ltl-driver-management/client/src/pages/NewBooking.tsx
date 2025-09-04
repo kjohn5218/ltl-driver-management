@@ -6,10 +6,18 @@ import { Carrier, Route } from '../types';
 import { Calendar, Truck, MapPin, DollarSign, AlertCircle, Search } from 'lucide-react';
 import { format } from 'date-fns';
 
+interface BookingLeg {
+  id: string;
+  routeId: string;
+  rate: string;
+  route?: Route;
+}
+
 export const NewBooking: React.FC = () => {
   const navigate = useNavigate();
   const [carrierId, setCarrierId] = useState('');
   const [selectedRoutes, setSelectedRoutes] = useState<string[]>([]);
+  const [bookingLegs, setBookingLegs] = useState<BookingLeg[]>([]);
   const [bookingDate, setBookingDate] = useState(format(new Date(), 'yyyy-MM-dd'));
   const [rate, setRate] = useState('');
   const [notes, setNotes] = useState('');
@@ -73,23 +81,62 @@ export const NewBooking: React.FC = () => {
   const handleSubmit = (e: React.FormEvent) => {
     e.preventDefault();
     
-    if (!carrierId || selectedRoutes.length === 0 || !bookingDate || !rate) {
+    if (!carrierId || !bookingDate) {
       alert('Please fill in all required fields');
       return;
     }
 
-    // For multiple routes, create separate bookings for each route
-    selectedRoutes.forEach(routeId => {
+    if (isRoundTrip) {
+      // Multi-leg booking validation
+      if (bookingLegs.length === 0) {
+        alert('Please add at least one route for the multi-leg booking');
+        return;
+      }
+      
+      // Validate that all legs have rates
+      const invalidLegs = bookingLegs.filter(leg => !leg.rate || parseFloat(leg.rate) <= 0);
+      if (invalidLegs.length > 0) {
+        alert('Please ensure all legs have valid rates');
+        return;
+      }
+
+      // Create multi-leg booking
+      const bookingGroupId = `booking-${Date.now()}-${Math.random().toString(36).substr(2, 9)}`;
+      
+      bookingLegs.forEach((leg, index) => {
+        createBookingMutation.mutate({
+          carrierId: parseInt(carrierId),
+          routeId: parseInt(leg.routeId),
+          bookingDate: new Date(bookingDate).toISOString(),
+          rate: parseFloat(leg.rate),
+          billable,
+          notes: notes || undefined,
+          status: 'PENDING',
+          bookingGroupId,
+          legNumber: index + 1,
+          isParent: index === 0, // First leg is the parent
+          parentBookingId: index === 0 ? undefined : null // Will be set after parent is created
+        });
+      });
+    } else {
+      // Single route booking validation
+      if (selectedRoutes.length === 0 || !rate) {
+        alert('Please select a route and enter a rate');
+        return;
+      }
+
       createBookingMutation.mutate({
         carrierId: parseInt(carrierId),
-        routeId: parseInt(routeId),
+        routeId: parseInt(selectedRoutes[0]),
         bookingDate: new Date(bookingDate).toISOString(),
-        rate: parseFloat(rate) / selectedRoutes.length, // Divide rate among routes
+        rate: parseFloat(rate),
         billable,
         notes: notes || undefined,
-        status: 'PENDING'
+        status: 'PENDING',
+        legNumber: 1,
+        isParent: true
       });
-    });
+    }
   };
 
   const calculateSuggestedRate = () => {
@@ -112,19 +159,68 @@ export const NewBooking: React.FC = () => {
     }
   };
 
-  const addRoute = (routeId: string) => {
-    if (!selectedRoutes.includes(routeId)) {
-      setSelectedRoutes([...selectedRoutes, routeId]);
-      calculateSuggestedRate();
+  // Booking leg management functions
+  const addBookingLeg = (routeId: string) => {
+    if (isRoundTrip) {
+      // For multi-leg bookings, add to legs array
+      const route = routes.find((r: Route) => r.id.toString() === routeId);
+      if (route && !bookingLegs.find(leg => leg.routeId === routeId)) {
+        const suggestedRate = calculateLegRate(route);
+        const newLeg: BookingLeg = {
+          id: Date.now().toString(), // Temporary ID
+          routeId: routeId,
+          rate: suggestedRate.toString(),
+          route: route
+        };
+        setBookingLegs([...bookingLegs, newLeg]);
+      }
+    } else {
+      // For single route, use existing logic
+      if (!selectedRoutes.includes(routeId)) {
+        setSelectedRoutes([routeId]);
+        calculateSuggestedRate();
+      }
     }
   };
 
+  const removeBookingLeg = (legId: string) => {
+    setBookingLegs(bookingLegs.filter(leg => leg.id !== legId));
+  };
+
+  const updateLegRate = (legId: string, newRate: string) => {
+    setBookingLegs(bookingLegs.map(leg => 
+      leg.id === legId ? { ...leg, rate: newRate } : leg
+    ));
+  };
+
+  const calculateLegRate = (route: Route): number => {
+    if (selectedCarrier && selectedCarrier.ratePerMile && route.miles) {
+      return parseFloat(selectedCarrier.ratePerMile.toString()) * parseFloat(route.miles.toString());
+    } else if (route.standardRate) {
+      return parseFloat(route.standardRate.toString());
+    }
+    return 0;
+  };
+
+  const addRoute = (routeId: string) => {
+    addBookingLeg(routeId);
+  };
+
   const removeRoute = (routeId: string) => {
-    setSelectedRoutes(selectedRoutes.filter(id => id !== routeId));
+    if (isRoundTrip) {
+      const leg = bookingLegs.find(leg => leg.routeId === routeId);
+      if (leg) removeBookingLeg(leg.id);
+    } else {
+      setSelectedRoutes(selectedRoutes.filter(id => id !== routeId));
+    }
   };
 
   const getTotalMiles = () => {
-    return selectedRouteObjects.reduce((total, route) => total + (route.miles || 0), 0);
+    if (isRoundTrip) {
+      return bookingLegs.reduce((total, leg) => total + (leg.route?.miles || 0), 0);
+    } else {
+      return selectedRouteObjects.reduce((total, route) => total + (route.miles || 0), 0);
+    }
   };
 
   return (
@@ -288,9 +384,9 @@ export const NewBooking: React.FC = () => {
                     }}
                     className="w-full px-3 py-2 border border-gray-300 rounded-md focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
                   >
-                    <option value="">Add a route...</option>
+                    <option value="">Add a route leg...</option>
                     {routes
-                      .filter(route => !selectedRoutes.includes(route.id.toString()))
+                      .filter(route => !bookingLegs.find(leg => leg.routeId === route.id.toString()))
                       .map((route: Route) => (
                         <option key={route.id} value={route.id}>
                           {route.name} ({route.origin} → {route.destination}) - {route.miles} miles
@@ -299,41 +395,68 @@ export const NewBooking: React.FC = () => {
                   </select>
                 </div>
                 
-                {/* Selected Routes Display */}
-                {selectedRoutes.length > 0 && (
-                  <div className="space-y-2">
-                    <h4 className="text-sm font-medium text-gray-700">Selected Routes:</h4>
-                    {selectedRouteObjects.map((route, index) => (
-                      <div key={route.id} className="flex items-center justify-between bg-white p-3 rounded border">
-                        <div className="flex-1">
-                          <p className="text-sm font-medium text-gray-900">
-                            {index + 1}. {route.name}
-                          </p>
-                          <p className="text-xs text-gray-600">
-                            {route.origin} → {route.destination} • {route.miles} miles
-                          </p>
-                          {route.departureTime && route.arrivalTime && (
-                            <p className="text-xs text-gray-500">
-                              {route.departureTime} - {route.arrivalTime}
+                {/* Booking Legs Display */}
+                {bookingLegs.length > 0 && (
+                  <div className="space-y-3">
+                    <h4 className="text-sm font-medium text-gray-700">Booking Legs:</h4>
+                    {bookingLegs.map((leg, index) => (
+                      <div key={leg.id} className="bg-white p-4 rounded border">
+                        <div className="flex items-start justify-between mb-3">
+                          <div className="flex-1">
+                            <p className="text-sm font-medium text-gray-900">
+                              Leg {index + 1}: {leg.route?.name}
                             </p>
-                          )}
+                            <p className="text-xs text-gray-600">
+                              {leg.route?.origin} → {leg.route?.destination} • {leg.route?.miles} miles
+                            </p>
+                            {leg.route?.departureTime && leg.route?.arrivalTime && (
+                              <p className="text-xs text-gray-500">
+                                {leg.route.departureTime} - {leg.route.arrivalTime}
+                              </p>
+                            )}
+                          </div>
+                          <button
+                            type="button"
+                            onClick={() => removeBookingLeg(leg.id)}
+                            className="text-red-500 hover:text-red-700 text-sm px-2"
+                          >
+                            Remove
+                          </button>
                         </div>
-                        <button
-                          type="button"
-                          onClick={() => removeRoute(route.id.toString())}
-                          className="text-red-500 hover:text-red-700 text-sm px-2"
-                        >
-                          Remove
-                        </button>
+                        
+                        {/* Individual Rate for this leg */}
+                        <div className="flex items-center gap-2">
+                          <label className="text-xs font-medium text-gray-700 min-w-[60px]">
+                            Rate:
+                          </label>
+                          <div className="relative flex-1">
+                            <DollarSign className="absolute left-2 top-1/2 transform -translate-y-1/2 text-gray-400 w-3 h-3" />
+                            <input
+                              type="number"
+                              step="0.01"
+                              value={leg.rate}
+                              onChange={(e) => updateLegRate(leg.id, e.target.value)}
+                              className="w-full pl-6 pr-3 py-1 text-sm border border-gray-300 rounded focus:ring-1 focus:ring-blue-500 focus:border-blue-500"
+                              placeholder="0.00"
+                            />
+                          </div>
+                        </div>
                       </div>
                     ))}
+                    
+                    {/* Summary */}
                     <div className="mt-3 p-3 bg-blue-50 rounded-md">
-                      <p className="text-sm text-blue-800">
-                        <strong>Total Distance:</strong> {getTotalMiles()} miles
-                      </p>
-                      <p className="text-sm text-blue-800">
-                        <strong>Routes Selected:</strong> {selectedRoutes.length}
-                      </p>
+                      <div className="grid grid-cols-3 gap-4 text-sm text-blue-800">
+                        <div>
+                          <strong>Total Legs:</strong> {bookingLegs.length}
+                        </div>
+                        <div>
+                          <strong>Total Miles:</strong> {bookingLegs.reduce((total, leg) => total + (leg.route?.miles || 0), 0)}
+                        </div>
+                        <div>
+                          <strong>Total Rate:</strong> ${bookingLegs.reduce((total, leg) => total + parseFloat(leg.rate || '0'), 0).toFixed(2)}
+                        </div>
+                      </div>
                     </div>
                   </div>
                 )}
