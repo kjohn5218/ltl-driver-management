@@ -1,7 +1,7 @@
 import { Request, Response } from 'express';
 import { prisma } from '../index';
 
-export const getSystemSettings = async (req: Request, res: Response) => {
+export const getSystemSettings = async (_req: Request, res: Response) => {
   try {
     let settings = await prisma.systemSettings.findFirst({
       orderBy: { id: 'desc' }
