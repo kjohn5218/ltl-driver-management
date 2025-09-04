@@ -13,18 +13,38 @@ export const getRoutes = async (req: Request, res: Response) => {
       active: true
     };
     
-    // If search is provided, use it instead of specific filters
+    // Build conditions array for combining filters
+    const conditions: Prisma.RouteWhereInput[] = [];
+    
+    // Add search filter if provided
     if (search) {
       const searchTerm = search as string;
-      where.OR = [
-        { name: { contains: searchTerm, mode: 'insensitive' } },
-        { origin: { contains: searchTerm, mode: 'insensitive' } },
-        { destination: { contains: searchTerm, mode: 'insensitive' } }
-      ];
-    } else {
-      // Only apply specific filters if no search term
-      if (origin) where.origin = { contains: origin as string, mode: 'insensitive' };
-      if (destination) where.destination = { contains: destination as string, mode: 'insensitive' };
+      conditions.push({
+        OR: [
+          { name: { contains: searchTerm, mode: 'insensitive' } },
+          { origin: { contains: searchTerm, mode: 'insensitive' } },
+          { destination: { contains: searchTerm, mode: 'insensitive' } }
+        ]
+      });
+    }
+    
+    // Add origin filter if provided
+    if (origin) {
+      conditions.push({
+        origin: { contains: origin as string, mode: 'insensitive' }
+      });
+    }
+    
+    // Add destination filter if provided
+    if (destination) {
+      conditions.push({
+        destination: { contains: destination as string, mode: 'insensitive' }
+      });
+    }
+    
+    // Combine all conditions with AND logic
+    if (conditions.length > 0) {
+      where.AND = conditions;
     }
 
     // Get total count

@@ -16,6 +16,8 @@ export const NewBooking: React.FC = () => {
   const [billable, setBillable] = useState(true);
   const [carrierSearch, setCarrierSearch] = useState('');
   const [routeSearch, setRouteSearch] = useState('');
+  const [originFilter, setOriginFilter] = useState('');
+  const [destinationFilter, setDestinationFilter] = useState('');
   const [isRoundTrip, setIsRoundTrip] = useState(false);
 
   // Fetch carriers
@@ -34,11 +36,13 @@ export const NewBooking: React.FC = () => {
 
   // Fetch routes
   const { data: routesData, isLoading: loadingRoutes } = useQuery({
-    queryKey: ['routes', routeSearch],
+    queryKey: ['routes', routeSearch, originFilter, destinationFilter],
     queryFn: async () => {
       const params = new URLSearchParams();
       params.append('limit', '1500');
       if (routeSearch.trim()) params.append('search', routeSearch.trim());
+      if (originFilter.trim()) params.append('origin', originFilter.trim());
+      if (destinationFilter.trim()) params.append('destination', destinationFilter.trim());
       
       const response = await api.get(`/routes?${params.toString()}`);
       return response.data;
@@ -47,6 +51,10 @@ export const NewBooking: React.FC = () => {
 
   const carriers = carriersData?.carriers || [];
   const routes = routesData?.routes || [];
+
+  // Get unique origins and destinations for filter dropdowns
+  const uniqueOrigins = [...new Set(routes.map((r: Route) => r.origin))].sort();
+  const uniqueDestinations = [...new Set(routes.map((r: Route) => r.destination))].sort();
 
   const selectedCarrier = carriers.find((c: Carrier) => c.id.toString() === carrierId);
   const selectedRouteObjects = routes.filter((r: Route) => selectedRoutes.includes(r.id.toString()));
@@ -210,17 +218,62 @@ export const NewBooking: React.FC = () => {
             <MapPin className="inline w-4 h-4 mr-1" />
             {isRoundTrip ? 'Select Routes *' : 'Select Route *'}
           </label>
-          <div className="space-y-2">
-            <div className="relative">
-              <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 text-gray-400 w-4 h-4" />
-              <input
-                type="text"
-                placeholder="Search routes by name or origin/destination..."
-                className="w-full pl-10 pr-4 py-2 border border-gray-300 rounded-md focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
-                value={routeSearch}
-                onChange={(e) => setRouteSearch(e.target.value)}
-              />
+          <div className="space-y-3">
+            {/* Search and Filters Row */}
+            <div className="grid grid-cols-1 md:grid-cols-4 gap-3">
+              <div className="relative">
+                <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 text-gray-400 w-4 h-4" />
+                <input
+                  type="text"
+                  placeholder="Search routes..."
+                  className="w-full pl-10 pr-4 py-2 border border-gray-300 rounded-md focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
+                  value={routeSearch}
+                  onChange={(e) => setRouteSearch(e.target.value)}
+                />
+              </div>
+              <select
+                value={originFilter}
+                onChange={(e) => setOriginFilter(e.target.value)}
+                className="px-3 py-2 border border-gray-300 rounded-md focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
+              >
+                <option value="">All Origins</option>
+                {uniqueOrigins.map(origin => (
+                  <option key={origin} value={origin}>{origin}</option>
+                ))}
+              </select>
+              <select
+                value={destinationFilter}
+                onChange={(e) => setDestinationFilter(e.target.value)}
+                className="px-3 py-2 border border-gray-300 rounded-md focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
+              >
+                <option value="">All Destinations</option>
+                {uniqueDestinations.map(destination => (
+                  <option key={destination} value={destination}>{destination}</option>
+                ))}
+              </select>
+              <button
+                type="button"
+                onClick={() => {
+                  setRouteSearch('');
+                  setOriginFilter('');
+                  setDestinationFilter('');
+                }}
+                className="px-4 py-2 text-sm text-gray-600 bg-gray-100 border border-gray-300 rounded-md hover:bg-gray-200 focus:outline-none focus:ring-2 focus:ring-gray-500 focus:ring-offset-2"
+              >
+                Clear Filters
+              </button>
             </div>
+
+            {/* Active Filters Display */}
+            {(routeSearch || originFilter || destinationFilter) && (
+              <div className="flex items-center gap-2 text-sm text-gray-600 bg-blue-50 p-2 rounded-md">
+                <span className="font-medium">Active filters:</span>
+                {routeSearch && <span className="bg-blue-100 px-2 py-1 rounded">Search: "{routeSearch}"</span>}
+                {originFilter && <span className="bg-blue-100 px-2 py-1 rounded">Origin: {originFilter}</span>}
+                {destinationFilter && <span className="bg-blue-100 px-2 py-1 rounded">Destination: {destinationFilter}</span>}
+                <span className="ml-2 text-blue-700">({routes.length} routes found)</span>
+              </div>
+            )}
             
             {isRoundTrip ? (
               // Multiple route selection interface
