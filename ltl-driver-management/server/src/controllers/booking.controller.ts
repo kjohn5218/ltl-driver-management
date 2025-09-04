@@ -104,7 +104,10 @@ export const createBooking = async (req: Request, res: Response) => {
       bookingGroupId,
       legNumber = 1,
       isParent = true,
-      parentBookingId
+      parentBookingId,
+      rateType = 'FLAT_RATE',
+      baseRate,
+      fscRate
     } = req.body;
 
     // Check if carrier exists and is active
@@ -157,7 +160,10 @@ export const createBooking = async (req: Request, res: Response) => {
         bookingGroupId,
         legNumber,
         isParent,
-        parentBookingId: parentBookingId ? parseInt(parentBookingId) : undefined
+        parentBookingId: parentBookingId ? parseInt(parentBookingId) : undefined,
+        rateType: rateType as any,
+        baseRate: baseRate ? parseFloat(baseRate) : undefined,
+        fscRate: fscRate ? parseFloat(fscRate) : undefined
       },
       include: {
         carrier: true,

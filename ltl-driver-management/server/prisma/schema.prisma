@@ -20,6 +20,9 @@ model User {
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
 
+  // Relations
+  systemSettingsUpdates SystemSettings[]
+
   @@map("users")
 }
 
@@ -101,16 +104,34 @@ model Route {
   @@map("routes")
 }
 
+// System Settings model
+model SystemSettings {
+  id                Int     @id @default(autoincrement())
+  fuelSurchargeRate Decimal @default(0.00) @db.Decimal(5, 2) // FSC percentage (e.g., 15.50 for 15.5%)
+  updatedAt         DateTime @updatedAt
+  updatedBy         Int?    // User ID who last updated
+  
+  // Relations
+  updatedByUser     User?   @relation(fields: [updatedBy], references: [id])
+  
+  @@map("system_settings")
+}
+
 // Booking model
 model Booking {
   id            Int           @id @default(autoincrement())
   carrierId     Int
   routeId       Int
   bookingDate   DateTime
-  rate          Decimal       @db.Decimal(8, 2)
+  rate          Decimal       @db.Decimal(8, 2) // Final calculated rate
   status        BookingStatus @default(PENDING)
   billable      Boolean       @default(false)
   notes         String?       @db.Text
+  
+  // Rate calculation fields
+  rateType      RateType      @default(FLAT_RATE) // How the rate was calculated
+  baseRate      Decimal?      @db.Decimal(8, 2) // Base rate before FSC (for Mile and Mile+FSC)
+  fscRate       Decimal?      @db.Decimal(5, 2) // FSC percentage used (snapshot at booking time)
   
   // Multi-leg booking support
   parentBookingId Int?        // For multi-leg bookings, points to parent booking
@@ -139,6 +160,12 @@ enum BookingStatus {
   IN_PROGRESS
   COMPLETED
   CANCELLED
+}
+
+enum RateType {
+  MILE
+  MILE_FSC
+  FLAT_RATE
 }
 
 // Carrier Preferred Routes (many-to-many)

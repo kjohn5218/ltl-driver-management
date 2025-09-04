@@ -53,7 +53,10 @@ router.post(
     body('bookingGroupId').optional().trim(),
     body('legNumber').optional().isInt({ min: 1 }),
     body('isParent').optional().isBoolean(),
-    body('parentBookingId').optional().isInt()
+    body('parentBookingId').optional().isInt(),
+    body('rateType').optional().isIn(['MILE', 'MILE_FSC', 'FLAT_RATE']),
+    body('baseRate').optional().isDecimal({ decimal_digits: '0,2' }),
+    body('fscRate').optional().isDecimal({ decimal_digits: '0,2' })
   ],
   validateRequest,
   createBooking
