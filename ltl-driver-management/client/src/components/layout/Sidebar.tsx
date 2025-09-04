@@ -47,9 +47,11 @@ export const Sidebar: React.FC<SidebarProps> = ({ isOpen, onClose }) => {
     const loadFuelSurchargeRate = async () => {
       try {
         const response = await api.get('/settings');
-        setFuelSurchargeRate(response.data.fuelSurchargeRate);
+        const rate = response.data?.fuelSurchargeRate;
+        setFuelSurchargeRate(typeof rate === 'number' ? rate : 0);
       } catch (error) {
         console.error('Failed to load fuel surcharge rate:', error);
+        setFuelSurchargeRate(0); // Set default value on error
       }
     };
 
@@ -171,7 +173,7 @@ export const Sidebar: React.FC<SidebarProps> = ({ isOpen, onClose }) => {
                 {!isEditing ? (
                   <div className="flex items-center justify-between">
                     <span className="text-sm text-gray-600">
-                      {fuelSurchargeRate.toFixed(2)}%
+                      {(fuelSurchargeRate || 0).toFixed(2)}%
                     </span>
                     <button
                       onClick={handleEditClick}
