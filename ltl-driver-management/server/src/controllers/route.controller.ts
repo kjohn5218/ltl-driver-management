@@ -4,14 +4,28 @@ import { Prisma } from '@prisma/client';
 
 export const getRoutes = async (req: Request, res: Response) => {
   try {
-    const { origin, destination, page = 1, limit = 20 } = req.query;
+    const { origin, destination, search, page = 1, limit = 20 } = req.query;
     const pageNum = parseInt(page as string);
     const limitNum = parseInt(limit as string);
     
-    // Build filter
-    const where: Prisma.RouteWhereInput = {};
-    if (origin) where.origin = { contains: origin as string, mode: 'insensitive' };
-    if (destination) where.destination = { contains: destination as string, mode: 'insensitive' };
+    // Build filter - always include active routes by default
+    const where: Prisma.RouteWhereInput = {
+      active: true
+    };
+    
+    // If search is provided, use it instead of specific filters
+    if (search) {
+      const searchTerm = search as string;
+      where.OR = [
+        { name: { contains: searchTerm, mode: 'insensitive' } },
+        { origin: { contains: searchTerm, mode: 'insensitive' } },
+        { destination: { contains: searchTerm, mode: 'insensitive' } }
+      ];
+    } else {
+      // Only apply specific filters if no search term
+      if (origin) where.origin = { contains: origin as string, mode: 'insensitive' };
+      if (destination) where.destination = { contains: destination as string, mode: 'insensitive' };
+    }
 
     // Get total count
     const total = await prisma.route.count({ where });

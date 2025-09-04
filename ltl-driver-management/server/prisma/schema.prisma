@@ -44,6 +44,20 @@ model Carrier {
   rating               Decimal?                 @db.Decimal(2, 1)
   ratePerMile          Decimal?                 @db.Decimal(5, 2)
   onboardingComplete   Boolean                  @default(false)
+  
+  // Additional fields from Excel import
+  safetyRating         String?                  // From Excel: Safety Rating
+  taxId                String?                  // From Excel: TAX ID
+  carrierType          String?                  // From Excel: Type
+  streetAddress1       String?                  // From Excel: Street Address 1
+  streetAddress2       String?                  // From Excel: Street Address 2
+  city                 String?                  // From Excel: City
+  state                String?                  // From Excel: ST
+  zipCode              String?                  // From Excel: Zip
+  remittanceContact    String?                  // From Excel: Remittance Contact
+  remittanceEmail      String?                  // From Excel: Remittance Email
+  factoringCompany     String?                  // From Excel: Factoring Company
+  
   createdAt            DateTime                 @default(now())
   updatedAt            DateTime                 @updatedAt
 
@@ -60,6 +74,8 @@ enum CarrierStatus {
   ACTIVE
   INACTIVE
   SUSPENDED
+  NOT_ONBOARDED
+  ONBOARDED
 }
 
 // Route model

@@ -2,31 +2,46 @@ import React, { useState } from 'react';
 import { useQuery } from '@tanstack/react-query';
 import { api } from '../services/api';
 import { Carrier } from '../types';
-import { Plus, Search, Edit, Eye, Trash2, MapPin, Phone, Mail } from 'lucide-react';
+import { Plus, Search, Edit, Eye, Trash2, MapPin, Phone, Mail, ExternalLink } from 'lucide-react';
 
 export const Carriers: React.FC = () => {
   const [searchTerm, setSearchTerm] = useState('');
   const [statusFilter, setStatusFilter] = useState('');
+  const [stateFilter, setStateFilter] = useState('');
 
-  const { data: carriers, isLoading } = useQuery({
+  const { data: carriersData, isLoading } = useQuery({
     queryKey: ['carriers'],
     queryFn: async () => {
-      const response = await api.get('/carriers');
-      return response.data.carriers as Carrier[];
+      const response = await api.get('/carriers?limit=5000'); // Fetch all carriers
+      return response.data;
     }
   });
 
-  const filteredCarriers = carriers?.filter(carrier =>
-    carrier.name.toLowerCase().includes(searchTerm.toLowerCase()) &&
-    (statusFilter === '' || carrier.status === statusFilter)
-  ) || [];
+  const carriers = carriersData?.carriers || [];
+
+  const filteredCarriers = carriers?.filter(carrier => {
+    const matchesSearch = carrier.name.toLowerCase().includes(searchTerm.toLowerCase()) ||
+      (carrier.mcNumber && carrier.mcNumber.includes(searchTerm)) ||
+      (carrier.dotNumber && carrier.dotNumber.includes(searchTerm)) ||
+      (carrier.city && carrier.city.toLowerCase().includes(searchTerm.toLowerCase()));
+    
+    const matchesStatus = statusFilter === '' || carrier.status === statusFilter;
+    const matchesState = stateFilter === '' || carrier.state === stateFilter;
+    
+    return matchesSearch && matchesStatus && matchesState;
+  }) || [];
+
+  // Get unique states for filter
+  const uniqueStates = [...new Set(carriers.filter(c => c.state).map(c => c.state))].sort();
 
   const getStatusBadge = (status: string) => {
     const statusColors = {
       ACTIVE: 'bg-green-100 text-green-800',
       PENDING: 'bg-yellow-100 text-yellow-800',
       INACTIVE: 'bg-gray-100 text-gray-800',
-      SUSPENDED: 'bg-red-100 text-red-800'
+      SUSPENDED: 'bg-red-100 text-red-800',
+      ONBOARDED: 'bg-blue-100 text-blue-800',
+      NOT_ONBOARDED: 'bg-orange-100 text-orange-800'
     };
     return statusColors[status as keyof typeof statusColors] || 'bg-gray-100 text-gray-800';
   };
@@ -59,7 +74,7 @@ export const Carriers: React.FC = () => {
           <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 text-gray-400 w-4 h-4" />
           <input
             type="text"
-            placeholder="Search carriers..."
+            placeholder="Search by name, MC#, DOT#, or city..."
             className="w-full pl-10 pr-4 py-2 border border-gray-300 rounded-md focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
             value={searchTerm}
             onChange={(e) => setSearchTerm(e.target.value)}
@@ -71,10 +86,22 @@ export const Carriers: React.FC = () => {
           onChange={(e) => setStatusFilter(e.target.value)}
         >
           <option value="">All Statuses</option>
+          <option value="ONBOARDED">Onboarded</option>
+          <option value="NOT_ONBOARDED">Not Onboarded</option>
           <option value="ACTIVE">Active</option>
           <option value="PENDING">Pending</option>
           <option value="INACTIVE">Inactive</option>
           <option value="SUSPENDED">Suspended</option>
+        </select>
+        <select
+          className="px-3 py-2 border border-gray-300 rounded-md focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
+          value={stateFilter}
+          onChange={(e) => setStateFilter(e.target.value)}
+        >
+          <option value="">All States</option>
+          {uniqueStates.map(state => (
+            <option key={state} value={state}>{state}</option>
+          ))}
         </select>
       </div>
 
@@ -103,10 +130,10 @@ export const Carriers: React.FC = () => {
             </div>
 
             <div className="space-y-2 text-sm text-gray-600">
-              {carrier.contactPerson && (
+              {(carrier.city || carrier.state) && (
                 <div className="flex items-center gap-2">
                   <MapPin className="w-4 h-4" />
-                  <span>{carrier.contactPerson}</span>
+                  <span>{carrier.city}{carrier.city && carrier.state && ', '}{carrier.state}</span>
                 </div>
               )}
               {carrier.phone && (
@@ -118,7 +145,7 @@ export const Carriers: React.FC = () => {
               {carrier.email && (
                 <div className="flex items-center gap-2">
                   <Mail className="w-4 h-4" />
-                  <span>{carrier.email}</span>
+                  <span className="truncate">{carrier.email}</span>
                 </div>
               )}
             </div>
@@ -132,10 +159,27 @@ export const Carriers: React.FC = () => {
                 <span className="text-gray-500">DOT #:</span>
                 <span className="font-medium">{carrier.dotNumber || 'N/A'}</span>
               </div>
-              {carrier.rating && (
+              {carrier.safetyRating && (
                 <div className="flex justify-between text-sm mt-1">
-                  <span className="text-gray-500">Rating:</span>
-                  <span className="font-medium">{carrier.rating}/5</span>
+                  <span className="text-gray-500">Safety:</span>
+                  <span className={`font-medium ${
+                    carrier.safetyRating === 'Acceptable' ? 'text-green-600' : 
+                    carrier.safetyRating === 'Unacceptable' ? 'text-red-600' : 
+                    'text-yellow-600'
+                  }`}>
+                    {carrier.safetyRating}
+                  </span>
+                </div>
+              )}
+              {(carrier.mcNumber || carrier.dotNumber) && (
+                <div className="mt-3">
+                  <button
+                    onClick={() => window.open('https://safer.fmcsa.dot.gov/CompanySnapshot.aspx', '_blank')}
+                    className="w-full text-center text-xs bg-blue-50 text-blue-700 px-3 py-2 rounded hover:bg-blue-100 transition-colors flex items-center justify-center gap-2"
+                  >
+                    <ExternalLink className="w-3 h-3" />
+                    View FMCSA Co.Snapshot
+                  </button>
                 </div>
               )}
             </div>

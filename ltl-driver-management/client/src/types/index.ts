@@ -1,5 +1,5 @@
 export type UserRole = 'ADMIN' | 'DISPATCHER' | 'USER' | 'CARRIER';
-export type CarrierStatus = 'PENDING' | 'ACTIVE' | 'INACTIVE' | 'SUSPENDED';
+export type CarrierStatus = 'PENDING' | 'ACTIVE' | 'INACTIVE' | 'SUSPENDED' | 'NOT_ONBOARDED' | 'ONBOARDED';
 export type BookingStatus = 'PENDING' | 'CONFIRMED' | 'IN_PROGRESS' | 'COMPLETED' | 'CANCELLED';
 export type InvoiceStatus = 'PENDING' | 'SENT' | 'PAID' | 'OVERDUE' | 'CANCELLED';
 
@@ -25,6 +25,20 @@ export interface Carrier {
   rating?: number;
   ratePerMile?: number;
   onboardingComplete: boolean;
+  
+  // Additional fields from Excel import
+  safetyRating?: string;
+  taxId?: string;
+  carrierType?: string;
+  streetAddress1?: string;
+  streetAddress2?: string;
+  city?: string;
+  state?: string;
+  zipCode?: string;
+  remittanceContact?: string;
+  remittanceEmail?: string;
+  factoringCompany?: string;
+  
   createdAt: string;
   updatedAt: string;
   _count?: {

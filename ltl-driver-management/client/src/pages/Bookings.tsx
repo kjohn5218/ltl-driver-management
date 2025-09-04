@@ -1,4 +1,5 @@
 import React, { useState } from 'react';
+import { useNavigate } from 'react-router-dom';
 import { useQuery } from '@tanstack/react-query';
 import { api } from '../services/api';
 import { Booking } from '../types';
@@ -6,6 +7,7 @@ import { Plus, Search, Edit, Eye, Calendar, MapPin, User, DollarSign } from 'luc
 import { format } from 'date-fns';
 
 export const Bookings: React.FC = () => {
+  const navigate = useNavigate();
   const [searchTerm, setSearchTerm] = useState('');
   const [statusFilter, setStatusFilter] = useState('');
 
@@ -50,7 +52,10 @@ export const Bookings: React.FC = () => {
           <h1 className="text-2xl font-bold text-gray-900">Bookings</h1>
           <p className="text-gray-600">Track and manage all bookings</p>
         </div>
-        <button className="btn-primary flex items-center gap-2">
+        <button 
+          onClick={() => navigate('/bookings/new')}
+          className="btn-primary flex items-center gap-2"
+        >
           <Plus className="w-4 h-4" />
           New Booking
         </button>

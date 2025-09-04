@@ -23,6 +23,7 @@ router.get(
   [
     query('origin').optional().trim(),
     query('destination').optional().trim(),
+    query('search').optional().trim(),
     query('page').optional().isInt({ min: 1 }),
     query('limit').optional().isInt({ min: 1, max: 2000 })
   ],

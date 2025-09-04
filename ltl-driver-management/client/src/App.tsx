@@ -9,6 +9,7 @@ import { Dashboard } from './pages/Dashboard';
 import { Carriers } from './pages/Carriers';
 import { Routes as RoutesPage } from './pages/Routes';
 import { Bookings } from './pages/Bookings';
+import { NewBooking } from './pages/NewBooking';
 import { Invoices } from './pages/Invoices';
 import { Reports } from './pages/Reports';
 
@@ -69,6 +70,16 @@ function App() {
                 <ProtectedRoute>
                   <Layout>
                     <Bookings />
+                  </Layout>
+                </ProtectedRoute>
+              }
+            />
+            <Route
+              path="/bookings/new"
+              element={
+                <ProtectedRoute>
+                  <Layout>
+                    <NewBooking />
                   </Layout>
                 </ProtectedRoute>
               }

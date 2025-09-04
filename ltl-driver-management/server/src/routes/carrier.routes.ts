@@ -23,10 +23,11 @@ router.use(authenticate);
 router.get(
   '/',
   [
-    query('status').optional().isIn(['PENDING', 'ACTIVE', 'INACTIVE', 'SUSPENDED']),
+    query('status').optional().isIn(['PENDING', 'ACTIVE', 'INACTIVE', 'SUSPENDED', 'NOT_ONBOARDED', 'ONBOARDED']),
     query('onboardingComplete').optional().isBoolean(),
+    query('search').optional().trim(),
     query('page').optional().isInt({ min: 1 }),
-    query('limit').optional().isInt({ min: 1, max: 100 })
+    query('limit').optional().isInt({ min: 1, max: 5000 })
   ],
   validateRequest,
   getCarriers

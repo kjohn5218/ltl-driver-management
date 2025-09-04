@@ -5,7 +5,7 @@ import fs from 'fs/promises';
 
 export const getCarriers = async (req: Request, res: Response) => {
   try {
-    const { status, onboardingComplete, page = 1, limit = 20 } = req.query;
+    const { status, onboardingComplete, search, page = 1, limit = 20 } = req.query;
     const pageNum = parseInt(page as string);
     const limitNum = parseInt(limit as string);
     
@@ -14,6 +14,18 @@ export const getCarriers = async (req: Request, res: Response) => {
     if (status) where.status = status as any;
     if (onboardingComplete !== undefined) {
       where.onboardingComplete = onboardingComplete === 'true';
+    }
+    
+    // Add search functionality
+    if (search) {
+      const searchTerm = search as string;
+      where.OR = [
+        { name: { contains: searchTerm, mode: 'insensitive' } },
+        { email: { contains: searchTerm, mode: 'insensitive' } },
+        { mcNumber: { contains: searchTerm, mode: 'insensitive' } },
+        { dotNumber: { contains: searchTerm, mode: 'insensitive' } },
+        { city: { contains: searchTerm, mode: 'insensitive' } }
+      ];
     }
 
     // Get total count
