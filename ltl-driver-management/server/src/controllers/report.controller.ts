@@ -45,7 +45,7 @@ export const getDashboardMetrics = async (req: Request, res: Response) => {
       }
     });
 
-    res.json({
+    return res.json({
       metrics: {
         totalCarriers,
         activeCarriers,
@@ -59,7 +59,7 @@ export const getDashboardMetrics = async (req: Request, res: Response) => {
     });
   } catch (error) {
     console.error('Get dashboard metrics error:', error);
-    res.status(500).json({ message: 'Failed to fetch dashboard metrics' });
+    return res.status(500).json({ message: 'Failed to fetch dashboard metrics' });
   }
 };
 
@@ -122,10 +122,10 @@ export const getCarrierPerformance = async (req: Request, res: Response) => {
       };
     });
 
-    res.json(performance);
+    return res.json(performance);
   } catch (error) {
     console.error('Get carrier performance error:', error);
-    res.status(500).json({ message: 'Failed to fetch carrier performance' });
+    return res.status(500).json({ message: 'Failed to fetch carrier performance' });
   }
 };
 
@@ -189,16 +189,16 @@ export const getRouteAnalytics = async (req: Request, res: Response) => {
           averageRate: stats?._avg.rate || 0,
           uniqueCarriers,
           profitMargin: route.standardRate 
-            ? ((stats?._avg.rate || 0) - parseFloat(route.standardRate.toString())) / parseFloat(route.standardRate.toString()) * 100 
+            ? ((Number(stats?._avg.rate) || 0) - parseFloat(route.standardRate.toString())) / parseFloat(route.standardRate.toString()) * 100 
             : 0
         }
       };
     });
 
-    res.json(analytics);
+    return res.json(analytics);
   } catch (error) {
     console.error('Get route analytics error:', error);
-    res.status(500).json({ message: 'Failed to fetch route analytics' });
+    return res.status(500).json({ message: 'Failed to fetch route analytics' });
   }
 };
 
@@ -241,12 +241,12 @@ export const exportData = async (req: Request, res: Response) => {
 
     if (format === 'csv') {
       // TODO: Implement CSV conversion
-      res.status(501).json({ message: 'CSV export not implemented yet' });
+      return res.status(501).json({ message: 'CSV export not implemented yet' });
     } else {
-      res.json(data);
+      return res.json(data);
     }
   } catch (error) {
     console.error('Export data error:', error);
-    res.status(500).json({ message: 'Failed to export data' });
+    return res.status(500).json({ message: 'Failed to export data' });
   }
 };
