@@ -43,7 +43,7 @@ router.post(
   '/',
   authorize(UserRole.ADMIN, UserRole.DISPATCHER),
   [
-    body('carrierId').isInt(),
+    body('carrierId').optional().isInt(),
     body('routeId').isInt(),
     body('bookingDate').isISO8601(),
     body('rate').isDecimal({ decimal_digits: '0,2' }),
