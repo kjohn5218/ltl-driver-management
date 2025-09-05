@@ -150,7 +150,7 @@ export const NewBooking: React.FC = () => {
       }
 
       createBookingMutation.mutate({
-        carrierId: parseInt(carrierId),
+        carrierId: carrierId ? parseInt(carrierId) : undefined,
         routeId: parseInt(selectedRoutes[0]),
         bookingDate: new Date(bookingDate).toISOString(),
         rate: parseFloat(rate),
@@ -158,7 +158,7 @@ export const NewBooking: React.FC = () => {
         baseRate: parseFloat(rate),
         billable,
         notes: notes || undefined,
-        status: 'PENDING',
+        status: carrierId ? 'CONFIRMED' : 'PENDING',
         legNumber: 1,
         isParent: true
       });
