@@ -100,7 +100,7 @@ export const createBooking = async (req: Request, res: Response) => {
       rate, 
       notes, 
       billable = false, 
-      status = 'PENDING',
+      status = 'UNBOOKED',
       bookingGroupId,
       legNumber = 1,
       isParent = true,
@@ -110,17 +110,19 @@ export const createBooking = async (req: Request, res: Response) => {
       fscRate
     } = req.body;
 
-    // Check if carrier exists and is active
-    const carrier = await prisma.carrier.findUnique({
-      where: { id: parseInt(carrierId) }
-    });
+    // Check if carrier exists and is active (only if carrierId is provided)
+    if (carrierId) {
+      const carrier = await prisma.carrier.findUnique({
+        where: { id: parseInt(carrierId) }
+      });
 
-    if (!carrier) {
-      return res.status(404).json({ message: 'Carrier not found' });
-    }
+      if (!carrier) {
+        return res.status(404).json({ message: 'Carrier not found' });
+      }
 
-    if (carrier.status !== 'ACTIVE') {
-      return res.status(400).json({ message: 'Carrier is not active' });
+      if (carrier.status !== 'ACTIVE') {
+        return res.status(400).json({ message: 'Carrier is not active' });
+      }
     }
 
     // Check if route exists
@@ -132,25 +134,27 @@ export const createBooking = async (req: Request, res: Response) => {
       return res.status(404).json({ message: 'Route not found' });
     }
 
-    // Check for existing booking on same date
-    const existingBooking = await prisma.booking.findFirst({
-      where: {
-        carrierId: parseInt(carrierId),
-        routeId: parseInt(routeId),
-        bookingDate: new Date(bookingDate),
-        status: {
-          notIn: ['CANCELLED']
+    // Check for existing booking on same date (only if carrier is specified)
+    if (carrierId) {
+      const existingBooking = await prisma.booking.findFirst({
+        where: {
+          carrierId: parseInt(carrierId),
+          routeId: parseInt(routeId),
+          bookingDate: new Date(bookingDate),
+          status: {
+            notIn: ['CANCELLED']
+          }
         }
-      }
-    });
+      });
 
-    if (existingBooking) {
-      return res.status(409).json({ message: 'Booking already exists for this carrier, route, and date' });
+      if (existingBooking) {
+        return res.status(409).json({ message: 'Booking already exists for this carrier, route, and date' });
+      }
     }
 
     const booking = await prisma.booking.create({
       data: {
-        carrierId: parseInt(carrierId),
+        carrierId: carrierId ? parseInt(carrierId) : null,
         routeId: parseInt(routeId),
         bookingDate: new Date(bookingDate),
         rate: parseFloat(rate),
@@ -191,7 +195,9 @@ export const updateBooking = async (req: Request, res: Response) => {
         bookingDate: updateData.bookingDate ? new Date(updateData.bookingDate) : undefined,
         rate: updateData.rate ? parseFloat(updateData.rate) : undefined,
         billable: updateData.billable,
-        notes: updateData.notes
+        notes: updateData.notes,
+        status: updateData.status,
+        carrierId: updateData.carrierId !== undefined ? (updateData.carrierId ? parseInt(updateData.carrierId) : null) : undefined
       },
       include: {
         carrier: true,
@@ -222,13 +228,13 @@ export const confirmBooking = async (req: Request, res: Response) => {
       return res.status(404).json({ message: 'Booking not found' });
     }
 
-    if (booking.status !== 'PENDING') {
+    if (booking.status !== 'UNBOOKED') {
       return res.status(400).json({ message: 'Booking cannot be confirmed in current status' });
     }
 
     const updatedBooking = await prisma.booking.update({
       where: { id: parseInt(id) },
-      data: { status: 'CONFIRMED' },
+      data: { status: 'BOOKED' },
       include: {
         carrier: true,
         route: true

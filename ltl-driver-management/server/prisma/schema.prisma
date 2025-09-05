@@ -120,11 +120,11 @@ model SystemSettings {
 // Booking model
 model Booking {
   id            Int           @id @default(autoincrement())
-  carrierId     Int
+  carrierId     Int?          // Now nullable to support unbooked bookings
   routeId       Int
   bookingDate   DateTime
   rate          Decimal       @db.Decimal(8, 2) // Final calculated rate
-  status        BookingStatus @default(PENDING)
+  status        BookingStatus @default(UNBOOKED)
   billable      Boolean       @default(false)
   notes         String?       @db.Text
   
@@ -143,7 +143,7 @@ model Booking {
   updatedAt     DateTime      @updatedAt
 
   // Relations
-  carrier       Carrier       @relation(fields: [carrierId], references: [id])
+  carrier       Carrier?      @relation(fields: [carrierId], references: [id])
   route         Route         @relation(fields: [routeId], references: [id])
   
   // Self-referencing for multi-leg bookings
@@ -155,8 +155,8 @@ model Booking {
 }
 
 enum BookingStatus {
-  PENDING
-  CONFIRMED
+  UNBOOKED
+  BOOKED
   IN_PROGRESS
   COMPLETED
   CANCELLED

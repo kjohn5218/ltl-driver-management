@@ -102,8 +102,8 @@ export const NewBooking: React.FC = () => {
   const handleSubmit = (e: React.FormEvent) => {
     e.preventDefault();
     
-    if (!carrierId || !bookingDate) {
-      alert('Please fill in all required fields');
+    if (!bookingDate) {
+      alert('Please select a booking date');
       return;
     }
 
@@ -126,7 +126,7 @@ export const NewBooking: React.FC = () => {
       
       bookingLegs.forEach((leg, index) => {
         createBookingMutation.mutate({
-          carrierId: parseInt(carrierId),
+          carrierId: carrierId ? parseInt(carrierId) : undefined,
           routeId: parseInt(leg.routeId),
           bookingDate: new Date(bookingDate).toISOString(),
           rate: parseFloat(leg.rate),
@@ -135,7 +135,7 @@ export const NewBooking: React.FC = () => {
           fscRate: leg.rateType === 'MILE_FSC' ? fuelSurchargeRate : undefined,
           billable,
           notes: notes || undefined,
-          status: 'PENDING',
+          status: carrierId ? 'BOOKED' : 'UNBOOKED',
           bookingGroupId,
           legNumber: index + 1,
           isParent: index === 0, // First leg is the parent
@@ -166,12 +166,12 @@ export const NewBooking: React.FC = () => {
   };
 
   const calculateSuggestedRate = () => {
-    if (selectedCarrier && selectedRouteObjects.length > 0) {
+    if (selectedRouteObjects.length > 0) {
       let totalRate = 0;
       
       selectedRouteObjects.forEach(route => {
         // If carrier has a rate per mile and route has miles
-        if (selectedCarrier.ratePerMile && route.miles) {
+        if (selectedCarrier && selectedCarrier.ratePerMile && route.miles) {
           totalRate += parseFloat(selectedCarrier.ratePerMile.toString()) * parseFloat(route.miles.toString());
         } else if (route.standardRate) {
           // Use route's standard rate as fallback
@@ -359,7 +359,7 @@ export const NewBooking: React.FC = () => {
         <div>
           <label className="block text-sm font-medium text-gray-700 mb-2">
             <Truck className="inline w-4 h-4 mr-1" />
-            Select Carrier *
+            Select Carrier (Optional - Leave empty for unbooked)
           </label>
           <div className="space-y-2">
             <div className="relative">
@@ -379,9 +379,8 @@ export const NewBooking: React.FC = () => {
                 calculateSuggestedRate();
               }}
               className="w-full px-3 py-2 border border-gray-300 rounded-md focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
-              required
             >
-              <option value="">Select a carrier...</option>
+              <option value="">No carrier (Unbooked)</option>
               {carriers.map((carrier: Carrier) => (
                 <option key={carrier.id} value={carrier.id}>
                   {carrier.name} (MC: {carrier.mcNumber || 'N/A'}, DOT: {carrier.dotNumber || 'N/A'})
