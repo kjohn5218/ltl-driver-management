@@ -100,7 +100,7 @@ export const createBooking = async (req: Request, res: Response) => {
       rate, 
       notes, 
       billable = false, 
-      status = 'UNBOOKED',
+      status = 'PENDING',
       bookingGroupId,
       legNumber = 1,
       isParent = true,
@@ -154,7 +154,7 @@ export const createBooking = async (req: Request, res: Response) => {
 
     const booking = await prisma.booking.create({
       data: {
-        carrierId: carrierId ? parseInt(carrierId) : null,
+        carrierId: carrierId ? parseInt(carrierId) : undefined,
         routeId: parseInt(routeId),
         bookingDate: new Date(bookingDate),
         rate: parseFloat(rate),
@@ -197,7 +197,7 @@ export const updateBooking = async (req: Request, res: Response) => {
         billable: updateData.billable,
         notes: updateData.notes,
         status: updateData.status,
-        carrierId: updateData.carrierId !== undefined ? (updateData.carrierId ? parseInt(updateData.carrierId) : null) : undefined
+        carrierId: updateData.carrierId !== undefined ? (updateData.carrierId ? parseInt(updateData.carrierId) : undefined) : undefined
       },
       include: {
         carrier: true,
@@ -228,13 +228,13 @@ export const confirmBooking = async (req: Request, res: Response) => {
       return res.status(404).json({ message: 'Booking not found' });
     }
 
-    if (booking.status !== 'UNBOOKED') {
+    if (booking.status !== 'PENDING') {
       return res.status(400).json({ message: 'Booking cannot be confirmed in current status' });
     }
 
     const updatedBooking = await prisma.booking.update({
       where: { id: parseInt(id) },
-      data: { status: 'BOOKED' },
+      data: { status: 'CONFIRMED' },
       include: {
         carrier: true,
         route: true

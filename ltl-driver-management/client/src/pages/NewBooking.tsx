@@ -135,7 +135,7 @@ export const NewBooking: React.FC = () => {
           fscRate: leg.rateType === 'MILE_FSC' ? fuelSurchargeRate : undefined,
           billable,
           notes: notes || undefined,
-          status: carrierId ? 'BOOKED' : 'UNBOOKED',
+          status: carrierId ? 'CONFIRMED' : 'PENDING',
           bookingGroupId,
           legNumber: index + 1,
           isParent: index === 0, // First leg is the parent

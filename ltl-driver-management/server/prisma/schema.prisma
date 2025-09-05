@@ -124,7 +124,7 @@ model Booking {
   routeId       Int
   bookingDate   DateTime
   rate          Decimal       @db.Decimal(8, 2) // Final calculated rate
-  status        BookingStatus @default(UNBOOKED)
+  status        BookingStatus @default(PENDING)
   billable      Boolean       @default(false)
   notes         String?       @db.Text
   
@@ -155,8 +155,8 @@ model Booking {
 }
 
 enum BookingStatus {
-  UNBOOKED
-  BOOKED
+  PENDING
+  CONFIRMED
   IN_PROGRESS
   COMPLETED
   CANCELLED

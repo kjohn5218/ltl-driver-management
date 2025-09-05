@@ -29,8 +29,8 @@ export const Bookings: React.FC = () => {
 
   const getStatusBadge = (status: string) => {
     const statusColors = {
-      UNBOOKED: 'bg-yellow-100 text-yellow-800',
-      BOOKED: 'bg-blue-100 text-blue-800',
+      PENDING: 'bg-yellow-100 text-yellow-800',
+      CONFIRMED: 'bg-blue-100 text-blue-800',
       IN_PROGRESS: 'bg-purple-100 text-purple-800',
       COMPLETED: 'bg-green-100 text-green-800',
       CANCELLED: 'bg-red-100 text-red-800'
@@ -97,8 +97,8 @@ export const Bookings: React.FC = () => {
           onChange={(e) => setStatusFilter(e.target.value)}
         >
           <option value="">All Status</option>
-          <option value="UNBOOKED">Unbooked</option>
-          <option value="BOOKED">Booked</option>
+          <option value="PENDING">Pending (Unbooked)</option>
+          <option value="CONFIRMED">Confirmed (Booked)</option>
           <option value="IN_PROGRESS">In Progress</option>
           <option value="COMPLETED">Completed</option>
           <option value="CANCELLED">Cancelled</option>
@@ -168,7 +168,7 @@ export const Bookings: React.FC = () => {
                 </td>
                 <td className="px-6 py-4 whitespace-nowrap">
                   <span className={`inline-flex px-2 py-1 rounded-full text-xs font-medium ${getStatusBadge(booking.status)}`}>
-                    {booking.status.replace('_', ' ')}
+                    {booking.status === 'PENDING' ? 'UNBOOKED' : booking.status === 'CONFIRMED' ? 'BOOKED' : booking.status.replace('_', ' ')}
                   </span>
                 </td>
                 <td className="px-6 py-4 whitespace-nowrap text-right text-sm font-medium">
@@ -256,7 +256,7 @@ const BookingViewModal: React.FC<BookingViewModalProps> = ({ booking, onClose, g
             <div>
               <label className="block text-sm font-medium text-gray-700 mb-1">Status</label>
               <span className={`inline-flex px-2 py-1 rounded-full text-xs font-medium ${getStatusBadge(booking.status)}`}>
-                {booking.status.replace('_', ' ')}
+                {booking.status === 'PENDING' ? 'UNBOOKED' : booking.status === 'CONFIRMED' ? 'BOOKED' : booking.status.replace('_', ' ')}
               </span>
             </div>
           </div>
@@ -383,8 +383,8 @@ const BookingEditModal: React.FC<BookingEditModalProps> = ({ booking, onClose, o
                 onChange={(e) => setFormData({ ...formData, status: e.target.value as any })}
                 className="w-full px-3 py-2 border border-gray-300 rounded-md focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
               >
-                <option value="UNBOOKED">Unbooked</option>
-                <option value="BOOKED">Booked</option>
+                <option value="PENDING">Pending (Unbooked)</option>
+                <option value="CONFIRMED">Confirmed (Booked)</option>
                 <option value="IN_PROGRESS">In Progress</option>
                 <option value="COMPLETED">Completed</option>
                 <option value="CANCELLED">Cancelled</option>
