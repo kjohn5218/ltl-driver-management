@@ -3,13 +3,15 @@ import { useNavigate } from 'react-router-dom';
 import { useQuery } from '@tanstack/react-query';
 import { api } from '../services/api';
 import { Booking } from '../types';
-import { Plus, Search, Edit, Eye, Calendar, MapPin, User, DollarSign } from 'lucide-react';
+import { Plus, Search, Edit, Eye, Calendar, MapPin, User, DollarSign, X } from 'lucide-react';
 import { format } from 'date-fns';
 
 export const Bookings: React.FC = () => {
   const navigate = useNavigate();
   const [searchTerm, setSearchTerm] = useState('');
   const [statusFilter, setStatusFilter] = useState('');
+  const [viewingBooking, setViewingBooking] = useState<Booking | null>(null);
+  const [editingBooking, setEditingBooking] = useState<Booking | null>(null);
 
   const { data: bookings, isLoading } = useQuery({
     queryKey: ['bookings'],
@@ -34,6 +36,22 @@ export const Bookings: React.FC = () => {
       CANCELLED: 'bg-red-100 text-red-800'
     };
     return statusColors[status as keyof typeof statusColors] || 'bg-gray-100 text-gray-800';
+  };
+
+  const handleViewBooking = (booking: Booking) => {
+    setViewingBooking(booking);
+  };
+
+  const handleEditBooking = (booking: Booking) => {
+    setEditingBooking(booking);
+  };
+
+  const handleCloseView = () => {
+    setViewingBooking(null);
+  };
+
+  const handleCloseEdit = () => {
+    setEditingBooking(null);
   };
 
   if (isLoading) {
@@ -155,10 +173,18 @@ export const Bookings: React.FC = () => {
                 </td>
                 <td className="px-6 py-4 whitespace-nowrap text-right text-sm font-medium">
                   <div className="flex items-center gap-2 justify-end">
-                    <button className="text-gray-500 hover:text-blue-600">
+                    <button 
+                      onClick={() => handleViewBooking(booking)}
+                      className="text-gray-500 hover:text-blue-600 transition-colors"
+                      title="View booking details"
+                    >
                       <Eye className="w-4 h-4" />
                     </button>
-                    <button className="text-gray-500 hover:text-blue-600">
+                    <button 
+                      onClick={() => handleEditBooking(booking)}
+                      className="text-gray-500 hover:text-blue-600 transition-colors"
+                      title="Edit booking"
+                    >
                       <Edit className="w-4 h-4" />
                     </button>
                   </div>
@@ -174,6 +200,270 @@ export const Bookings: React.FC = () => {
           <p className="text-gray-500">No bookings found matching your criteria.</p>
         </div>
       )}
+
+      {/* View Booking Modal */}
+      {viewingBooking && (
+        <BookingViewModal 
+          booking={viewingBooking} 
+          onClose={handleCloseView} 
+          getStatusBadge={getStatusBadge}
+        />
+      )}
+
+      {/* Edit Booking Modal */}
+      {editingBooking && (
+        <BookingEditModal 
+          booking={editingBooking} 
+          onClose={handleCloseEdit} 
+          onSave={(updatedBooking) => {
+            // Handle booking update logic here
+            setEditingBooking(null);
+            // Optionally refetch bookings data
+          }}
+        />
+      )}
+    </div>
+  );
+};
+
+// Booking View Modal Component
+interface BookingViewModalProps {
+  booking: Booking;
+  onClose: () => void;
+  getStatusBadge: (status: string) => string;
+}
+
+const BookingViewModal: React.FC<BookingViewModalProps> = ({ booking, onClose, getStatusBadge }) => {
+  return (
+    <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50">
+      <div className="bg-white rounded-lg p-6 w-full max-w-2xl max-h-[90vh] overflow-y-auto">
+        <div className="flex justify-between items-center mb-6">
+          <h2 className="text-xl font-bold text-gray-900">Booking Details #{booking.id}</h2>
+          <button 
+            onClick={onClose}
+            className="text-gray-400 hover:text-gray-600"
+          >
+            <X className="w-5 h-5" />
+          </button>
+        </div>
+        
+        <div className="space-y-4">
+          <div className="grid grid-cols-2 gap-4">
+            <div>
+              <label className="block text-sm font-medium text-gray-700 mb-1">Carrier</label>
+              <p className="text-sm text-gray-900">{booking.carrier?.name || 'N/A'}</p>
+            </div>
+            <div>
+              <label className="block text-sm font-medium text-gray-700 mb-1">Status</label>
+              <span className={`inline-flex px-2 py-1 rounded-full text-xs font-medium ${getStatusBadge(booking.status)}`}>
+                {booking.status.replace('_', ' ')}
+              </span>
+            </div>
+          </div>
+          
+          <div>
+            <label className="block text-sm font-medium text-gray-700 mb-1">Route</label>
+            <div className="text-sm text-gray-900">
+              <p className="font-medium">{booking.route?.name}</p>
+              <p className="text-gray-600">{booking.route?.origin} → {booking.route?.destination}</p>
+              {booking.route?.distance && (
+                <p className="text-gray-600">{booking.route.distance} miles</p>
+              )}
+            </div>
+          </div>
+          
+          <div className="grid grid-cols-2 gap-4">
+            <div>
+              <label className="block text-sm font-medium text-gray-700 mb-1">Booking Date</label>
+              <p className="text-sm text-gray-900">{format(new Date(booking.bookingDate), 'MMM dd, yyyy')}</p>
+            </div>
+            <div>
+              <label className="block text-sm font-medium text-gray-700 mb-1">Rate</label>
+              <p className="text-sm text-gray-900 font-medium">${booking.rate}</p>
+            </div>
+          </div>
+          
+          <div>
+            <label className="block text-sm font-medium text-gray-700 mb-1">Billable</label>
+            <p className="text-sm text-gray-900">{booking.billable ? 'Yes' : 'No'}</p>
+          </div>
+          
+          {booking.notes && (
+            <div>
+              <label className="block text-sm font-medium text-gray-700 mb-1">Notes</label>
+              <p className="text-sm text-gray-900 bg-gray-50 p-3 rounded">{booking.notes}</p>
+            </div>
+          )}
+          
+          <div className="grid grid-cols-2 gap-4 text-xs text-gray-500">
+            <div>
+              <label className="block font-medium mb-1">Created</label>
+              <p>{format(new Date(booking.createdAt), 'MMM dd, yyyy HH:mm')}</p>
+            </div>
+            <div>
+              <label className="block font-medium mb-1">Last Updated</label>
+              <p>{format(new Date(booking.updatedAt), 'MMM dd, yyyy HH:mm')}</p>
+            </div>
+          </div>
+        </div>
+        
+        <div className="flex justify-end mt-6 pt-4 border-t">
+          <button 
+            onClick={onClose}
+            className="px-4 py-2 bg-gray-500 text-white rounded hover:bg-gray-600"
+          >
+            Close
+          </button>
+        </div>
+      </div>
+    </div>
+  );
+};
+
+// Booking Edit Modal Component
+interface BookingEditModalProps {
+  booking: Booking;
+  onClose: () => void;
+  onSave: (updatedBooking: Booking) => void;
+}
+
+const BookingEditModal: React.FC<BookingEditModalProps> = ({ booking, onClose, onSave }) => {
+  const [formData, setFormData] = useState({
+    rate: booking.rate,
+    status: booking.status,
+    billable: booking.billable,
+    notes: booking.notes || '',
+    bookingDate: booking.bookingDate.split('T')[0] // Format for date input
+  });
+  
+  const [isSubmitting, setIsSubmitting] = useState(false);
+
+  const handleSubmit = async (e: React.FormEvent) => {
+    e.preventDefault();
+    setIsSubmitting(true);
+    
+    try {
+      const response = await api.put(`/bookings/${booking.id}`, {
+        ...formData,
+        bookingDate: new Date(formData.bookingDate).toISOString()
+      });
+      
+      onSave(response.data);
+    } catch (error) {
+      console.error('Error updating booking:', error);
+      // Handle error (show notification, etc.)
+    } finally {
+      setIsSubmitting(false);
+    }
+  };
+
+  return (
+    <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50">
+      <div className="bg-white rounded-lg p-6 w-full max-w-2xl max-h-[90vh] overflow-y-auto">
+        <div className="flex justify-between items-center mb-6">
+          <h2 className="text-xl font-bold text-gray-900">Edit Booking #{booking.id}</h2>
+          <button 
+            onClick={onClose}
+            className="text-gray-400 hover:text-gray-600"
+          >
+            <X className="w-5 h-5" />
+          </button>
+        </div>
+        
+        <form onSubmit={handleSubmit} className="space-y-4">
+          <div className="grid grid-cols-2 gap-4">
+            <div>
+              <label className="block text-sm font-medium text-gray-700 mb-1">Carrier</label>
+              <p className="text-sm text-gray-500 bg-gray-50 p-2 rounded">{booking.carrier?.name || 'N/A'}</p>
+            </div>
+            <div>
+              <label className="block text-sm font-medium text-gray-700 mb-1">Status</label>
+              <select
+                value={formData.status}
+                onChange={(e) => setFormData({ ...formData, status: e.target.value as any })}
+                className="w-full px-3 py-2 border border-gray-300 rounded-md focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
+              >
+                <option value="PENDING">Pending</option>
+                <option value="CONFIRMED">Confirmed</option>
+                <option value="IN_PROGRESS">In Progress</option>
+                <option value="COMPLETED">Completed</option>
+                <option value="CANCELLED">Cancelled</option>
+              </select>
+            </div>
+          </div>
+          
+          <div>
+            <label className="block text-sm font-medium text-gray-700 mb-1">Route</label>
+            <div className="text-sm text-gray-500 bg-gray-50 p-2 rounded">
+              <p className="font-medium">{booking.route?.name}</p>
+              <p>{booking.route?.origin} → {booking.route?.destination}</p>
+            </div>
+          </div>
+          
+          <div className="grid grid-cols-2 gap-4">
+            <div>
+              <label className="block text-sm font-medium text-gray-700 mb-1">Booking Date</label>
+              <input
+                type="date"
+                value={formData.bookingDate}
+                onChange={(e) => setFormData({ ...formData, bookingDate: e.target.value })}
+                className="w-full px-3 py-2 border border-gray-300 rounded-md focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
+              />
+            </div>
+            <div>
+              <label className="block text-sm font-medium text-gray-700 mb-1">Rate ($)</label>
+              <input
+                type="number"
+                step="0.01"
+                value={formData.rate}
+                onChange={(e) => setFormData({ ...formData, rate: parseFloat(e.target.value) })}
+                className="w-full px-3 py-2 border border-gray-300 rounded-md focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
+              />
+            </div>
+          </div>
+          
+          <div>
+            <label className="flex items-center">
+              <input
+                type="checkbox"
+                checked={formData.billable}
+                onChange={(e) => setFormData({ ...formData, billable: e.target.checked })}
+                className="mr-2"
+              />
+              <span className="text-sm font-medium text-gray-700">Billable</span>
+            </label>
+          </div>
+          
+          <div>
+            <label className="block text-sm font-medium text-gray-700 mb-1">Notes</label>
+            <textarea
+              value={formData.notes}
+              onChange={(e) => setFormData({ ...formData, notes: e.target.value })}
+              rows={3}
+              className="w-full px-3 py-2 border border-gray-300 rounded-md focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
+              placeholder="Additional notes..."
+            />
+          </div>
+          
+          <div className="flex justify-end gap-3 mt-6 pt-4 border-t">
+            <button 
+              type="button"
+              onClick={onClose}
+              className="px-4 py-2 bg-gray-500 text-white rounded hover:bg-gray-600"
+              disabled={isSubmitting}
+            >
+              Cancel
+            </button>
+            <button 
+              type="submit"
+              className="px-4 py-2 bg-blue-600 text-white rounded hover:bg-blue-700 disabled:bg-blue-400"
+              disabled={isSubmitting}
+            >
+              {isSubmitting ? 'Saving...' : 'Save Changes'}
+            </button>
+          </div>
+        </form>
+      </div>
     </div>
   );
 };
