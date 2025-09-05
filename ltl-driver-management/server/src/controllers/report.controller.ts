@@ -88,8 +88,8 @@ export const getCarrierPerformance = async (req: Request, res: Response) => {
       }
     });
 
-    // Get carrier details
-    const carrierIds = carrierStats.map(stat => stat.carrierId);
+    // Get carrier details - filter out null carrier IDs
+    const carrierIds = carrierStats.map(stat => stat.carrierId).filter((id): id is number => id !== null);
     const carriers = await prisma.carrier.findMany({
       where: { id: { in: carrierIds } },
       include: {
@@ -103,8 +103,8 @@ export const getCarrierPerformance = async (req: Request, res: Response) => {
     // Calculate performance metrics
     const performance = carriers.map(carrier => {
       const stats = carrierStats.find(s => s.carrierId === carrier.id);
-      const completedBookings = carrier.bookings.filter(b => b.status === 'COMPLETED').length;
-      const cancelledBookings = carrier.bookings.filter(b => b.status === 'CANCELLED').length;
+      const completedBookings = carrier.bookings.filter((b: any) => b.status === 'COMPLETED').length;
+      const cancelledBookings = carrier.bookings.filter((b: any) => b.status === 'CANCELLED').length;
       
       return {
         carrier: {

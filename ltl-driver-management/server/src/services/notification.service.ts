@@ -13,13 +13,13 @@ const transporter = nodemailer.createTransport({
 });
 
 interface BookingWithRelations extends Booking {
-  carrier: Carrier;
+  carrier: Carrier | null;
   route: Route;
 }
 
 export const sendBookingConfirmation = async (booking: BookingWithRelations) => {
   try {
-    if (!booking.carrier.email) return;
+    if (!booking.carrier || !booking.carrier.email) return;
 
     const mailOptions = {
       from: process.env.EMAIL_USER,
@@ -52,7 +52,7 @@ export const sendBookingConfirmation = async (booking: BookingWithRelations) => 
 
 export const sendBookingCancellation = async (booking: BookingWithRelations, reason?: string) => {
   try {
-    if (!booking.carrier.email) return;
+    if (!booking.carrier || !booking.carrier.email) return;
 
     const mailOptions = {
       from: process.env.EMAIL_USER,
