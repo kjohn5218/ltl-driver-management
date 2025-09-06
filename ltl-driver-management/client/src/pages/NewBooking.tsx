@@ -29,7 +29,6 @@ export const NewBooking: React.FC = () => {
   const [carrierSearch, setCarrierSearch] = useState('');
   const [showCarrierDropdown, setShowCarrierDropdown] = useState(false);
   const [selectedCarrierName, setSelectedCarrierName] = useState('');
-  const [routeSearch, setRouteSearch] = useState('');
   const [showRouteDropdown, setShowRouteDropdown] = useState(false);
   const [selectedRouteName, setSelectedRouteName] = useState('');
   const [routeSearchInput, setRouteSearchInput] = useState('');
@@ -57,11 +56,10 @@ export const NewBooking: React.FC = () => {
 
   // Fetch routes
   const { data: routesData, isLoading: loadingRoutes } = useQuery({
-    queryKey: ['routes', routeSearch, originFilter, destinationFilter],
+    queryKey: ['routes', originFilter, destinationFilter],
     queryFn: async () => {
       const params = new URLSearchParams();
       params.append('limit', '1500');
-      if (routeSearch.trim()) params.append('search', routeSearch.trim());
       if (originFilter.trim()) params.append('origin', originFilter.trim());
       if (destinationFilter.trim()) params.append('destination', destinationFilter.trim());
       
@@ -654,18 +652,8 @@ export const NewBooking: React.FC = () => {
             {isRoundTrip ? 'Select Routes *' : 'Select Route *'}
           </label>
           <div className="space-y-3">
-            {/* Search and Filters Row */}
-            <div className="grid grid-cols-1 md:grid-cols-4 gap-3">
-              <div className="relative">
-                <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 text-gray-400 w-4 h-4" />
-                <input
-                  type="text"
-                  placeholder="Search routes..."
-                  className="w-full pl-10 pr-4 py-2 border border-gray-300 rounded-md focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
-                  value={routeSearch}
-                  onChange={(e) => setRouteSearch(e.target.value)}
-                />
-              </div>
+            {/* Filters Row */}
+            <div className="grid grid-cols-1 md:grid-cols-3 gap-3">
               <div className="relative">
                 {/* Display selected origin or search input */}
                 {originFilter && !showOriginDropdown ? (
@@ -793,7 +781,6 @@ export const NewBooking: React.FC = () => {
               <button
                 type="button"
                 onClick={() => {
-                  setRouteSearch('');
                   setOriginFilter('');
                   setDestinationFilter('');
                   setOriginSearchInput('');
@@ -808,10 +795,9 @@ export const NewBooking: React.FC = () => {
             </div>
 
             {/* Active Filters Display */}
-            {(routeSearch || originFilter || destinationFilter) && (
+            {(originFilter || destinationFilter) && (
               <div className="flex items-center gap-2 text-sm text-gray-600 bg-blue-50 p-2 rounded-md">
                 <span className="font-medium">Active filters:</span>
-                {routeSearch && <span className="bg-blue-100 px-2 py-1 rounded">Search: "{routeSearch}"</span>}
                 {originFilter && <span className="bg-blue-100 px-2 py-1 rounded">Origin: {originFilter}</span>}
                 {destinationFilter && <span className="bg-blue-100 px-2 py-1 rounded">Destination: {destinationFilter}</span>}
                 <span className="ml-2 text-blue-700">({routes.length} routes found)</span>
