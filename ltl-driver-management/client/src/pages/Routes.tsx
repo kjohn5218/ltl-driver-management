@@ -482,16 +482,6 @@ const RouteViewModal: React.FC<RouteViewModalProps> = ({ route, onClose }) => {
             </div>
           )}
           
-          {route._count && (
-            <div>
-              <label className="block text-sm font-medium text-gray-700 mb-1">Statistics</label>
-              <div className="text-sm text-gray-900 space-y-1">
-                <p><strong>Total Bookings:</strong> {route._count.bookings}</p>
-                <p><strong>Preferred by Carriers:</strong> {route._count.preferredBy}</p>
-              </div>
-            </div>
-          )}
-          
           <div className="grid grid-cols-2 gap-4 text-xs text-gray-500 pt-4 border-t">
             <div>
               <label className="block font-medium mb-1">Created</label>
