@@ -663,4 +663,209 @@ const RouteDeleteModal: React.FC<RouteDeleteModalProps> = ({ route, onClose, onC
       </div>
     </div>
   );
-};\n\n// Add Route Modal Component\ninterface AddRouteModalProps {\n  onClose: () => void;\n  onSave: (route: Route) => void;\n}\n\nconst AddRouteModal: React.FC<AddRouteModalProps> = ({ onClose, onSave }) => {\n  const [formData, setFormData] = useState({\n    name: '',\n    origin: '',\n    destination: '',\n    distance: '',\n    miles: '',\n    active: true,\n    standardRate: '',\n    frequency: '',\n    departureTime: '',\n    arrivalTime: ''\n  });\n  \n  const [isSubmitting, setIsSubmitting] = useState(false);\n\n  const handleSubmit = async (e: React.FormEvent) => {\n    e.preventDefault();\n    setIsSubmitting(true);\n    \n    try {\n      const payload = {\n        name: formData.name,\n        origin: formData.origin,\n        destination: formData.destination,\n        distance: parseFloat(formData.distance),\n        miles: formData.miles ? parseFloat(formData.miles) : undefined,\n        active: formData.active,\n        standardRate: formData.standardRate ? parseFloat(formData.standardRate) : undefined,\n        frequency: formData.frequency || undefined,\n        departureTime: formData.departureTime || undefined,\n        arrivalTime: formData.arrivalTime || undefined\n      };\n      \n      const response = await api.post('/routes', payload);\n      onSave(response.data);\n    } catch (error) {\n      console.error('Error creating route:', error);\n    } finally {\n      setIsSubmitting(false);\n    }\n  };\n\n  return (\n    <div className=\"fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50\">\n      <div className=\"bg-white rounded-lg p-6 w-full max-w-2xl max-h-[90vh] overflow-y-auto\">\n        <div className=\"flex justify-between items-center mb-6\">\n          <h2 className=\"text-xl font-bold text-gray-900\">Add New Route</h2>\n          <button \n            onClick={onClose}\n            className=\"text-gray-400 hover:text-gray-600\"\n          >\n            <X className=\"w-5 h-5\" />\n          </button>\n        </div>\n        \n        <form onSubmit={handleSubmit} className=\"space-y-4\">\n          <div>\n            <label className=\"block text-sm font-medium text-gray-700 mb-1\">Route Name *</label>\n            <input\n              type=\"text\"\n              required\n              value={formData.name}\n              onChange={(e) => setFormData({ ...formData, name: e.target.value })}\n              className=\"w-full px-3 py-2 border border-gray-300 rounded-md focus:ring-2 focus:ring-blue-500 focus:border-blue-500\"\n              placeholder=\"e.g., NYCLAX1\"\n            />\n          </div>\n          \n          <div className=\"grid grid-cols-2 gap-4\">\n            <div>\n              <label className=\"block text-sm font-medium text-gray-700 mb-1\">Origin *</label>\n              <input\n                type=\"text\"\n                required\n                value={formData.origin}\n                onChange={(e) => setFormData({ ...formData, origin: e.target.value })}\n                className=\"w-full px-3 py-2 border border-gray-300 rounded-md focus:ring-2 focus:ring-blue-500 focus:border-blue-500\"\n                placeholder=\"e.g., NYC\"\n              />\n            </div>\n            <div>\n              <label className=\"block text-sm font-medium text-gray-700 mb-1\">Destination *</label>\n              <input\n                type=\"text\"\n                required\n                value={formData.destination}\n                onChange={(e) => setFormData({ ...formData, destination: e.target.value })}\n                className=\"w-full px-3 py-2 border border-gray-300 rounded-md focus:ring-2 focus:ring-blue-500 focus:border-blue-500\"\n                placeholder=\"e.g., LAX\"\n              />\n            </div>\n          </div>\n          \n          <div className=\"grid grid-cols-2 gap-4\">\n            <div>\n              <label className=\"block text-sm font-medium text-gray-700 mb-1\">Distance (miles) *</label>\n              <input\n                type=\"number\"\n                step=\"0.1\"\n                required\n                value={formData.distance}\n                onChange={(e) => setFormData({ ...formData, distance: e.target.value })}\n                className=\"w-full px-3 py-2 border border-gray-300 rounded-md focus:ring-2 focus:ring-blue-500 focus:border-blue-500\"\n                placeholder=\"2445.5\"\n              />\n            </div>\n            <div>\n              <label className=\"block text-sm font-medium text-gray-700 mb-1\">Miles (Optional)</label>\n              <input\n                type=\"number\"\n                step=\"0.1\"\n                value={formData.miles}\n                onChange={(e) => setFormData({ ...formData, miles: e.target.value })}\n                className=\"w-full px-3 py-2 border border-gray-300 rounded-md focus:ring-2 focus:ring-blue-500 focus:border-blue-500\"\n                placeholder=\"Leave empty to use distance\"\n              />\n            </div>\n          </div>\n\n          <div>\n            <label className=\"block text-sm font-medium text-gray-700 mb-1\">Standard Rate ($)</label>\n            <input\n              type=\"number\"\n              step=\"0.01\"\n              value={formData.standardRate}\n              onChange={(e) => setFormData({ ...formData, standardRate: e.target.value })}\n              className=\"w-full px-3 py-2 border border-gray-300 rounded-md focus:ring-2 focus:ring-blue-500 focus:border-blue-500\"\n              placeholder=\"Optional standard rate\"\n            />\n          </div>\n\n          <div>\n            <label className=\"block text-sm font-medium text-gray-700 mb-1\">Frequency</label>\n            <input\n              type=\"text\"\n              value={formData.frequency}\n              onChange={(e) => setFormData({ ...formData, frequency: e.target.value })}\n              className=\"w-full px-3 py-2 border border-gray-300 rounded-md focus:ring-2 focus:ring-blue-500 focus:border-blue-500\"\n              placeholder=\"e.g., Daily, Weekly, etc.\"\n            />\n          </div>\n          \n          <div className=\"grid grid-cols-2 gap-4\">\n            <div>\n              <label className=\"block text-sm font-medium text-gray-700 mb-1\">Departure Time</label>\n              <input\n                type=\"time\"\n                value={formData.departureTime}\n                onChange={(e) => setFormData({ ...formData, departureTime: e.target.value })}\n                className=\"w-full px-3 py-2 border border-gray-300 rounded-md focus:ring-2 focus:ring-blue-500 focus:border-blue-500\"\n              />\n            </div>\n            <div>\n              <label className=\"block text-sm font-medium text-gray-700 mb-1\">Arrival Time</label>\n              <input\n                type=\"time\"\n                value={formData.arrivalTime}\n                onChange={(e) => setFormData({ ...formData, arrivalTime: e.target.value })}\n                className=\"w-full px-3 py-2 border border-gray-300 rounded-md focus:ring-2 focus:ring-blue-500 focus:border-blue-500\"\n              />\n            </div>\n          </div>\n          \n          <div>\n            <label className=\"flex items-center\">\n              <input\n                type=\"checkbox\"\n                checked={formData.active}\n                onChange={(e) => setFormData({ ...formData, active: e.target.checked })}\n                className=\"mr-2\"\n              />\n              <span className=\"text-sm font-medium text-gray-700\">Active Route</span>\n            </label>\n          </div>\n          \n          <div className=\"flex justify-end gap-3 mt-6 pt-4 border-t\">\n            <button \n              type=\"button\"\n              onClick={onClose}\n              className=\"px-4 py-2 bg-gray-500 text-white rounded hover:bg-gray-600\"\n              disabled={isSubmitting}\n            >\n              Cancel\n            </button>\n            <button \n              type=\"submit\"\n              className=\"px-4 py-2 bg-blue-600 text-white rounded hover:bg-blue-700 disabled:bg-blue-400\"\n              disabled={isSubmitting}\n            >\n              {isSubmitting ? 'Creating...' : 'Create Route'}\n            </button>\n          </div>\n        </form>\n      </div>\n    </div>\n  );\n};
+};
+
+// Add Route Modal Component
+interface AddRouteModalProps {
+  onClose: () => void;
+  onSave: (route: Route) => void;
+}
+
+const AddRouteModal: React.FC<AddRouteModalProps> = ({ onClose, onSave }) => {
+  const [formData, setFormData] = useState({
+    name: '',
+    origin: '',
+    destination: '',
+    distance: '',
+    miles: '',
+    active: true,
+    standardRate: '',
+    frequency: '',
+    departureTime: '',
+    arrivalTime: ''
+  });
+  
+  const [isSubmitting, setIsSubmitting] = useState(false);
+
+  const handleSubmit = async (e: React.FormEvent) => {
+    e.preventDefault();
+    setIsSubmitting(true);
+    
+    try {
+      const payload = {
+        name: formData.name,
+        origin: formData.origin,
+        destination: formData.destination,
+        distance: parseFloat(formData.distance),
+        miles: formData.miles ? parseFloat(formData.miles) : undefined,
+        active: formData.active,
+        standardRate: formData.standardRate ? parseFloat(formData.standardRate) : undefined,
+        frequency: formData.frequency || undefined,
+        departureTime: formData.departureTime || undefined,
+        arrivalTime: formData.arrivalTime || undefined
+      };
+      
+      const response = await api.post('/routes', payload);
+      onSave(response.data);
+    } catch (error) {
+      console.error('Error creating route:', error);
+    } finally {
+      setIsSubmitting(false);
+    }
+  };
+
+  return (
+    <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50">
+      <div className="bg-white rounded-lg p-6 w-full max-w-2xl max-h-[90vh] overflow-y-auto">
+        <div className="flex justify-between items-center mb-6">
+          <h2 className="text-xl font-bold text-gray-900">Add New Route</h2>
+          <button 
+            onClick={onClose}
+            className="text-gray-400 hover:text-gray-600"
+          >
+            <X className="w-5 h-5" />
+          </button>
+        </div>
+        
+        <form onSubmit={handleSubmit} className="space-y-4">
+          <div>
+            <label className="block text-sm font-medium text-gray-700 mb-1">Route Name *</label>
+            <input
+              type="text"
+              required
+              value={formData.name}
+              onChange={(e) => setFormData({ ...formData, name: e.target.value })}
+              className="w-full px-3 py-2 border border-gray-300 rounded-md focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
+              placeholder="e.g., NYCLAX1"
+            />
+          </div>
+          
+          <div className="grid grid-cols-2 gap-4">
+            <div>
+              <label className="block text-sm font-medium text-gray-700 mb-1">Origin *</label>
+              <input
+                type="text"
+                required
+                value={formData.origin}
+                onChange={(e) => setFormData({ ...formData, origin: e.target.value })}
+                className="w-full px-3 py-2 border border-gray-300 rounded-md focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
+                placeholder="e.g., NYC"
+              />
+            </div>
+            <div>
+              <label className="block text-sm font-medium text-gray-700 mb-1">Destination *</label>
+              <input
+                type="text"
+                required
+                value={formData.destination}
+                onChange={(e) => setFormData({ ...formData, destination: e.target.value })}
+                className="w-full px-3 py-2 border border-gray-300 rounded-md focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
+                placeholder="e.g., LAX"
+              />
+            </div>
+          </div>
+          
+          <div className="grid grid-cols-2 gap-4">
+            <div>
+              <label className="block text-sm font-medium text-gray-700 mb-1">Distance (miles) *</label>
+              <input
+                type="number"
+                step="0.1"
+                required
+                value={formData.distance}
+                onChange={(e) => setFormData({ ...formData, distance: e.target.value })}
+                className="w-full px-3 py-2 border border-gray-300 rounded-md focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
+                placeholder="2445.5"
+              />
+            </div>
+            <div>
+              <label className="block text-sm font-medium text-gray-700 mb-1">Miles (Optional)</label>
+              <input
+                type="number"
+                step="0.1"
+                value={formData.miles}
+                onChange={(e) => setFormData({ ...formData, miles: e.target.value })}
+                className="w-full px-3 py-2 border border-gray-300 rounded-md focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
+                placeholder="Leave empty to use distance"
+              />
+            </div>
+          </div>
+
+          <div>
+            <label className="block text-sm font-medium text-gray-700 mb-1">Standard Rate ($)</label>
+            <input
+              type="number"
+              step="0.01"
+              value={formData.standardRate}
+              onChange={(e) => setFormData({ ...formData, standardRate: e.target.value })}
+              className="w-full px-3 py-2 border border-gray-300 rounded-md focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
+              placeholder="Optional standard rate"
+            />
+          </div>
+
+          <div>
+            <label className="block text-sm font-medium text-gray-700 mb-1">Frequency</label>
+            <input
+              type="text"
+              value={formData.frequency}
+              onChange={(e) => setFormData({ ...formData, frequency: e.target.value })}
+              className="w-full px-3 py-2 border border-gray-300 rounded-md focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
+              placeholder="e.g., Daily, Weekly, etc."
+            />
+          </div>
+          
+          <div className="grid grid-cols-2 gap-4">
+            <div>
+              <label className="block text-sm font-medium text-gray-700 mb-1">Departure Time</label>
+              <input
+                type="time"
+                value={formData.departureTime}
+                onChange={(e) => setFormData({ ...formData, departureTime: e.target.value })}
+                className="w-full px-3 py-2 border border-gray-300 rounded-md focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
+              />
+            </div>
+            <div>
+              <label className="block text-sm font-medium text-gray-700 mb-1">Arrival Time</label>
+              <input
+                type="time"
+                value={formData.arrivalTime}
+                onChange={(e) => setFormData({ ...formData, arrivalTime: e.target.value })}
+                className="w-full px-3 py-2 border border-gray-300 rounded-md focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
+              />
+            </div>
+          </div>
+          
+          <div>
+            <label className="flex items-center">
+              <input
+                type="checkbox"
+                checked={formData.active}
+                onChange={(e) => setFormData({ ...formData, active: e.target.checked })}
+                className="mr-2"
+              />
+              <span className="text-sm font-medium text-gray-700">Active Route</span>
+            </label>
+          </div>
+          
+          <div className="flex justify-end gap-3 mt-6 pt-4 border-t">
+            <button 
+              type="button"
+              onClick={onClose}
+              className="px-4 py-2 bg-gray-500 text-white rounded hover:bg-gray-600"
+              disabled={isSubmitting}
+            >
+              Cancel
+            </button>
+            <button 
+              type="submit"
+              className="px-4 py-2 bg-blue-600 text-white rounded hover:bg-blue-700 disabled:bg-blue-400"
+              disabled={isSubmitting}
+            >
+              {isSubmitting ? 'Creating...' : 'Create Route'}
+            </button>
+          </div>
+        </form>
+      </div>
+    </div>
+  );
+};
