@@ -537,12 +537,17 @@ const BookingEditModal: React.FC<BookingEditModalProps> = ({ booking, onClose, o
   });
   
   const [isSubmitting, setIsSubmitting] = useState(false);
+  const [carrierSearchTerm, setCarrierSearchTerm] = useState('');
+  const [showCarrierDropdown, setShowCarrierDropdown] = useState(false);
+  const [selectedCarrierName, setSelectedCarrierName] = useState(
+    booking.carrier?.name || ''
+  );
 
   // Fetch carriers for carrier selection
   const { data: carriersData } = useQuery({
     queryKey: ['carriers'],
     queryFn: async () => {
-      const response = await api.get('/carriers');
+      const response = await api.get('/carriers?limit=5000'); // Fetch all carriers
       return response.data;
     }
   });
@@ -591,6 +596,34 @@ const BookingEditModal: React.FC<BookingEditModalProps> = ({ booking, onClose, o
   const carriers = carriersData?.carriers || [];
   const canChangeCarrier = formData.status === 'PENDING' || formData.status === 'CONFIRMED';
 
+  // Filter carriers based on search term
+  const filteredCarriers = useMemo(() => {
+    if (!carriers.length) return [];
+    
+    return carriers.filter((carrier: any) =>
+      carrier.name.toLowerCase().includes(carrierSearchTerm.toLowerCase()) ||
+      carrier.mcNumber?.toLowerCase().includes(carrierSearchTerm.toLowerCase())
+    ).slice(0, 10); // Limit to first 10 results
+  }, [carriers, carrierSearchTerm]);
+
+  // Handle carrier selection
+  const handleCarrierSelect = (carrier: any) => {
+    setFormData(prev => ({ ...prev, carrierId: carrier.id }));
+    setSelectedCarrierName(carrier.name);
+    setCarrierSearchTerm('');
+    setShowCarrierDropdown(false);
+  };
+
+  // Handle carrier search input
+  const handleCarrierSearch = (value: string) => {
+    setCarrierSearchTerm(value);
+    setShowCarrierDropdown(value.length > 0);
+    if (value.length === 0) {
+      setSelectedCarrierName('');
+      setFormData(prev => ({ ...prev, carrierId: null }));
+    }
+  };
+
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     setIsSubmitting(true);
@@ -629,18 +662,60 @@ const BookingEditModal: React.FC<BookingEditModalProps> = ({ booking, onClose, o
             <div>
               <label className="block text-sm font-medium text-gray-700 mb-1">Carrier</label>
               {canChangeCarrier ? (
-                <select
-                  value={formData.carrierId || ''}
-                  onChange={(e) => setFormData({ ...formData, carrierId: e.target.value ? Number(e.target.value) : null })}
-                  className="w-full px-3 py-2 border border-gray-300 rounded-md focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
-                >
-                  <option value="">Select Carrier</option>
-                  {carriers.map((carrier: any) => (
-                    <option key={carrier.id} value={carrier.id}>
-                      {carrier.name}
-                    </option>
-                  ))}
-                </select>
+                <div className="relative">
+                  {/* Display selected carrier or search input */}
+                  {selectedCarrierName && !showCarrierDropdown ? (
+                    <div className="w-full px-3 py-2 border border-gray-300 rounded-md bg-blue-50 border-blue-200 flex items-center justify-between">
+                      <span className="text-blue-900 font-medium">{selectedCarrierName}</span>
+                      <button
+                        type="button"
+                        onClick={() => {
+                          setSelectedCarrierName('');
+                          setFormData(prev => ({ ...prev, carrierId: null }));
+                        }}
+                        className="text-blue-600 hover:text-blue-800 ml-2"
+                        title="Clear selection"
+                      >
+                        <X className="w-4 h-4" />
+                      </button>
+                    </div>
+                  ) : (
+                    <div>
+                      <input
+                        type="text"
+                        value={carrierSearchTerm}
+                        onChange={(e) => handleCarrierSearch(e.target.value)}
+                        onFocus={() => carrierSearchTerm.length > 0 && setShowCarrierDropdown(true)}
+                        onBlur={() => setTimeout(() => setShowCarrierDropdown(false), 200)}
+                        className="w-full px-3 py-2 border border-gray-300 rounded-md focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
+                        placeholder="Search carriers by name or MC number..."
+                      />
+                      {/* Dropdown with filtered carriers */}
+                      {showCarrierDropdown && filteredCarriers.length > 0 && (
+                        <div className="absolute z-50 w-full mt-1 bg-white border border-gray-300 rounded-md shadow-lg max-h-60 overflow-y-auto">
+                          {filteredCarriers.map((carrier: any) => (
+                            <button
+                              key={carrier.id}
+                              type="button"
+                              onClick={() => handleCarrierSelect(carrier)}
+                              className="w-full px-3 py-2 text-left hover:bg-blue-50 border-b border-gray-100 last:border-b-0"
+                            >
+                              <div className="font-medium text-gray-900">{carrier.name}</div>
+                              {carrier.mcNumber && (
+                                <div className="text-xs text-gray-500">MC: {carrier.mcNumber}</div>
+                              )}
+                            </button>
+                          ))}
+                          {carrierSearchTerm.length > 0 && filteredCarriers.length === 0 && (
+                            <div className="px-3 py-2 text-gray-500 text-sm">
+                              No carriers found matching "{carrierSearchTerm}"
+                            </div>
+                          )}
+                        </div>
+                      )}
+                    </div>
+                  )}
+                </div>
               ) : (
                 <p className="text-sm text-gray-500 bg-gray-50 p-2 rounded">
                   {booking.carrier?.name || 'N/A'}
