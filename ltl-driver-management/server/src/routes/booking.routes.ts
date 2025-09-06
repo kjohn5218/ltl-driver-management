@@ -43,7 +43,15 @@ router.post(
   '/',
   authorize(UserRole.ADMIN, UserRole.DISPATCHER),
   [
-    body('carrierId').optional().isInt(),
+    body('carrierId').optional().custom((value) => {
+      if (value === undefined || value === null) {
+        return true; // Allow null/undefined
+      }
+      if (!Number.isInteger(Number(value))) {
+        throw new Error('carrierId must be an integer when provided');
+      }
+      return true;
+    }),
     body('routeId').isInt(),
     body('bookingDate').isISO8601(),
     body('rate').isDecimal({ decimal_digits: '0,2' }),
