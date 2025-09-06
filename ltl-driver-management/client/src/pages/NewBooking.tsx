@@ -30,6 +30,9 @@ export const NewBooking: React.FC = () => {
   const [showCarrierDropdown, setShowCarrierDropdown] = useState(false);
   const [selectedCarrierName, setSelectedCarrierName] = useState('');
   const [routeSearch, setRouteSearch] = useState('');
+  const [showRouteDropdown, setShowRouteDropdown] = useState(false);
+  const [selectedRouteName, setSelectedRouteName] = useState('');
+  const [routeSearchInput, setRouteSearchInput] = useState('');
   const [originFilter, setOriginFilter] = useState('');
   const [destinationFilter, setDestinationFilter] = useState('');
   const [isRoundTrip, setIsRoundTrip] = useState(false);
@@ -125,6 +128,67 @@ export const NewBooking: React.FC = () => {
     setCarrierSearch('');
     setShowCarrierDropdown(false);
   };
+
+  // Filter routes based on search term (for single route selection)
+  const filteredRoutes = useMemo(() => {
+    if (!routes.length) return [];
+    
+    return routes.filter((route: Route) =>
+      route.name.toLowerCase().includes(routeSearchInput.toLowerCase()) ||
+      route.origin.toLowerCase().includes(routeSearchInput.toLowerCase()) ||
+      route.destination.toLowerCase().includes(routeSearchInput.toLowerCase())
+    ).slice(0, 10); // Limit to first 10 results
+  }, [routes, routeSearchInput]);
+
+  // Filter routes for multi-leg selection (exclude already selected)
+  const filteredMultiRoutes = useMemo(() => {
+    if (!routes.length) return [];
+    
+    const availableRoutes = routes.filter(route => !bookingLegs.find(leg => leg.routeId === route.id.toString()));
+    
+    return availableRoutes.filter((route: Route) =>
+      route.name.toLowerCase().includes(routeSearchInput.toLowerCase()) ||
+      route.origin.toLowerCase().includes(routeSearchInput.toLowerCase()) ||
+      route.destination.toLowerCase().includes(routeSearchInput.toLowerCase())
+    ).slice(0, 10); // Limit to first 10 results
+  }, [routes, routeSearchInput, bookingLegs]);
+
+  // Handle single route selection
+  const handleSingleRouteSelect = (route: Route) => {
+    setSelectedRoutes([route.id.toString()]);
+    setSelectedRouteName(`${route.name} (${route.origin} → ${route.destination})`);
+    setRouteSearchInput('');
+    setShowRouteDropdown(false);
+    calculateSuggestedRate();
+  };
+
+  // Handle multi route selection
+  const handleMultiRouteSelect = (route: Route) => {
+    addRoute(route.id.toString());
+    setRouteSearchInput('');
+    setShowRouteDropdown(false);
+  };
+
+  // Handle route search input
+  const handleRouteSearch = (value: string) => {
+    setRouteSearchInput(value);
+    setShowRouteDropdown(value.length > 0);
+    if (value.length === 0) {
+      setSelectedRouteName('');
+      if (!isRoundTrip) {
+        setSelectedRoutes([]);
+      }
+    }
+  };
+
+  // Clear single route selection
+  const clearSingleRouteSelection = () => {
+    setSelectedRoutes([]);
+    setSelectedRouteName('');
+    setRouteSearchInput('');
+    setShowRouteDropdown(false);
+  };
+
   const selectedRouteObjects = routes.filter((r: Route) => selectedRoutes.includes(r.id.toString()));
 
   // Create booking mutation
@@ -583,25 +647,43 @@ export const NewBooking: React.FC = () => {
             {isRoundTrip ? (
               // Multiple route selection interface
               <div className="border border-gray-300 rounded-md p-4 bg-gray-50">
-                <div className="mb-3">
-                  <select
-                    onChange={(e) => {
-                      if (e.target.value) {
-                        addRoute(e.target.value);
-                        e.target.value = ''; // Reset select
-                      }
-                    }}
-                    className="w-full px-3 py-2 border border-gray-300 rounded-md focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
-                  >
-                    <option value="">Add a route leg...</option>
-                    {routes
-                      .filter(route => !bookingLegs.find(leg => leg.routeId === route.id.toString()))
-                      .map((route: Route) => (
-                        <option key={route.id} value={route.id}>
-                          {route.name} ({route.origin} → {route.destination}) - {route.distance} miles
-                        </option>
-                      ))}
-                  </select>
+                <div className="mb-3 relative">
+                  <div className="relative">
+                    <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 text-gray-400 w-4 h-4" />
+                    <input
+                      type="text"
+                      placeholder="Add a route leg - search by name, origin, or destination..."
+                      className="w-full pl-10 pr-4 py-2 border border-gray-300 rounded-md focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
+                      value={routeSearchInput}
+                      onChange={(e) => handleRouteSearch(e.target.value)}
+                      onFocus={() => routeSearchInput.length > 0 && setShowRouteDropdown(true)}
+                      onBlur={() => setTimeout(() => setShowRouteDropdown(false), 200)}
+                    />
+                    {/* Dropdown with filtered routes */}
+                    {showRouteDropdown && (
+                      <div className="absolute z-50 w-full mt-1 bg-white border border-gray-300 rounded-md shadow-lg max-h-60 overflow-y-auto">
+                        {filteredMultiRoutes.length > 0 ? (
+                          filteredMultiRoutes.map((route: Route) => (
+                            <button
+                              key={route.id}
+                              type="button"
+                              onClick={() => handleMultiRouteSelect(route)}
+                              className="w-full px-3 py-2 text-left hover:bg-blue-50 border-b border-gray-100 last:border-b-0"
+                            >
+                              <div className="font-medium text-gray-900">{route.name}</div>
+                              <div className="text-xs text-gray-500">
+                                {route.origin} → {route.destination} • {route.distance} miles
+                              </div>
+                            </button>
+                          ))
+                        ) : (
+                          <div className="px-3 py-2 text-gray-500 text-sm">
+                            {routeSearchInput.length > 0 ? `No available routes found matching "${routeSearchInput}"` : 'Start typing to search routes'}
+                          </div>
+                        )}
+                      </div>
+                    )}
+                  </div>
                 </div>
                 
                 {/* Booking Legs Display */}
@@ -723,23 +805,65 @@ export const NewBooking: React.FC = () => {
                 )}
               </div>
             ) : (
-              // Single route selection
-              <select
-                value={selectedRoutes[0] || ''}
-                onChange={(e) => {
-                  setSelectedRoutes(e.target.value ? [e.target.value] : []);
-                  calculateSuggestedRate();
-                }}
-                className="w-full px-3 py-2 border border-gray-300 rounded-md focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
-                required
-              >
-                <option value="">Select a route...</option>
-                {routes.map((route: Route) => (
-                  <option key={route.id} value={route.id}>
-                    {route.name} ({route.origin} → {route.destination}) - {route.distance} miles
-                  </option>
-                ))}
-              </select>
+              // Single route selection with search
+              <div className="relative">
+                {/* Display selected route or search input */}
+                {selectedRouteName && !showRouteDropdown ? (
+                  <div className="w-full px-3 py-2 border border-gray-300 rounded-md bg-blue-50 border-blue-200 flex items-center justify-between">
+                    <div>
+                      <span className="text-blue-900 font-medium">{selectedRouteName}</span>
+                      {selectedRouteObjects[0]?.distance && (
+                        <span className="text-blue-700 text-sm ml-2">({selectedRouteObjects[0].distance} mi)</span>
+                      )}
+                    </div>
+                    <button
+                      type="button"
+                      onClick={clearSingleRouteSelection}
+                      className="text-blue-600 hover:text-blue-800 ml-2"
+                      title="Clear selection"
+                    >
+                      <X className="w-4 h-4" />
+                    </button>
+                  </div>
+                ) : (
+                  <div className="relative">
+                    <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 text-gray-400 w-4 h-4" />
+                    <input
+                      type="text"
+                      placeholder="Search routes by name, origin, or destination..."
+                      className="w-full pl-10 pr-4 py-2 border border-gray-300 rounded-md focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
+                      value={routeSearchInput}
+                      onChange={(e) => handleRouteSearch(e.target.value)}
+                      onFocus={() => routeSearchInput.length > 0 && setShowRouteDropdown(true)}
+                      onBlur={() => setTimeout(() => setShowRouteDropdown(false), 200)}
+                    />
+                    {/* Dropdown with filtered routes */}
+                    {showRouteDropdown && (
+                      <div className="absolute z-50 w-full mt-1 bg-white border border-gray-300 rounded-md shadow-lg max-h-60 overflow-y-auto">
+                        {filteredRoutes.length > 0 ? (
+                          filteredRoutes.map((route: Route) => (
+                            <button
+                              key={route.id}
+                              type="button"
+                              onClick={() => handleSingleRouteSelect(route)}
+                              className="w-full px-3 py-2 text-left hover:bg-blue-50 border-b border-gray-100 last:border-b-0"
+                            >
+                              <div className="font-medium text-gray-900">{route.name}</div>
+                              <div className="text-xs text-gray-500">
+                                {route.origin} → {route.destination} • {route.distance} miles
+                              </div>
+                            </button>
+                          ))
+                        ) : (
+                          <div className="px-3 py-2 text-gray-500 text-sm">
+                            {routeSearchInput.length > 0 ? `No routes found matching "${routeSearchInput}"` : 'Start typing to search routes'}
+                          </div>
+                        )}
+                      </div>
+                    )}
+                  </div>
+                )}
+              </div>
             )}
           </div>
           
