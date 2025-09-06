@@ -2,6 +2,7 @@ export type UserRole = 'ADMIN' | 'DISPATCHER' | 'USER' | 'CARRIER';
 export type CarrierStatus = 'PENDING' | 'ACTIVE' | 'INACTIVE' | 'SUSPENDED' | 'NOT_ONBOARDED' | 'ONBOARDED';
 export type BookingStatus = 'PENDING' | 'CONFIRMED' | 'IN_PROGRESS' | 'COMPLETED' | 'CANCELLED';
 export type InvoiceStatus = 'PENDING' | 'SENT' | 'PAID' | 'OVERDUE' | 'CANCELLED';
+export type RateType = 'MILE' | 'MILE_FSC' | 'FLAT_RATE';
 
 export interface User {
   id: number;
@@ -87,6 +88,12 @@ export interface Booking {
   status: BookingStatus;
   billable: boolean;
   notes?: string;
+  
+  // Rate calculation fields
+  rateType: RateType;
+  baseRate?: number;
+  fscRate?: number;
+  
   createdAt: string;
   updatedAt: string;
   carrier?: Carrier;

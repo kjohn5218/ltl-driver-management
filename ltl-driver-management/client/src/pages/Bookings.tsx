@@ -1,4 +1,4 @@
-import React, { useState, useMemo } from 'react';
+import React, { useState, useMemo, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { useQuery } from '@tanstack/react-query';
 import { api } from '../services/api';
@@ -451,8 +451,31 @@ const BookingViewModal: React.FC<BookingViewModalProps> = ({ booking, onClose, g
               <p className="text-sm text-gray-900">{format(new Date(booking.bookingDate), 'MMM dd, yyyy')}</p>
             </div>
             <div>
-              <label className="block text-sm font-medium text-gray-700 mb-1">Rate</label>
-              <p className="text-sm text-gray-900 font-medium">${booking.rate}</p>
+              <label className="block text-sm font-medium text-gray-700 mb-1">Rate Type</label>
+              <p className="text-sm text-gray-900">
+                {booking.rateType === 'MILE' && 'Per Mile'}
+                {booking.rateType === 'MILE_FSC' && 'Per Mile + FSC'}
+                {booking.rateType === 'FLAT_RATE' && 'Flat Rate'}
+              </p>
+            </div>
+          </div>
+          
+          <div className="grid grid-cols-3 gap-4">
+            {booking.rateType !== 'FLAT_RATE' && booking.baseRate && (
+              <div>
+                <label className="block text-sm font-medium text-gray-700 mb-1">Base Rate</label>
+                <p className="text-sm text-gray-900">${booking.baseRate}</p>
+              </div>
+            )}
+            {booking.rateType === 'MILE_FSC' && booking.fscRate && (
+              <div>
+                <label className="block text-sm font-medium text-gray-700 mb-1">FSC Rate</label>
+                <p className="text-sm text-gray-900">{booking.fscRate}%</p>
+              </div>
+            )}
+            <div>
+              <label className="block text-sm font-medium text-gray-700 mb-1">Total Rate</label>
+              <p className="text-sm text-gray-900 font-medium text-green-600">${booking.rate}</p>
             </div>
           </div>
           
@@ -506,10 +529,51 @@ const BookingEditModal: React.FC<BookingEditModalProps> = ({ booking, onClose, o
     status: booking.status,
     billable: booking.billable,
     notes: booking.notes || '',
-    bookingDate: booking.bookingDate.split('T')[0] // Format for date input
+    bookingDate: booking.bookingDate.split('T')[0], // Format for date input
+    rateType: booking.rateType,
+    baseRate: booking.baseRate || 0,
+    fscRate: booking.fscRate || 0
   });
   
   const [isSubmitting, setIsSubmitting] = useState(false);
+
+  // Fetch system settings for fuel surcharge
+  const { data: settingsData } = useQuery({
+    queryKey: ['settings'],
+    queryFn: async () => {
+      const response = await api.get('/settings');
+      return response.data;
+    }
+  });
+
+  // Calculate total rate based on rate type and values
+  const calculateTotalRate = (rateType: string, baseRate: number, fscRate: number) => {
+    if (!booking.route?.distance) return baseRate;
+    
+    switch (rateType) {
+      case 'MILE':
+        return baseRate * booking.route.distance;
+      case 'MILE_FSC':
+        const mileRate = baseRate * booking.route.distance;
+        return mileRate + (mileRate * (fscRate / 100));
+      case 'FLAT_RATE':
+      default:
+        return baseRate;
+    }
+  };
+
+  // Update total rate when rate type or values change
+  useEffect(() => {
+    const totalRate = calculateTotalRate(formData.rateType, formData.baseRate, formData.fscRate);
+    setFormData(prev => ({ ...prev, rate: Number(totalRate.toFixed(2)) }));
+  }, [formData.rateType, formData.baseRate, formData.fscRate]);
+
+  // Set FSC rate from system settings when available
+  useEffect(() => {
+    if (settingsData?.fuelSurchargeRate && formData.rateType === 'MILE_FSC' && !formData.fscRate) {
+      setFormData(prev => ({ ...prev, fscRate: Number(settingsData.fuelSurchargeRate) }));
+    }
+  }, [settingsData?.fuelSurchargeRate, formData.rateType]);
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -570,6 +634,9 @@ const BookingEditModal: React.FC<BookingEditModalProps> = ({ booking, onClose, o
             <div className="text-sm text-gray-500 bg-gray-50 p-2 rounded">
               <p className="font-medium">{booking.route?.name}</p>
               <p>{booking.route?.origin} → {booking.route?.destination}</p>
+              {booking.route?.distance && (
+                <p className="text-gray-600">{booking.route.distance} miles</p>
+              )}
             </div>
           </div>
           
@@ -584,14 +651,52 @@ const BookingEditModal: React.FC<BookingEditModalProps> = ({ booking, onClose, o
               />
             </div>
             <div>
-              <label className="block text-sm font-medium text-gray-700 mb-1">Rate ($)</label>
+              <label className="block text-sm font-medium text-gray-700 mb-1">Rate Type</label>
+              <select
+                value={formData.rateType}
+                onChange={(e) => setFormData({ ...formData, rateType: e.target.value as any })}
+                className="w-full px-3 py-2 border border-gray-300 rounded-md focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
+              >
+                <option value="FLAT_RATE">Flat Rate</option>
+                <option value="MILE">Per Mile</option>
+                <option value="MILE_FSC">Per Mile + FSC</option>
+              </select>
+            </div>
+          </div>
+
+          {/* Rate calculation fields */}
+          <div className="grid grid-cols-3 gap-4">
+            <div>
+              <label className="block text-sm font-medium text-gray-700 mb-1">
+                {formData.rateType === 'FLAT_RATE' ? 'Flat Rate ($)' : 'Base Rate ($/mile)'}
+              </label>
               <input
                 type="number"
                 step="0.01"
-                value={formData.rate}
-                onChange={(e) => setFormData({ ...formData, rate: parseFloat(e.target.value) })}
+                value={formData.baseRate}
+                onChange={(e) => setFormData({ ...formData, baseRate: parseFloat(e.target.value) || 0 })}
                 className="w-full px-3 py-2 border border-gray-300 rounded-md focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
+                placeholder="0.00"
               />
+            </div>
+            {formData.rateType === 'MILE_FSC' && (
+              <div>
+                <label className="block text-sm font-medium text-gray-700 mb-1">FSC Rate (%)</label>
+                <input
+                  type="number"
+                  step="0.01"
+                  value={formData.fscRate}
+                  onChange={(e) => setFormData({ ...formData, fscRate: parseFloat(e.target.value) || 0 })}
+                  className="w-full px-3 py-2 border border-gray-300 rounded-md focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
+                  placeholder="0.00"
+                />
+              </div>
+            )}
+            <div>
+              <label className="block text-sm font-medium text-gray-700 mb-1">Total Rate</label>
+              <div className="w-full px-3 py-2 bg-green-50 border border-green-200 rounded-md text-green-800 font-medium">
+                ${formData.rate.toFixed(2)}
+              </div>
             </div>
           </div>
           
