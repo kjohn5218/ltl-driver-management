@@ -1,8 +1,9 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import { useQuery, useQueryClient } from '@tanstack/react-query';
 import { api } from '../services/api';
 import { Route } from '../types';
-import { Plus, Search, Edit, Eye, Trash2, MapPin, Clock, DollarSign, Filter, X } from 'lucide-react';
+import { Plus, Search, Edit, Eye, Trash2, MapPin, Clock, DollarSign, Filter, X, Calculator } from 'lucide-react';
+import { calculateRoute, calculateArrivalTime, formatRunTime, hasAddressInfo } from '../utils/routeCalculations';
 
 // Location tooltip component
 interface LocationWithTooltipProps {
@@ -430,11 +431,17 @@ const RouteViewModal: React.FC<RouteViewModalProps> = ({ route, onClose }) => {
             </div>
           </div>
           
-          <div className="grid grid-cols-2 gap-4">
+          <div className="grid grid-cols-3 gap-4">
             <div>
               <label className="block text-sm font-medium text-gray-700 mb-1">Distance</label>
               <p className="text-sm text-gray-900">{route.distance} miles</p>
             </div>
+            {route.runTime && (
+              <div>
+                <label className="block text-sm font-medium text-gray-700 mb-1">Run Time</label>
+                <p className="text-sm text-gray-900">{formatRunTime(route.runTime)}</p>
+              </div>
+            )}
             <div>
               <label className="block text-sm font-medium text-gray-700 mb-1">Status</label>
               <span className={`inline-flex px-2 py-1 rounded-full text-xs font-medium ${
@@ -532,22 +539,128 @@ const RouteEditModal: React.FC<RouteEditModalProps> = ({ route, onClose, onSave 
     destinationState: route.destinationState || '',
     destinationZipCode: route.destinationZipCode || '',
     destinationContact: route.destinationContact || '',
-    distance: route.distance,
+    distance: route.distance.toString(),
+    runTime: route.runTime?.toString() || '',
     active: route.active,
-    standardRate: route.standardRate || '',
+    standardRate: route.standardRate?.toString() || '',
     frequency: route.frequency || '',
     departureTime: route.departureTime || '',
     arrivalTime: route.arrivalTime || ''
   });
   
   const [isSubmitting, setIsSubmitting] = useState(false);
+  const [isCalculating, setIsCalculating] = useState(false);
+
+  // Auto-calculate arrival time when departure time or run time changes
+  useEffect(() => {
+    if (formData.departureTime && formData.runTime) {
+      const runTimeNumber = parseInt(formData.runTime);
+      const arrivalTime = calculateArrivalTime(formData.departureTime, runTimeNumber);
+      if (arrivalTime && arrivalTime !== formData.arrivalTime) {
+        setFormData(prev => ({ ...prev, arrivalTime }));
+      }
+    }
+  }, [formData.departureTime, formData.runTime]);
+
+  const handleCalculateDistance = async () => {
+    setIsCalculating(true);
+    try {
+      const origin = {
+        address: formData.originAddress,
+        city: formData.originCity,
+        state: formData.originState,
+        zipCode: formData.originZipCode
+      };
+
+      const destination = {
+        address: formData.destinationAddress,
+        city: formData.destinationCity,
+        state: formData.destinationState,
+        zipCode: formData.destinationZipCode
+      };
+
+      const result = await calculateRoute(origin, destination);
+      
+      if (result.distance) {
+        setFormData(prev => ({ 
+          ...prev, 
+          distance: result.distance!.toString()
+        }));
+      } else {
+        alert('Could not calculate distance. Please ensure you have provided sufficient address information.');
+      }
+    } catch (error) {
+      console.error('Distance calculation error:', error);
+      alert('Failed to calculate distance. Please enter manually.');
+    } finally {
+      setIsCalculating(false);
+    }
+  };
+
+  const handleCalculateRunTime = async () => {
+    setIsCalculating(true);
+    try {
+      const origin = {
+        address: formData.originAddress,
+        city: formData.originCity,
+        state: formData.originState,
+        zipCode: formData.originZipCode
+      };
+
+      const destination = {
+        address: formData.destinationAddress,
+        city: formData.destinationCity,
+        state: formData.destinationState,
+        zipCode: formData.destinationZipCode
+      };
+
+      const result = await calculateRoute(origin, destination);
+      
+      if (result.duration) {
+        setFormData(prev => ({ 
+          ...prev, 
+          runTime: result.duration!.toString()
+        }));
+      } else {
+        alert('Could not calculate run time. Please ensure you have provided sufficient address information.');
+      }
+    } catch (error) {
+      console.error('Run time calculation error:', error);
+      alert('Failed to calculate run time. Please enter manually.');
+    } finally {
+      setIsCalculating(false);
+    }
+  };
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     setIsSubmitting(true);
     
     try {
-      const response = await api.put(`/routes/${route.id}`, formData);
+      const payload = {
+        name: formData.name,
+        origin: formData.origin,
+        destination: formData.destination,
+        originAddress: formData.originAddress || undefined,
+        originCity: formData.originCity || undefined,
+        originState: formData.originState || undefined,
+        originZipCode: formData.originZipCode || undefined,
+        originContact: formData.originContact || undefined,
+        destinationAddress: formData.destinationAddress || undefined,
+        destinationCity: formData.destinationCity || undefined,
+        destinationState: formData.destinationState || undefined,
+        destinationZipCode: formData.destinationZipCode || undefined,
+        destinationContact: formData.destinationContact || undefined,
+        distance: parseFloat(formData.distance),
+        runTime: formData.runTime ? parseInt(formData.runTime) : undefined,
+        active: formData.active,
+        standardRate: formData.standardRate ? parseFloat(formData.standardRate) : undefined,
+        frequency: formData.frequency || undefined,
+        departureTime: formData.departureTime || undefined,
+        arrivalTime: formData.arrivalTime || undefined
+      };
+      
+      const response = await api.put(`/routes/${route.id}`, payload);
       onSave(response.data);
     } catch (error) {
       console.error('Error updating route:', error);
@@ -715,26 +828,68 @@ const RouteEditModal: React.FC<RouteEditModalProps> = ({ route, onClose, onSave 
           <div className="grid grid-cols-2 gap-4">
             <div>
               <label className="block text-sm font-medium text-gray-700 mb-1">Distance (miles)</label>
-              <input
-                type="number"
-                step="0.1"
-                required
-                value={formData.distance}
-                onChange={(e) => setFormData({ ...formData, distance: parseFloat(e.target.value) || 0 })}
-                className="w-full px-3 py-2 border border-gray-300 rounded-md focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
-              />
+              <div className="flex gap-2">
+                <input
+                  type="number"
+                  step="0.1"
+                  required
+                  value={formData.distance}
+                  onChange={(e) => setFormData({ ...formData, distance: e.target.value })}
+                  className="flex-1 px-3 py-2 border border-gray-300 rounded-md focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
+                />
+                <button
+                  type="button"
+                  onClick={handleCalculateDistance}
+                  disabled={isCalculating || !hasAddressInfo({ 
+                    address: formData.originAddress, city: formData.originCity, state: formData.originState, zipCode: formData.originZipCode 
+                  }) || !hasAddressInfo({ 
+                    address: formData.destinationAddress, city: formData.destinationCity, state: formData.destinationState, zipCode: formData.destinationZipCode 
+                  })}
+                  className="px-3 py-2 bg-blue-600 text-white rounded-md hover:bg-blue-700 disabled:bg-gray-300 disabled:cursor-not-allowed"
+                  title="Calculate distance using addresses"
+                >
+                  <Calculator className="w-4 h-4" />
+                </button>
+              </div>
             </div>
             <div>
-              <label className="block text-sm font-medium text-gray-700 mb-1">Standard Rate ($)</label>
-              <input
-                type="number"
-                step="0.01"
-                value={formData.standardRate}
-                onChange={(e) => setFormData({ ...formData, standardRate: e.target.value })}
-                className="w-full px-3 py-2 border border-gray-300 rounded-md focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
-                placeholder="Optional"
-              />
+              <label className="block text-sm font-medium text-gray-700 mb-1">Run Time (minutes)</label>
+              <div className="flex gap-2">
+                <input
+                  type="number"
+                  min="1"
+                  value={formData.runTime}
+                  onChange={(e) => setFormData({ ...formData, runTime: e.target.value })}
+                  className="flex-1 px-3 py-2 border border-gray-300 rounded-md focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
+                  placeholder="Optional"
+                />
+                <button
+                  type="button"
+                  onClick={handleCalculateRunTime}
+                  disabled={isCalculating || !hasAddressInfo({ 
+                    address: formData.originAddress, city: formData.originCity, state: formData.originState, zipCode: formData.originZipCode 
+                  }) || !hasAddressInfo({ 
+                    address: formData.destinationAddress, city: formData.destinationCity, state: formData.destinationState, zipCode: formData.destinationZipCode 
+                  })}
+                  className="px-3 py-2 bg-blue-600 text-white rounded-md hover:bg-blue-700 disabled:bg-gray-300 disabled:cursor-not-allowed"
+                  title="Calculate run time using addresses"
+                >
+                  <Clock className="w-4 h-4" />
+                </button>
+              </div>
             </div>
+          </div>
+
+          <div>
+            <label className="block text-sm font-medium text-gray-700 mb-1">Standard Rate ($)</label>
+            <input
+              type="number"
+              step="0.01"
+              value={formData.standardRate}
+              onChange={(e) => setFormData({ ...formData, standardRate: e.target.value })}
+              className="w-full px-3 py-2 border border-gray-300 rounded-md focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
+              placeholder="Optional"
+            />
           </div>
 
           <div>
@@ -879,6 +1034,7 @@ const AddRouteModal: React.FC<AddRouteModalProps> = ({ onClose, onSave }) => {
     destinationZipCode: '',
     destinationContact: '',
     distance: '',
+    runTime: '',
     active: true,
     standardRate: '',
     frequency: '',
@@ -887,6 +1043,94 @@ const AddRouteModal: React.FC<AddRouteModalProps> = ({ onClose, onSave }) => {
   });
   
   const [isSubmitting, setIsSubmitting] = useState(false);
+  const [isCalculating, setIsCalculating] = useState(false);
+
+  // Auto-calculate arrival time when departure time or run time changes
+  useEffect(() => {
+    if (formData.departureTime && formData.runTime) {
+      const arrivalTime = calculateArrivalTime(formData.departureTime, parseInt(formData.runTime));
+      if (arrivalTime && arrivalTime !== formData.arrivalTime) {
+        setFormData(prev => ({ ...prev, arrivalTime }));
+      }
+    }
+  }, [formData.departureTime, formData.runTime]);
+
+  // Calculate distance using addresses
+  const handleCalculateDistance = async () => {
+    if (isCalculating) return;
+    
+    setIsCalculating(true);
+    try {
+      const origin = {
+        address: formData.originAddress,
+        city: formData.originCity,
+        state: formData.originState,
+        zipCode: formData.originZipCode
+      };
+
+      const destination = {
+        address: formData.destinationAddress,
+        city: formData.destinationCity,
+        state: formData.destinationState,
+        zipCode: formData.destinationZipCode
+      };
+
+      const result = await calculateRoute(origin, destination);
+      
+      if (result.distance) {
+        setFormData(prev => ({ 
+          ...prev, 
+          distance: result.distance!.toString(),
+          runTime: result.duration ? result.duration.toString() : prev.runTime
+        }));
+      } else {
+        alert('Could not calculate distance. Please ensure you have provided sufficient address information.');
+      }
+    } catch (error) {
+      console.error('Distance calculation error:', error);
+      alert('Failed to calculate distance. Please enter manually.');
+    } finally {
+      setIsCalculating(false);
+    }
+  };
+
+  // Calculate run time using addresses
+  const handleCalculateRunTime = async () => {
+    if (isCalculating) return;
+    
+    setIsCalculating(true);
+    try {
+      const origin = {
+        address: formData.originAddress,
+        city: formData.originCity,
+        state: formData.originState,
+        zipCode: formData.originZipCode
+      };
+
+      const destination = {
+        address: formData.destinationAddress,
+        city: formData.destinationCity,
+        state: formData.destinationState,
+        zipCode: formData.destinationZipCode
+      };
+
+      const result = await calculateRoute(origin, destination);
+      
+      if (result.duration) {
+        setFormData(prev => ({ 
+          ...prev, 
+          runTime: result.duration!.toString()
+        }));
+      } else {
+        alert('Could not calculate run time. Please ensure you have provided sufficient address information.');
+      }
+    } catch (error) {
+      console.error('Run time calculation error:', error);
+      alert('Failed to calculate run time. Please enter manually.');
+    } finally {
+      setIsCalculating(false);
+    }
+  };
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -908,6 +1152,7 @@ const AddRouteModal: React.FC<AddRouteModalProps> = ({ onClose, onSave }) => {
         destinationZipCode: formData.destinationZipCode || undefined,
         destinationContact: formData.destinationContact || undefined,
         distance: parseFloat(formData.distance),
+        runTime: formData.runTime ? parseInt(formData.runTime) : undefined,
         active: formData.active,
         standardRate: formData.standardRate ? parseFloat(formData.standardRate) : undefined,
         frequency: formData.frequency || undefined,
@@ -1083,17 +1328,50 @@ const AddRouteModal: React.FC<AddRouteModalProps> = ({ onClose, onSave }) => {
             </div>
           </div>
           
-          <div>
-            <label className="block text-sm font-medium text-gray-700 mb-1">Distance (miles) *</label>
-            <input
-              type="number"
-              step="0.1"
-              required
-              value={formData.distance}
-              onChange={(e) => setFormData({ ...formData, distance: e.target.value })}
-              className="w-full px-3 py-2 border border-gray-300 rounded-md focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
-              placeholder="2445.5"
-            />
+          <div className="grid grid-cols-2 gap-4">
+            <div>
+              <label className="block text-sm font-medium text-gray-700 mb-1">Distance (miles) *</label>
+              <div className="relative">
+                <input
+                  type="number"
+                  step="0.1"
+                  required
+                  value={formData.distance}
+                  onChange={(e) => setFormData({ ...formData, distance: e.target.value })}
+                  className="w-full px-3 py-2 pr-10 border border-gray-300 rounded-md focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
+                  placeholder="2445.5"
+                />
+                <button
+                  type="button"
+                  onClick={handleCalculateDistance}
+                  className="absolute right-2 top-1/2 transform -translate-y-1/2 text-gray-400 hover:text-blue-600"
+                  title="Calculate distance using addresses"
+                >
+                  <Calculator className="w-4 h-4" />
+                </button>
+              </div>
+            </div>
+            <div>
+              <label className="block text-sm font-medium text-gray-700 mb-1">Run Time (hours)</label>
+              <div className="relative">
+                <input
+                  type="number"
+                  step="0.1"
+                  value={formData.runTime ? (parseInt(formData.runTime) / 60).toFixed(1) : ''}
+                  onChange={(e) => setFormData({ ...formData, runTime: e.target.value ? Math.round(parseFloat(e.target.value) * 60).toString() : '' })}
+                  className="w-full px-3 py-2 pr-10 border border-gray-300 rounded-md focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
+                  placeholder="8.5"
+                />
+                <button
+                  type="button"
+                  onClick={handleCalculateRunTime}
+                  className="absolute right-2 top-1/2 transform -translate-y-1/2 text-gray-400 hover:text-blue-600"
+                  title="Calculate run time using addresses"
+                >
+                  <Calculator className="w-4 h-4" />
+                </button>
+              </div>
+            </div>
           </div>
 
           <div>

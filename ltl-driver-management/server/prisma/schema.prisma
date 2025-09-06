@@ -98,6 +98,7 @@ model Route {
   destinationZipCode   String?
   destinationContact   String?
   distance             Decimal                  @db.Decimal(6, 1)
+  runTime              Int?                     // Run time in minutes
   active               Boolean                  @default(true)
   standardRate         Decimal?                 @db.Decimal(5, 2)
   frequency            String?

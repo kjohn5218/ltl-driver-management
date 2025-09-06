@@ -56,6 +56,7 @@ router.post(
     body('destinationZipCode').optional().trim(),
     body('destinationContact').optional().trim(),
     body('distance').isFloat({ min: 0.1 }),
+    body('runTime').optional().isInt({ min: 1 }),
     body('standardRate').optional().custom((value) => {
       if (value === '' || value === undefined || value === null) return true;
       if (!isNaN(parseFloat(value)) && parseFloat(value) >= 0) return true;
@@ -88,6 +89,7 @@ router.put(
     body('destinationZipCode').optional().trim(),
     body('destinationContact').optional().trim(),
     body('distance').optional().isFloat({ min: 0.1 }),
+    body('runTime').optional().isInt({ min: 1 }),
     body('standardRate').optional().custom((value) => {
       if (value === '' || value === undefined || value === null) return true;
       if (!isNaN(parseFloat(value)) && parseFloat(value) >= 0) return true;

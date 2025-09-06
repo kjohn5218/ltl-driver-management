@@ -64,6 +64,7 @@ export interface Route {
   destinationZipCode?: string;
   destinationContact?: string;
   distance: number;
+  runTime?: number; // Run time in minutes
   active: boolean;
   standardRate?: number;
   frequency?: string;
