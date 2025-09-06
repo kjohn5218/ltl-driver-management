@@ -1,9 +1,9 @@
-import React, { useState } from 'react';
+import React, { useState, useMemo } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { useMutation, useQuery } from '@tanstack/react-query';
 import { api } from '../services/api';
 import { Carrier, Route } from '../types';
-import { Calendar, Truck, MapPin, DollarSign, AlertCircle, Search } from 'lucide-react';
+import { Calendar, Truck, MapPin, DollarSign, AlertCircle, Search, X } from 'lucide-react';
 import { format } from 'date-fns';
 
 type RateType = 'MILE' | 'MILE_FSC' | 'FLAT_RATE';
@@ -27,6 +27,8 @@ export const NewBooking: React.FC = () => {
   const [notes, setNotes] = useState('');
   const [billable, setBillable] = useState(true);
   const [carrierSearch, setCarrierSearch] = useState('');
+  const [showCarrierDropdown, setShowCarrierDropdown] = useState(false);
+  const [selectedCarrierName, setSelectedCarrierName] = useState('');
   const [routeSearch, setRouteSearch] = useState('');
   const [originFilter, setOriginFilter] = useState('');
   const [destinationFilter, setDestinationFilter] = useState('');
@@ -35,12 +37,11 @@ export const NewBooking: React.FC = () => {
 
   // Fetch carriers
   const { data: carriersData, isLoading: loadingCarriers } = useQuery({
-    queryKey: ['carriers', carrierSearch],
+    queryKey: ['carriers'],
     queryFn: async () => {
       const params = new URLSearchParams();
       params.append('status', 'ACTIVE');
-      params.append('limit', '1000');
-      if (carrierSearch.trim()) params.append('search', carrierSearch.trim());
+      params.append('limit', '5000'); // Fetch all active carriers
       
       const response = await api.get(`/carriers?${params.toString()}`);
       return response.data;
@@ -86,6 +87,44 @@ export const NewBooking: React.FC = () => {
   const uniqueDestinations = [...new Set(routes.map((r: Route) => r.destination))].sort();
 
   const selectedCarrier = carriers.find((c: Carrier) => c.id.toString() === carrierId);
+
+  // Filter carriers based on search term
+  const filteredCarriers = useMemo(() => {
+    if (!carriers.length) return [];
+    
+    return carriers.filter((carrier: Carrier) =>
+      carrier.name.toLowerCase().includes(carrierSearch.toLowerCase()) ||
+      carrier.mcNumber?.toLowerCase().includes(carrierSearch.toLowerCase()) ||
+      carrier.dotNumber?.toLowerCase().includes(carrierSearch.toLowerCase())
+    ).slice(0, 10); // Limit to first 10 results
+  }, [carriers, carrierSearch]);
+
+  // Handle carrier selection
+  const handleCarrierSelect = (carrier: Carrier) => {
+    setCarrierId(carrier.id.toString());
+    setSelectedCarrierName(carrier.name);
+    setCarrierSearch('');
+    setShowCarrierDropdown(false);
+    calculateSuggestedRate();
+  };
+
+  // Handle carrier search input
+  const handleCarrierSearch = (value: string) => {
+    setCarrierSearch(value);
+    setShowCarrierDropdown(value.length > 0);
+    if (value.length === 0) {
+      setSelectedCarrierName('');
+      setCarrierId('');
+    }
+  };
+
+  // Clear carrier selection
+  const clearCarrierSelection = () => {
+    setCarrierId('');
+    setSelectedCarrierName('');
+    setCarrierSearch('');
+    setShowCarrierDropdown(false);
+  };
   const selectedRouteObjects = routes.filter((r: Route) => selectedRoutes.includes(r.id.toString()));
 
   // Create booking mutation
@@ -363,30 +402,77 @@ export const NewBooking: React.FC = () => {
           </label>
           <div className="space-y-2">
             <div className="relative">
-              <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 text-gray-400 w-4 h-4" />
-              <input
-                type="text"
-                placeholder="Search carriers by name, MC#, or DOT#..."
-                className="w-full pl-10 pr-4 py-2 border border-gray-300 rounded-md focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
-                value={carrierSearch}
-                onChange={(e) => setCarrierSearch(e.target.value)}
-              />
+              {/* Display selected carrier or search input */}
+              {selectedCarrierName && !showCarrierDropdown ? (
+                <div className="w-full px-3 py-2 border border-gray-300 rounded-md bg-blue-50 border-blue-200 flex items-center justify-between">
+                  <div>
+                    <span className="text-blue-900 font-medium">{selectedCarrierName}</span>
+                    {selectedCarrier?.mcNumber && (
+                      <span className="text-blue-700 text-sm ml-2">(MC: {selectedCarrier.mcNumber})</span>
+                    )}
+                  </div>
+                  <button
+                    type="button"
+                    onClick={clearCarrierSelection}
+                    className="text-blue-600 hover:text-blue-800 ml-2"
+                    title="Clear selection"
+                  >
+                    <X className="w-4 h-4" />
+                  </button>
+                </div>
+              ) : (
+                <div className="relative">
+                  <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 text-gray-400 w-4 h-4" />
+                  <input
+                    type="text"
+                    placeholder="Search carriers by name, MC#, or DOT#..."
+                    className="w-full pl-10 pr-4 py-2 border border-gray-300 rounded-md focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
+                    value={carrierSearch}
+                    onChange={(e) => handleCarrierSearch(e.target.value)}
+                    onFocus={() => carrierSearch.length > 0 && setShowCarrierDropdown(true)}
+                    onBlur={() => setTimeout(() => setShowCarrierDropdown(false), 200)}
+                  />
+                  {/* Dropdown with filtered carriers */}
+                  {showCarrierDropdown && (
+                    <div className="absolute z-50 w-full mt-1 bg-white border border-gray-300 rounded-md shadow-lg max-h-60 overflow-y-auto">
+                      {filteredCarriers.length > 0 ? (
+                        <>
+                          <button
+                            type="button"
+                            onClick={() => {
+                              setCarrierId('');
+                              setSelectedCarrierName('');
+                              setCarrierSearch('');
+                              setShowCarrierDropdown(false);
+                            }}
+                            className="w-full px-3 py-2 text-left hover:bg-gray-50 border-b border-gray-100 text-gray-600 italic"
+                          >
+                            No carrier (Unbooked)
+                          </button>
+                          {filteredCarriers.map((carrier: Carrier) => (
+                            <button
+                              key={carrier.id}
+                              type="button"
+                              onClick={() => handleCarrierSelect(carrier)}
+                              className="w-full px-3 py-2 text-left hover:bg-blue-50 border-b border-gray-100 last:border-b-0"
+                            >
+                              <div className="font-medium text-gray-900">{carrier.name}</div>
+                              <div className="text-xs text-gray-500">
+                                MC: {carrier.mcNumber || 'N/A'} | DOT: {carrier.dotNumber || 'N/A'}
+                              </div>
+                            </button>
+                          ))}
+                        </>
+                      ) : (
+                        <div className="px-3 py-2 text-gray-500 text-sm">
+                          {carrierSearch.length > 0 ? `No carriers found matching "${carrierSearch}"` : 'Start typing to search carriers'}
+                        </div>
+                      )}
+                    </div>
+                  )}
+                </div>
+              )}
             </div>
-            <select
-              value={carrierId}
-              onChange={(e) => {
-                setCarrierId(e.target.value);
-                calculateSuggestedRate();
-              }}
-              className="w-full px-3 py-2 border border-gray-300 rounded-md focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
-            >
-              <option value="">No carrier (Unbooked)</option>
-              {carriers.map((carrier: Carrier) => (
-                <option key={carrier.id} value={carrier.id}>
-                  {carrier.name} (MC: {carrier.mcNumber || 'N/A'}, DOT: {carrier.dotNumber || 'N/A'})
-                </option>
-              ))}
-            </select>
           </div>
           {selectedCarrier && (
             <div className="mt-2 p-3 bg-gray-50 rounded-md">
