@@ -386,14 +386,47 @@ const RouteViewModal: React.FC<RouteViewModalProps> = ({ route, onClose }) => {
             <p className="text-lg font-semibold text-gray-900">{route.name}</p>
           </div>
           
-          <div className="grid grid-cols-2 gap-4">
-            <div>
-              <label className="block text-sm font-medium text-gray-700 mb-1">Origin</label>
-              <p className="text-sm text-gray-900">{route.origin}</p>
+          {/* Origin Details */}
+          <div>
+            <label className="block text-sm font-medium text-gray-700 mb-2">Origin</label>
+            <div className="bg-gray-50 p-3 rounded-md">
+              <p className="text-sm font-medium text-gray-900 mb-1">{route.origin}</p>
+              {route.originAddress && (
+                <p className="text-sm text-gray-600">{route.originAddress}</p>
+              )}
+              {(route.originCity || route.originState || route.originZipCode) && (
+                <p className="text-sm text-gray-600">
+                  {route.originCity}{route.originCity && (route.originState || route.originZipCode) ? ', ' : ''}
+                  {route.originState} {route.originZipCode}
+                </p>
+              )}
+              {route.originContact && (
+                <p className="text-sm text-gray-600 mt-1">
+                  <span className="font-medium">Contact:</span> {route.originContact}
+                </p>
+              )}
             </div>
-            <div>
-              <label className="block text-sm font-medium text-gray-700 mb-1">Destination</label>
-              <p className="text-sm text-gray-900">{route.destination}</p>
+          </div>
+
+          {/* Destination Details */}
+          <div>
+            <label className="block text-sm font-medium text-gray-700 mb-2">Destination</label>
+            <div className="bg-gray-50 p-3 rounded-md">
+              <p className="text-sm font-medium text-gray-900 mb-1">{route.destination}</p>
+              {route.destinationAddress && (
+                <p className="text-sm text-gray-600">{route.destinationAddress}</p>
+              )}
+              {(route.destinationCity || route.destinationState || route.destinationZipCode) && (
+                <p className="text-sm text-gray-600">
+                  {route.destinationCity}{route.destinationCity && (route.destinationState || route.destinationZipCode) ? ', ' : ''}
+                  {route.destinationState} {route.destinationZipCode}
+                </p>
+              )}
+              {route.destinationContact && (
+                <p className="text-sm text-gray-600 mt-1">
+                  <span className="font-medium">Contact:</span> {route.destinationContact}
+                </p>
+              )}
             </div>
           </div>
           
@@ -550,7 +583,7 @@ const RouteEditModal: React.FC<RouteEditModalProps> = ({ route, onClose, onSave 
           
           <div className="grid grid-cols-2 gap-4">
             <div>
-              <label className="block text-sm font-medium text-gray-700 mb-1">Origin</label>
+              <label className="block text-sm font-medium text-gray-700 mb-1">Origin *</label>
               <input
                 type="text"
                 required
@@ -560,7 +593,7 @@ const RouteEditModal: React.FC<RouteEditModalProps> = ({ route, onClose, onSave 
               />
             </div>
             <div>
-              <label className="block text-sm font-medium text-gray-700 mb-1">Destination</label>
+              <label className="block text-sm font-medium text-gray-700 mb-1">Destination *</label>
               <input
                 type="text"
                 required
@@ -568,6 +601,114 @@ const RouteEditModal: React.FC<RouteEditModalProps> = ({ route, onClose, onSave 
                 onChange={(e) => setFormData({ ...formData, destination: e.target.value })}
                 className="w-full px-3 py-2 border border-gray-300 rounded-md focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
               />
+            </div>
+          </div>
+
+          {/* Origin Address Details */}
+          <div>
+            <label className="block text-sm font-medium text-gray-700 mb-2">Origin Details</label>
+            <div className="grid grid-cols-2 gap-4 mb-2">
+              <div>
+                <input
+                  type="text"
+                  value={formData.originAddress}
+                  onChange={(e) => setFormData({ ...formData, originAddress: e.target.value })}
+                  className="w-full px-3 py-2 border border-gray-300 rounded-md focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
+                  placeholder="Address"
+                />
+              </div>
+              <div>
+                <input
+                  type="text"
+                  value={formData.originCity}
+                  onChange={(e) => setFormData({ ...formData, originCity: e.target.value })}
+                  className="w-full px-3 py-2 border border-gray-300 rounded-md focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
+                  placeholder="City"
+                />
+              </div>
+            </div>
+            <div className="grid grid-cols-3 gap-4">
+              <div>
+                <input
+                  type="text"
+                  value={formData.originState}
+                  onChange={(e) => setFormData({ ...formData, originState: e.target.value })}
+                  className="w-full px-3 py-2 border border-gray-300 rounded-md focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
+                  placeholder="State"
+                />
+              </div>
+              <div>
+                <input
+                  type="text"
+                  value={formData.originZipCode}
+                  onChange={(e) => setFormData({ ...formData, originZipCode: e.target.value })}
+                  className="w-full px-3 py-2 border border-gray-300 rounded-md focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
+                  placeholder="Zip Code"
+                />
+              </div>
+              <div>
+                <input
+                  type="text"
+                  value={formData.originContact}
+                  onChange={(e) => setFormData({ ...formData, originContact: e.target.value })}
+                  className="w-full px-3 py-2 border border-gray-300 rounded-md focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
+                  placeholder="Contact"
+                />
+              </div>
+            </div>
+          </div>
+
+          {/* Destination Address Details */}
+          <div>
+            <label className="block text-sm font-medium text-gray-700 mb-2">Destination Details</label>
+            <div className="grid grid-cols-2 gap-4 mb-2">
+              <div>
+                <input
+                  type="text"
+                  value={formData.destinationAddress}
+                  onChange={(e) => setFormData({ ...formData, destinationAddress: e.target.value })}
+                  className="w-full px-3 py-2 border border-gray-300 rounded-md focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
+                  placeholder="Address"
+                />
+              </div>
+              <div>
+                <input
+                  type="text"
+                  value={formData.destinationCity}
+                  onChange={(e) => setFormData({ ...formData, destinationCity: e.target.value })}
+                  className="w-full px-3 py-2 border border-gray-300 rounded-md focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
+                  placeholder="City"
+                />
+              </div>
+            </div>
+            <div className="grid grid-cols-3 gap-4">
+              <div>
+                <input
+                  type="text"
+                  value={formData.destinationState}
+                  onChange={(e) => setFormData({ ...formData, destinationState: e.target.value })}
+                  className="w-full px-3 py-2 border border-gray-300 rounded-md focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
+                  placeholder="State"
+                />
+              </div>
+              <div>
+                <input
+                  type="text"
+                  value={formData.destinationZipCode}
+                  onChange={(e) => setFormData({ ...formData, destinationZipCode: e.target.value })}
+                  className="w-full px-3 py-2 border border-gray-300 rounded-md focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
+                  placeholder="Zip Code"
+                />
+              </div>
+              <div>
+                <input
+                  type="text"
+                  value={formData.destinationContact}
+                  onChange={(e) => setFormData({ ...formData, destinationContact: e.target.value })}
+                  className="w-full px-3 py-2 border border-gray-300 rounded-md focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
+                  placeholder="Contact"
+                />
+              </div>
             </div>
           </div>
           

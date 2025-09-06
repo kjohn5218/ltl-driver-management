@@ -45,8 +45,22 @@ router.post(
     body('name').notEmpty().trim(),
     body('origin').notEmpty().trim(),
     body('destination').notEmpty().trim(),
-    body('distance').isInt({ min: 1 }),
-    body('standardRate').isDecimal({ decimal_digits: '0,2' }),
+    body('originAddress').optional().trim(),
+    body('originCity').optional().trim(),
+    body('originState').optional().trim(),
+    body('originZipCode').optional().trim(),
+    body('originContact').optional().trim(),
+    body('destinationAddress').optional().trim(),
+    body('destinationCity').optional().trim(),
+    body('destinationState').optional().trim(),
+    body('destinationZipCode').optional().trim(),
+    body('destinationContact').optional().trim(),
+    body('distance').isFloat({ min: 0.1 }),
+    body('standardRate').optional().custom((value) => {
+      if (value === '' || value === undefined || value === null) return true;
+      if (!isNaN(parseFloat(value)) && parseFloat(value) >= 0) return true;
+      throw new Error('standardRate must be a valid number >= 0');
+    }),
     body('frequency').optional().trim(),
     body('departureTime').optional().matches(/^([0-1]?[0-9]|2[0-3]):[0-5][0-9]$/),
     body('arrivalTime').optional().matches(/^([0-1]?[0-9]|2[0-3]):[0-5][0-9]$/)
@@ -63,8 +77,22 @@ router.put(
     body('name').optional().notEmpty().trim(),
     body('origin').optional().notEmpty().trim(),
     body('destination').optional().notEmpty().trim(),
-    body('distance').optional().isInt({ min: 1 }),
-    body('standardRate').optional().isDecimal({ decimal_digits: '0,2' }),
+    body('originAddress').optional().trim(),
+    body('originCity').optional().trim(),
+    body('originState').optional().trim(),
+    body('originZipCode').optional().trim(),
+    body('originContact').optional().trim(),
+    body('destinationAddress').optional().trim(),
+    body('destinationCity').optional().trim(),
+    body('destinationState').optional().trim(),
+    body('destinationZipCode').optional().trim(),
+    body('destinationContact').optional().trim(),
+    body('distance').optional().isFloat({ min: 0.1 }),
+    body('standardRate').optional().custom((value) => {
+      if (value === '' || value === undefined || value === null) return true;
+      if (!isNaN(parseFloat(value)) && parseFloat(value) >= 0) return true;
+      throw new Error('standardRate must be a valid number >= 0');
+    }),
     body('frequency').optional().trim(),
     body('departureTime').optional().matches(/^([0-1]?[0-9]|2[0-3]):[0-5][0-9]$/),
     body('arrivalTime').optional().matches(/^([0-1]?[0-9]|2[0-3]):[0-5][0-9]$/)

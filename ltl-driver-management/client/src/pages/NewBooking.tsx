@@ -171,8 +171,8 @@ export const NewBooking: React.FC = () => {
       
       selectedRouteObjects.forEach(route => {
         // If carrier has a rate per mile and route has miles
-        if (selectedCarrier && selectedCarrier.ratePerMile && route.miles) {
-          totalRate += parseFloat(selectedCarrier.ratePerMile.toString()) * parseFloat(route.miles.toString());
+        if (selectedCarrier && selectedCarrier.ratePerMile && route.distance) {
+          totalRate += parseFloat(selectedCarrier.ratePerMile.toString()) * parseFloat(route.distance.toString());
         } else if (route.standardRate) {
           // Use route's standard rate as fallback
           totalRate += parseFloat(route.standardRate.toString());
@@ -233,8 +233,8 @@ export const NewBooking: React.FC = () => {
             // For mile-based rates, try to get base rate from carrier or use current rate divided by miles
             if (selectedCarrier && selectedCarrier.ratePerMile) {
               baseRate = parseFloat(selectedCarrier.ratePerMile.toString());
-            } else if (leg.route.miles && parseFloat(leg.rate) > 0) {
-              baseRate = parseFloat(leg.rate) / parseFloat(leg.route.miles.toString());
+            } else if (leg.route.distance && parseFloat(leg.rate) > 0) {
+              baseRate = parseFloat(leg.rate) / parseFloat(leg.route.distance.toString());
             }
           } else {
             // For flat rate, use current rate as base
@@ -271,7 +271,7 @@ export const NewBooking: React.FC = () => {
   };
 
   const calculateLegRate = (route: Route, rateType: RateType = 'MILE', baseRate?: number): number => {
-    const miles = route.miles ? parseFloat(route.miles.toString()) : 0;
+    const miles = route.distance ? parseFloat(route.distance.toString()) : 0;
     
     switch (rateType) {
       case 'MILE':
@@ -325,12 +325,12 @@ export const NewBooking: React.FC = () => {
   const getTotalMiles = () => {
     if (isRoundTrip) {
       return bookingLegs.reduce((total, leg) => {
-        const miles = leg.route?.miles ? parseFloat(leg.route.miles.toString()) : 0;
+        const miles = leg.route?.distance ? parseFloat(leg.route.distance.toString()) : 0;
         return total + miles;
       }, 0);
     } else {
       return selectedRouteObjects.reduce((total, route) => {
-        const miles = route.miles ? parseFloat(route.miles.toString()) : 0;
+        const miles = route.distance ? parseFloat(route.distance.toString()) : 0;
         return total + miles;
       }, 0);
     }
@@ -512,7 +512,7 @@ export const NewBooking: React.FC = () => {
                       .filter(route => !bookingLegs.find(leg => leg.routeId === route.id.toString()))
                       .map((route: Route) => (
                         <option key={route.id} value={route.id}>
-                          {route.name} ({route.origin} → {route.destination}) - {route.miles} miles
+                          {route.name} ({route.origin} → {route.destination}) - {route.distance} miles
                         </option>
                       ))}
                   </select>
@@ -530,7 +530,7 @@ export const NewBooking: React.FC = () => {
                               Leg {index + 1}: {leg.route?.name}
                             </p>
                             <p className="text-xs text-gray-600">
-                              {leg.route?.origin} → {leg.route?.destination} • {leg.route?.miles} miles
+                              {leg.route?.origin} → {leg.route?.destination} • {leg.route?.distance} miles
                             </p>
                             {leg.route?.departureTime && leg.route?.arrivalTime && (
                               <p className="text-xs text-gray-500">
@@ -650,7 +650,7 @@ export const NewBooking: React.FC = () => {
                 <option value="">Select a route...</option>
                 {routes.map((route: Route) => (
                   <option key={route.id} value={route.id}>
-                    {route.name} ({route.origin} → {route.destination}) - {route.miles} miles
+                    {route.name} ({route.origin} → {route.destination}) - {route.distance} miles
                   </option>
                 ))}
               </select>
@@ -661,7 +661,7 @@ export const NewBooking: React.FC = () => {
           {!isRoundTrip && selectedRouteObjects.length === 1 && (
             <div className="mt-2 p-3 bg-gray-50 rounded-md">
               <p className="text-sm text-gray-600">
-                <strong>Distance:</strong> {selectedRouteObjects[0].miles} miles
+                <strong>Distance:</strong> {selectedRouteObjects[0].distance} miles
               </p>
               {selectedRouteObjects[0].departureTime && selectedRouteObjects[0].arrivalTime && (
                 <p className="text-sm text-gray-600">
