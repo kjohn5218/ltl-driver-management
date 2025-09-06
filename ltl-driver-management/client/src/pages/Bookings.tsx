@@ -525,14 +525,14 @@ interface BookingEditModalProps {
 
 const BookingEditModal: React.FC<BookingEditModalProps> = ({ booking, onClose, onSave }) => {
   const [formData, setFormData] = useState({
-    rate: booking.rate,
+    rate: Number(booking.rate) || 0,
     status: booking.status,
     billable: booking.billable,
     notes: booking.notes || '',
     bookingDate: booking.bookingDate.split('T')[0], // Format for date input
-    rateType: booking.rateType,
-    baseRate: booking.baseRate || 0,
-    fscRate: booking.fscRate || 0
+    rateType: booking.rateType || 'FLAT_RATE',
+    baseRate: Number(booking.baseRate) || 0,
+    fscRate: Number(booking.fscRate) || 0
   });
   
   const [isSubmitting, setIsSubmitting] = useState(false);
@@ -548,24 +548,27 @@ const BookingEditModal: React.FC<BookingEditModalProps> = ({ booking, onClose, o
 
   // Calculate total rate based on rate type and values
   const calculateTotalRate = (rateType: string, baseRate: number, fscRate: number) => {
-    if (!booking.route?.distance) return baseRate;
+    const validBaseRate = Number(baseRate) || 0;
+    const validFscRate = Number(fscRate) || 0;
+    const distance = Number(booking.route?.distance) || 1;
     
     switch (rateType) {
       case 'MILE':
-        return baseRate * booking.route.distance;
+        return validBaseRate * distance;
       case 'MILE_FSC':
-        const mileRate = baseRate * booking.route.distance;
-        return mileRate + (mileRate * (fscRate / 100));
+        const mileRate = validBaseRate * distance;
+        return mileRate + (mileRate * (validFscRate / 100));
       case 'FLAT_RATE':
       default:
-        return baseRate;
+        return validBaseRate;
     }
   };
 
   // Update total rate when rate type or values change
   useEffect(() => {
     const totalRate = calculateTotalRate(formData.rateType, formData.baseRate, formData.fscRate);
-    setFormData(prev => ({ ...prev, rate: Number(totalRate.toFixed(2)) }));
+    const validTotalRate = Number(totalRate) || 0;
+    setFormData(prev => ({ ...prev, rate: Number(validTotalRate.toFixed(2)) }));
   }, [formData.rateType, formData.baseRate, formData.fscRate]);
 
   // Set FSC rate from system settings when available
@@ -695,7 +698,7 @@ const BookingEditModal: React.FC<BookingEditModalProps> = ({ booking, onClose, o
             <div>
               <label className="block text-sm font-medium text-gray-700 mb-1">Total Rate</label>
               <div className="w-full px-3 py-2 bg-green-50 border border-green-200 rounded-md text-green-800 font-medium">
-                ${formData.rate.toFixed(2)}
+                ${(Number(formData.rate) || 0).toFixed(2)}
               </div>
             </div>
           </div>
