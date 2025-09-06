@@ -525,6 +525,7 @@ interface BookingEditModalProps {
 
 const BookingEditModal: React.FC<BookingEditModalProps> = ({ booking, onClose, onSave }) => {
   const [formData, setFormData] = useState({
+    carrierId: booking.carrierId,
     rate: Number(booking.rate) || 0,
     status: booking.status,
     billable: booking.billable,
@@ -536,6 +537,15 @@ const BookingEditModal: React.FC<BookingEditModalProps> = ({ booking, onClose, o
   });
   
   const [isSubmitting, setIsSubmitting] = useState(false);
+
+  // Fetch carriers for carrier selection
+  const { data: carriersData } = useQuery({
+    queryKey: ['carriers'],
+    queryFn: async () => {
+      const response = await api.get('/carriers');
+      return response.data;
+    }
+  });
 
   // Fetch system settings for fuel surcharge
   const { data: settingsData } = useQuery({
@@ -578,6 +588,9 @@ const BookingEditModal: React.FC<BookingEditModalProps> = ({ booking, onClose, o
     }
   }, [settingsData?.fuelSurchargeRate, formData.rateType]);
 
+  const carriers = carriersData?.carriers || [];
+  const canChangeCarrier = formData.status === 'PENDING' || formData.status === 'CONFIRMED';
+
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     setIsSubmitting(true);
@@ -585,7 +598,8 @@ const BookingEditModal: React.FC<BookingEditModalProps> = ({ booking, onClose, o
     try {
       const response = await api.put(`/bookings/${booking.id}`, {
         ...formData,
-        bookingDate: new Date(formData.bookingDate).toISOString()
+        bookingDate: new Date(formData.bookingDate).toISOString(),
+        carrierId: formData.carrierId || null
       });
       
       onSave(response.data);
@@ -614,7 +628,27 @@ const BookingEditModal: React.FC<BookingEditModalProps> = ({ booking, onClose, o
           <div className="grid grid-cols-2 gap-4">
             <div>
               <label className="block text-sm font-medium text-gray-700 mb-1">Carrier</label>
-              <p className="text-sm text-gray-500 bg-gray-50 p-2 rounded">{booking.carrier?.name || 'N/A'}</p>
+              {canChangeCarrier ? (
+                <select
+                  value={formData.carrierId || ''}
+                  onChange={(e) => setFormData({ ...formData, carrierId: e.target.value ? Number(e.target.value) : null })}
+                  className="w-full px-3 py-2 border border-gray-300 rounded-md focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
+                >
+                  <option value="">Select Carrier</option>
+                  {carriers.map((carrier: any) => (
+                    <option key={carrier.id} value={carrier.id}>
+                      {carrier.name}
+                    </option>
+                  ))}
+                </select>
+              ) : (
+                <p className="text-sm text-gray-500 bg-gray-50 p-2 rounded">
+                  {booking.carrier?.name || 'N/A'}
+                  <span className="text-xs text-gray-400 ml-2">
+                    (Cannot change carrier for {formData.status.toLowerCase().replace('_', ' ')} bookings)
+                  </span>
+                </p>
+              )}
             </div>
             <div>
               <label className="block text-sm font-medium text-gray-700 mb-1">Status</label>

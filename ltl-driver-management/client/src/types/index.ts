@@ -81,7 +81,7 @@ export interface Route {
 
 export interface Booking {
   id: number;
-  carrierId: number;
+  carrierId: number | null;
   routeId: number;
   bookingDate: string;
   rate: number;
