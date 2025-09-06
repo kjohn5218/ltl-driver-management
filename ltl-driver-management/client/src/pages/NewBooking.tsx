@@ -35,6 +35,10 @@ export const NewBooking: React.FC = () => {
   const [routeSearchInput, setRouteSearchInput] = useState('');
   const [originFilter, setOriginFilter] = useState('');
   const [destinationFilter, setDestinationFilter] = useState('');
+  const [originSearchInput, setOriginSearchInput] = useState('');
+  const [destinationSearchInput, setDestinationSearchInput] = useState('');
+  const [showOriginDropdown, setShowOriginDropdown] = useState(false);
+  const [showDestinationDropdown, setShowDestinationDropdown] = useState(false);
   const [isRoundTrip, setIsRoundTrip] = useState(false);
   const [fuelSurchargeRate, setFuelSurchargeRate] = useState<number>(0);
 
@@ -187,6 +191,62 @@ export const NewBooking: React.FC = () => {
     setSelectedRouteName('');
     setRouteSearchInput('');
     setShowRouteDropdown(false);
+  };
+
+  // Filter origins based on search term
+  const filteredOrigins = useMemo(() => {
+    return uniqueOrigins.filter(origin =>
+      origin.toLowerCase().includes(originSearchInput.toLowerCase())
+    ).slice(0, 10); // Limit to first 10 results
+  }, [uniqueOrigins, originSearchInput]);
+
+  // Filter destinations based on search term
+  const filteredDestinations = useMemo(() => {
+    return uniqueDestinations.filter(destination =>
+      destination.toLowerCase().includes(destinationSearchInput.toLowerCase())
+    ).slice(0, 10); // Limit to first 10 results
+  }, [uniqueDestinations, destinationSearchInput]);
+
+  // Handle origin search and selection
+  const handleOriginSearch = (value: string) => {
+    setOriginSearchInput(value);
+    setShowOriginDropdown(value.length > 0);
+    if (value.length === 0) {
+      setOriginFilter('');
+    }
+  };
+
+  const handleOriginSelect = (origin: string) => {
+    setOriginFilter(origin);
+    setOriginSearchInput('');
+    setShowOriginDropdown(false);
+  };
+
+  const clearOriginSelection = () => {
+    setOriginFilter('');
+    setOriginSearchInput('');
+    setShowOriginDropdown(false);
+  };
+
+  // Handle destination search and selection
+  const handleDestinationSearch = (value: string) => {
+    setDestinationSearchInput(value);
+    setShowDestinationDropdown(value.length > 0);
+    if (value.length === 0) {
+      setDestinationFilter('');
+    }
+  };
+
+  const handleDestinationSelect = (destination: string) => {
+    setDestinationFilter(destination);
+    setDestinationSearchInput('');
+    setShowDestinationDropdown(false);
+  };
+
+  const clearDestinationSelection = () => {
+    setDestinationFilter('');
+    setDestinationSearchInput('');
+    setShowDestinationDropdown(false);
   };
 
   const selectedRouteObjects = routes.filter((r: Route) => selectedRoutes.includes(r.id.toString()));
@@ -600,32 +660,140 @@ export const NewBooking: React.FC = () => {
                   onChange={(e) => setRouteSearch(e.target.value)}
                 />
               </div>
-              <select
-                value={originFilter}
-                onChange={(e) => setOriginFilter(e.target.value)}
-                className="px-3 py-2 border border-gray-300 rounded-md focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
-              >
-                <option value="">All Origins</option>
-                {uniqueOrigins.map(origin => (
-                  <option key={origin} value={origin}>{origin}</option>
-                ))}
-              </select>
-              <select
-                value={destinationFilter}
-                onChange={(e) => setDestinationFilter(e.target.value)}
-                className="px-3 py-2 border border-gray-300 rounded-md focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
-              >
-                <option value="">All Destinations</option>
-                {uniqueDestinations.map(destination => (
-                  <option key={destination} value={destination}>{destination}</option>
-                ))}
-              </select>
+              <div className="relative">
+                {/* Display selected origin or search input */}
+                {originFilter && !showOriginDropdown ? (
+                  <div className="px-3 py-2 border border-gray-300 rounded-md bg-blue-50 border-blue-200 flex items-center justify-between">
+                    <span className="text-blue-900 font-medium">{originFilter}</span>
+                    <button
+                      type="button"
+                      onClick={clearOriginSelection}
+                      className="text-blue-600 hover:text-blue-800 ml-2"
+                      title="Clear selection"
+                    >
+                      <X className="w-4 h-4" />
+                    </button>
+                  </div>
+                ) : (
+                  <div className="relative">
+                    <input
+                      type="text"
+                      placeholder="All Origins"
+                      className="w-full px-3 py-2 border border-gray-300 rounded-md focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
+                      value={originSearchInput}
+                      onChange={(e) => handleOriginSearch(e.target.value)}
+                      onFocus={() => originSearchInput.length > 0 && setShowOriginDropdown(true)}
+                      onBlur={() => setTimeout(() => setShowOriginDropdown(false), 200)}
+                    />
+                    {/* Dropdown with filtered origins */}
+                    {showOriginDropdown && (
+                      <div className="absolute z-50 w-full mt-1 bg-white border border-gray-300 rounded-md shadow-lg max-h-60 overflow-y-auto">
+                        {filteredOrigins.length > 0 ? (
+                          <>
+                            <button
+                              type="button"
+                              onClick={() => {
+                                setOriginFilter('');
+                                setOriginSearchInput('');
+                                setShowOriginDropdown(false);
+                              }}
+                              className="w-full px-3 py-2 text-left hover:bg-gray-50 border-b border-gray-100 text-gray-600 italic"
+                            >
+                              All Origins
+                            </button>
+                            {filteredOrigins.map((origin) => (
+                              <button
+                                key={origin}
+                                type="button"
+                                onClick={() => handleOriginSelect(origin)}
+                                className="w-full px-3 py-2 text-left hover:bg-blue-50 border-b border-gray-100 last:border-b-0"
+                              >
+                                <div className="font-medium text-gray-900">{origin}</div>
+                              </button>
+                            ))}
+                          </>
+                        ) : (
+                          <div className="px-3 py-2 text-gray-500 text-sm">
+                            {originSearchInput.length > 0 ? `No origins found matching "${originSearchInput}"` : 'Start typing to search origins'}
+                          </div>
+                        )}
+                      </div>
+                    )}
+                  </div>
+                )}
+              </div>
+              <div className="relative">
+                {/* Display selected destination or search input */}
+                {destinationFilter && !showDestinationDropdown ? (
+                  <div className="px-3 py-2 border border-gray-300 rounded-md bg-blue-50 border-blue-200 flex items-center justify-between">
+                    <span className="text-blue-900 font-medium">{destinationFilter}</span>
+                    <button
+                      type="button"
+                      onClick={clearDestinationSelection}
+                      className="text-blue-600 hover:text-blue-800 ml-2"
+                      title="Clear selection"
+                    >
+                      <X className="w-4 h-4" />
+                    </button>
+                  </div>
+                ) : (
+                  <div className="relative">
+                    <input
+                      type="text"
+                      placeholder="All Destinations"
+                      className="w-full px-3 py-2 border border-gray-300 rounded-md focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
+                      value={destinationSearchInput}
+                      onChange={(e) => handleDestinationSearch(e.target.value)}
+                      onFocus={() => destinationSearchInput.length > 0 && setShowDestinationDropdown(true)}
+                      onBlur={() => setTimeout(() => setShowDestinationDropdown(false), 200)}
+                    />
+                    {/* Dropdown with filtered destinations */}
+                    {showDestinationDropdown && (
+                      <div className="absolute z-50 w-full mt-1 bg-white border border-gray-300 rounded-md shadow-lg max-h-60 overflow-y-auto">
+                        {filteredDestinations.length > 0 ? (
+                          <>
+                            <button
+                              type="button"
+                              onClick={() => {
+                                setDestinationFilter('');
+                                setDestinationSearchInput('');
+                                setShowDestinationDropdown(false);
+                              }}
+                              className="w-full px-3 py-2 text-left hover:bg-gray-50 border-b border-gray-100 text-gray-600 italic"
+                            >
+                              All Destinations
+                            </button>
+                            {filteredDestinations.map((destination) => (
+                              <button
+                                key={destination}
+                                type="button"
+                                onClick={() => handleDestinationSelect(destination)}
+                                className="w-full px-3 py-2 text-left hover:bg-blue-50 border-b border-gray-100 last:border-b-0"
+                              >
+                                <div className="font-medium text-gray-900">{destination}</div>
+                              </button>
+                            ))}
+                          </>
+                        ) : (
+                          <div className="px-3 py-2 text-gray-500 text-sm">
+                            {destinationSearchInput.length > 0 ? `No destinations found matching "${destinationSearchInput}"` : 'Start typing to search destinations'}
+                          </div>
+                        )}
+                      </div>
+                    )}
+                  </div>
+                )}
+              </div>
               <button
                 type="button"
                 onClick={() => {
                   setRouteSearch('');
                   setOriginFilter('');
                   setDestinationFilter('');
+                  setOriginSearchInput('');
+                  setDestinationSearchInput('');
+                  setShowOriginDropdown(false);
+                  setShowDestinationDropdown(false);
                 }}
                 className="px-4 py-2 text-sm text-gray-600 bg-gray-100 border border-gray-300 rounded-md hover:bg-gray-200 focus:outline-none focus:ring-2 focus:ring-gray-500 focus:ring-offset-2"
               >
