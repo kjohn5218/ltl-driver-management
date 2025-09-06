@@ -154,11 +154,23 @@ export const createRoute = async (req: Request, res: Response) => {
 
     const route = await prisma.route.create({
       data: {
-        ...routeData,
-        distance: routeData.distance ? parseFloat(routeData.distance) : undefined,
-        miles: routeData.miles ? parseFloat(routeData.miles) : undefined,
+        name: routeData.name,
+        origin: routeData.origin,
+        destination: routeData.destination,
+        originAddress: routeData.originAddress || undefined,
+        originCity: routeData.originCity || undefined,
+        originState: routeData.originState || undefined,
+        originZipCode: routeData.originZipCode || undefined,
+        originContact: routeData.originContact || undefined,
+        destinationAddress: routeData.destinationAddress || undefined,
+        destinationCity: routeData.destinationCity || undefined,
+        destinationState: routeData.destinationState || undefined,
+        destinationZipCode: routeData.destinationZipCode || undefined,
+        destinationContact: routeData.destinationContact || undefined,
+        distance: parseFloat(routeData.distance),
         standardRate: routeData.standardRate ? parseFloat(routeData.standardRate) : undefined,
         active: routeData.active !== undefined ? routeData.active : true,
+        frequency: routeData.frequency || undefined,
         departureTime: routeData.departureTime || undefined,
         arrivalTime: routeData.arrivalTime || undefined
       }
@@ -179,10 +191,25 @@ export const updateRoute = async (req: Request, res: Response) => {
     const route = await prisma.route.update({
       where: { id: parseInt(id) },
       data: {
-        ...updateData,
-        distance: updateData.distance ? parseFloat(updateData.distance) : undefined,
-        miles: updateData.miles ? parseFloat(updateData.miles) : undefined,
-        standardRate: updateData.standardRate ? parseFloat(updateData.standardRate) : undefined
+        name: updateData.name,
+        origin: updateData.origin,
+        destination: updateData.destination,
+        originAddress: updateData.originAddress || undefined,
+        originCity: updateData.originCity || undefined,
+        originState: updateData.originState || undefined,
+        originZipCode: updateData.originZipCode || undefined,
+        originContact: updateData.originContact || undefined,
+        destinationAddress: updateData.destinationAddress || undefined,
+        destinationCity: updateData.destinationCity || undefined,
+        destinationState: updateData.destinationState || undefined,
+        destinationZipCode: updateData.destinationZipCode || undefined,
+        destinationContact: updateData.destinationContact || undefined,
+        distance: parseFloat(updateData.distance),
+        standardRate: updateData.standardRate ? parseFloat(updateData.standardRate) : undefined,
+        active: updateData.active,
+        frequency: updateData.frequency || undefined,
+        departureTime: updateData.departureTime || undefined,
+        arrivalTime: updateData.arrivalTime || undefined
       }
     });
 

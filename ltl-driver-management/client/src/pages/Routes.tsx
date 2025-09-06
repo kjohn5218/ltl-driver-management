@@ -4,6 +4,48 @@ import { api } from '../services/api';
 import { Route } from '../types';
 import { Plus, Search, Edit, Eye, Trash2, MapPin, Clock, DollarSign, Filter, X } from 'lucide-react';
 
+// Location tooltip component
+interface LocationWithTooltipProps {
+  location: string;
+  address?: string;
+  city?: string;
+  state?: string;
+  zipCode?: string;
+  contact?: string;
+}
+
+const LocationWithTooltip: React.FC<LocationWithTooltipProps> = ({ 
+  location, address, city, state, zipCode, contact 
+}) => {
+  const hasDetails = address || city || state || zipCode || contact;
+  
+  if (!hasDetails) {
+    return <span className="font-medium">{location}</span>;
+  }
+
+  return (
+    <div className="relative group inline-block">
+      <span className="font-medium cursor-help border-b border-dotted border-gray-400">
+        {location}
+      </span>
+      <div className="absolute bottom-full left-0 mb-2 hidden group-hover:block z-10 w-64 p-3 bg-gray-900 text-white text-xs rounded shadow-lg">
+        <div className="space-y-1">
+          <div className="font-medium">{location}</div>
+          {address && <div>{address}</div>}
+          {(city || state || zipCode) && (
+            <div>
+              {city}{city && (state || zipCode) ? ', ' : ''}
+              {state} {zipCode}
+            </div>
+          )}
+          {contact && <div className="pt-1 border-t border-gray-700">Contact: {contact}</div>}
+        </div>
+        <div className="absolute top-full left-4 border-4 border-transparent border-t-gray-900"></div>
+      </div>
+    </div>
+  );
+};
+
 export const Routes: React.FC = () => {
   const queryClient = useQueryClient();
   const [searchTerm, setSearchTerm] = useState('');
@@ -203,11 +245,11 @@ export const Routes: React.FC = () => {
                 <td className="px-6 py-4 whitespace-nowrap">
                   <div className="flex items-center text-sm text-gray-900">
                     <MapPin className="w-4 h-4 mr-1 text-gray-400" />
-                    <span className="font-medium">{route.origin}</span> → <span className="font-medium">{route.destination}</span>
+                    <LocationWithTooltip location={route.origin} address={route.originAddress} city={route.originCity} state={route.originState} zipCode={route.originZipCode} contact={route.originContact} /> → <LocationWithTooltip location={route.destination} address={route.destinationAddress} city={route.destinationCity} state={route.destinationState} zipCode={route.destinationZipCode} contact={route.destinationContact} />
                   </div>
                 </td>
                 <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-900">
-                  <span className="font-medium">{route.miles}</span> miles
+                  <span className="font-medium">{route.distance}</span> miles
                 </td>
                 <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-900">
                   {route.departureTime && route.arrivalTime ? (
@@ -447,8 +489,17 @@ const RouteEditModal: React.FC<RouteEditModalProps> = ({ route, onClose, onSave 
     name: route.name,
     origin: route.origin,
     destination: route.destination,
+    originAddress: route.originAddress || '',
+    originCity: route.originCity || '',
+    originState: route.originState || '',
+    originZipCode: route.originZipCode || '',
+    originContact: route.originContact || '',
+    destinationAddress: route.destinationAddress || '',
+    destinationCity: route.destinationCity || '',
+    destinationState: route.destinationState || '',
+    destinationZipCode: route.destinationZipCode || '',
+    destinationContact: route.destinationContact || '',
     distance: route.distance,
-    miles: route.miles || route.distance,
     active: route.active,
     standardRate: route.standardRate || '',
     frequency: route.frequency || '',
@@ -676,8 +727,17 @@ const AddRouteModal: React.FC<AddRouteModalProps> = ({ onClose, onSave }) => {
     name: '',
     origin: '',
     destination: '',
+    originAddress: '',
+    originCity: '',
+    originState: '',
+    originZipCode: '',
+    originContact: '',
+    destinationAddress: '',
+    destinationCity: '',
+    destinationState: '',
+    destinationZipCode: '',
+    destinationContact: '',
     distance: '',
-    miles: '',
     active: true,
     standardRate: '',
     frequency: '',
@@ -696,8 +756,17 @@ const AddRouteModal: React.FC<AddRouteModalProps> = ({ onClose, onSave }) => {
         name: formData.name,
         origin: formData.origin,
         destination: formData.destination,
+        originAddress: formData.originAddress || undefined,
+        originCity: formData.originCity || undefined,
+        originState: formData.originState || undefined,
+        originZipCode: formData.originZipCode || undefined,
+        originContact: formData.originContact || undefined,
+        destinationAddress: formData.destinationAddress || undefined,
+        destinationCity: formData.destinationCity || undefined,
+        destinationState: formData.destinationState || undefined,
+        destinationZipCode: formData.destinationZipCode || undefined,
+        destinationContact: formData.destinationContact || undefined,
         distance: parseFloat(formData.distance),
-        miles: formData.miles ? parseFloat(formData.miles) : undefined,
         active: formData.active,
         standardRate: formData.standardRate ? parseFloat(formData.standardRate) : undefined,
         frequency: formData.frequency || undefined,
@@ -765,30 +834,125 @@ const AddRouteModal: React.FC<AddRouteModalProps> = ({ onClose, onSave }) => {
             </div>
           </div>
           
-          <div className="grid grid-cols-2 gap-4">
-            <div>
-              <label className="block text-sm font-medium text-gray-700 mb-1">Distance (miles) *</label>
-              <input
-                type="number"
-                step="0.1"
-                required
-                value={formData.distance}
-                onChange={(e) => setFormData({ ...formData, distance: e.target.value })}
-                className="w-full px-3 py-2 border border-gray-300 rounded-md focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
-                placeholder="2445.5"
-              />
+          {/* Origin Address Details */}
+          <div>
+            <label className="block text-sm font-medium text-gray-700 mb-2">Origin Details</label>
+            <div className="grid grid-cols-2 gap-4 mb-2">
+              <div>
+                <input
+                  type="text"
+                  value={formData.originAddress}
+                  onChange={(e) => setFormData({ ...formData, originAddress: e.target.value })}
+                  className="w-full px-3 py-2 border border-gray-300 rounded-md focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
+                  placeholder="Address"
+                />
+              </div>
+              <div>
+                <input
+                  type="text"
+                  value={formData.originCity}
+                  onChange={(e) => setFormData({ ...formData, originCity: e.target.value })}
+                  className="w-full px-3 py-2 border border-gray-300 rounded-md focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
+                  placeholder="City"
+                />
+              </div>
             </div>
-            <div>
-              <label className="block text-sm font-medium text-gray-700 mb-1">Miles (Optional)</label>
-              <input
-                type="number"
-                step="0.1"
-                value={formData.miles}
-                onChange={(e) => setFormData({ ...formData, miles: e.target.value })}
-                className="w-full px-3 py-2 border border-gray-300 rounded-md focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
-                placeholder="Leave empty to use distance"
-              />
+            <div className="grid grid-cols-3 gap-4">
+              <div>
+                <input
+                  type="text"
+                  value={formData.originState}
+                  onChange={(e) => setFormData({ ...formData, originState: e.target.value })}
+                  className="w-full px-3 py-2 border border-gray-300 rounded-md focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
+                  placeholder="State"
+                />
+              </div>
+              <div>
+                <input
+                  type="text"
+                  value={formData.originZipCode}
+                  onChange={(e) => setFormData({ ...formData, originZipCode: e.target.value })}
+                  className="w-full px-3 py-2 border border-gray-300 rounded-md focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
+                  placeholder="Zip Code"
+                />
+              </div>
+              <div>
+                <input
+                  type="text"
+                  value={formData.originContact}
+                  onChange={(e) => setFormData({ ...formData, originContact: e.target.value })}
+                  className="w-full px-3 py-2 border border-gray-300 rounded-md focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
+                  placeholder="Contact"
+                />
+              </div>
             </div>
+          </div>
+
+          {/* Destination Address Details */}
+          <div>
+            <label className="block text-sm font-medium text-gray-700 mb-2">Destination Details</label>
+            <div className="grid grid-cols-2 gap-4 mb-2">
+              <div>
+                <input
+                  type="text"
+                  value={formData.destinationAddress}
+                  onChange={(e) => setFormData({ ...formData, destinationAddress: e.target.value })}
+                  className="w-full px-3 py-2 border border-gray-300 rounded-md focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
+                  placeholder="Address"
+                />
+              </div>
+              <div>
+                <input
+                  type="text"
+                  value={formData.destinationCity}
+                  onChange={(e) => setFormData({ ...formData, destinationCity: e.target.value })}
+                  className="w-full px-3 py-2 border border-gray-300 rounded-md focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
+                  placeholder="City"
+                />
+              </div>
+            </div>
+            <div className="grid grid-cols-3 gap-4">
+              <div>
+                <input
+                  type="text"
+                  value={formData.destinationState}
+                  onChange={(e) => setFormData({ ...formData, destinationState: e.target.value })}
+                  className="w-full px-3 py-2 border border-gray-300 rounded-md focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
+                  placeholder="State"
+                />
+              </div>
+              <div>
+                <input
+                  type="text"
+                  value={formData.destinationZipCode}
+                  onChange={(e) => setFormData({ ...formData, destinationZipCode: e.target.value })}
+                  className="w-full px-3 py-2 border border-gray-300 rounded-md focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
+                  placeholder="Zip Code"
+                />
+              </div>
+              <div>
+                <input
+                  type="text"
+                  value={formData.destinationContact}
+                  onChange={(e) => setFormData({ ...formData, destinationContact: e.target.value })}
+                  className="w-full px-3 py-2 border border-gray-300 rounded-md focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
+                  placeholder="Contact"
+                />
+              </div>
+            </div>
+          </div>
+          
+          <div>
+            <label className="block text-sm font-medium text-gray-700 mb-1">Distance (miles) *</label>
+            <input
+              type="number"
+              step="0.1"
+              required
+              value={formData.distance}
+              onChange={(e) => setFormData({ ...formData, distance: e.target.value })}
+              className="w-full px-3 py-2 border border-gray-300 rounded-md focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
+              placeholder="2445.5"
+            />
           </div>
 
           <div>

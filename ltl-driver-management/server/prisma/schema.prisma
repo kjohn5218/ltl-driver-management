@@ -83,23 +83,32 @@ enum CarrierStatus {
 
 // Route model
 model Route {
-  id            Int                      @id @default(autoincrement())
-  name          String
-  origin        String
-  destination   String
-  distance      Decimal                  @db.Decimal(6, 1)
-  miles         Decimal?                 @db.Decimal(6, 1) // From spreadsheet
-  active        Boolean                  @default(true)
-  standardRate  Decimal?                 @db.Decimal(5, 2)
-  frequency     String?
-  departureTime String?                  // Store as time string (HH:mm:ss)
-  arrivalTime   String?                  // Store as time string (HH:mm:ss)
-  createdAt     DateTime                 @default(now())
-  updatedAt     DateTime                 @updatedAt
+  id                   Int                      @id @default(autoincrement())
+  name                 String
+  origin               String
+  destination          String
+  originAddress        String?
+  originCity           String?
+  originState          String?
+  originZipCode        String?
+  originContact        String?
+  destinationAddress   String?
+  destinationCity      String?
+  destinationState     String?
+  destinationZipCode   String?
+  destinationContact   String?
+  distance             Decimal                  @db.Decimal(6, 1)
+  active               Boolean                  @default(true)
+  standardRate         Decimal?                 @db.Decimal(5, 2)
+  frequency            String?
+  departureTime        String?                  // Store as time string (HH:mm:ss)
+  arrivalTime          String?                  // Store as time string (HH:mm:ss)
+  createdAt            DateTime                 @default(now())
+  updatedAt            DateTime                 @updatedAt
 
   // Relations
-  bookings      Booking[]
-  preferredBy   CarrierPreferredRoute[]
+  bookings             Booking[]
+  preferredBy          CarrierPreferredRoute[]
 
   @@map("routes")
 }

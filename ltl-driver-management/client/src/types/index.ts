@@ -53,8 +53,17 @@ export interface Route {
   name: string;
   origin: string;
   destination: string;
+  originAddress?: string;
+  originCity?: string;
+  originState?: string;
+  originZipCode?: string;
+  originContact?: string;
+  destinationAddress?: string;
+  destinationCity?: string;
+  destinationState?: string;
+  destinationZipCode?: string;
+  destinationContact?: string;
   distance: number;
-  miles?: number;
   active: boolean;
   standardRate?: number;
   frequency?: string;
