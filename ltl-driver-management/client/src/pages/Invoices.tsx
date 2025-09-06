@@ -1,13 +1,21 @@
-import React, { useState } from 'react';
+import React, { useState, useMemo } from 'react';
 import { useQuery } from '@tanstack/react-query';
 import { api } from '../services/api';
 import { Invoice } from '../types';
-import { Plus, Search, Download, Eye, Calendar, DollarSign, FileText } from 'lucide-react';
-import { format } from 'date-fns';
+import { Plus, Search, Download, Eye, Calendar, DollarSign, FileText, X, ChevronUp, ChevronDown } from 'lucide-react';
+import { format, isAfter, isBefore, isSameDay, parseISO } from 'date-fns';
+
+type SortField = 'invoiceNumber' | 'bookingId' | 'amount' | 'createdAt' | 'paidAt' | 'status';
+type SortDirection = 'asc' | 'desc';
 
 export const Invoices: React.FC = () => {
   const [searchTerm, setSearchTerm] = useState('');
   const [statusFilter, setStatusFilter] = useState('');
+  const [dateFromFilter, setDateFromFilter] = useState('');
+  const [dateToFilter, setDateToFilter] = useState('');
+  const [sortField, setSortField] = useState<SortField>('createdAt');
+  const [sortDirection, setSortDirection] = useState<SortDirection>('desc');
+  const [viewingInvoice, setViewingInvoice] = useState<Invoice | null>(null);
 
   const { data: invoices, isLoading } = useQuery({
     queryKey: ['invoices'],
@@ -17,10 +25,136 @@ export const Invoices: React.FC = () => {
     }
   });
 
-  const filteredInvoices = invoices?.filter(invoice =>
-    invoice.invoiceNumber.toLowerCase().includes(searchTerm.toLowerCase()) &&
-    (statusFilter === '' || invoice.status === statusFilter)
-  ) || [];
+  const filteredAndSortedInvoices = useMemo(() => {
+    if (!invoices) return [];
+
+    // First, filter the invoices
+    let filtered = invoices.filter(invoice => {
+      // Search filter
+      const matchesSearch = searchTerm === '' || 
+        invoice.invoiceNumber.toLowerCase().includes(searchTerm.toLowerCase()) ||
+        invoice.bookingId.toString().includes(searchTerm);
+      
+      // Status filter
+      const matchesStatus = statusFilter === '' || invoice.status === statusFilter;
+      
+      // Date filter
+      let matchesDate = true;
+      if (dateFromFilter || dateToFilter) {
+        const invoiceDate = parseISO(invoice.createdAt);
+        
+        if (dateFromFilter) {
+          const fromDate = parseISO(dateFromFilter);
+          matchesDate = matchesDate && (isAfter(invoiceDate, fromDate) || isSameDay(invoiceDate, fromDate));
+        }
+        
+        if (dateToFilter) {
+          const toDate = parseISO(dateToFilter);
+          matchesDate = matchesDate && (isBefore(invoiceDate, toDate) || isSameDay(invoiceDate, toDate));
+        }
+      }
+      
+      return matchesSearch && matchesStatus && matchesDate;
+    });
+
+    // Then, sort the filtered results
+    filtered.sort((a, b) => {
+      let aValue: any;
+      let bValue: any;
+
+      switch (sortField) {
+        case 'invoiceNumber':
+          aValue = a.invoiceNumber;
+          bValue = b.invoiceNumber;
+          break;
+        case 'bookingId':
+          aValue = a.bookingId;
+          bValue = b.bookingId;
+          break;
+        case 'amount':
+          aValue = a.amount;
+          bValue = b.amount;
+          break;
+        case 'createdAt':
+          aValue = new Date(a.createdAt);
+          bValue = new Date(b.createdAt);
+          break;
+        case 'paidAt':
+          aValue = a.paidAt ? new Date(a.paidAt) : new Date(0);
+          bValue = b.paidAt ? new Date(b.paidAt) : new Date(0);
+          break;
+        case 'status':
+          aValue = a.status;
+          bValue = b.status;
+          break;
+        default:
+          return 0;
+      }
+
+      // Handle string comparison
+      if (typeof aValue === 'string' && typeof bValue === 'string') {
+        const comparison = aValue.localeCompare(bValue);
+        return sortDirection === 'asc' ? comparison : -comparison;
+      }
+
+      // Handle number and date comparison
+      if (aValue < bValue) return sortDirection === 'asc' ? -1 : 1;
+      if (aValue > bValue) return sortDirection === 'asc' ? 1 : -1;
+      return 0;
+    });
+
+    return filtered;
+  }, [invoices, searchTerm, statusFilter, dateFromFilter, dateToFilter, sortField, sortDirection]);
+
+  const handleSort = (field: SortField) => {
+    if (sortField === field) {
+      setSortDirection(sortDirection === 'asc' ? 'desc' : 'asc');
+    } else {
+      setSortField(field);
+      setSortDirection('asc');
+    }
+  };
+
+  const getSortIcon = (field: SortField) => {
+    if (sortField !== field) {
+      return null;
+    }
+    return sortDirection === 'asc' ? 
+      <ChevronUp className="w-4 h-4 ml-1 inline" /> : 
+      <ChevronDown className="w-4 h-4 ml-1 inline" />;
+  };
+
+  const handleViewInvoice = (invoice: Invoice) => {
+    setViewingInvoice(invoice);
+  };
+
+  const handleDownloadInvoice = async (invoice: Invoice) => {
+    try {
+      // Create a simple PDF-like content for download
+      const content = `
+Invoice: ${invoice.invoiceNumber}
+Booking ID: ${invoice.bookingId}
+Amount: $${invoice.amount}
+Status: ${invoice.status}
+Created: ${format(new Date(invoice.createdAt), 'MMM dd, yyyy')}
+${invoice.paidAt ? `Paid: ${format(new Date(invoice.paidAt), 'MMM dd, yyyy')}` : ''}
+`;
+      
+      const blob = new Blob([content], { type: 'text/plain' });
+      const url = window.URL.createObjectURL(blob);
+      const a = document.createElement('a');
+      a.style.display = 'none';
+      a.href = url;
+      a.download = `invoice-${invoice.invoiceNumber}.txt`;
+      document.body.appendChild(a);
+      a.click();
+      window.URL.revokeObjectURL(url);
+      document.body.removeChild(a);
+    } catch (error) {
+      console.error('Error downloading invoice:', error);
+      alert('Error downloading invoice. Please try again.');
+    }
+  };
 
   const getStatusBadge = (status: string) => {
     const statusColors = {
@@ -34,17 +168,17 @@ export const Invoices: React.FC = () => {
   };
 
   const getTotalAmount = () => {
-    return filteredInvoices.reduce((total, invoice) => total + invoice.amount, 0);
+    return filteredAndSortedInvoices.reduce((total, invoice) => total + invoice.amount, 0);
   };
 
   const getPaidAmount = () => {
-    return filteredInvoices
+    return filteredAndSortedInvoices
       .filter(invoice => invoice.status === 'PAID')
       .reduce((total, invoice) => total + invoice.amount, 0);
   };
 
   const getPendingAmount = () => {
-    return filteredInvoices
+    return filteredAndSortedInvoices
       .filter(invoice => ['PENDING', 'SENT', 'OVERDUE'].includes(invoice.status))
       .reduce((total, invoice) => total + invoice.amount, 0);
   };
@@ -111,29 +245,66 @@ export const Invoices: React.FC = () => {
       </div>
 
       {/* Filters */}
-      <div className="flex gap-4 mb-6">
-        <div className="flex-1 relative">
-          <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 text-gray-400 w-4 h-4" />
-          <input
-            type="text"
-            placeholder="Search by invoice number..."
-            className="w-full pl-10 pr-4 py-2 border border-gray-300 rounded-md focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
-            value={searchTerm}
-            onChange={(e) => setSearchTerm(e.target.value)}
-          />
+      <div className="space-y-4 mb-6">
+        <div className="flex gap-4">
+          <div className="flex-1 relative">
+            <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 text-gray-400 w-4 h-4" />
+            <input
+              type="text"
+              placeholder="Search by invoice number or booking ID..."
+              className="w-full pl-10 pr-4 py-2 border border-gray-300 rounded-md focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
+              value={searchTerm}
+              onChange={(e) => setSearchTerm(e.target.value)}
+            />
+          </div>
+          <select
+            className="px-3 py-2 border border-gray-300 rounded-md focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
+            value={statusFilter}
+            onChange={(e) => setStatusFilter(e.target.value)}
+          >
+            <option value="">All Status</option>
+            <option value="PENDING">Pending</option>
+            <option value="SENT">Sent</option>
+            <option value="PAID">Paid</option>
+            <option value="OVERDUE">Overdue</option>
+            <option value="CANCELLED">Cancelled</option>
+          </select>
         </div>
-        <select
-          className="px-3 py-2 border border-gray-300 rounded-md focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
-          value={statusFilter}
-          onChange={(e) => setStatusFilter(e.target.value)}
-        >
-          <option value="">All Status</option>
-          <option value="PENDING">Pending</option>
-          <option value="SENT">Sent</option>
-          <option value="PAID">Paid</option>
-          <option value="OVERDUE">Overdue</option>
-          <option value="CANCELLED">Cancelled</option>
-        </select>
+        
+        {/* Date Filters */}
+        <div className="flex gap-4 items-center">
+          <Calendar className="w-4 h-4 text-gray-400" />
+          <span className="text-sm font-medium text-gray-700">Created Date Range:</span>
+          <div className="flex gap-2 items-center">
+            <input
+              type="date"
+              value={dateFromFilter}
+              onChange={(e) => setDateFromFilter(e.target.value)}
+              className="px-3 py-2 border border-gray-300 rounded-md focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
+              placeholder="From date"
+            />
+            <span className="text-gray-500">to</span>
+            <input
+              type="date"
+              value={dateToFilter}
+              onChange={(e) => setDateToFilter(e.target.value)}
+              className="px-3 py-2 border border-gray-300 rounded-md focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
+              placeholder="To date"
+            />
+          </div>
+          {(dateFromFilter || dateToFilter) && (
+            <button
+              onClick={() => {
+                setDateFromFilter('');
+                setDateToFilter('');
+              }}
+              className="text-gray-500 hover:text-red-600 transition-colors"
+              title="Clear date filters"
+            >
+              <X className="w-4 h-4" />
+            </button>
+          )}
+        </div>
       </div>
 
       {/* Invoices Table */}
@@ -142,22 +313,58 @@ export const Invoices: React.FC = () => {
           <thead className="bg-gray-50">
             <tr>
               <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
-                Invoice #
+                <button
+                  onClick={() => handleSort('invoiceNumber')}
+                  className="flex items-center hover:text-gray-700 transition-colors"
+                >
+                  Invoice #
+                  {getSortIcon('invoiceNumber')}
+                </button>
               </th>
               <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
-                Booking
+                <button
+                  onClick={() => handleSort('bookingId')}
+                  className="flex items-center hover:text-gray-700 transition-colors"
+                >
+                  Booking
+                  {getSortIcon('bookingId')}
+                </button>
               </th>
               <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
-                Amount
+                <button
+                  onClick={() => handleSort('amount')}
+                  className="flex items-center hover:text-gray-700 transition-colors"
+                >
+                  Amount
+                  {getSortIcon('amount')}
+                </button>
               </th>
               <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
-                Created Date
+                <button
+                  onClick={() => handleSort('createdAt')}
+                  className="flex items-center hover:text-gray-700 transition-colors"
+                >
+                  Created Date
+                  {getSortIcon('createdAt')}
+                </button>
               </th>
               <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
-                Paid Date
+                <button
+                  onClick={() => handleSort('paidAt')}
+                  className="flex items-center hover:text-gray-700 transition-colors"
+                >
+                  Paid Date
+                  {getSortIcon('paidAt')}
+                </button>
               </th>
               <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
-                Status
+                <button
+                  onClick={() => handleSort('status')}
+                  className="flex items-center hover:text-gray-700 transition-colors"
+                >
+                  Status
+                  {getSortIcon('status')}
+                </button>
               </th>
               <th className="px-6 py-3 text-right text-xs font-medium text-gray-500 uppercase tracking-wider">
                 Actions
@@ -165,7 +372,7 @@ export const Invoices: React.FC = () => {
             </tr>
           </thead>
           <tbody className="bg-white divide-y divide-gray-200">
-            {filteredInvoices.map((invoice) => (
+            {filteredAndSortedInvoices.map((invoice) => (
               <tr key={invoice.id} className="hover:bg-gray-50">
                 <td className="px-6 py-4 whitespace-nowrap">
                   <div className="flex items-center">
@@ -198,10 +405,18 @@ export const Invoices: React.FC = () => {
                 </td>
                 <td className="px-6 py-4 whitespace-nowrap text-right text-sm font-medium">
                   <div className="flex items-center gap-2 justify-end">
-                    <button className="text-gray-500 hover:text-blue-600">
+                    <button 
+                      onClick={() => handleViewInvoice(invoice)}
+                      className="text-gray-500 hover:text-blue-600 transition-colors"
+                      title="View invoice details"
+                    >
                       <Eye className="w-4 h-4" />
                     </button>
-                    <button className="text-gray-500 hover:text-green-600">
+                    <button 
+                      onClick={() => handleDownloadInvoice(invoice)}
+                      className="text-gray-500 hover:text-green-600 transition-colors"
+                      title="Download invoice"
+                    >
                       <Download className="w-4 h-4" />
                     </button>
                   </div>
@@ -212,11 +427,159 @@ export const Invoices: React.FC = () => {
         </table>
       </div>
 
-      {filteredInvoices.length === 0 && (
+      {filteredAndSortedInvoices.length === 0 && (
         <div className="text-center py-12">
           <p className="text-gray-500">No invoices found matching your criteria.</p>
         </div>
       )}
+
+      {/* Invoice View Modal */}
+      {viewingInvoice && (
+        <InvoiceViewModal 
+          invoice={viewingInvoice}
+          onClose={() => setViewingInvoice(null)}
+          onDownload={() => handleDownloadInvoice(viewingInvoice)}
+        />
+      )}
+    </div>
+  );
+};
+
+// Invoice View Modal Component
+interface InvoiceViewModalProps {
+  invoice: Invoice;
+  onClose: () => void;
+  onDownload: () => void;
+}
+
+const InvoiceViewModal: React.FC<InvoiceViewModalProps> = ({ invoice, onClose, onDownload }) => {
+  const getStatusBadge = (status: string) => {
+    const statusColors = {
+      PENDING: 'bg-yellow-100 text-yellow-800',
+      SENT: 'bg-blue-100 text-blue-800',
+      PAID: 'bg-green-100 text-green-800',
+      OVERDUE: 'bg-red-100 text-red-800',
+      CANCELLED: 'bg-gray-100 text-gray-800'
+    };
+    return statusColors[status as keyof typeof statusColors] || 'bg-gray-100 text-gray-800';
+  };
+
+  return (
+    <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50">
+      <div className="bg-white rounded-lg p-6 w-full max-w-2xl max-h-[90vh] overflow-y-auto">
+        <div className="flex justify-between items-center mb-6">
+          <h2 className="text-xl font-bold text-gray-900">Invoice Details</h2>
+          <button 
+            onClick={onClose}
+            className="text-gray-400 hover:text-gray-600"
+          >
+            <X className="w-5 h-5" />
+          </button>
+        </div>
+        
+        <div className="space-y-6">
+          {/* Invoice Header */}
+          <div className="bg-gray-50 p-4 rounded-lg">
+            <div className="flex justify-between items-start">
+              <div>
+                <h3 className="text-lg font-semibold text-gray-900">{invoice.invoiceNumber}</h3>
+                <p className="text-gray-600">Booking ID: #{invoice.bookingId}</p>
+              </div>
+              <span className={`inline-flex px-3 py-1 rounded-full text-sm font-medium ${getStatusBadge(invoice.status)}`}>
+                {invoice.status}
+              </span>
+            </div>
+          </div>
+
+          {/* Invoice Details */}
+          <div className="grid grid-cols-2 gap-6">
+            <div>
+              <h4 className="text-sm font-medium text-gray-700 mb-3">Invoice Information</h4>
+              <div className="space-y-2 text-sm">
+                <div className="flex justify-between">
+                  <span className="text-gray-600">Invoice Number:</span>
+                  <span className="font-medium">{invoice.invoiceNumber}</span>
+                </div>
+                <div className="flex justify-between">
+                  <span className="text-gray-600">Amount:</span>
+                  <span className="font-medium text-lg">${invoice.amount.toLocaleString()}</span>
+                </div>
+                <div className="flex justify-between">
+                  <span className="text-gray-600">Status:</span>
+                  <span className="font-medium">{invoice.status}</span>
+                </div>
+              </div>
+            </div>
+
+            <div>
+              <h4 className="text-sm font-medium text-gray-700 mb-3">Dates</h4>
+              <div className="space-y-2 text-sm">
+                <div className="flex justify-between">
+                  <span className="text-gray-600">Created:</span>
+                  <span className="font-medium">{format(new Date(invoice.createdAt), 'MMM dd, yyyy')}</span>
+                </div>
+                {invoice.paidAt && (
+                  <div className="flex justify-between">
+                    <span className="text-gray-600">Paid:</span>
+                    <span className="font-medium text-green-600">{format(new Date(invoice.paidAt), 'MMM dd, yyyy')}</span>
+                  </div>
+                )}
+              </div>
+            </div>
+          </div>
+
+          {/* Booking Information */}
+          {invoice.booking && (
+            <div>
+              <h4 className="text-sm font-medium text-gray-700 mb-3">Related Booking</h4>
+              <div className="bg-gray-50 p-3 rounded-md">
+                <div className="text-sm space-y-1">
+                  <div className="flex justify-between">
+                    <span className="text-gray-600">Booking ID:</span>
+                    <span className="font-medium">#{invoice.booking.id}</span>
+                  </div>
+                  {invoice.booking.carrier && (
+                    <div className="flex justify-between">
+                      <span className="text-gray-600">Carrier:</span>
+                      <span className="font-medium">{invoice.booking.carrier.name}</span>
+                    </div>
+                  )}
+                  {invoice.booking.route && (
+                    <div className="flex justify-between">
+                      <span className="text-gray-600">Route:</span>
+                      <span className="font-medium">{invoice.booking.route.name}</span>
+                    </div>
+                  )}
+                </div>
+              </div>
+            </div>
+          )}
+
+          {/* Summary */}
+          <div className="border-t pt-4">
+            <div className="flex justify-between items-center text-lg font-semibold">
+              <span>Total Amount:</span>
+              <span className="text-green-600">${invoice.amount.toLocaleString()}</span>
+            </div>
+          </div>
+        </div>
+        
+        <div className="flex justify-end gap-3 mt-6 pt-4 border-t">
+          <button 
+            onClick={onClose}
+            className="px-4 py-2 bg-gray-500 text-white rounded hover:bg-gray-600"
+          >
+            Close
+          </button>
+          <button 
+            onClick={onDownload}
+            className="px-4 py-2 bg-green-600 text-white rounded hover:bg-green-700 flex items-center gap-2"
+          >
+            <Download className="w-4 h-4" />
+            Download
+          </button>
+        </div>
+      </div>
     </div>
   );
 };
