@@ -1,14 +1,15 @@
 import React, { useState, useMemo } from 'react';
-import { useQuery } from '@tanstack/react-query';
+import { useQuery, useQueryClient } from '@tanstack/react-query';
 import { api } from '../services/api';
-import { Invoice } from '../types';
-import { Plus, Search, Download, Eye, Calendar, DollarSign, FileText, X, ChevronUp, ChevronDown } from 'lucide-react';
+import { Invoice, Booking } from '../types';
+import { Plus, Search, Download, Eye, Calendar, DollarSign, FileText, X, ChevronUp, ChevronDown, CheckCircle } from 'lucide-react';
 import { format, isAfter, isBefore, isSameDay, parseISO } from 'date-fns';
 
 type SortField = 'invoiceNumber' | 'bookingId' | 'amount' | 'createdAt' | 'paidAt' | 'status';
 type SortDirection = 'asc' | 'desc';
 
 export const Invoices: React.FC = () => {
+  const queryClient = useQueryClient();
   const [searchTerm, setSearchTerm] = useState('');
   const [statusFilter, setStatusFilter] = useState('');
   const [dateFromFilter, setDateFromFilter] = useState('');
@@ -16,6 +17,7 @@ export const Invoices: React.FC = () => {
   const [sortField, setSortField] = useState<SortField>('createdAt');
   const [sortDirection, setSortDirection] = useState<SortDirection>('desc');
   const [viewingInvoice, setViewingInvoice] = useState<Invoice | null>(null);
+  const [showGenerateModal, setShowGenerateModal] = useState(false);
 
   const { data: invoices, isLoading } = useQuery({
     queryKey: ['invoices'],
@@ -168,17 +170,20 @@ ${invoice.paidAt ? `Paid: ${format(new Date(invoice.paidAt), 'MMM dd, yyyy')}` :
   };
 
   const getTotalAmount = () => {
-    return filteredAndSortedInvoices.reduce((total, invoice) => total + invoice.amount, 0);
+    if (!invoices) return 0;
+    return invoices.reduce((total, invoice) => total + invoice.amount, 0);
   };
 
   const getPaidAmount = () => {
-    return filteredAndSortedInvoices
+    if (!invoices) return 0;
+    return invoices
       .filter(invoice => invoice.status === 'PAID')
       .reduce((total, invoice) => total + invoice.amount, 0);
   };
 
   const getPendingAmount = () => {
-    return filteredAndSortedInvoices
+    if (!invoices) return 0;
+    return invoices
       .filter(invoice => ['PENDING', 'SENT', 'OVERDUE'].includes(invoice.status))
       .reduce((total, invoice) => total + invoice.amount, 0);
   };
@@ -199,7 +204,10 @@ ${invoice.paidAt ? `Paid: ${format(new Date(invoice.paidAt), 'MMM dd, yyyy')}` :
           <h1 className="text-2xl font-bold text-gray-900">Invoices</h1>
           <p className="text-gray-600">Manage billing and payments</p>
         </div>
-        <button className="btn-primary flex items-center gap-2">
+        <button 
+          onClick={() => setShowGenerateModal(true)}
+          className="btn-primary flex items-center gap-2"
+        >
           <Plus className="w-4 h-4" />
           Generate Invoice
         </button>
@@ -433,6 +441,17 @@ ${invoice.paidAt ? `Paid: ${format(new Date(invoice.paidAt), 'MMM dd, yyyy')}` :
         </div>
       )}
 
+      {/* Generate Invoice Modal */}
+      {showGenerateModal && (
+        <GenerateInvoiceModal
+          onClose={() => setShowGenerateModal(false)}
+          onSuccess={() => {
+            queryClient.invalidateQueries({ queryKey: ['invoices'] });
+            setShowGenerateModal(false);
+          }}
+        />
+      )}
+
       {/* Invoice View Modal */}
       {viewingInvoice && (
         <InvoiceViewModal 
@@ -577,6 +596,213 @@ const InvoiceViewModal: React.FC<InvoiceViewModalProps> = ({ invoice, onClose, o
           >
             <Download className="w-4 h-4" />
             Download
+          </button>
+        </div>
+      </div>
+    </div>
+  );
+};
+
+// Generate Invoice Modal Component
+interface GenerateInvoiceModalProps {
+  onClose: () => void;
+  onSuccess: () => void;
+}
+
+const GenerateInvoiceModal: React.FC<GenerateInvoiceModalProps> = ({ onClose, onSuccess }) => {
+  const [searchTerm, setSearchTerm] = useState('');
+  const [selectedBooking, setSelectedBooking] = useState<Booking | null>(null);
+  const [isSubmitting, setIsSubmitting] = useState(false);
+
+  // Fetch completed bookings without invoices
+  const { data: bookings, isLoading } = useQuery({
+    queryKey: ['completed-bookings-without-invoices'],
+    queryFn: async () => {
+      const response = await api.get('/bookings?status=COMPLETED');
+      // Filter out bookings that already have invoices
+      return response.data.bookings.filter((booking: Booking) => !booking.invoice) as Booking[];
+    }
+  });
+
+  const filteredBookings = useMemo(() => {
+    if (!bookings) return [];
+    
+    if (searchTerm === '') return bookings;
+    
+    return bookings.filter(booking =>
+      booking.id.toString().includes(searchTerm) ||
+      booking.carrier?.name.toLowerCase().includes(searchTerm.toLowerCase()) ||
+      booking.route?.name.toLowerCase().includes(searchTerm.toLowerCase())
+    );
+  }, [bookings, searchTerm]);
+
+  const handleGenerateInvoice = async () => {
+    if (!selectedBooking) return;
+
+    setIsSubmitting(true);
+    try {
+      await api.post('/invoices', {
+        bookingId: selectedBooking.id
+      });
+      
+      onSuccess();
+    } catch (error) {
+      console.error('Error generating invoice:', error);
+      alert('Error generating invoice. Please try again.');
+    } finally {
+      setIsSubmitting(false);
+    }
+  };
+
+  return (
+    <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50">
+      <div className="bg-white rounded-lg p-6 w-full max-w-4xl max-h-[90vh] overflow-y-auto">
+        <div className="flex justify-between items-center mb-6">
+          <h2 className="text-xl font-bold text-gray-900">Generate Invoice</h2>
+          <button 
+            onClick={onClose}
+            className="text-gray-400 hover:text-gray-600"
+          >
+            <X className="w-5 h-5" />
+          </button>
+        </div>
+
+        {/* Search */}
+        <div className="mb-6">
+          <div className="relative">
+            <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 text-gray-400 w-4 h-4" />
+            <input
+              type="text"
+              placeholder="Search by booking ID, carrier, or route..."
+              className="w-full pl-10 pr-4 py-2 border border-gray-300 rounded-md focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
+              value={searchTerm}
+              onChange={(e) => setSearchTerm(e.target.value)}
+            />
+          </div>
+        </div>
+
+        {isLoading ? (
+          <div className="flex items-center justify-center py-12">
+            <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-blue-600"></div>
+          </div>
+        ) : (
+          <>
+            {/* Bookings List */}
+            <div className="mb-6 max-h-96 overflow-y-auto border border-gray-200 rounded-lg">
+              {filteredBookings.length === 0 ? (
+                <div className="text-center py-8 text-gray-500">
+                  {bookings?.length === 0 
+                    ? 'No completed bookings without invoices found.'
+                    : 'No bookings match your search criteria.'}
+                </div>
+              ) : (
+                <table className="min-w-full divide-y divide-gray-200">
+                  <thead className="bg-gray-50">
+                    <tr>
+                      <th className="px-4 py-2 text-left text-xs font-medium text-gray-500 uppercase">Select</th>
+                      <th className="px-4 py-2 text-left text-xs font-medium text-gray-500 uppercase">Booking</th>
+                      <th className="px-4 py-2 text-left text-xs font-medium text-gray-500 uppercase">Carrier</th>
+                      <th className="px-4 py-2 text-left text-xs font-medium text-gray-500 uppercase">Route</th>
+                      <th className="px-4 py-2 text-left text-xs font-medium text-gray-500 uppercase">Date</th>
+                      <th className="px-4 py-2 text-left text-xs font-medium text-gray-500 uppercase">Amount</th>
+                    </tr>
+                  </thead>
+                  <tbody className="bg-white divide-y divide-gray-200">
+                    {filteredBookings.map((booking) => (
+                      <tr 
+                        key={booking.id}
+                        className={`hover:bg-gray-50 cursor-pointer ${
+                          selectedBooking?.id === booking.id ? 'bg-blue-50' : ''
+                        }`}
+                        onClick={() => setSelectedBooking(booking)}
+                      >
+                        <td className="px-4 py-3">
+                          <input
+                            type="radio"
+                            checked={selectedBooking?.id === booking.id}
+                            onChange={() => setSelectedBooking(booking)}
+                            className="h-4 w-4 text-blue-600 focus:ring-blue-500"
+                          />
+                        </td>
+                        <td className="px-4 py-3 text-sm font-medium text-gray-900">
+                          #{booking.id}
+                        </td>
+                        <td className="px-4 py-3 text-sm text-gray-900">
+                          {booking.carrier?.name || 'N/A'}
+                        </td>
+                        <td className="px-4 py-3 text-sm text-gray-900">
+                          <div>
+                            <div className="font-medium">{booking.route?.name}</div>
+                            <div className="text-gray-500 text-xs">
+                              {booking.route?.origin} → {booking.route?.destination}
+                            </div>
+                          </div>
+                        </td>
+                        <td className="px-4 py-3 text-sm text-gray-900">
+                          {format(new Date(booking.bookingDate), 'MMM dd, yyyy')}
+                        </td>
+                        <td className="px-4 py-3 text-sm font-medium text-gray-900">
+                          ${booking.rate.toLocaleString()}
+                        </td>
+                      </tr>
+                    ))}
+                  </tbody>
+                </table>
+              )}
+            </div>
+
+            {/* Selected Booking Details */}
+            {selectedBooking && (
+              <div className="mb-6 p-4 bg-blue-50 rounded-lg border border-blue-200">
+                <h3 className="text-sm font-medium text-blue-900 mb-2">Selected Booking Details</h3>
+                <div className="grid grid-cols-2 gap-4 text-sm">
+                  <div>
+                    <span className="text-blue-700 font-medium">Booking ID:</span>
+                    <span className="ml-2 text-blue-900">#{selectedBooking.id}</span>
+                  </div>
+                  <div>
+                    <span className="text-blue-700 font-medium">Carrier:</span>
+                    <span className="ml-2 text-blue-900">{selectedBooking.carrier?.name}</span>
+                  </div>
+                  <div>
+                    <span className="text-blue-700 font-medium">Route:</span>
+                    <span className="ml-2 text-blue-900">{selectedBooking.route?.name}</span>
+                  </div>
+                  <div>
+                    <span className="text-blue-700 font-medium">Amount:</span>
+                    <span className="ml-2 text-blue-900 font-semibold">${selectedBooking.rate.toLocaleString()}</span>
+                  </div>
+                </div>
+              </div>
+            )}
+          </>
+        )}
+
+        {/* Action Buttons */}
+        <div className="flex justify-end gap-3 pt-4 border-t">
+          <button 
+            onClick={onClose}
+            className="px-4 py-2 bg-gray-500 text-white rounded hover:bg-gray-600"
+            disabled={isSubmitting}
+          >
+            Cancel
+          </button>
+          <button 
+            onClick={handleGenerateInvoice}
+            disabled={!selectedBooking || isSubmitting}
+            className="px-4 py-2 bg-blue-600 text-white rounded hover:bg-blue-700 disabled:bg-blue-400 flex items-center gap-2"
+          >
+            {isSubmitting ? (
+              <>
+                <div className="animate-spin rounded-full h-4 w-4 border-b-2 border-white"></div>
+                Generating...
+              </>
+            ) : (
+              <>
+                <CheckCircle className="w-4 h-4" />
+                Generate Invoice
+              </>
+            )}
           </button>
         </div>
       </div>
