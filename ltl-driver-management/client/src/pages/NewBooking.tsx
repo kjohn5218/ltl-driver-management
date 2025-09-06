@@ -254,11 +254,17 @@ export const NewBooking: React.FC = () => {
   // Create booking mutation
   const createBookingMutation = useMutation({
     mutationFn: async (data: any) => {
+      console.log('Sending booking data:', data); // Debug log
       const response = await api.post('/bookings', data);
       return response.data;
     },
     onSuccess: () => {
       navigate('/bookings');
+    },
+    onError: (error: any) => {
+      console.error('Booking creation error:', error);
+      const errorMessage = error.response?.data?.message || 'Failed to create booking';
+      alert(`Error creating booking: ${errorMessage}`);
     }
   });
 
@@ -289,20 +295,20 @@ export const NewBooking: React.FC = () => {
       
       bookingLegs.forEach((leg, index) => {
         createBookingMutation.mutate({
-          carrierId: carrierId ? parseInt(carrierId) : undefined,
+          carrierId: carrierId ? parseInt(carrierId) : null,
           routeId: parseInt(leg.routeId),
           bookingDate: new Date(bookingDate).toISOString(),
           rate: parseFloat(leg.rate),
           rateType: leg.rateType,
-          baseRate: leg.baseRate ? parseFloat(leg.baseRate) : undefined,
-          fscRate: leg.rateType === 'MILE_FSC' ? fuelSurchargeRate : undefined,
+          baseRate: leg.baseRate ? parseFloat(leg.baseRate) : null,
+          fscRate: leg.rateType === 'MILE_FSC' ? fuelSurchargeRate : null,
           billable,
-          notes: notes || undefined,
+          notes: notes || null,
           status: carrierId ? 'CONFIRMED' : 'PENDING',
           bookingGroupId,
           legNumber: index + 1,
           isParent: index === 0, // First leg is the parent
-          parentBookingId: index === 0 ? undefined : null // Will be set after parent is created
+          parentBookingId: index === 0 ? null : null // Will be set after parent is created
         });
       });
     } else {
@@ -313,14 +319,14 @@ export const NewBooking: React.FC = () => {
       }
 
       createBookingMutation.mutate({
-        carrierId: carrierId ? parseInt(carrierId) : undefined,
+        carrierId: carrierId ? parseInt(carrierId) : null,
         routeId: parseInt(selectedRoutes[0]),
         bookingDate: new Date(bookingDate).toISOString(),
         rate: parseFloat(rate),
         rateType: 'FLAT_RATE', // Single route bookings use flat rate by default
         baseRate: parseFloat(rate),
         billable,
-        notes: notes || undefined,
+        notes: notes || null,
         status: carrierId ? 'CONFIRMED' : 'PENDING',
         legNumber: 1,
         isParent: true
