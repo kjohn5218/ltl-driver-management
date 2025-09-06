@@ -261,8 +261,9 @@ export const NewBooking: React.FC = () => {
     },
     onError: (error: any) => {
       console.error('Booking creation error:', error);
-      const errorMessage = error.response?.data?.message || 'Failed to create booking';
-      alert(`Error creating booking: ${errorMessage}`);
+      console.error('Error response:', error.response?.data);
+      const errorMessage = error.response?.data?.message || error.response?.data?.errors || 'Failed to create booking';
+      alert(`Error creating booking: ${JSON.stringify(errorMessage)}`);
     }
   });
 
@@ -271,6 +272,12 @@ export const NewBooking: React.FC = () => {
     
     if (!bookingDate) {
       alert('Please select a booking date');
+      return;
+    }
+
+    // Validate selected routes
+    if (!isRoundTrip && selectedRoutes.length === 0) {
+      alert('Please select a route');
       return;
     }
 
@@ -296,10 +303,10 @@ export const NewBooking: React.FC = () => {
           carrierId: carrierId ? parseInt(carrierId) : null,
           routeId: parseInt(leg.routeId),
           bookingDate: new Date(bookingDate).toISOString(),
-          rate: parseFloat(leg.rate),
+          rate: leg.rate.toString(),
           rateType: leg.rateType,
-          baseRate: leg.baseRate ? parseFloat(leg.baseRate) : null,
-          fscRate: leg.rateType === 'MILE_FSC' ? fuelSurchargeRate : null,
+          baseRate: leg.baseRate ? leg.baseRate.toString() : null,
+          fscRate: leg.rateType === 'MILE_FSC' ? fuelSurchargeRate.toString() : null,
           billable,
           notes: notes || null,
           status: carrierId ? 'CONFIRMED' : 'PENDING',
@@ -320,9 +327,9 @@ export const NewBooking: React.FC = () => {
         carrierId: carrierId ? parseInt(carrierId) : null,
         routeId: parseInt(selectedRoutes[0]),
         bookingDate: new Date(bookingDate).toISOString(),
-        rate: parseFloat(rate),
+        rate: rate.toString(),
         rateType: 'FLAT_RATE', // Single route bookings use flat rate by default
-        baseRate: parseFloat(rate),
+        baseRate: rate.toString(),
         billable,
         notes: notes || null,
         status: carrierId ? 'CONFIRMED' : 'PENDING',
