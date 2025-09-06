@@ -1,15 +1,22 @@
-import React, { useState } from 'react';
+import React, { useState, useMemo } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { useQuery } from '@tanstack/react-query';
 import { api } from '../services/api';
 import { Booking } from '../types';
-import { Plus, Search, Edit, Eye, Calendar, MapPin, User, DollarSign, X } from 'lucide-react';
-import { format } from 'date-fns';
+import { Plus, Search, Edit, Eye, Calendar, MapPin, User, DollarSign, X, ChevronUp, ChevronDown } from 'lucide-react';
+import { format, isAfter, isBefore, isSameDay, parseISO } from 'date-fns';
+
+type SortField = 'id' | 'carrier' | 'route' | 'bookingDate' | 'rate' | 'status';
+type SortDirection = 'asc' | 'desc';
 
 export const Bookings: React.FC = () => {
   const navigate = useNavigate();
   const [searchTerm, setSearchTerm] = useState('');
   const [statusFilter, setStatusFilter] = useState('');
+  const [dateFromFilter, setDateFromFilter] = useState('');
+  const [dateToFilter, setDateToFilter] = useState('');
+  const [sortField, setSortField] = useState<SortField>('bookingDate');
+  const [sortDirection, setSortDirection] = useState<SortDirection>('desc');
   const [viewingBooking, setViewingBooking] = useState<Booking | null>(null);
   const [editingBooking, setEditingBooking] = useState<Booking | null>(null);
 
@@ -21,11 +28,104 @@ export const Bookings: React.FC = () => {
     }
   });
 
-  const filteredBookings = bookings?.filter(booking =>
-    (booking.carrier?.name.toLowerCase().includes(searchTerm.toLowerCase()) ||
-     booking.route?.name.toLowerCase().includes(searchTerm.toLowerCase())) &&
-    (statusFilter === '' || booking.status === statusFilter)
-  ) || [];
+  const filteredAndSortedBookings = useMemo(() => {
+    if (!bookings) return [];
+
+    // First, filter the bookings
+    let filtered = bookings.filter(booking => {
+      // Search filter
+      const matchesSearch = searchTerm === '' || 
+        (booking.carrier?.name.toLowerCase().includes(searchTerm.toLowerCase()) ||
+         booking.route?.name.toLowerCase().includes(searchTerm.toLowerCase()));
+      
+      // Status filter
+      const matchesStatus = statusFilter === '' || booking.status === statusFilter;
+      
+      // Date filter
+      let matchesDate = true;
+      if (dateFromFilter || dateToFilter) {
+        const bookingDate = parseISO(booking.bookingDate);
+        
+        if (dateFromFilter) {
+          const fromDate = parseISO(dateFromFilter);
+          matchesDate = matchesDate && (isAfter(bookingDate, fromDate) || isSameDay(bookingDate, fromDate));
+        }
+        
+        if (dateToFilter) {
+          const toDate = parseISO(dateToFilter);
+          matchesDate = matchesDate && (isBefore(bookingDate, toDate) || isSameDay(bookingDate, toDate));
+        }
+      }
+      
+      return matchesSearch && matchesStatus && matchesDate;
+    });
+
+    // Then, sort the filtered results
+    filtered.sort((a, b) => {
+      let aValue: any;
+      let bValue: any;
+
+      switch (sortField) {
+        case 'id':
+          aValue = a.id;
+          bValue = b.id;
+          break;
+        case 'carrier':
+          aValue = a.carrier?.name || '';
+          bValue = b.carrier?.name || '';
+          break;
+        case 'route':
+          aValue = a.route?.name || '';
+          bValue = b.route?.name || '';
+          break;
+        case 'bookingDate':
+          aValue = new Date(a.bookingDate);
+          bValue = new Date(b.bookingDate);
+          break;
+        case 'rate':
+          aValue = a.rate;
+          bValue = b.rate;
+          break;
+        case 'status':
+          aValue = a.status;
+          bValue = b.status;
+          break;
+        default:
+          return 0;
+      }
+
+      // Handle string comparison
+      if (typeof aValue === 'string' && typeof bValue === 'string') {
+        const comparison = aValue.localeCompare(bValue);
+        return sortDirection === 'asc' ? comparison : -comparison;
+      }
+
+      // Handle number and date comparison
+      if (aValue < bValue) return sortDirection === 'asc' ? -1 : 1;
+      if (aValue > bValue) return sortDirection === 'asc' ? 1 : -1;
+      return 0;
+    });
+
+    return filtered;
+  }, [bookings, searchTerm, statusFilter, dateFromFilter, dateToFilter, sortField, sortDirection]);
+
+  const handleSort = (field: SortField) => {
+    if (sortField === field) {
+      setSortDirection(sortDirection === 'asc' ? 'desc' : 'asc');
+    } else {
+      setSortField(field);
+      setSortDirection('asc');
+    }
+  };
+
+  const getSortIcon = (field: SortField) => {
+    if (sortField !== field) {
+      return null;
+    }
+    return sortDirection === 'asc' ? 
+      <ChevronUp className="w-4 h-4 ml-1 inline" /> : 
+      <ChevronDown className="w-4 h-4 ml-1 inline" />;
+  };
 
   const getStatusBadge = (status: string) => {
     const statusColors = {
@@ -80,29 +180,66 @@ export const Bookings: React.FC = () => {
       </div>
 
       {/* Filters */}
-      <div className="flex gap-4 mb-6">
-        <div className="flex-1 relative">
-          <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 text-gray-400 w-4 h-4" />
-          <input
-            type="text"
-            placeholder="Search by carrier or route..."
-            className="w-full pl-10 pr-4 py-2 border border-gray-300 rounded-md focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
-            value={searchTerm}
-            onChange={(e) => setSearchTerm(e.target.value)}
-          />
+      <div className="space-y-4 mb-6">
+        <div className="flex gap-4">
+          <div className="flex-1 relative">
+            <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 text-gray-400 w-4 h-4" />
+            <input
+              type="text"
+              placeholder="Search by carrier or route..."
+              className="w-full pl-10 pr-4 py-2 border border-gray-300 rounded-md focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
+              value={searchTerm}
+              onChange={(e) => setSearchTerm(e.target.value)}
+            />
+          </div>
+          <select
+            className="px-3 py-2 border border-gray-300 rounded-md focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
+            value={statusFilter}
+            onChange={(e) => setStatusFilter(e.target.value)}
+          >
+            <option value="">All Status</option>
+            <option value="PENDING">Pending (Unbooked)</option>
+            <option value="CONFIRMED">Confirmed (Booked)</option>
+            <option value="IN_PROGRESS">In Progress</option>
+            <option value="COMPLETED">Completed</option>
+            <option value="CANCELLED">Cancelled</option>
+          </select>
         </div>
-        <select
-          className="px-3 py-2 border border-gray-300 rounded-md focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
-          value={statusFilter}
-          onChange={(e) => setStatusFilter(e.target.value)}
-        >
-          <option value="">All Status</option>
-          <option value="PENDING">Pending (Unbooked)</option>
-          <option value="CONFIRMED">Confirmed (Booked)</option>
-          <option value="IN_PROGRESS">In Progress</option>
-          <option value="COMPLETED">Completed</option>
-          <option value="CANCELLED">Cancelled</option>
-        </select>
+        
+        {/* Date Filters */}
+        <div className="flex gap-4 items-center">
+          <Calendar className="w-4 h-4 text-gray-400" />
+          <span className="text-sm font-medium text-gray-700">Date Range:</span>
+          <div className="flex gap-2 items-center">
+            <input
+              type="date"
+              value={dateFromFilter}
+              onChange={(e) => setDateFromFilter(e.target.value)}
+              className="px-3 py-2 border border-gray-300 rounded-md focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
+              placeholder="From date"
+            />
+            <span className="text-gray-500">to</span>
+            <input
+              type="date"
+              value={dateToFilter}
+              onChange={(e) => setDateToFilter(e.target.value)}
+              className="px-3 py-2 border border-gray-300 rounded-md focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
+              placeholder="To date"
+            />
+          </div>
+          {(dateFromFilter || dateToFilter) && (
+            <button
+              onClick={() => {
+                setDateFromFilter('');
+                setDateToFilter('');
+              }}
+              className="text-gray-500 hover:text-red-600 transition-colors"
+              title="Clear date filters"
+            >
+              <X className="w-4 h-4" />
+            </button>
+          )}
+        </div>
       </div>
 
       {/* Bookings Table */}
@@ -111,22 +248,58 @@ export const Bookings: React.FC = () => {
           <thead className="bg-gray-50">
             <tr>
               <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
-                Booking ID
+                <button
+                  onClick={() => handleSort('id')}
+                  className="flex items-center hover:text-gray-700 transition-colors"
+                >
+                  Booking ID
+                  {getSortIcon('id')}
+                </button>
               </th>
               <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
-                Carrier
+                <button
+                  onClick={() => handleSort('carrier')}
+                  className="flex items-center hover:text-gray-700 transition-colors"
+                >
+                  Carrier
+                  {getSortIcon('carrier')}
+                </button>
               </th>
               <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
-                Route
+                <button
+                  onClick={() => handleSort('route')}
+                  className="flex items-center hover:text-gray-700 transition-colors"
+                >
+                  Route
+                  {getSortIcon('route')}
+                </button>
               </th>
               <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
-                Date
+                <button
+                  onClick={() => handleSort('bookingDate')}
+                  className="flex items-center hover:text-gray-700 transition-colors"
+                >
+                  Date
+                  {getSortIcon('bookingDate')}
+                </button>
               </th>
               <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
-                Rate
+                <button
+                  onClick={() => handleSort('rate')}
+                  className="flex items-center hover:text-gray-700 transition-colors"
+                >
+                  Rate
+                  {getSortIcon('rate')}
+                </button>
               </th>
               <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
-                Status
+                <button
+                  onClick={() => handleSort('status')}
+                  className="flex items-center hover:text-gray-700 transition-colors"
+                >
+                  Status
+                  {getSortIcon('status')}
+                </button>
               </th>
               <th className="px-6 py-3 text-right text-xs font-medium text-gray-500 uppercase tracking-wider">
                 Actions
@@ -134,7 +307,7 @@ export const Bookings: React.FC = () => {
             </tr>
           </thead>
           <tbody className="bg-white divide-y divide-gray-200">
-            {filteredBookings.map((booking) => (
+            {filteredAndSortedBookings.map((booking) => (
               <tr key={booking.id} className="hover:bg-gray-50">
                 <td className="px-6 py-4 whitespace-nowrap text-sm font-medium text-gray-900">
                   #{booking.id}
@@ -195,7 +368,7 @@ export const Bookings: React.FC = () => {
         </table>
       </div>
 
-      {filteredBookings.length === 0 && (
+      {filteredAndSortedBookings.length === 0 && (
         <div className="text-center py-12">
           <p className="text-gray-500">No bookings found matching your criteria.</p>
         </div>
@@ -215,7 +388,7 @@ export const Bookings: React.FC = () => {
         <BookingEditModal 
           booking={editingBooking} 
           onClose={handleCloseEdit} 
-          onSave={(updatedBooking) => {
+          onSave={(_updatedBooking) => {
             // Handle booking update logic here
             setEditingBooking(null);
             // Optionally refetch bookings data
