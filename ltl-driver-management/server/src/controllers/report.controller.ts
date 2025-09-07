@@ -13,7 +13,18 @@ export const getDashboardMetrics = async (req: Request, res: Response) => {
       if (endDate) dateFilter.bookingDate.lte = new Date(endDate as string);
     }
 
-    // Get metrics
+    // Build current month filter for monthly expenses
+    const currentMonth = new Date();
+    const monthStart = new Date(currentMonth.getFullYear(), currentMonth.getMonth(), 1);
+    const monthEnd = new Date(currentMonth.getFullYear(), currentMonth.getMonth() + 1, 0);
+    const monthFilter = {
+      bookingDate: {
+        gte: monthStart,
+        lte: monthEnd
+      }
+    };
+
+    // Get metrics - focusing on expenses rather than revenue
     const [
       totalCarriers,
       activeCarriers,
@@ -21,7 +32,8 @@ export const getDashboardMetrics = async (req: Request, res: Response) => {
       totalBookings,
       completedBookings,
       pendingInvoices,
-      totalRevenue
+      totalExpenses,
+      monthlyExpenses
     ] = await Promise.all([
       prisma.carrier.count(),
       prisma.carrier.count({ where: { status: 'ACTIVE' } }),
@@ -29,13 +41,19 @@ export const getDashboardMetrics = async (req: Request, res: Response) => {
       prisma.booking.count({ where: dateFilter }),
       prisma.booking.count({ where: { ...dateFilter, status: 'COMPLETED' } }),
       prisma.invoice.count({ where: { status: 'PENDING' } }),
-      prisma.invoice.aggregate({
-        where: { status: 'PAID' },
-        _sum: { amount: true }
+      // Calculate total expenses from completed bookings
+      prisma.booking.aggregate({
+        where: { status: 'COMPLETED' },
+        _sum: { rate: true }
+      }),
+      // Calculate monthly expenses from completed bookings
+      prisma.booking.aggregate({
+        where: { ...monthFilter, status: 'COMPLETED' },
+        _sum: { rate: true }
       })
     ]);
 
-    // Get recent activities
+    // Get recent activities (carrier bookings)
     const recentBookings = await prisma.booking.findMany({
       take: 5,
       orderBy: { createdAt: 'desc' },
@@ -53,7 +71,8 @@ export const getDashboardMetrics = async (req: Request, res: Response) => {
         totalBookings,
         completedBookings,
         pendingInvoices,
-        totalRevenue: totalRevenue._sum.amount || 0
+        totalExpenses: totalExpenses._sum.rate || 0,
+        monthlyExpenses: monthlyExpenses._sum.rate || 0
       },
       recentActivities: recentBookings
     });

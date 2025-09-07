@@ -6,8 +6,10 @@ import {
   Route, 
   Calendar, 
   DollarSign,
-  TrendingUp,
-  AlertCircle
+  TrendingDown,
+  AlertCircle,
+  CreditCard,
+  TrendingUp
 } from 'lucide-react';
 import { format } from 'date-fns';
 import { Booking } from '../types';
@@ -19,7 +21,8 @@ interface DashboardMetrics {
   totalBookings: number;
   completedBookings: number;
   pendingInvoices: number;
-  totalRevenue: number;
+  totalExpenses: number;
+  monthlyExpenses: number;
 }
 
 interface DashboardData {
@@ -66,23 +69,23 @@ export const Dashboard: React.FC = () => {
       color: 'bg-blue-500'
     },
     {
-      name: 'Total Routes',
+      name: 'Covered Routes',
       value: data.metrics.totalRoutes,
       icon: Route,
       color: 'bg-green-500'
     },
     {
-      name: 'Completed Bookings',
+      name: 'Completed Trips',
       value: data.metrics.completedBookings,
       total: data.metrics.totalBookings,
       icon: Calendar,
       color: 'bg-purple-500'
     },
     {
-      name: 'Total Revenue',
-      value: `$${data.metrics.totalRevenue.toLocaleString()}`,
-      icon: DollarSign,
-      color: 'bg-yellow-500'
+      name: 'Total Expenses',
+      value: `$${(data.metrics.totalExpenses || 0).toLocaleString()}`,
+      icon: CreditCard,
+      color: 'bg-red-500'
     }
   ];
 
@@ -91,7 +94,7 @@ export const Dashboard: React.FC = () => {
       <div className="mb-8">
         <h1 className="text-2xl font-bold text-gray-900">Dashboard</h1>
         <p className="mt-2 text-sm text-gray-700">
-          Welcome to your LTL Driver Management dashboard
+          Track carrier expenses and route coverage for your LTL operations
         </p>
       </div>
 
@@ -131,36 +134,42 @@ export const Dashboard: React.FC = () => {
       <div className="grid grid-cols-1 lg:grid-cols-2 gap-4 lg:gap-6 mb-8">
         <div className="bg-white shadow rounded-lg p-6">
           <div className="flex items-center justify-between mb-4">
-            <h2 className="text-lg font-medium text-gray-900">Quick Stats</h2>
-            <TrendingUp className="h-5 w-5 text-gray-400" />
+            <h2 className="text-lg font-medium text-gray-900">Expense Overview</h2>
+            <TrendingDown className="h-5 w-5 text-red-500" />
           </div>
           <dl className="space-y-4">
             <div className="flex justify-between">
-              <dt className="text-sm font-medium text-gray-500">Pending Invoices</dt>
+              <dt className="text-sm font-medium text-gray-500">Pending Payments</dt>
               <dd className="text-sm font-semibold text-gray-900">{data.metrics.pendingInvoices}</dd>
             </div>
             <div className="flex justify-between">
-              <dt className="text-sm font-medium text-gray-500">Carrier Utilization</dt>
+              <dt className="text-sm font-medium text-gray-500">Monthly Expenses</dt>
               <dd className="text-sm font-semibold text-gray-900">
-                {data.metrics.activeCarriers > 0 
-                  ? Math.round((data.metrics.completedBookings / data.metrics.activeCarriers) * 100) 
-                  : 0}%
+                ${(data.metrics.monthlyExpenses || 0).toLocaleString()}
               </dd>
             </div>
             <div className="flex justify-between">
-              <dt className="text-sm font-medium text-gray-500">Average Revenue per Booking</dt>
+              <dt className="text-sm font-medium text-gray-500">Average Cost per Trip</dt>
               <dd className="text-sm font-semibold text-gray-900">
                 ${data.metrics.completedBookings > 0 
-                  ? Math.round(data.metrics.totalRevenue / data.metrics.completedBookings).toLocaleString()
+                  ? Math.round((data.metrics.totalExpenses || 0) / data.metrics.completedBookings).toLocaleString()
                   : 0}
+              </dd>
+            </div>
+            <div className="flex justify-between">
+              <dt className="text-sm font-medium text-gray-500">Route Coverage</dt>
+              <dd className="text-sm font-semibold text-gray-900">
+                {data.metrics.totalRoutes > 0 
+                  ? Math.round((data.metrics.completedBookings / data.metrics.totalRoutes) * 100) 
+                  : 0}%
               </dd>
             </div>
           </dl>
         </div>
 
-        {/* Recent Activities */}
+        {/* Recent Carrier Bookings */}
         <div className="bg-white shadow rounded-lg p-6">
-          <h2 className="text-lg font-medium text-gray-900 mb-4">Recent Activities</h2>
+          <h2 className="text-lg font-medium text-gray-900 mb-4">Recent Carrier Bookings</h2>
           <div className="space-y-3">
             {data.recentActivities.length > 0 ? (
               data.recentActivities.map((activity) => (
@@ -168,27 +177,28 @@ export const Dashboard: React.FC = () => {
                   <div className={`flex-shrink-0 w-2 h-2 rounded-full ${
                     activity.status === 'COMPLETED' ? 'bg-green-400' : 
                     activity.status === 'CONFIRMED' ? 'bg-blue-400' : 
+                    activity.status === 'PENDING' ? 'bg-yellow-400' :
                     'bg-gray-400'
                   }`} />
                   <div className="flex-1 min-w-0">
                     <p className="text-gray-900 truncate">
-                      <span className="font-medium">{activity.carrier?.name}</span>
+                      <span className="font-medium">{activity.carrier?.name || 'Unassigned'}</span>
                       {' - '}
                       {activity.route?.name}
                     </p>
                     <p className="text-gray-500">
                       {format(new Date(activity.bookingDate), 'MMM d, yyyy')}
                       {' • '}
-                      <span className="capitalize">{activity.status.toLowerCase()}</span>
+                      <span className="capitalize">{activity.status.toLowerCase().replace('_', ' ')}</span>
                     </p>
                   </div>
-                  <div className="flex-shrink-0 text-gray-900 font-medium">
-                    ${activity.rate}
+                  <div className="flex-shrink-0 text-red-600 font-medium">
+                    -${activity.rate}
                   </div>
                 </div>
               ))
             ) : (
-              <p className="text-gray-500 text-sm">No recent activities</p>
+              <p className="text-gray-500 text-sm">No recent carrier bookings</p>
             )}
           </div>
         </div>
