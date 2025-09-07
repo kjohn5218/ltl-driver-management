@@ -2,7 +2,7 @@ import React, { useState } from 'react';
 import { useQuery } from '@tanstack/react-query';
 import { api } from '../services/api';
 import { BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer, LineChart, Line, PieChart, Pie, Cell } from 'recharts';
-import { Download, Calendar, TrendingUp, DollarSign, Users, MapPin } from 'lucide-react';
+import { Download, Calendar, TrendingDown, CreditCard, Users, MapPin, AlertTriangle, Target } from 'lucide-react';
 
 interface DashboardMetrics {
   totalCarriers: number;
@@ -11,7 +11,8 @@ interface DashboardMetrics {
   totalBookings: number;
   completedBookings: number;
   pendingBookings: number;
-  totalRevenue: number;
+  totalExpenses: number;
+  monthlyExpenses: number;
   averageRate: number;
 }
 
@@ -27,20 +28,20 @@ export const Reports: React.FC = () => {
   });
 
   // Mock data for charts - in a real app, this would come from API
-  const monthlyRevenue = [
-    { month: 'Jan', revenue: 45000, bookings: 23 },
-    { month: 'Feb', revenue: 52000, bookings: 28 },
-    { month: 'Mar', revenue: 48000, bookings: 25 },
-    { month: 'Apr', revenue: 61000, bookings: 32 },
-    { month: 'May', revenue: 55000, bookings: 29 },
-    { month: 'Jun', revenue: 67000, bookings: 35 },
+  const monthlyExpenses = [
+    { month: 'Jan', expenses: 45000, bookings: 23, budget: 50000 },
+    { month: 'Feb', expenses: 52000, bookings: 28, budget: 50000 },
+    { month: 'Mar', expenses: 48000, bookings: 25, budget: 50000 },
+    { month: 'Apr', expenses: 61000, bookings: 32, budget: 60000 },
+    { month: 'May', expenses: 55000, bookings: 29, budget: 60000 },
+    { month: 'Jun', expenses: 67000, bookings: 35, budget: 65000 },
   ];
 
-  const carrierPerformance = [
-    { name: 'Swift Transport', bookings: 45, revenue: 78000, rating: 4.8 },
-    { name: 'Reliable Freight', bookings: 38, revenue: 65000, rating: 4.6 },
-    { name: 'Express Logistics', bookings: 32, revenue: 54000, rating: 4.7 },
-    { name: 'Prime Carriers', bookings: 29, revenue: 48000, rating: 4.5 },
+  const carrierCostAnalysis = [
+    { name: 'Swift Transport', bookings: 45, totalCost: 78000, avgCost: 1733, efficiency: 4.8 },
+    { name: 'Reliable Freight', bookings: 38, totalCost: 65000, avgCost: 1711, efficiency: 4.6 },
+    { name: 'Express Logistics', bookings: 32, totalCost: 54000, avgCost: 1688, efficiency: 4.7 },
+    { name: 'Prime Carriers', bookings: 29, totalCost: 48000, avgCost: 1655, efficiency: 4.5 },
   ];
 
   const statusDistribution = [
@@ -50,11 +51,11 @@ export const Reports: React.FC = () => {
     { name: 'Cancelled', value: 14, color: '#EF4444' },
   ];
 
-  const topRoutes = [
-    { route: 'LA → NYC', bookings: 28, revenue: 84000 },
-    { route: 'Chicago → Miami', bookings: 24, revenue: 72000 },
-    { route: 'Houston → Atlanta', bookings: 21, revenue: 63000 },
-    { route: 'Seattle → Denver', bookings: 19, revenue: 57000 },
+  const routeCostAnalysis = [
+    { route: 'LA → NYC', bookings: 28, totalCost: 84000, avgCost: 3000, utilization: 85 },
+    { route: 'Chicago → Miami', bookings: 24, totalCost: 72000, avgCost: 3000, utilization: 75 },
+    { route: 'Houston → Atlanta', bookings: 21, totalCost: 63000, avgCost: 3000, utilization: 68 },
+    { route: 'Seattle → Denver', bookings: 19, totalCost: 57000, avgCost: 3000, utilization: 63 },
   ];
 
   if (metricsLoading) {
@@ -71,7 +72,7 @@ export const Reports: React.FC = () => {
       <div className="flex justify-between items-center">
         <div>
           <h1 className="text-2xl font-bold text-gray-900">Reports & Analytics</h1>
-          <p className="text-gray-600">Insights and performance metrics</p>
+          <p className="text-gray-600">Expense analysis and carrier cost management insights</p>
         </div>
         <div className="flex items-center gap-3">
           <select
@@ -96,11 +97,11 @@ export const Reports: React.FC = () => {
         <div className="bg-white p-6 rounded-lg shadow-sm border border-gray-200">
           <div className="flex items-center">
             <div className="flex-shrink-0">
-              <DollarSign className="h-6 w-6 text-green-600" />
+              <CreditCard className="h-6 w-6 text-red-600" />
             </div>
             <div className="ml-3">
-              <p className="text-sm font-medium text-gray-500">Total Revenue</p>
-              <p className="text-2xl font-semibold text-gray-900">${metrics?.totalRevenue?.toLocaleString() || '0'}</p>
+              <p className="text-sm font-medium text-gray-500">Total Expenses</p>
+              <p className="text-2xl font-semibold text-gray-900">${metrics?.totalExpenses?.toLocaleString() || '0'}</p>
             </div>
           </div>
         </div>
@@ -108,11 +109,11 @@ export const Reports: React.FC = () => {
         <div className="bg-white p-6 rounded-lg shadow-sm border border-gray-200">
           <div className="flex items-center">
             <div className="flex-shrink-0">
-              <Calendar className="h-6 w-6 text-blue-600" />
+              <TrendingDown className="h-6 w-6 text-orange-600" />
             </div>
             <div className="ml-3">
-              <p className="text-sm font-medium text-gray-500">Total Bookings</p>
-              <p className="text-2xl font-semibold text-gray-900">{metrics?.totalBookings || 0}</p>
+              <p className="text-sm font-medium text-gray-500">Monthly Expenses</p>
+              <p className="text-2xl font-semibold text-gray-900">${metrics?.monthlyExpenses?.toLocaleString() || '0'}</p>
             </div>
           </div>
         </div>
@@ -120,7 +121,7 @@ export const Reports: React.FC = () => {
         <div className="bg-white p-6 rounded-lg shadow-sm border border-gray-200">
           <div className="flex items-center">
             <div className="flex-shrink-0">
-              <Users className="h-6 w-6 text-purple-600" />
+              <Users className="h-6 w-6 text-blue-600" />
             </div>
             <div className="ml-3">
               <p className="text-sm font-medium text-gray-500">Active Carriers</p>
@@ -132,11 +133,15 @@ export const Reports: React.FC = () => {
         <div className="bg-white p-6 rounded-lg shadow-sm border border-gray-200">
           <div className="flex items-center">
             <div className="flex-shrink-0">
-              <MapPin className="h-6 w-6 text-orange-600" />
+              <Target className="h-6 w-6 text-green-600" />
             </div>
             <div className="ml-3">
-              <p className="text-sm font-medium text-gray-500">Total Routes</p>
-              <p className="text-2xl font-semibold text-gray-900">{metrics?.totalRoutes || 0}</p>
+              <p className="text-sm font-medium text-gray-500">Avg Cost per Trip</p>
+              <p className="text-2xl font-semibold text-gray-900">
+                ${metrics?.completedBookings > 0 
+                  ? Math.round((metrics?.totalExpenses || 0) / metrics.completedBookings).toLocaleString()
+                  : '0'}
+              </p>
             </div>
           </div>
         </div>
@@ -144,16 +149,17 @@ export const Reports: React.FC = () => {
 
       {/* Charts Row 1 */}
       <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
-        {/* Revenue Chart */}
+        {/* Expense vs Budget Chart */}
         <div className="bg-white p-6 rounded-lg shadow-sm border border-gray-200">
-          <h3 className="text-lg font-medium text-gray-900 mb-4">Monthly Revenue & Bookings</h3>
+          <h3 className="text-lg font-medium text-gray-900 mb-4">Monthly Expenses vs Budget</h3>
           <ResponsiveContainer width="100%" height={300}>
-            <BarChart data={monthlyRevenue}>
+            <BarChart data={monthlyExpenses}>
               <CartesianGrid strokeDasharray="3 3" />
               <XAxis dataKey="month" />
               <YAxis />
               <Tooltip />
-              <Bar dataKey="revenue" fill="#3B82F6" name="Revenue ($)" />
+              <Bar dataKey="budget" fill="#E5E7EB" name="Budget ($)" />
+              <Bar dataKey="expenses" fill="#EF4444" name="Expenses ($)" />
             </BarChart>
           </ResponsiveContainer>
         </div>
@@ -185,41 +191,63 @@ export const Reports: React.FC = () => {
 
       {/* Charts Row 2 */}
       <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
-        {/* Top Carriers */}
+        {/* Carrier Cost Analysis */}
         <div className="bg-white p-6 rounded-lg shadow-sm border border-gray-200">
-          <h3 className="text-lg font-medium text-gray-900 mb-4">Top Performing Carriers</h3>
+          <h3 className="text-lg font-medium text-gray-900 mb-4">Carrier Cost Analysis</h3>
           <div className="space-y-4">
-            {carrierPerformance.map((carrier, index) => (
+            {carrierCostAnalysis.map((carrier, index) => (
               <div key={carrier.name} className="flex items-center justify-between p-3 border border-gray-200 rounded">
                 <div>
                   <p className="font-medium text-gray-900">{carrier.name}</p>
-                  <p className="text-sm text-gray-500">{carrier.bookings} bookings • Rating: {carrier.rating}/5</p>
+                  <p className="text-sm text-gray-500">{carrier.bookings} trips • Avg: ${carrier.avgCost}/trip</p>
                 </div>
                 <div className="text-right">
-                  <p className="font-semibold text-gray-900">${carrier.revenue.toLocaleString()}</p>
-                  <p className="text-sm text-gray-500">Revenue</p>
+                  <p className="font-semibold text-red-600">${carrier.totalCost.toLocaleString()}</p>
+                  <p className="text-sm text-gray-500">Total Cost</p>
                 </div>
               </div>
             ))}
           </div>
         </div>
 
-        {/* Top Routes */}
+        {/* Route Cost Efficiency */}
         <div className="bg-white p-6 rounded-lg shadow-sm border border-gray-200">
-          <h3 className="text-lg font-medium text-gray-900 mb-4">Most Popular Routes</h3>
+          <h3 className="text-lg font-medium text-gray-900 mb-4">Route Cost Efficiency</h3>
           <div className="space-y-4">
-            {topRoutes.map((route, index) => (
+            {routeCostAnalysis.map((route, index) => (
               <div key={route.route} className="flex items-center justify-between p-3 border border-gray-200 rounded">
                 <div>
                   <p className="font-medium text-gray-900">{route.route}</p>
-                  <p className="text-sm text-gray-500">{route.bookings} bookings</p>
+                  <p className="text-sm text-gray-500">{route.bookings} trips • {route.utilization}% utilization</p>
                 </div>
                 <div className="text-right">
-                  <p className="font-semibold text-gray-900">${route.revenue.toLocaleString()}</p>
-                  <p className="text-sm text-gray-500">Revenue</p>
+                  <p className="font-semibold text-red-600">${route.totalCost.toLocaleString()}</p>
+                  <p className="text-sm text-gray-500">Total Cost</p>
                 </div>
               </div>
             ))}
+          </div>
+        </div>
+      </div>
+
+      {/* Cost Insights */}
+      <div className="bg-white p-6 rounded-lg shadow-sm border border-gray-200">
+        <h3 className="text-lg font-medium text-gray-900 mb-4">Cost Management Insights</h3>
+        <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
+          <div className="text-center p-4 bg-red-50 rounded-lg">
+            <AlertTriangle className="h-8 w-8 text-red-600 mx-auto mb-2" />
+            <p className="text-sm font-medium text-red-900">Over Budget</p>
+            <p className="text-xs text-red-700">April expenses exceeded budget by $1,000</p>
+          </div>
+          <div className="text-center p-4 bg-green-50 rounded-lg">
+            <Target className="h-8 w-8 text-green-600 mx-auto mb-2" />
+            <p className="text-sm font-medium text-green-900">Most Efficient</p>
+            <p className="text-xs text-green-700">Prime Carriers - $1,655 avg cost per trip</p>
+          </div>
+          <div className="text-center p-4 bg-blue-50 rounded-lg">
+            <TrendingDown className="h-8 w-8 text-blue-600 mx-auto mb-2" />
+            <p className="text-sm font-medium text-blue-900">Cost Trend</p>
+            <p className="text-xs text-blue-700">3% increase in monthly expenses</p>
           </div>
         </div>
       </div>
