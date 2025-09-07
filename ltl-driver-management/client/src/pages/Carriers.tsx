@@ -941,7 +941,10 @@ const CarrierEditModal: React.FC<CarrierEditModalProps> = ({ carrier, onClose, o
     city: carrier.city || '',
     state: carrier.state || '',
     zipCode: carrier.zipCode || '',
-    status: carrier.status,
+    // Map invalid status values to valid ones for server compatibility
+    status: ['PENDING', 'ACTIVE', 'INACTIVE', 'SUSPENDED'].includes(carrier.status) 
+      ? carrier.status 
+      : carrier.status === 'ONBOARDED' ? 'ACTIVE' : 'PENDING',
     carrierType: carrier.carrierType || '',
     safetyRating: carrier.safetyRating || '',
     taxId: carrier.taxId || '',
@@ -961,35 +964,57 @@ const CarrierEditModal: React.FC<CarrierEditModalProps> = ({ carrier, onClose, o
     setIsSubmitting(true);
     
     try {
-      const payload = {
-        name: formData.name,
-        contactPerson: formData.contactPerson || undefined,
-        phone: formData.phone || undefined,
-        email: formData.email || undefined,
-        mcNumber: formData.mcNumber || undefined,
-        dotNumber: formData.dotNumber || undefined,
-        streetAddress1: formData.streetAddress1 || undefined,
-        streetAddress2: formData.streetAddress2 || undefined,
-        city: formData.city || undefined,
-        state: formData.state || undefined,
-        zipCode: formData.zipCode || undefined,
-        status: formData.status,
-        carrierType: formData.carrierType || undefined,
-        safetyRating: formData.safetyRating || undefined,
-        taxId: formData.taxId || undefined,
-        ratePerMile: formData.ratePerMile ? parseFloat(formData.ratePerMile) : undefined,
-        rating: formData.rating ? parseFloat(formData.rating) : undefined,
-        remittanceContact: formData.remittanceContact || undefined,
-        remittanceEmail: formData.remittanceEmail || undefined,
-        factoringCompany: formData.factoringCompany || undefined,
-        onboardingComplete: formData.onboardingComplete,
-        insuranceExpiration: formData.insuranceExpiration || undefined
-      };
+      // Build payload with proper validation for server
+      const payload: any = {};
+      
+      // Only include fields that have values to avoid validation issues
+      if (formData.name.trim()) payload.name = formData.name.trim();
+      if (formData.contactPerson.trim()) payload.contactPerson = formData.contactPerson.trim();
+      if (formData.phone.trim()) payload.phone = formData.phone.trim();
+      if (formData.email.trim()) payload.email = formData.email.trim();
+      if (formData.mcNumber.trim()) payload.mcNumber = formData.mcNumber.trim();
+      if (formData.dotNumber.trim()) payload.dotNumber = formData.dotNumber.trim();
+      if (formData.streetAddress1.trim()) payload.streetAddress1 = formData.streetAddress1.trim();
+      if (formData.streetAddress2.trim()) payload.streetAddress2 = formData.streetAddress2.trim();
+      if (formData.city.trim()) payload.city = formData.city.trim();
+      if (formData.state.trim()) payload.state = formData.state.trim();
+      if (formData.zipCode.trim()) payload.zipCode = formData.zipCode.trim();
+      if (formData.carrierType.trim()) payload.carrierType = formData.carrierType.trim();
+      if (formData.safetyRating.trim()) payload.safetyRating = formData.safetyRating.trim();
+      if (formData.taxId.trim()) payload.taxId = formData.taxId.trim();
+      if (formData.remittanceContact.trim()) payload.remittanceContact = formData.remittanceContact.trim();
+      if (formData.remittanceEmail.trim()) payload.remittanceEmail = formData.remittanceEmail.trim();
+      if (formData.factoringCompany.trim()) payload.factoringCompany = formData.factoringCompany.trim();
+      if (formData.insuranceExpiration) payload.insuranceExpiration = formData.insuranceExpiration;
+      
+      // Handle numeric fields
+      if (formData.ratePerMile && !isNaN(parseFloat(formData.ratePerMile))) {
+        payload.ratePerMile = parseFloat(formData.ratePerMile);
+      }
+      if (formData.rating && !isNaN(parseFloat(formData.rating))) {
+        payload.rating = parseFloat(formData.rating);
+      }
+      
+      // Always include status and onboardingComplete
+      payload.status = formData.status;
+      payload.onboardingComplete = formData.onboardingComplete;
       
       const response = await api.put(`/carriers/${carrier.id}`, payload);
       onSave(response.data);
     } catch (error) {
       console.error('Error updating carrier:', error);
+      
+      // Enhanced error handling
+      let errorMessage = 'Failed to update carrier. Please try again.';
+      if (error.response?.data?.message) {
+        errorMessage = error.response.data.message;
+      } else if (error.response?.data?.errors && Array.isArray(error.response.data.errors)) {
+        const validationErrors = error.response.data.errors
+          .map((err: any) => `${err.path || err.param}: ${err.msg}`)
+          .join('\n');
+        errorMessage = 'Validation Errors:\n' + validationErrors;
+      }
+      alert(errorMessage);
     } finally {
       setIsSubmitting(false);
     }
@@ -1167,8 +1192,6 @@ const CarrierEditModal: React.FC<CarrierEditModalProps> = ({ carrier, onClose, o
                   <option value="ACTIVE">Active</option>
                   <option value="INACTIVE">Inactive</option>
                   <option value="SUSPENDED">Suspended</option>
-                  <option value="ONBOARDED">Onboarded</option>
-                  <option value="NOT_ONBOARDED">Not Onboarded</option>
                 </select>
               </div>
               <div>
