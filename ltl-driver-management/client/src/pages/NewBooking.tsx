@@ -1195,29 +1195,28 @@ export const NewBooking: React.FC = () => {
           />
         </div>
 
-        {/* Total Rate Display */}
-        <div>
-          <label className="block text-sm font-medium text-gray-700 mb-2">
-            <DollarSign className="inline w-4 h-4 mr-1" />
-            Total Rate
-          </label>
-          <div className="relative">
-            <DollarSign className="absolute left-3 top-1/2 transform -translate-y-1/2 text-gray-400 w-4 h-4" />
-            <input
-              type="text"
-              value={`${getTotalRate().toFixed(2)}`}
-              readOnly
-              className="w-full pl-10 pr-4 py-2 border border-gray-300 rounded-md bg-gray-50 text-gray-700"
-              placeholder="0.00"
-            />
+        {/* Total Rate Display - Only show for multi-leg bookings */}
+        {isRoundTrip && (
+          <div>
+            <label className="block text-sm font-medium text-gray-700 mb-2">
+              <DollarSign className="inline w-4 h-4 mr-1" />
+              Total Rate
+            </label>
+            <div className="relative">
+              <DollarSign className="absolute left-3 top-1/2 transform -translate-y-1/2 text-gray-400 w-4 h-4" />
+              <input
+                type="text"
+                value={`${getTotalRate().toFixed(2)}`}
+                readOnly
+                className="w-full pl-10 pr-4 py-2 border border-gray-300 rounded-md bg-gray-50 text-gray-700"
+                placeholder="0.00"
+              />
+            </div>
+            <p className="mt-1 text-sm text-gray-500">
+              Calculated from {bookingLegs.length} legs
+            </p>
           </div>
-          <p className="mt-1 text-sm text-gray-500">
-            {isRoundTrip 
-              ? `Calculated from ${bookingLegs.length} legs`
-              : 'Enter rate for the selected route above'
-            }
-          </p>
-        </div>
+        )}
 
         {/* Single Route Rate Configuration - Only show for single route */}
         {!isRoundTrip && selectedRouteObjects.length > 0 && (
@@ -1294,18 +1293,23 @@ export const NewBooking: React.FC = () => {
               )}
             </div>
 
-            {/* Calculated Rate Display */}
-            <div className="pt-2 border-t border-gray-300">
+            {/* Calculated Total Rate Display */}
+            <div className="mt-4 p-3 bg-blue-50 rounded-md border border-blue-200">
               <div className="flex justify-between items-center">
-                <span className="text-sm font-medium text-gray-700">Calculated Total:</span>
-                <span className="text-lg font-bold text-gray-900">${rate}</span>
+                <div>
+                  <label className="text-sm font-medium text-blue-900">
+                    <DollarSign className="inline w-4 h-4 mr-1" />
+                    Total Rate
+                  </label>
+                  {singleRouteRateType !== 'FLAT_RATE' && (
+                    <p className="text-xs text-blue-700 mt-0.5">
+                      {selectedRouteObjects[0].distance} miles × ${parseFloat(singleRouteBaseRate || '0').toFixed(2)}/mile
+                      {singleRouteRateType === 'MILE_FSC' && ` + ${fuelSurchargeRate}% FSC`}
+                    </p>
+                  )}
+                </div>
+                <span className="text-xl font-bold text-blue-900">${rate}</span>
               </div>
-              {singleRouteRateType !== 'FLAT_RATE' && (
-                <p className="text-xs text-gray-500 mt-1">
-                  {selectedRouteObjects[0].distance} miles × ${parseFloat(singleRouteBaseRate || '0').toFixed(2)}/mile
-                  {singleRouteRateType === 'MILE_FSC' && ` + ${fuelSurchargeRate}% FSC`}
-                </p>
-              )}
             </div>
           </div>
         )}
