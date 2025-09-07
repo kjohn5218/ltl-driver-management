@@ -262,8 +262,28 @@ export const NewBooking: React.FC = () => {
     onError: (error: any) => {
       console.error('Booking creation error:', error);
       console.error('Error response:', error.response?.data);
-      const errorMessage = error.response?.data?.message || error.response?.data?.errors || 'Failed to create booking';
-      alert(`Error creating booking: ${JSON.stringify(errorMessage)}`);
+      
+      // Log the errors array in detail
+      if (error.response?.data?.errors) {
+        console.error('Validation errors detail:', JSON.stringify(error.response.data.errors, null, 2));
+      }
+      
+      let errorMessage = 'Failed to create booking';
+      
+      if (error.response?.data) {
+        if (error.response.data.message) {
+          errorMessage = error.response.data.message;
+        }
+        
+        if (error.response.data.errors && Array.isArray(error.response.data.errors)) {
+          const validationErrors = error.response.data.errors
+            .map((err: any) => `${err.path || err.param}: ${err.msg}`)
+            .join('\n');
+          errorMessage += '\n\nValidation Errors:\n' + validationErrors;
+        }
+      }
+      
+      alert(`Error creating booking:\n${errorMessage}`);
     }
   });
 
@@ -299,22 +319,30 @@ export const NewBooking: React.FC = () => {
       const bookingGroupId = `booking-${Date.now()}-${Math.random().toString(36).substr(2, 9)}`;
       
       bookingLegs.forEach((leg, index) => {
-        createBookingMutation.mutate({
+        const legData: any = {
           carrierId: carrierId ? parseInt(carrierId) : null,
           routeId: parseInt(leg.routeId),
-          bookingDate: new Date(bookingDate).toISOString(),
-          rate: leg.rate.toString(),
+          bookingDate: bookingDate, // Send as YYYY-MM-DD format for ISO8601 validation
+          rate: parseFloat(leg.rate).toFixed(2), // Ensure 2 decimal places
           rateType: leg.rateType,
-          baseRate: leg.baseRate ? leg.baseRate.toString() : null,
-          fscRate: leg.rateType === 'MILE_FSC' ? fuelSurchargeRate.toString() : null,
+          baseRate: leg.baseRate ? parseFloat(leg.baseRate).toFixed(2) : undefined,
+          fscRate: leg.rateType === 'MILE_FSC' ? parseFloat(fuelSurchargeRate.toString()).toFixed(2) : undefined,
           billable,
           notes: notes || null,
           status: carrierId ? 'CONFIRMED' : 'PENDING',
           bookingGroupId,
           legNumber: index + 1,
-          isParent: index === 0, // First leg is the parent
-          parentBookingId: index === 0 ? null : null // Will be set after parent is created
+          isParent: index === 0
+        };
+        
+        // Remove undefined values
+        Object.keys(legData).forEach(key => {
+          if (legData[key] === undefined || (legData[key] === null && key !== 'carrierId' && key !== 'notes')) {
+            delete legData[key];
+          }
         });
+        
+        createBookingMutation.mutate(legData);
       });
     } else {
       // Single route booking validation
@@ -323,19 +351,29 @@ export const NewBooking: React.FC = () => {
         return;
       }
 
-      createBookingMutation.mutate({
+      const bookingData: any = {
         carrierId: carrierId ? parseInt(carrierId) : null,
         routeId: parseInt(selectedRoutes[0]),
-        bookingDate: new Date(bookingDate).toISOString(),
-        rate: rate.toString(),
-        rateType: 'FLAT_RATE', // Single route bookings use flat rate by default
-        baseRate: rate.toString(),
+        bookingDate: bookingDate, // Send as YYYY-MM-DD format for ISO8601 validation
+        rate: parseFloat(rate).toFixed(2), // Ensure 2 decimal places
+        rateType: 'FLAT_RATE',
+        baseRate: parseFloat(rate).toFixed(2), // Ensure 2 decimal places
         billable,
         notes: notes || null,
         status: carrierId ? 'CONFIRMED' : 'PENDING',
         legNumber: 1,
         isParent: true
+      };
+      
+      // Remove null values that should be omitted
+      Object.keys(bookingData).forEach(key => {
+        if (bookingData[key] === null && key !== 'carrierId' && key !== 'notes') {
+          delete bookingData[key];
+        }
       });
+      
+      console.log('Creating booking with data:', JSON.stringify(bookingData, null, 2));
+      createBookingMutation.mutate(bookingData);
     }
   };
 

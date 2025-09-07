@@ -171,21 +171,21 @@ ${invoice.paidAt ? `Paid: ${format(new Date(invoice.paidAt), 'MMM dd, yyyy')}` :
 
   const getTotalAmount = () => {
     if (!invoices) return 0;
-    return invoices.reduce((total, invoice) => total + invoice.amount, 0);
+    return invoices.reduce((total, invoice) => total + Number(invoice.amount), 0);
   };
 
   const getPaidAmount = () => {
     if (!invoices) return 0;
     return invoices
       .filter(invoice => invoice.status === 'PAID')
-      .reduce((total, invoice) => total + invoice.amount, 0);
+      .reduce((total, invoice) => total + Number(invoice.amount), 0);
   };
 
   const getPendingAmount = () => {
     if (!invoices) return 0;
     return invoices
       .filter(invoice => ['PENDING', 'SENT', 'OVERDUE'].includes(invoice.status))
-      .reduce((total, invoice) => total + invoice.amount, 0);
+      .reduce((total, invoice) => total + Number(invoice.amount), 0);
   };
 
   if (isLoading) {
