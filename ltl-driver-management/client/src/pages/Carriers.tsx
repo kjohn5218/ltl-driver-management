@@ -1,5 +1,5 @@
 import React, { useState } from 'react';
-import { useQuery, useQueryClient } from '@tanstack/react-query';
+import { useQuery, useQueryClient, useMutation } from '@tanstack/react-query';
 import { api } from '../services/api';
 import { Carrier } from '../types';
 import { Plus, Search, Edit, Eye, Trash2, MapPin, Phone, Mail, ExternalLink, X } from 'lucide-react';
@@ -12,6 +12,7 @@ export const Carriers: React.FC = () => {
   const [viewingCarrier, setViewingCarrier] = useState<Carrier | null>(null);
   const [editingCarrier, setEditingCarrier] = useState<Carrier | null>(null);
   const [deletingCarrier, setDeletingCarrier] = useState<Carrier | null>(null);
+  const [showAddCarrierModal, setShowAddCarrierModal] = useState(false);
 
   const { data: carriersData, isLoading } = useQuery({
     queryKey: ['carriers'],
@@ -66,7 +67,10 @@ export const Carriers: React.FC = () => {
           <h1 className="text-2xl font-bold text-gray-900">Carriers</h1>
           <p className="text-gray-600">Manage your carrier network</p>
         </div>
-        <button className="btn-primary flex items-center gap-2">
+        <button 
+          className="btn-primary flex items-center gap-2"
+          onClick={() => setShowAddCarrierModal(true)}
+        >
           <Plus className="w-4 h-4" />
           Add Carrier
         </button>
@@ -240,6 +244,454 @@ export const Carriers: React.FC = () => {
           }}
         />
       )}
+
+      {/* Add Carrier Modal */}
+      {showAddCarrierModal && (
+        <AddCarrierModal
+          onClose={() => setShowAddCarrierModal(false)}
+          onSave={() => {
+            queryClient.invalidateQueries({ queryKey: ['carriers'] });
+            setShowAddCarrierModal(false);
+          }}
+        />
+      )}
+    </div>
+  );
+};
+
+// Add Carrier Modal Component
+interface AddCarrierModalProps {
+  onClose: () => void;
+  onSave: () => void;
+}
+
+const AddCarrierModal: React.FC<AddCarrierModalProps> = ({ onClose, onSave }) => {
+  const [formData, setFormData] = useState({
+    name: '',
+    contactPerson: '',
+    phone: '',
+    email: '',
+    mcNumber: '',
+    dotNumber: '',
+    streetAddress1: '',
+    streetAddress2: '',
+    city: '',
+    state: '',
+    zipCode: '',
+    status: 'PENDING',
+    carrierType: '',
+    safetyRating: '',
+    taxId: '',
+    ratePerMile: '',
+    rating: '',
+    remittanceContact: '',
+    remittanceEmail: '',
+    factoringCompany: '',
+    onboardingComplete: false,
+    insuranceExpiration: ''
+  });
+  
+  const [isSubmitting, setIsSubmitting] = useState(false);
+  const [errors, setErrors] = useState<string[]>([]);
+
+  // Create carrier mutation
+  const createCarrierMutation = useMutation({
+    mutationFn: async (carrierData: any) => {
+      const response = await api.post('/carriers', carrierData);
+      return response.data;
+    },
+    onSuccess: () => {
+      setErrors([]);
+      onSave();
+    },
+    onError: (error: any) => {
+      console.error('Error creating carrier:', error);
+      
+      // Extract validation errors from server response
+      let errorMessages = ['Failed to create carrier. Please try again.'];
+      
+      if (error.response?.data?.message) {
+        errorMessages = [error.response.data.message];
+      } else if (error.response?.data?.errors && Array.isArray(error.response.data.errors)) {
+        errorMessages = error.response.data.errors.map((err: any) => 
+          `${err.path || err.param}: ${err.msg}`
+        );
+      }
+      
+      setErrors(errorMessages);
+    }
+  });
+
+  const handleSubmit = async (e: React.FormEvent) => {
+    e.preventDefault();
+    setErrors([]);
+    
+    // Client-side validation
+    const validationErrors: string[] = [];
+    
+    if (!formData.name.trim()) {
+      validationErrors.push('Carrier name is required');
+    }
+    
+    if (formData.email && !/\S+@\S+\.\S+/.test(formData.email)) {
+      validationErrors.push('Please enter a valid email address');
+    }
+    
+    if (formData.ratePerMile && (isNaN(parseFloat(formData.ratePerMile)) || parseFloat(formData.ratePerMile) < 0)) {
+      validationErrors.push('Rate per mile must be a valid positive number');
+    }
+    
+    if (formData.rating && (isNaN(parseFloat(formData.rating)) || parseFloat(formData.rating) < 0 || parseFloat(formData.rating) > 5)) {
+      validationErrors.push('Rating must be a number between 0 and 5');
+    }
+    
+    if (validationErrors.length > 0) {
+      setErrors(validationErrors);
+      return;
+    }
+    
+    setIsSubmitting(true);
+    
+    try {
+      const payload = {
+        name: formData.name,
+        contactPerson: formData.contactPerson || undefined,
+        phone: formData.phone || undefined,
+        email: formData.email || undefined,
+        mcNumber: formData.mcNumber || undefined,
+        dotNumber: formData.dotNumber || undefined,
+        streetAddress1: formData.streetAddress1 || undefined,
+        streetAddress2: formData.streetAddress2 || undefined,
+        city: formData.city || undefined,
+        state: formData.state || undefined,
+        zipCode: formData.zipCode || undefined,
+        status: formData.status,
+        carrierType: formData.carrierType || undefined,
+        safetyRating: formData.safetyRating || undefined,
+        taxId: formData.taxId || undefined,
+        ratePerMile: formData.ratePerMile ? parseFloat(formData.ratePerMile) : undefined,
+        rating: formData.rating ? parseFloat(formData.rating) : undefined,
+        remittanceContact: formData.remittanceContact || undefined,
+        remittanceEmail: formData.remittanceEmail || undefined,
+        factoringCompany: formData.factoringCompany || undefined,
+        onboardingComplete: formData.onboardingComplete,
+        insuranceExpiration: formData.insuranceExpiration || undefined
+      };
+      
+      await createCarrierMutation.mutateAsync(payload);
+    } finally {
+      setIsSubmitting(false);
+    }
+  };
+
+  return (
+    <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50">
+      <div className="bg-white rounded-lg p-6 w-full max-w-4xl max-h-[90vh] overflow-y-auto">
+        <div className="flex justify-between items-center mb-6">
+          <h2 className="text-xl font-bold text-gray-900">Add New Carrier</h2>
+          <button 
+            onClick={onClose}
+            className="text-gray-400 hover:text-gray-600"
+          >
+            <X className="w-5 h-5" />
+          </button>
+        </div>
+        
+        {/* Error Display */}
+        {errors.length > 0 && (
+          <div className="mb-4 p-4 bg-red-50 border border-red-200 rounded-md">
+            <div className="flex">
+              <div className="ml-3">
+                <h3 className="text-sm font-medium text-red-800">
+                  Please correct the following errors:
+                </h3>
+                <div className="mt-2 text-sm text-red-700">
+                  <ul className="list-disc pl-5 space-y-1">
+                    {errors.map((error, index) => (
+                      <li key={index}>{error}</li>
+                    ))}
+                  </ul>
+                </div>
+              </div>
+            </div>
+          </div>
+        )}
+        
+        <form onSubmit={handleSubmit} className="space-y-6">
+          {/* Basic Information */}
+          <div>
+            <h3 className="text-lg font-medium text-gray-900 mb-4">Basic Information</h3>
+            <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+              <div>
+                <label className="block text-sm font-medium text-gray-700 mb-1">Carrier Name *</label>
+                <input
+                  type="text"
+                  required
+                  value={formData.name}
+                  onChange={(e) => setFormData({ ...formData, name: e.target.value })}
+                  className="w-full px-3 py-2 border border-gray-300 rounded-md focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
+                />
+              </div>
+              <div>
+                <label className="block text-sm font-medium text-gray-700 mb-1">Contact Person</label>
+                <input
+                  type="text"
+                  value={formData.contactPerson}
+                  onChange={(e) => setFormData({ ...formData, contactPerson: e.target.value })}
+                  className="w-full px-3 py-2 border border-gray-300 rounded-md focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
+                />
+              </div>
+              <div>
+                <label className="block text-sm font-medium text-gray-700 mb-1">Phone</label>
+                <input
+                  type="tel"
+                  value={formData.phone}
+                  onChange={(e) => setFormData({ ...formData, phone: e.target.value })}
+                  className="w-full px-3 py-2 border border-gray-300 rounded-md focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
+                />
+              </div>
+              <div>
+                <label className="block text-sm font-medium text-gray-700 mb-1">Email</label>
+                <input
+                  type="email"
+                  value={formData.email}
+                  onChange={(e) => setFormData({ ...formData, email: e.target.value })}
+                  className="w-full px-3 py-2 border border-gray-300 rounded-md focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
+                />
+              </div>
+            </div>
+          </div>
+
+          {/* Address Information */}
+          <div>
+            <h3 className="text-lg font-medium text-gray-900 mb-4">Address Information</h3>
+            <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+              <div className="md:col-span-2">
+                <label className="block text-sm font-medium text-gray-700 mb-1">Street Address 1</label>
+                <input
+                  type="text"
+                  value={formData.streetAddress1}
+                  onChange={(e) => setFormData({ ...formData, streetAddress1: e.target.value })}
+                  className="w-full px-3 py-2 border border-gray-300 rounded-md focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
+                />
+              </div>
+              <div className="md:col-span-2">
+                <label className="block text-sm font-medium text-gray-700 mb-1">Street Address 2</label>
+                <input
+                  type="text"
+                  value={formData.streetAddress2}
+                  onChange={(e) => setFormData({ ...formData, streetAddress2: e.target.value })}
+                  className="w-full px-3 py-2 border border-gray-300 rounded-md focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
+                />
+              </div>
+              <div>
+                <label className="block text-sm font-medium text-gray-700 mb-1">City</label>
+                <input
+                  type="text"
+                  value={formData.city}
+                  onChange={(e) => setFormData({ ...formData, city: e.target.value })}
+                  className="w-full px-3 py-2 border border-gray-300 rounded-md focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
+                />
+              </div>
+              <div>
+                <label className="block text-sm font-medium text-gray-700 mb-1">State</label>
+                <input
+                  type="text"
+                  value={formData.state}
+                  onChange={(e) => setFormData({ ...formData, state: e.target.value })}
+                  className="w-full px-3 py-2 border border-gray-300 rounded-md focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
+                />
+              </div>
+              <div>
+                <label className="block text-sm font-medium text-gray-700 mb-1">Zip Code</label>
+                <input
+                  type="text"
+                  value={formData.zipCode}
+                  onChange={(e) => setFormData({ ...formData, zipCode: e.target.value })}
+                  className="w-full px-3 py-2 border border-gray-300 rounded-md focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
+                />
+              </div>
+            </div>
+          </div>
+
+          {/* Regulatory Information */}
+          <div>
+            <h3 className="text-lg font-medium text-gray-900 mb-4">Regulatory Information</h3>
+            <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+              <div>
+                <label className="block text-sm font-medium text-gray-700 mb-1">MC Number</label>
+                <input
+                  type="text"
+                  value={formData.mcNumber}
+                  onChange={(e) => setFormData({ ...formData, mcNumber: e.target.value })}
+                  className="w-full px-3 py-2 border border-gray-300 rounded-md focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
+                />
+              </div>
+              <div>
+                <label className="block text-sm font-medium text-gray-700 mb-1">DOT Number</label>
+                <input
+                  type="text"
+                  value={formData.dotNumber}
+                  onChange={(e) => setFormData({ ...formData, dotNumber: e.target.value })}
+                  className="w-full px-3 py-2 border border-gray-300 rounded-md focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
+                />
+              </div>
+              <div>
+                <label className="block text-sm font-medium text-gray-700 mb-1">Safety Rating</label>
+                <select
+                  value={formData.safetyRating}
+                  onChange={(e) => setFormData({ ...formData, safetyRating: e.target.value })}
+                  className="w-full px-3 py-2 border border-gray-300 rounded-md focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
+                >
+                  <option value="">Select Rating</option>
+                  <option value="Acceptable">Acceptable</option>
+                  <option value="Conditional">Conditional</option>
+                  <option value="Unacceptable">Unacceptable</option>
+                </select>
+              </div>
+              <div>
+                <label className="block text-sm font-medium text-gray-700 mb-1">Insurance Expiration</label>
+                <input
+                  type="date"
+                  value={formData.insuranceExpiration}
+                  onChange={(e) => setFormData({ ...formData, insuranceExpiration: e.target.value })}
+                  className="w-full px-3 py-2 border border-gray-300 rounded-md focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
+                />
+              </div>
+            </div>
+          </div>
+
+          {/* Status and Type */}
+          <div>
+            <h3 className="text-lg font-medium text-gray-900 mb-4">Status and Type</h3>
+            <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+              <div>
+                <label className="block text-sm font-medium text-gray-700 mb-1">Status</label>
+                <select
+                  value={formData.status}
+                  onChange={(e) => setFormData({ ...formData, status: e.target.value as any })}
+                  className="w-full px-3 py-2 border border-gray-300 rounded-md focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
+                >
+                  <option value="PENDING">Pending</option>
+                  <option value="ACTIVE">Active</option>
+                  <option value="INACTIVE">Inactive</option>
+                  <option value="SUSPENDED">Suspended</option>
+                  <option value="ONBOARDED">Onboarded</option>
+                  <option value="NOT_ONBOARDED">Not Onboarded</option>
+                </select>
+              </div>
+              <div>
+                <label className="block text-sm font-medium text-gray-700 mb-1">Carrier Type</label>
+                <input
+                  type="text"
+                  value={formData.carrierType}
+                  onChange={(e) => setFormData({ ...formData, carrierType: e.target.value })}
+                  className="w-full px-3 py-2 border border-gray-300 rounded-md focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
+                />
+              </div>
+              <div>
+                <label className="flex items-center">
+                  <input
+                    type="checkbox"
+                    checked={formData.onboardingComplete}
+                    onChange={(e) => setFormData({ ...formData, onboardingComplete: e.target.checked })}
+                    className="mr-2"
+                  />
+                  <span className="text-sm font-medium text-gray-700">Onboarding Complete</span>
+                </label>
+              </div>
+            </div>
+          </div>
+
+          {/* Financial Information */}
+          <div>
+            <h3 className="text-lg font-medium text-gray-900 mb-4">Financial Information</h3>
+            <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+              <div>
+                <label className="block text-sm font-medium text-gray-700 mb-1">Rate per Mile</label>
+                <input
+                  type="number"
+                  step="0.01"
+                  value={formData.ratePerMile}
+                  onChange={(e) => setFormData({ ...formData, ratePerMile: e.target.value })}
+                  className="w-full px-3 py-2 border border-gray-300 rounded-md focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
+                />
+              </div>
+              <div>
+                <label className="block text-sm font-medium text-gray-700 mb-1">Rating</label>
+                <input
+                  type="number"
+                  step="0.1"
+                  value={formData.rating}
+                  onChange={(e) => setFormData({ ...formData, rating: e.target.value })}
+                  className="w-full px-3 py-2 border border-gray-300 rounded-md focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
+                />
+              </div>
+              <div>
+                <label className="block text-sm font-medium text-gray-700 mb-1">Tax ID</label>
+                <input
+                  type="text"
+                  value={formData.taxId}
+                  onChange={(e) => setFormData({ ...formData, taxId: e.target.value })}
+                  className="w-full px-3 py-2 border border-gray-300 rounded-md focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
+                />
+              </div>
+              <div>
+                <label className="block text-sm font-medium text-gray-700 mb-1">Factoring Company</label>
+                <input
+                  type="text"
+                  value={formData.factoringCompany}
+                  onChange={(e) => setFormData({ ...formData, factoringCompany: e.target.value })}
+                  className="w-full px-3 py-2 border border-gray-300 rounded-md focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
+                />
+              </div>
+            </div>
+          </div>
+
+          {/* Remittance Information */}
+          <div>
+            <h3 className="text-lg font-medium text-gray-900 mb-4">Remittance Information</h3>
+            <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+              <div>
+                <label className="block text-sm font-medium text-gray-700 mb-1">Remittance Contact</label>
+                <input
+                  type="text"
+                  value={formData.remittanceContact}
+                  onChange={(e) => setFormData({ ...formData, remittanceContact: e.target.value })}
+                  className="w-full px-3 py-2 border border-gray-300 rounded-md focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
+                />
+              </div>
+              <div>
+                <label className="block text-sm font-medium text-gray-700 mb-1">Remittance Email</label>
+                <input
+                  type="email"
+                  value={formData.remittanceEmail}
+                  onChange={(e) => setFormData({ ...formData, remittanceEmail: e.target.value })}
+                  className="w-full px-3 py-2 border border-gray-300 rounded-md focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
+                />
+              </div>
+            </div>
+          </div>
+          
+          <div className="flex justify-end gap-3 mt-6 pt-4 border-t">
+            <button 
+              type="button"
+              onClick={onClose}
+              className="px-4 py-2 bg-gray-500 text-white rounded hover:bg-gray-600"
+              disabled={isSubmitting}
+            >
+              Cancel
+            </button>
+            <button 
+              type="submit"
+              className="px-4 py-2 bg-blue-600 text-white rounded hover:bg-blue-700 disabled:bg-gray-300"
+              disabled={isSubmitting}
+            >
+              {isSubmitting ? 'Creating...' : 'Create Carrier'}
+            </button>
+          </div>
+        </form>
+      </div>
     </div>
   );
 };
