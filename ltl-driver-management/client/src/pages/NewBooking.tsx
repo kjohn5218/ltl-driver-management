@@ -26,6 +26,8 @@ export const NewBooking: React.FC = () => {
   const [rate, setRate] = useState('');
   const [notes, setNotes] = useState('');
   const [billable, setBillable] = useState(true);
+  const [singleRouteRateType, setSingleRouteRateType] = useState<RateType>('FLAT_RATE');
+  const [singleRouteBaseRate, setSingleRouteBaseRate] = useState('');
   const [carrierSearch, setCarrierSearch] = useState('');
   const [showCarrierDropdown, setShowCarrierDropdown] = useState(false);
   const [selectedCarrierName, setSelectedCarrierName] = useState('');
@@ -315,39 +317,70 @@ export const NewBooking: React.FC = () => {
         return;
       }
 
-      // Create multi-leg booking
-      const bookingGroupId = `booking-${Date.now()}-${Math.random().toString(36).substr(2, 9)}`;
+      // Create consolidated multi-leg booking
+      // Calculate total rate across all legs
+      let totalRate = 0;
+      const legDetails: string[] = [];
       
       bookingLegs.forEach((leg, index) => {
-        const legData: any = {
-          carrierId: carrierId ? parseInt(carrierId) : null,
-          routeId: parseInt(leg.routeId),
-          bookingDate: bookingDate, // Send as YYYY-MM-DD format for ISO8601 validation
-          rate: parseFloat(leg.rate).toFixed(2), // Ensure 2 decimal places
-          rateType: leg.rateType,
-          baseRate: leg.baseRate ? parseFloat(leg.baseRate).toFixed(2) : undefined,
-          fscRate: leg.rateType === 'MILE_FSC' ? parseFloat(fuelSurchargeRate.toString()).toFixed(2) : undefined,
-          billable,
-          notes: notes || null,
-          status: carrierId ? 'CONFIRMED' : 'PENDING',
-          bookingGroupId,
-          legNumber: index + 1,
-          isParent: index === 0
-        };
+        const legRate = parseFloat(leg.rate);
+        totalRate += legRate;
         
-        // Remove undefined values
-        Object.keys(legData).forEach(key => {
-          if (legData[key] === undefined || (legData[key] === null && key !== 'carrierId' && key !== 'notes')) {
-            delete legData[key];
-          }
-        });
-        
-        createBookingMutation.mutate(legData);
+        // Build leg description
+        const route = leg.route;
+        if (route) {
+          legDetails.push(`Leg ${index + 1}: ${route.origin} → ${route.destination} ($${legRate.toFixed(2)})`);
+        }
       });
+      
+      // Use the first route as the primary route (for database constraint)
+      const primaryRouteId = bookingLegs[0].routeId;
+      
+      // Combine notes with leg details
+      const combinedNotes = [
+        notes ? notes : null,
+        '--- Multi-Leg Booking ---',
+        ...legDetails,
+        `Total: $${totalRate.toFixed(2)}`
+      ].filter(Boolean).join('\n');
+      
+      const bookingData: any = {
+        carrierId: carrierId ? parseInt(carrierId) : null,
+        routeId: parseInt(primaryRouteId),
+        bookingDate: bookingDate,
+        rate: totalRate.toFixed(2),
+        rateType: 'FLAT_RATE', // Multi-leg bookings use flat rate for the total
+        baseRate: totalRate.toFixed(2),
+        billable,
+        notes: combinedNotes,
+        status: carrierId ? 'CONFIRMED' : 'PENDING',
+        legNumber: 1,
+        isParent: true
+      };
+      
+      // Remove null values that should be omitted
+      Object.keys(bookingData).forEach(key => {
+        if (bookingData[key] === null && key !== 'carrierId' && key !== 'notes') {
+          delete bookingData[key];
+        }
+      });
+      
+      console.log('Creating multi-leg booking with data:', JSON.stringify(bookingData, null, 2));
+      createBookingMutation.mutate(bookingData);
     } else {
       // Single route booking validation
-      if (selectedRoutes.length === 0 || !rate || parseFloat(rate) <= 0) {
-        alert('Please select a route and enter a valid rate');
+      if (selectedRoutes.length === 0) {
+        alert('Please select a route');
+        return;
+      }
+      
+      if (!singleRouteBaseRate || parseFloat(singleRouteBaseRate) <= 0) {
+        alert('Please enter a valid rate');
+        return;
+      }
+      
+      if (!rate || parseFloat(rate) <= 0) {
+        alert('Invalid calculated rate. Please check your inputs.');
         return;
       }
 
@@ -356,8 +389,11 @@ export const NewBooking: React.FC = () => {
         routeId: parseInt(selectedRoutes[0]),
         bookingDate: bookingDate, // Send as YYYY-MM-DD format for ISO8601 validation
         rate: parseFloat(rate).toFixed(2), // Ensure 2 decimal places
-        rateType: 'FLAT_RATE',
-        baseRate: parseFloat(rate).toFixed(2), // Ensure 2 decimal places
+        rateType: singleRouteRateType,
+        baseRate: singleRouteRateType === 'FLAT_RATE' 
+          ? parseFloat(rate).toFixed(2) 
+          : parseFloat(singleRouteBaseRate).toFixed(2),
+        fscRate: singleRouteRateType === 'MILE_FSC' ? fuelSurchargeRate.toFixed(2) : undefined,
         billable,
         notes: notes || null,
         status: carrierId ? 'CONFIRMED' : 'PENDING',
@@ -396,6 +432,29 @@ export const NewBooking: React.FC = () => {
       }
     }
   };
+
+  // Calculate single route rate based on rate type
+  const calculateSingleRouteRate = (): string => {
+    if (!selectedRouteObjects.length) return '0.00';
+    
+    const route = selectedRouteObjects[0];
+    const baseRateNum = parseFloat(singleRouteBaseRate) || 0;
+    
+    if (singleRouteRateType === 'FLAT_RATE') {
+      return singleRouteBaseRate || '0.00';
+    }
+    
+    const calculatedRate = calculateLegRate(route, singleRouteRateType, baseRateNum);
+    return calculatedRate.toFixed(2);
+  };
+
+  // Update rate when base rate or type changes for single route
+  React.useEffect(() => {
+    if (!isRoundTrip && selectedRouteObjects.length > 0) {
+      const newRate = calculateSingleRouteRate();
+      setRate(newRate);
+    }
+  }, [singleRouteRateType, singleRouteBaseRate, selectedRouteObjects, isRoundTrip]);
 
   // Booking leg management functions
   const addBookingLeg = (routeId: string) => {
@@ -686,7 +745,7 @@ export const NewBooking: React.FC = () => {
               onChange={() => setIsRoundTrip(true)}
               className="w-4 h-4 text-blue-600 border-gray-300 focus:ring-blue-500"
             />
-            <span className="text-sm font-medium text-gray-700">Round Trip / Multiple Routes</span>
+            <span className="text-sm font-medium text-gray-700">Multi-Leg Booking (Consolidated)</span>
           </label>
         </div>
 
@@ -922,26 +981,52 @@ export const NewBooking: React.FC = () => {
                         
                         {/* Rate Type Selection */}
                         <div className="space-y-2">
-                          <div className="flex items-center gap-2">
-                            <label className="text-xs font-medium text-gray-700 min-w-[60px]">
+                          <div>
+                            <label className="text-xs font-medium text-gray-700 mb-1 block">
                               Rate Type:
                             </label>
-                            <select
-                              value={leg.rateType}
-                              onChange={(e) => updateLegRateType(leg.id, e.target.value as RateType)}
-                              className="flex-1 px-2 py-1 text-sm border border-gray-300 rounded focus:ring-1 focus:ring-blue-500 focus:border-blue-500"
-                            >
-                              <option value="MILE">Mile</option>
-                              <option value="MILE_FSC">Mile + FSC ({Number(fuelSurchargeRate || 0).toFixed(1)}%)</option>
-                              <option value="FLAT_RATE">Flat Rate</option>
-                            </select>
+                            <div className="flex gap-2">
+                              <label className="flex items-center gap-1.5 text-xs">
+                                <input
+                                  type="radio"
+                                  name={`legRateType_${leg.id}`}
+                                  value="FLAT_RATE"
+                                  checked={leg.rateType === 'FLAT_RATE'}
+                                  onChange={(e) => updateLegRateType(leg.id, e.target.value as RateType)}
+                                  className="text-blue-600"
+                                />
+                                <span>Flat Rate</span>
+                              </label>
+                              <label className="flex items-center gap-1.5 text-xs">
+                                <input
+                                  type="radio"
+                                  name={`legRateType_${leg.id}`}
+                                  value="MILE"
+                                  checked={leg.rateType === 'MILE'}
+                                  onChange={(e) => updateLegRateType(leg.id, e.target.value as RateType)}
+                                  className="text-blue-600"
+                                />
+                                <span>Per Mile</span>
+                              </label>
+                              <label className="flex items-center gap-1.5 text-xs">
+                                <input
+                                  type="radio"
+                                  name={`legRateType_${leg.id}`}
+                                  value="MILE_FSC"
+                                  checked={leg.rateType === 'MILE_FSC'}
+                                  onChange={(e) => updateLegRateType(leg.id, e.target.value as RateType)}
+                                  className="text-blue-600"
+                                />
+                                <span>Mile + FSC ({Number(fuelSurchargeRate || 0).toFixed(1)}%)</span>
+                              </label>
+                            </div>
                           </div>
 
                           {/* Base Rate Input for Mile and Mile+FSC */}
                           {(leg.rateType === 'MILE' || leg.rateType === 'MILE_FSC') && (
                             <div className="flex items-center gap-2">
-                              <label className="text-xs font-medium text-gray-700 min-w-[60px]">
-                                Per Mile:
+                              <label className="text-xs font-medium text-gray-700 min-w-[80px]">
+                                Rate per Mile:
                               </label>
                               <div className="relative flex-1">
                                 <DollarSign className="absolute left-2 top-1/2 transform -translate-y-1/2 text-gray-400 w-3 h-3" />
@@ -964,8 +1049,8 @@ export const NewBooking: React.FC = () => {
 
                           {/* Final Rate Display/Input */}
                           <div className="flex items-center gap-2">
-                            <label className="text-xs font-medium text-gray-700 min-w-[60px]">
-                              {leg.rateType === 'FLAT_RATE' ? 'Total Rate:' : 'Calculated:'}
+                            <label className="text-xs font-medium text-gray-700 min-w-[80px]">
+                              {leg.rateType === 'FLAT_RATE' ? 'Total Rate:' : 'Calculated Total:'}
                             </label>
                             <div className="relative flex-1">
                               <DollarSign className="absolute left-2 top-1/2 transform -translate-y-1/2 text-gray-400 w-3 h-3" />
@@ -992,7 +1077,7 @@ export const NewBooking: React.FC = () => {
                       </div>
                     ))}
                     
-                    {/* Summary */}
+                        {/* Summary */}
                     <div className="mt-3 p-3 bg-blue-50 rounded-md">
                       <div className="grid grid-cols-3 gap-4 text-sm text-blue-800">
                         <div>
@@ -1005,6 +1090,9 @@ export const NewBooking: React.FC = () => {
                           <strong>Total Rate:</strong> ${getTotalRate().toFixed(2)}
                         </div>
                       </div>
+                      <p className="text-xs text-blue-700 mt-2">
+                        <strong>Note:</strong> This will create a single consolidated booking with all legs included in the notes.
+                      </p>
                     </div>
                   </div>
                 )}
@@ -1131,34 +1219,94 @@ export const NewBooking: React.FC = () => {
           </p>
         </div>
 
-        {/* Single Route Rate Input - Only show for single route */}
-        {!isRoundTrip && (
-          <div>
-            <label className="block text-sm font-medium text-gray-700 mb-2">
-              <DollarSign className="inline w-4 h-4 mr-1" />
-              Rate *
-            </label>
-            <div className="relative">
-              <DollarSign className="absolute left-3 top-1/2 transform -translate-y-1/2 text-gray-400 w-4 h-4" />
-              <input
-                type="number"
-                step="0.01"
-                value={rate}
-                onChange={(e) => setRate(e.target.value)}
-                className="w-full pl-10 pr-4 py-2 border border-gray-300 rounded-md focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
-                placeholder="0.00"
-                required
-              />
+        {/* Single Route Rate Configuration - Only show for single route */}
+        {!isRoundTrip && selectedRouteObjects.length > 0 && (
+          <div className="space-y-4 p-4 bg-gray-50 rounded-md border border-gray-200">
+            <h3 className="text-sm font-medium text-gray-700">Rate Configuration</h3>
+            
+            {/* Rate Type Selection */}
+            <div>
+              <label className="block text-xs font-medium text-gray-700 mb-1">
+                Rate Type *
+              </label>
+              <div className="flex gap-2">
+                <label className="flex items-center gap-1.5 text-sm">
+                  <input
+                    type="radio"
+                    name="singleRateType"
+                    value="FLAT_RATE"
+                    checked={singleRouteRateType === 'FLAT_RATE'}
+                    onChange={(e) => setSingleRouteRateType(e.target.value as RateType)}
+                    className="text-blue-600"
+                  />
+                  <span>Flat Rate</span>
+                </label>
+                <label className="flex items-center gap-1.5 text-sm">
+                  <input
+                    type="radio"
+                    name="singleRateType"
+                    value="MILE"
+                    checked={singleRouteRateType === 'MILE'}
+                    onChange={(e) => setSingleRouteRateType(e.target.value as RateType)}
+                    className="text-blue-600"
+                  />
+                  <span>Per Mile</span>
+                </label>
+                <label className="flex items-center gap-1.5 text-sm">
+                  <input
+                    type="radio"
+                    name="singleRateType"
+                    value="MILE_FSC"
+                    checked={singleRouteRateType === 'MILE_FSC'}
+                    onChange={(e) => setSingleRouteRateType(e.target.value as RateType)}
+                    className="text-blue-600"
+                  />
+                  <span>Mile + FSC ({fuelSurchargeRate}%)</span>
+                </label>
+              </div>
             </div>
-            {selectedCarrier && selectedRouteObjects.length > 0 && (
-              <button
-                type="button"
-                onClick={calculateSuggestedRate}
-                className="mt-2 text-sm text-blue-600 hover:text-blue-800"
-              >
-                Calculate suggested rate
-              </button>
-            )}
+
+            {/* Base Rate Input */}
+            <div>
+              <label className="block text-xs font-medium text-gray-700 mb-1">
+                {singleRouteRateType === 'FLAT_RATE' ? 'Total Rate' : 'Rate per Mile'} *
+              </label>
+              <div className="relative">
+                <DollarSign className="absolute left-3 top-1/2 transform -translate-y-1/2 text-gray-400 w-4 h-4" />
+                <input
+                  type="number"
+                  step="0.01"
+                  value={singleRouteBaseRate}
+                  onChange={(e) => setSingleRouteBaseRate(e.target.value)}
+                  className="w-full pl-10 pr-4 py-2 border border-gray-300 rounded-md focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
+                  placeholder="0.00"
+                  required
+                />
+              </div>
+              {selectedCarrier?.ratePerMile && singleRouteRateType !== 'FLAT_RATE' && (
+                <button
+                  type="button"
+                  onClick={() => setSingleRouteBaseRate(selectedCarrier.ratePerMile?.toString() || '')}
+                  className="mt-1 text-xs text-blue-600 hover:text-blue-800"
+                >
+                  Use carrier rate: ${selectedCarrier.ratePerMile}/mile
+                </button>
+              )}
+            </div>
+
+            {/* Calculated Rate Display */}
+            <div className="pt-2 border-t border-gray-300">
+              <div className="flex justify-between items-center">
+                <span className="text-sm font-medium text-gray-700">Calculated Total:</span>
+                <span className="text-lg font-bold text-gray-900">${rate}</span>
+              </div>
+              {singleRouteRateType !== 'FLAT_RATE' && (
+                <p className="text-xs text-gray-500 mt-1">
+                  {selectedRouteObjects[0].distance} miles × ${parseFloat(singleRouteBaseRate || '0').toFixed(2)}/mile
+                  {singleRouteRateType === 'MILE_FSC' && ` + ${fuelSurchargeRate}% FSC`}
+                </p>
+              )}
+            </div>
           </div>
         )}
 
