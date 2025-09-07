@@ -1,6 +1,6 @@
 import React, { useState, useMemo, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
-import { useQuery } from '@tanstack/react-query';
+import { useQuery, useQueryClient } from '@tanstack/react-query';
 import { api } from '../services/api';
 import { Booking } from '../types';
 import { Plus, Search, Edit, Eye, Calendar, MapPin, User, DollarSign, X, ChevronUp, ChevronDown } from 'lucide-react';
@@ -11,6 +11,7 @@ type SortDirection = 'asc' | 'desc';
 
 export const Bookings: React.FC = () => {
   const navigate = useNavigate();
+  const queryClient = useQueryClient();
   const [searchTerm, setSearchTerm] = useState('');
   const [statusFilter, setStatusFilter] = useState('');
   const [dateFromFilter, setDateFromFilter] = useState('');
@@ -27,6 +28,30 @@ export const Bookings: React.FC = () => {
       return response.data.bookings as Booking[];
     }
   });
+
+  // Parse multi-leg booking information from notes
+  const parseMultiLegBooking = (notes: string | null) => {
+    if (!notes || !notes.includes('--- Multi-Leg Booking ---')) {
+      return null;
+    }
+    
+    const lines = notes.split('\n');
+    const legs = [];
+    
+    for (const line of lines) {
+      const legMatch = line.match(/^Leg (\d+): (.+) → (.+) \(\$(.+)\)$/);
+      if (legMatch) {
+        legs.push({
+          legNumber: parseInt(legMatch[1]),
+          origin: legMatch[2],
+          destination: legMatch[3],
+          rate: legMatch[4]
+        });
+      }
+    }
+    
+    return legs.length > 0 ? legs : null;
+  };
 
   const filteredAndSortedBookings = useMemo(() => {
     if (!bookings) return [];
@@ -322,8 +347,27 @@ export const Bookings: React.FC = () => {
                   <div className="flex items-center">
                     <MapPin className="w-4 h-4 mr-2 text-gray-400" />
                     <div>
-                      <div className="text-sm font-medium text-gray-900">{booking.route?.name}</div>
-                      <div className="text-sm text-gray-500">{booking.route?.origin} → {booking.route?.destination}</div>
+                      {(() => {
+                        const multiLegInfo = parseMultiLegBooking(booking.notes);
+                        if (multiLegInfo) {
+                          return (
+                            <>
+                              <div className="text-sm font-medium text-gray-900">Multi-Leg Booking</div>
+                              {multiLegInfo.map((leg) => (
+                                <div key={leg.legNumber} className="text-xs text-gray-500">
+                                  Leg {leg.legNumber}: {leg.origin} → {leg.destination}
+                                </div>
+                              ))}
+                            </>
+                          );
+                        }
+                        return (
+                          <>
+                            <div className="text-sm font-medium text-gray-900">{booking.route?.name}</div>
+                            <div className="text-sm text-gray-500">{booking.route?.origin} → {booking.route?.destination}</div>
+                          </>
+                        );
+                      })()}
                     </div>
                   </div>
                 </td>
@@ -389,9 +433,9 @@ export const Bookings: React.FC = () => {
           booking={editingBooking} 
           onClose={handleCloseEdit} 
           onSave={(_updatedBooking) => {
-            // Handle booking update logic here
             setEditingBooking(null);
-            // Optionally refetch bookings data
+            // Invalidate and refetch bookings data
+            queryClient.invalidateQueries({ queryKey: ['bookings'] });
           }}
         />
       )}

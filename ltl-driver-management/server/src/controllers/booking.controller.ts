@@ -134,23 +134,8 @@ export const createBooking = async (req: Request, res: Response) => {
       return res.status(404).json({ message: 'Route not found' });
     }
 
-    // Check for existing booking on same date (only if carrier is specified)
-    if (carrierId) {
-      const existingBooking = await prisma.booking.findFirst({
-        where: {
-          carrierId: parseInt(carrierId),
-          routeId: parseInt(routeId),
-          bookingDate: new Date(bookingDate),
-          status: {
-            notIn: ['CANCELLED']
-          }
-        }
-      });
-
-      if (existingBooking) {
-        return res.status(409).json({ message: 'Booking already exists for this carrier, route, and date' });
-      }
-    }
+    // Allow multiple bookings for the same carrier, route, and date
+    // This supports scenarios where a carrier might make multiple trips on the same route in a day
 
     const booking = await prisma.booking.create({
       data: {
