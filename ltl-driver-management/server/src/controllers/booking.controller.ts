@@ -313,3 +313,36 @@ export const cancelBooking = async (req: Request, res: Response) => {
     return res.status(500).json({ message: 'Failed to cancel booking' });
   }
 };
+
+export const deleteBooking = async (req: Request, res: Response) => {
+  try {
+    const { id } = req.params;
+
+    const booking = await prisma.booking.findUnique({
+      where: { id: parseInt(id) },
+      include: {
+        carrier: true,
+        route: true,
+        invoice: true
+      }
+    });
+
+    if (!booking) {
+      return res.status(404).json({ message: 'Booking not found' });
+    }
+
+    // Check if booking has an invoice - prevent deletion if invoiced
+    if (booking.invoice) {
+      return res.status(400).json({ message: 'Cannot delete booking that has an associated invoice' });
+    }
+
+    await prisma.booking.delete({
+      where: { id: parseInt(id) }
+    });
+
+    return res.json({ message: 'Booking deleted successfully' });
+  } catch (error) {
+    console.error('Delete booking error:', error);
+    return res.status(500).json({ message: 'Failed to delete booking' });
+  }
+};

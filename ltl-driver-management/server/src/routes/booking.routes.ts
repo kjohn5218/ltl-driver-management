@@ -7,7 +7,8 @@ import {
   updateBooking, 
   confirmBooking,
   completeBooking,
-  cancelBooking
+  cancelBooking,
+  deleteBooking
 } from '../controllers/booking.controller';
 import { authenticate, authorize } from '../middleware/auth.middleware';
 import { validateRequest } from '../middleware/validation.middleware';
@@ -107,6 +108,13 @@ router.post(
   ],
   validateRequest,
   cancelBooking
+);
+
+// Delete booking (Admin only)
+router.delete(
+  '/:id',
+  authorize(UserRole.ADMIN),
+  deleteBooking
 );
 
 export default router;

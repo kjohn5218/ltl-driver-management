@@ -1,9 +1,9 @@
 import React, { useState, useMemo, useEffect, useCallback } from 'react';
 import { useNavigate } from 'react-router-dom';
-import { useQuery, useQueryClient } from '@tanstack/react-query';
+import { useQuery, useQueryClient, useMutation } from '@tanstack/react-query';
 import { api } from '../services/api';
 import { Booking } from '../types';
-import { Plus, Search, Edit, Eye, Calendar, MapPin, User, DollarSign, X, ChevronUp, ChevronDown } from 'lucide-react';
+import { Plus, Search, Edit, Eye, Calendar, MapPin, User, DollarSign, X, ChevronUp, ChevronDown, Trash2 } from 'lucide-react';
 import { format, isAfter, isBefore, isSameDay, parseISO } from 'date-fns';
 
 type SortField = 'id' | 'carrier' | 'route' | 'bookingDate' | 'rate' | 'status';
@@ -20,12 +20,30 @@ export const Bookings: React.FC = () => {
   const [sortDirection, setSortDirection] = useState<SortDirection>('desc');
   const [viewingBooking, setViewingBooking] = useState<Booking | null>(null);
   const [editingBooking, setEditingBooking] = useState<Booking | null>(null);
+  const [deletingBooking, setDeletingBooking] = useState<Booking | null>(null);
 
   const { data: bookings, isLoading } = useQuery({
     queryKey: ['bookings'],
     queryFn: async () => {
       const response = await api.get('/bookings');
       return response.data.bookings as Booking[];
+    }
+  });
+
+  // Delete booking mutation
+  const deleteBookingMutation = useMutation({
+    mutationFn: async (bookingId: number) => {
+      const response = await api.delete(`/bookings/${bookingId}`);
+      return response.data;
+    },
+    onSuccess: () => {
+      // Invalidate and refetch bookings data
+      queryClient.invalidateQueries({ queryKey: ['bookings'] });
+      setDeletingBooking(null);
+    },
+    onError: (error: any) => {
+      console.error('Delete booking error:', error);
+      alert('Failed to delete booking. Please try again.');
     }
   });
 
@@ -171,12 +189,26 @@ export const Bookings: React.FC = () => {
     setEditingBooking(booking);
   };
 
+  const handleDeleteBooking = (booking: Booking) => {
+    setDeletingBooking(booking);
+  };
+
   const handleCloseView = () => {
     setViewingBooking(null);
   };
 
   const handleCloseEdit = () => {
     setEditingBooking(null);
+  };
+
+  const handleCloseDelete = () => {
+    setDeletingBooking(null);
+  };
+
+  const handleConfirmDelete = () => {
+    if (deletingBooking) {
+      deleteBookingMutation.mutate(deletingBooking.id);
+    }
   };
 
   if (isLoading) {
@@ -404,6 +436,13 @@ export const Bookings: React.FC = () => {
                     >
                       <Edit className="w-4 h-4" />
                     </button>
+                    <button 
+                      onClick={() => handleDeleteBooking(booking)}
+                      className="text-gray-500 hover:text-red-600 transition-colors"
+                      title="Delete booking"
+                    >
+                      <Trash2 className="w-4 h-4" />
+                    </button>
                   </div>
                 </td>
               </tr>
@@ -438,6 +477,54 @@ export const Bookings: React.FC = () => {
             queryClient.invalidateQueries({ queryKey: ['bookings'] });
           }}
         />
+      )}
+
+      {/* Delete Booking Confirmation Modal */}
+      {deletingBooking && (
+        <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50">
+          <div className="bg-white rounded-lg p-6 w-full max-w-md">
+            <div className="flex items-center gap-3 mb-4">
+              <div className="flex-shrink-0 w-10 h-10 bg-red-100 rounded-full flex items-center justify-center">
+                <Trash2 className="w-5 h-5 text-red-600" />
+              </div>
+              <div>
+                <h3 className="text-lg font-semibold text-gray-900">Delete Booking</h3>
+                <p className="text-sm text-gray-600">This action cannot be undone.</p>
+              </div>
+            </div>
+            
+            <div className="mb-6">
+              <p className="text-sm text-gray-700 mb-2">
+                Are you sure you want to delete this booking?
+              </p>
+              <div className="bg-gray-50 p-3 rounded-md">
+                <p className="text-sm font-medium text-gray-900">#{deletingBooking.id}</p>
+                <p className="text-sm text-gray-600">
+                  {deletingBooking.carrier?.name || 'Unbooked'} - {deletingBooking.route?.name}
+                </p>
+                <p className="text-sm text-gray-600">
+                  {format(new Date(deletingBooking.bookingDate), 'MMM dd, yyyy')} - ${deletingBooking.rate}
+                </p>
+              </div>
+            </div>
+            
+            <div className="flex gap-3">
+              <button
+                onClick={handleCloseDelete}
+                className="flex-1 px-4 py-2 text-sm font-medium text-gray-700 bg-gray-100 border border-gray-300 rounded-md hover:bg-gray-200 focus:outline-none focus:ring-2 focus:ring-gray-500 focus:ring-offset-2"
+              >
+                Cancel
+              </button>
+              <button
+                onClick={handleConfirmDelete}
+                disabled={deleteBookingMutation.isPending}
+                className="flex-1 px-4 py-2 text-sm font-medium text-white bg-red-600 border border-transparent rounded-md hover:bg-red-700 focus:outline-none focus:ring-2 focus:ring-red-500 focus:ring-offset-2 disabled:opacity-50 disabled:cursor-not-allowed"
+              >
+                {deleteBookingMutation.isPending ? 'Deleting...' : 'Delete'}
+              </button>
+            </div>
+          </div>
+        </div>
       )}
     </div>
   );
