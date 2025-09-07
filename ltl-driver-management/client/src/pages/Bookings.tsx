@@ -1,4 +1,4 @@
-import React, { useState, useMemo, useEffect } from 'react';
+import React, { useState, useMemo, useEffect, useCallback } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { useQuery, useQueryClient } from '@tanstack/react-query';
 import { api } from '../services/api';
@@ -568,17 +568,39 @@ interface BookingEditModalProps {
 }
 
 const BookingEditModal: React.FC<BookingEditModalProps> = ({ booking, onClose, onSave }) => {
-  const [formData, setFormData] = useState({
-    carrierId: booking.carrierId,
-    rate: Number(booking.rate) || 0,
-    status: booking.status,
-    billable: booking.billable,
-    notes: booking.notes || '',
-    bookingDate: booking.bookingDate.split('T')[0], // Format for date input
-    rateType: booking.rateType || 'FLAT_RATE',
-    baseRate: Number(booking.baseRate) || 0,
-    fscRate: Number(booking.fscRate) || 0
+  console.log('BookingEditModal - full booking data:', booking);
+  console.log('BookingEditModal - rate fields:', {
+    rateType: booking.rateType,
+    baseRate: booking.baseRate,
+    fscRate: booking.fscRate,
+    rate: booking.rate
   });
+  
+  // Initialize form data with better handling of rate type
+  const initializeFormData = useCallback(() => {
+    const initialRateType = booking.rateType || 'FLAT_RATE';
+    console.log('Initializing with rate type:', initialRateType);
+    
+    return {
+      carrierId: booking.carrierId,
+      rate: Number(booking.rate) || 0,
+      status: booking.status,
+      billable: booking.billable,
+      notes: booking.notes || '',
+      bookingDate: booking.bookingDate.split('T')[0], // Format for date input
+      rateType: initialRateType,
+      baseRate: Number(booking.baseRate) || Number(booking.rate) || 0,
+      fscRate: Number(booking.fscRate) || 0
+    };
+  }, [booking]);
+  
+  const [formData, setFormData] = useState(() => initializeFormData());
+  
+  // Update form data if booking changes (shouldn't happen in modal, but good practice)
+  useEffect(() => {
+    console.log('Booking changed, reinitializing form data');
+    setFormData(initializeFormData());
+  }, [initializeFormData]);
   
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [carrierSearchTerm, setCarrierSearchTerm] = useState('');
@@ -808,15 +830,42 @@ const BookingEditModal: React.FC<BookingEditModalProps> = ({ booking, onClose, o
             </div>
             <div>
               <label className="block text-sm font-medium text-gray-700 mb-1">Rate Type</label>
-              <select
-                value={formData.rateType}
-                onChange={(e) => setFormData({ ...formData, rateType: e.target.value as any })}
-                className="w-full px-3 py-2 border border-gray-300 rounded-md focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
-              >
-                <option value="FLAT_RATE">Flat Rate</option>
-                <option value="MILE">Per Mile</option>
-                <option value="MILE_FSC">Per Mile + FSC</option>
-              </select>
+              {console.log('Rendering radio buttons with formData.rateType:', formData.rateType)}
+              <div className="flex gap-2">
+                <label className="flex items-center gap-1.5 text-sm">
+                  <input
+                    type="radio"
+                    name="editRateType"
+                    value="FLAT_RATE"
+                    checked={formData.rateType === 'FLAT_RATE'}
+                    onChange={(e) => setFormData({ ...formData, rateType: e.target.value as any })}
+                    className="text-blue-600"
+                  />
+                  <span>Flat Rate</span>
+                </label>
+                <label className="flex items-center gap-1.5 text-sm">
+                  <input
+                    type="radio"
+                    name="editRateType"
+                    value="MILE"
+                    checked={formData.rateType === 'MILE'}
+                    onChange={(e) => setFormData({ ...formData, rateType: e.target.value as any })}
+                    className="text-blue-600"
+                  />
+                  <span>Per Mile</span>
+                </label>
+                <label className="flex items-center gap-1.5 text-sm">
+                  <input
+                    type="radio"
+                    name="editRateType"
+                    value="MILE_FSC"
+                    checked={formData.rateType === 'MILE_FSC'}
+                    onChange={(e) => setFormData({ ...formData, rateType: e.target.value as any })}
+                    className="text-blue-600"
+                  />
+                  <span>Mile + FSC ({Number(settingsData?.fuelSurchargeRate || 0).toFixed(1)}%)</span>
+                </label>
+              </div>
             </div>
           </div>
 
