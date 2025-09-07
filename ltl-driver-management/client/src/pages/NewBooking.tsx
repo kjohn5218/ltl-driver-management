@@ -1,10 +1,10 @@
 import React, { useState, useMemo } from 'react';
 import { useNavigate } from 'react-router-dom';
-import { useMutation, useQuery } from '@tanstack/react-query';
+import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { api } from '../services/api';
 import { Carrier, Route } from '../types';
 import { Calendar, Truck, MapPin, DollarSign, AlertCircle, Search, X } from 'lucide-react';
-import { format } from 'date-fns';
+import { format, eachDayOfInterval, parseISO } from 'date-fns';
 
 type RateType = 'MILE' | 'MILE_FSC' | 'FLAT_RATE';
 
@@ -19,10 +19,13 @@ interface BookingLeg {
 
 export const NewBooking: React.FC = () => {
   const navigate = useNavigate();
+  const queryClient = useQueryClient();
   const [carrierId, setCarrierId] = useState('');
   const [selectedRoutes, setSelectedRoutes] = useState<string[]>([]);
   const [bookingLegs, setBookingLegs] = useState<BookingLeg[]>([]);
   const [bookingDate, setBookingDate] = useState(format(new Date(), 'yyyy-MM-dd'));
+  const [useMultipleDates, setUseMultipleDates] = useState(false);
+  const [endDate, setEndDate] = useState(format(new Date(), 'yyyy-MM-dd'));
   const [rate, setRate] = useState('');
   const [notes, setNotes] = useState('');
   const [billable, setBillable] = useState(true);
@@ -251,14 +254,34 @@ export const NewBooking: React.FC = () => {
 
   const selectedRouteObjects = routes.filter((r: Route) => selectedRoutes.includes(r.id.toString()));
 
+  // Generate array of dates for multiple date booking
+  const getBookingDates = (): string[] => {
+    if (!useMultipleDates) {
+      return [bookingDate];
+    }
+    
+    const start = parseISO(bookingDate);
+    const end = parseISO(endDate);
+    const dates = eachDayOfInterval({ start, end });
+    
+    return dates.map(date => format(date, 'yyyy-MM-dd'));
+  };
+
   // Create booking mutation
   const createBookingMutation = useMutation({
-    mutationFn: async (data: any) => {
-      console.log('Sending booking data:', data); // Debug log
-      const response = await api.post('/bookings', data);
-      return response.data;
+    mutationFn: async (bookingsToCreate: any[]) => {
+      console.log(`Creating ${bookingsToCreate.length} booking(s)`);
+      const results = [];
+      for (const bookingData of bookingsToCreate) {
+        console.log('Sending booking data:', bookingData);
+        const response = await api.post('/bookings', bookingData);
+        results.push(response.data);
+      }
+      return results;
     },
-    onSuccess: () => {
+    onSuccess: (results) => {
+      // Invalidate bookings query to refresh the list
+      queryClient.invalidateQueries({ queryKey: ['bookings'] });
       navigate('/bookings');
     },
     onError: (error: any) => {
@@ -297,6 +320,16 @@ export const NewBooking: React.FC = () => {
       return;
     }
 
+    if (useMultipleDates && !endDate) {
+      alert('Please select an end date');
+      return;
+    }
+
+    if (useMultipleDates && new Date(endDate) < new Date(bookingDate)) {
+      alert('End date must be after or equal to start date');
+      return;
+    }
+
     // Validate selected routes
     if (!isRoundTrip && selectedRoutes.length === 0) {
       alert('Please select a route');
@@ -317,7 +350,7 @@ export const NewBooking: React.FC = () => {
         return;
       }
 
-      // Create consolidated multi-leg booking
+      // Create consolidated multi-leg booking(s)
       // Calculate total rate across all legs
       let totalRate = 0;
       const legDetails: string[] = [];
@@ -336,37 +369,45 @@ export const NewBooking: React.FC = () => {
       // Use the first route as the primary route (for database constraint)
       const primaryRouteId = bookingLegs[0].routeId;
       
-      // Combine notes with leg details
-      const combinedNotes = [
-        notes ? notes : null,
-        '--- Multi-Leg Booking ---',
-        ...legDetails,
-        `Total: $${totalRate.toFixed(2)}`
-      ].filter(Boolean).join('\n');
+      // Get all booking dates
+      const dates = getBookingDates();
       
-      const bookingData: any = {
-        carrierId: carrierId ? parseInt(carrierId) : null,
-        routeId: parseInt(primaryRouteId),
-        bookingDate: bookingDate,
-        rate: totalRate.toFixed(2),
-        rateType: 'FLAT_RATE', // Multi-leg bookings use flat rate for the total
-        baseRate: totalRate.toFixed(2),
-        billable,
-        notes: combinedNotes,
-        status: carrierId ? 'CONFIRMED' : 'PENDING',
-        legNumber: 1,
-        isParent: true
-      };
-      
-      // Remove null values that should be omitted
-      Object.keys(bookingData).forEach(key => {
-        if (bookingData[key] === null && key !== 'carrierId' && key !== 'notes') {
-          delete bookingData[key];
-        }
+      // Create booking data for each date
+      const bookingsToCreate = dates.map((date) => {
+        // Combine notes with leg details
+        const combinedNotes = [
+          notes ? notes : null,
+          useMultipleDates ? `--- Multi-Leg Booking (${format(parseISO(date), 'MMM dd, yyyy')}) ---` : '--- Multi-Leg Booking ---',
+          ...legDetails,
+          `Total: $${totalRate.toFixed(2)}`
+        ].filter(Boolean).join('\n');
+        
+        const bookingData: any = {
+          carrierId: carrierId ? parseInt(carrierId) : null,
+          routeId: parseInt(primaryRouteId),
+          bookingDate: date,
+          rate: totalRate.toFixed(2),
+          rateType: 'FLAT_RATE', // Multi-leg bookings use flat rate for the total
+          baseRate: totalRate.toFixed(2),
+          billable,
+          notes: combinedNotes,
+          status: carrierId ? 'CONFIRMED' : 'PENDING',
+          legNumber: 1,
+          isParent: true
+        };
+        
+        // Remove null values that should be omitted
+        Object.keys(bookingData).forEach(key => {
+          if (bookingData[key] === null && key !== 'carrierId' && key !== 'notes') {
+            delete bookingData[key];
+          }
+        });
+        
+        return bookingData;
       });
       
-      console.log('Creating multi-leg booking with data:', JSON.stringify(bookingData, null, 2));
-      createBookingMutation.mutate(bookingData);
+      console.log(`Creating ${bookingsToCreate.length} multi-leg booking(s)`);
+      createBookingMutation.mutate(bookingsToCreate);
     } else {
       // Single route booking validation
       if (selectedRoutes.length === 0) {
@@ -384,32 +425,45 @@ export const NewBooking: React.FC = () => {
         return;
       }
 
-      const bookingData: any = {
-        carrierId: carrierId ? parseInt(carrierId) : null,
-        routeId: parseInt(selectedRoutes[0]),
-        bookingDate: bookingDate, // Send as YYYY-MM-DD format for ISO8601 validation
-        rate: parseFloat(rate).toFixed(2), // Ensure 2 decimal places
-        rateType: singleRouteRateType,
-        baseRate: singleRouteRateType === 'FLAT_RATE' 
-          ? parseFloat(rate).toFixed(2) 
-          : parseFloat(singleRouteBaseRate).toFixed(2),
-        fscRate: singleRouteRateType === 'MILE_FSC' ? fuelSurchargeRate.toFixed(2) : undefined,
-        billable,
-        notes: notes || null,
-        status: carrierId ? 'CONFIRMED' : 'PENDING',
-        legNumber: 1,
-        isParent: true
-      };
+      // Get all booking dates
+      const dates = getBookingDates();
       
-      // Remove null values that should be omitted
-      Object.keys(bookingData).forEach(key => {
-        if (bookingData[key] === null && key !== 'carrierId' && key !== 'notes') {
-          delete bookingData[key];
-        }
+      // Create booking data for each date
+      const bookingsToCreate = dates.map((date) => {
+        // Add date info to notes if multiple dates
+        const dateNotes = useMultipleDates && notes ? 
+          `${notes}\n\n[Booking Date: ${format(parseISO(date), 'MMM dd, yyyy')}]` : 
+          (notes || null);
+        
+        const bookingData: any = {
+          carrierId: carrierId ? parseInt(carrierId) : null,
+          routeId: parseInt(selectedRoutes[0]),
+          bookingDate: date,
+          rate: parseFloat(rate).toFixed(2),
+          rateType: singleRouteRateType,
+          baseRate: singleRouteRateType === 'FLAT_RATE' 
+            ? parseFloat(rate).toFixed(2) 
+            : parseFloat(singleRouteBaseRate).toFixed(2),
+          fscRate: singleRouteRateType === 'MILE_FSC' ? fuelSurchargeRate.toFixed(2) : undefined,
+          billable,
+          notes: dateNotes,
+          status: carrierId ? 'CONFIRMED' : 'PENDING',
+          legNumber: 1,
+          isParent: true
+        };
+        
+        // Remove null values that should be omitted
+        Object.keys(bookingData).forEach(key => {
+          if (bookingData[key] === null && key !== 'carrierId' && key !== 'notes') {
+            delete bookingData[key];
+          }
+        });
+        
+        return bookingData;
       });
       
-      console.log('Creating booking with data:', JSON.stringify(bookingData, null, 2));
-      createBookingMutation.mutate(bookingData);
+      console.log(`Creating ${bookingsToCreate.length} single route booking(s)`);
+      createBookingMutation.mutate(bookingsToCreate);
     }
   };
 
@@ -1181,18 +1235,67 @@ export const NewBooking: React.FC = () => {
         </div>
 
         {/* Booking Date */}
-        <div>
-          <label className="block text-sm font-medium text-gray-700 mb-2">
-            <Calendar className="inline w-4 h-4 mr-1" />
-            Booking Date *
-          </label>
-          <input
-            type="date"
-            value={bookingDate}
-            onChange={(e) => setBookingDate(e.target.value)}
-            className="w-full px-3 py-2 border border-gray-300 rounded-md focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
-            required
-          />
+        <div className="space-y-3">
+          <div className="flex items-center justify-between">
+            <label className="block text-sm font-medium text-gray-700">
+              <Calendar className="inline w-4 h-4 mr-1" />
+              Booking Date *
+            </label>
+            <label className="flex items-center gap-2 text-sm">
+              <input
+                type="checkbox"
+                checked={useMultipleDates}
+                onChange={(e) => setUseMultipleDates(e.target.checked)}
+                className="w-4 h-4 text-blue-600 border-gray-300 rounded focus:ring-blue-500"
+              />
+              <span className="text-gray-700">Book multiple dates</span>
+            </label>
+          </div>
+          
+          {useMultipleDates ? (
+            <div className="grid grid-cols-2 gap-4">
+              <div>
+                <label className="block text-xs font-medium text-gray-600 mb-1">Start Date</label>
+                <input
+                  type="date"
+                  value={bookingDate}
+                  onChange={(e) => setBookingDate(e.target.value)}
+                  className="w-full px-3 py-2 border border-gray-300 rounded-md focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
+                  required
+                />
+              </div>
+              <div>
+                <label className="block text-xs font-medium text-gray-600 mb-1">End Date</label>
+                <input
+                  type="date"
+                  value={endDate}
+                  onChange={(e) => setEndDate(e.target.value)}
+                  min={bookingDate}
+                  className="w-full px-3 py-2 border border-gray-300 rounded-md focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
+                  required={useMultipleDates}
+                />
+              </div>
+            </div>
+          ) : (
+            <input
+              type="date"
+              value={bookingDate}
+              onChange={(e) => setBookingDate(e.target.value)}
+              className="w-full px-3 py-2 border border-gray-300 rounded-md focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
+              required
+            />
+          )}
+          
+          {useMultipleDates && bookingDate && endDate && (
+            <p className="text-sm text-blue-600 bg-blue-50 p-2 rounded">
+              This will create {(() => {
+                const start = new Date(bookingDate);
+                const end = new Date(endDate);
+                const days = Math.ceil((end.getTime() - start.getTime()) / (1000 * 60 * 60 * 24)) + 1;
+                return days;
+              })()} separate bookings, one for each day in the range.
+            </p>
+          )}
         </div>
 
         {/* Total Rate Display - Only show for multi-leg bookings */}
