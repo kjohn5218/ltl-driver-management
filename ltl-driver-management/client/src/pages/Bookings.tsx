@@ -1,11 +1,12 @@
 import React, { useState, useMemo, useEffect, useCallback } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { useQuery, useQueryClient, useMutation } from '@tanstack/react-query';
-import { api } from '../services/api';
+import { api, sendRateConfirmationEmail } from '../services/api';
 import { Booking } from '../types';
-import { Plus, Search, Edit, Eye, Calendar, MapPin, User, DollarSign, X, ChevronUp, ChevronDown, Trash2 } from 'lucide-react';
+import { Plus, Search, Edit, Eye, Calendar, MapPin, User, DollarSign, X, ChevronUp, ChevronDown, Trash2, FileText } from 'lucide-react';
 import { format, isAfter, isBefore, isSameDay, parseISO } from 'date-fns';
 import { RouteDetails } from '../components/LocationDisplay';
+import { RateConfirmationModal } from '../components/RateConfirmation';
 
 type SortField = 'id' | 'carrier' | 'route' | 'bookingDate' | 'rate' | 'status';
 type SortDirection = 'asc' | 'desc';
@@ -22,6 +23,7 @@ export const Bookings: React.FC = () => {
   const [viewingBooking, setViewingBooking] = useState<Booking | null>(null);
   const [editingBooking, setEditingBooking] = useState<Booking | null>(null);
   const [deletingBooking, setDeletingBooking] = useState<Booking | null>(null);
+  const [rateConfirmationBooking, setRateConfirmationBooking] = useState<Booking | null>(null);
 
   const { data: bookings, isLoading } = useQuery({
     queryKey: ['bookings'],
@@ -194,6 +196,10 @@ export const Bookings: React.FC = () => {
     setDeletingBooking(booking);
   };
 
+  const handleRateConfirmation = (booking: Booking) => {
+    setRateConfirmationBooking(booking);
+  };
+
   const handleCloseView = () => {
     setViewingBooking(null);
   };
@@ -206,9 +212,33 @@ export const Bookings: React.FC = () => {
     setDeletingBooking(null);
   };
 
+  const handleCloseRateConfirmation = () => {
+    setRateConfirmationBooking(null);
+  };
+
   const handleConfirmDelete = () => {
     if (deletingBooking) {
       deleteBookingMutation.mutate(deletingBooking.id);
+    }
+  };
+
+  const handleEmailRateConfirmation = async (pdfBlob: Blob) => {
+    if (!rateConfirmationBooking || !rateConfirmationBooking.carrier?.email) {
+      alert('Cannot send email: No carrier email available');
+      return;
+    }
+
+    try {
+      await sendRateConfirmationEmail(
+        rateConfirmationBooking.id,
+        rateConfirmationBooking.carrier.email,
+        pdfBlob
+      );
+      alert(`Rate confirmation sent successfully to ${rateConfirmationBooking.carrier.email}`);
+      setRateConfirmationBooking(null);
+    } catch (error) {
+      console.error('Error sending rate confirmation:', error);
+      alert('Failed to send rate confirmation email. Please try again.');
     }
   };
 
@@ -438,6 +468,14 @@ export const Bookings: React.FC = () => {
                       <Edit className="w-4 h-4" />
                     </button>
                     <button 
+                      onClick={() => handleRateConfirmation(booking)}
+                      className="text-gray-500 hover:text-green-600 transition-colors"
+                      title="Rate confirmation"
+                      disabled={!booking.carrier}
+                    >
+                      <FileText className="w-4 h-4" />
+                    </button>
+                    <button 
                       onClick={() => handleDeleteBooking(booking)}
                       className="text-gray-500 hover:text-red-600 transition-colors"
                       title="Delete booking"
@@ -464,6 +502,7 @@ export const Bookings: React.FC = () => {
           booking={viewingBooking} 
           onClose={handleCloseView} 
           getStatusBadge={getStatusBadge}
+          onRateConfirmation={handleRateConfirmation}
         />
       )}
 
@@ -527,6 +566,15 @@ export const Bookings: React.FC = () => {
           </div>
         </div>
       )}
+
+      {/* Rate Confirmation Modal */}
+      {rateConfirmationBooking && (
+        <RateConfirmationModal
+          booking={rateConfirmationBooking}
+          onClose={handleCloseRateConfirmation}
+          onEmail={handleEmailRateConfirmation}
+        />
+      )}
     </div>
   );
 };
@@ -536,9 +584,10 @@ interface BookingViewModalProps {
   booking: Booking;
   onClose: () => void;
   getStatusBadge: (status: string) => string;
+  onRateConfirmation?: (booking: Booking) => void;
 }
 
-const BookingViewModal: React.FC<BookingViewModalProps> = ({ booking, onClose, getStatusBadge }) => {
+const BookingViewModal: React.FC<BookingViewModalProps> = ({ booking, onClose, getStatusBadge, onRateConfirmation }) => {
   return (
     <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50">
       <div className="bg-white rounded-lg p-6 w-full max-w-2xl max-h-[90vh] overflow-y-auto">
@@ -566,12 +615,92 @@ const BookingViewModal: React.FC<BookingViewModalProps> = ({ booking, onClose, g
             </div>
           </div>
           
+          <div className="grid grid-cols-2 gap-4">
+            <div>
+              <label className="block text-sm font-medium text-gray-700 mb-1">Driver Name</label>
+              <p className="text-sm text-gray-900">{booking.driverName || 'N/A'}</p>
+            </div>
+            <div>
+              <label className="block text-sm font-medium text-gray-700 mb-1">Phone Number</label>
+              <p className="text-sm text-gray-900">{booking.phoneNumber || 'N/A'}</p>
+            </div>
+          </div>
+          
+          <div className="grid grid-cols-2 gap-4">
+            <div>
+              <label className="block text-sm font-medium text-gray-700 mb-1">Type</label>
+              <p className="text-sm text-gray-900">
+                {booking.type === 'POWER_ONLY' ? 'Power Only' : 'Power and Trailer'}
+              </p>
+            </div>
+            {booking.type === 'POWER_AND_TRAILER' && booking.trailerLength && (
+              <div>
+                <label className="block text-sm font-medium text-gray-700 mb-1">Trailer Length</label>
+                <p className="text-sm text-gray-900">{booking.trailerLength} feet</p>
+              </div>
+            )}
+          </div>
+          
           {booking.route && (
-            <RouteDetails 
-              route={booking.route} 
-              showDistance={true} 
-              compact={true} 
-            />
+            <div>
+              <label className="block text-sm font-medium text-gray-700 mb-2">Route Information</label>
+              <div className="bg-gray-50 p-4 rounded-lg space-y-3">
+                <div className="flex items-center gap-2 text-sm font-medium text-gray-900">
+                  <MapPin className="w-4 h-4 text-blue-500" />
+                  {booking.route.name}
+                </div>
+                
+                <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                  {/* Origin Information */}
+                  <div className="space-y-2">
+                    <h4 className="font-medium text-gray-800 text-sm">Origin</h4>
+                    <div className="text-sm text-gray-600 space-y-1">
+                      <div className="font-medium">{booking.route.origin}</div>
+                      {booking.route.originAddress && (
+                        <div>{booking.route.originAddress}</div>
+                      )}
+                      {(booking.route.originCity || booking.route.originState || booking.route.originZipCode) && (
+                        <div>
+                          {booking.route.originCity && `${booking.route.originCity}, `}
+                          {booking.route.originState && `${booking.route.originState} `}
+                          {booking.route.originZipCode}
+                        </div>
+                      )}
+                      {booking.route.originContact && (
+                        <div className="text-xs text-gray-500">Contact: {booking.route.originContact}</div>
+                      )}
+                    </div>
+                  </div>
+                  
+                  {/* Destination Information */}
+                  <div className="space-y-2">
+                    <h4 className="font-medium text-gray-800 text-sm">Destination</h4>
+                    <div className="text-sm text-gray-600 space-y-1">
+                      <div className="font-medium">{booking.route.destination}</div>
+                      {booking.route.destinationAddress && (
+                        <div>{booking.route.destinationAddress}</div>
+                      )}
+                      {(booking.route.destinationCity || booking.route.destinationState || booking.route.destinationZipCode) && (
+                        <div>
+                          {booking.route.destinationCity && `${booking.route.destinationCity}, `}
+                          {booking.route.destinationState && `${booking.route.destinationState} `}
+                          {booking.route.destinationZipCode}
+                        </div>
+                      )}
+                      {booking.route.destinationContact && (
+                        <div className="text-xs text-gray-500">Contact: {booking.route.destinationContact}</div>
+                      )}
+                    </div>
+                  </div>
+                </div>
+                
+                {booking.route.distance && (
+                  <div className="text-xs text-gray-500 pt-2 border-t border-gray-200">
+                    Distance: {booking.route.distance} miles
+                  </div>
+                )}
+              </div>
+            </div>
           )}
           
           <div className="grid grid-cols-2 gap-4">
@@ -632,10 +761,23 @@ const BookingViewModal: React.FC<BookingViewModalProps> = ({ booking, onClose, g
           </div>
         </div>
         
-        <div className="flex justify-end mt-6 pt-4 border-t">
+        <div className="flex justify-between mt-6 pt-4 border-t">
+          {onRateConfirmation && (
+            <button 
+              onClick={() => {
+                onClose();
+                onRateConfirmation(booking);
+              }}
+              disabled={!booking.carrier}
+              className="px-4 py-2 bg-green-600 text-white rounded hover:bg-green-700 disabled:bg-gray-400 disabled:cursor-not-allowed flex items-center gap-2"
+            >
+              <FileText className="w-4 h-4" />
+              Rate Confirmation
+            </button>
+          )}
           <button 
             onClick={onClose}
-            className="px-4 py-2 bg-gray-500 text-white rounded hover:bg-gray-600"
+            className="px-4 py-2 bg-gray-500 text-white rounded hover:bg-gray-600 ml-auto"
           >
             Close
           </button>
@@ -672,6 +814,10 @@ const BookingEditModal: React.FC<BookingEditModalProps> = ({ booking, onClose, o
       status: booking.status,
       billable: booking.billable,
       notes: booking.notes || '',
+      driverName: booking.driverName || '',
+      phoneNumber: booking.phoneNumber || '',
+      type: booking.type || 'POWER_ONLY',
+      trailerLength: booking.trailerLength ? booking.trailerLength.toString() : '',
       bookingDate: booking.bookingDate.split('T')[0], // Format for date input
       rateType: initialRateType,
       baseRate: Number(booking.baseRate) || Number(booking.rate) || 0,
@@ -783,7 +929,10 @@ const BookingEditModal: React.FC<BookingEditModalProps> = ({ booking, onClose, o
       const response = await api.put(`/bookings/${booking.id}`, {
         ...formData,
         bookingDate: new Date(formData.bookingDate).toISOString(),
-        carrierId: formData.carrierId || null
+        carrierId: formData.carrierId || null,
+        trailerLength: formData.type === 'POWER_AND_TRAILER' && formData.trailerLength 
+          ? parseInt(formData.trailerLength) 
+          : null
       });
       
       onSave(response.data);
@@ -894,16 +1043,135 @@ const BookingEditModal: React.FC<BookingEditModalProps> = ({ booking, onClose, o
           
           {booking.route && (
             <div>
-              <label className="block text-sm font-medium text-gray-700 mb-1">Route</label>
-              <div className="text-sm text-gray-500 bg-gray-50 p-2 rounded">
-                <RouteDetails 
-                  route={booking.route} 
-                  showDistance={true} 
-                  compact={true} 
-                />
+              <label className="block text-sm font-medium text-gray-700 mb-2">Route Information</label>
+              <div className="bg-gray-50 p-4 rounded-lg space-y-3">
+                <div className="flex items-center gap-2 text-sm font-medium text-gray-900">
+                  <MapPin className="w-4 h-4 text-blue-500" />
+                  {booking.route.name}
+                </div>
+                
+                <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                  {/* Origin Information */}
+                  <div className="space-y-2">
+                    <h4 className="font-medium text-gray-800 text-sm">Origin</h4>
+                    <div className="text-sm text-gray-600 space-y-1">
+                      <div className="font-medium">{booking.route.origin}</div>
+                      {booking.route.originAddress && (
+                        <div>{booking.route.originAddress}</div>
+                      )}
+                      {(booking.route.originCity || booking.route.originState || booking.route.originZipCode) && (
+                        <div>
+                          {booking.route.originCity && `${booking.route.originCity}, `}
+                          {booking.route.originState && `${booking.route.originState} `}
+                          {booking.route.originZipCode}
+                        </div>
+                      )}
+                      {booking.route.originContact && (
+                        <div className="text-xs text-gray-500">Contact: {booking.route.originContact}</div>
+                      )}
+                    </div>
+                  </div>
+                  
+                  {/* Destination Information */}
+                  <div className="space-y-2">
+                    <h4 className="font-medium text-gray-800 text-sm">Destination</h4>
+                    <div className="text-sm text-gray-600 space-y-1">
+                      <div className="font-medium">{booking.route.destination}</div>
+                      {booking.route.destinationAddress && (
+                        <div>{booking.route.destinationAddress}</div>
+                      )}
+                      {(booking.route.destinationCity || booking.route.destinationState || booking.route.destinationZipCode) && (
+                        <div>
+                          {booking.route.destinationCity && `${booking.route.destinationCity}, `}
+                          {booking.route.destinationState && `${booking.route.destinationState} `}
+                          {booking.route.destinationZipCode}
+                        </div>
+                      )}
+                      {booking.route.destinationContact && (
+                        <div className="text-xs text-gray-500">Contact: {booking.route.destinationContact}</div>
+                      )}
+                    </div>
+                  </div>
+                </div>
+                
+                {booking.route.distance && (
+                  <div className="text-xs text-gray-500 pt-2 border-t border-gray-200">
+                    Distance: {booking.route.distance} miles
+                  </div>
+                )}
               </div>
             </div>
           )}
+          
+          <div className="grid grid-cols-2 gap-4">
+            <div>
+              <label className="block text-sm font-medium text-gray-700 mb-1">Driver Name</label>
+              <input
+                type="text"
+                value={formData.driverName}
+                onChange={(e) => setFormData({ ...formData, driverName: e.target.value })}
+                className="w-full px-3 py-2 border border-gray-300 rounded-md focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
+                placeholder="Enter driver name..."
+              />
+            </div>
+            <div>
+              <label className="block text-sm font-medium text-gray-700 mb-1">Phone Number</label>
+              <input
+                type="tel"
+                value={formData.phoneNumber}
+                onChange={(e) => setFormData({ ...formData, phoneNumber: e.target.value })}
+                className="w-full px-3 py-2 border border-gray-300 rounded-md focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
+                placeholder="Enter phone number..."
+              />
+            </div>
+          </div>
+          
+          {/* Booking Type */}
+          <div>
+            <label className="block text-sm font-medium text-gray-700 mb-2">Type</label>
+            <div className="space-y-2">
+              <label className="flex items-center gap-2">
+                <input
+                  type="radio"
+                  name="editBookingType"
+                  value="POWER_ONLY"
+                  checked={formData.type === 'POWER_ONLY'}
+                  onChange={(e) => setFormData({ ...formData, type: e.target.value as any })}
+                  className="w-4 h-4 text-blue-600 border-gray-300 focus:ring-blue-500"
+                />
+                <span className="text-sm text-gray-700">Power Only</span>
+              </label>
+              <label className="flex items-center gap-2">
+                <input
+                  type="radio"
+                  name="editBookingType"
+                  value="POWER_AND_TRAILER"
+                  checked={formData.type === 'POWER_AND_TRAILER'}
+                  onChange={(e) => setFormData({ ...formData, type: e.target.value as any })}
+                  className="w-4 h-4 text-blue-600 border-gray-300 focus:ring-blue-500"
+                />
+                <span className="text-sm text-gray-700">Power and Trailer</span>
+              </label>
+            </div>
+            
+            {/* Trailer Length - only show when Power and Trailer is selected */}
+            {formData.type === 'POWER_AND_TRAILER' && (
+              <div className="mt-3">
+                <label className="block text-sm font-medium text-gray-700 mb-1">
+                  Trailer Length (feet)
+                </label>
+                <input
+                  type="number"
+                  value={formData.trailerLength}
+                  onChange={(e) => setFormData({ ...formData, trailerLength: e.target.value })}
+                  className="w-full px-3 py-2 border border-gray-300 rounded-md focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
+                  placeholder="Enter trailer length..."
+                  min="1"
+                  step="1"
+                />
+              </div>
+            )}
+          </div>
           
           <div className="grid grid-cols-2 gap-4">
             <div>

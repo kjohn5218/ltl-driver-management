@@ -3,6 +3,7 @@ export type CarrierStatus = 'PENDING' | 'ACTIVE' | 'INACTIVE' | 'SUSPENDED' | 'N
 export type BookingStatus = 'PENDING' | 'CONFIRMED' | 'IN_PROGRESS' | 'COMPLETED' | 'CANCELLED';
 export type InvoiceStatus = 'PENDING' | 'SENT' | 'PAID' | 'OVERDUE' | 'CANCELLED';
 export type RateType = 'MILE' | 'MILE_FSC' | 'FLAT_RATE';
+export type BookingType = 'POWER_ONLY' | 'POWER_AND_TRAILER';
 
 export interface User {
   id: number;
@@ -88,6 +89,10 @@ export interface Booking {
   status: BookingStatus;
   billable: boolean;
   notes?: string;
+  driverName?: string;
+  phoneNumber?: string;
+  type: BookingType;
+  trailerLength?: number;
   
   // Rate calculation fields
   rateType: RateType;

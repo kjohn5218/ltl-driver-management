@@ -30,3 +30,21 @@ api.interceptors.response.use(
     return Promise.reject(error);
   }
 );
+
+// Email service for rate confirmations
+export const sendRateConfirmationEmail = async (
+  bookingId: number,
+  recipientEmail: string,
+  pdfBlob: Blob
+): Promise<any> => {
+  const formData = new FormData();
+  formData.append('bookingId', bookingId.toString());
+  formData.append('recipientEmail', recipientEmail);
+  formData.append('pdf', pdfBlob, `rate-confirmation-${bookingId}.pdf`);
+
+  return api.post('/bookings/rate-confirmation/email', formData, {
+    headers: {
+      'Content-Type': 'multipart/form-data',
+    },
+  });
+};

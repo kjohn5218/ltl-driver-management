@@ -560,33 +560,48 @@ const RouteEditModal: React.FC<RouteEditModalProps> = ({ route, onClose, onSave 
     setIsSubmitting(true);
     
     try {
+      // Clean empty strings to undefined
+      const cleanValue = (val: string) => val?.trim() || undefined;
+      
+      // Format time to ensure HH:mm format (remove seconds if present)
+      const formatTime = (timeStr: string) => {
+        if (!timeStr || !timeStr.trim()) return undefined;
+        // If time includes seconds (HH:mm:ss), remove them
+        const timeParts = timeStr.split(':');
+        if (timeParts.length >= 2) {
+          return `${timeParts[0]}:${timeParts[1]}`;
+        }
+        return timeStr;
+      };
+      
       const payload = {
-        name: formData.name,
-        origin: formData.origin,
-        destination: formData.destination,
-        originAddress: formData.originAddress || undefined,
-        originCity: formData.originCity || undefined,
-        originState: formData.originState || undefined,
-        originZipCode: formData.originZipCode || undefined,
-        originContact: formData.originContact || undefined,
-        destinationAddress: formData.destinationAddress || undefined,
-        destinationCity: formData.destinationCity || undefined,
-        destinationState: formData.destinationState || undefined,
-        destinationZipCode: formData.destinationZipCode || undefined,
-        destinationContact: formData.destinationContact || undefined,
+        name: formData.name.trim(),
+        origin: formData.origin.trim(),
+        destination: formData.destination.trim(),
+        originAddress: cleanValue(formData.originAddress),
+        originCity: cleanValue(formData.originCity),
+        originState: cleanValue(formData.originState),
+        originZipCode: cleanValue(formData.originZipCode),
+        originContact: cleanValue(formData.originContact),
+        destinationAddress: cleanValue(formData.destinationAddress),
+        destinationCity: cleanValue(formData.destinationCity),
+        destinationState: cleanValue(formData.destinationState),
+        destinationZipCode: cleanValue(formData.destinationZipCode),
+        destinationContact: cleanValue(formData.destinationContact),
         distance: parseFloat(formData.distance),
         runTime: formData.runTime && !isNaN(parseInt(formData.runTime)) ? parseInt(formData.runTime) : undefined,
         active: formData.active,
         standardRate: formData.standardRate && !isNaN(parseFloat(formData.standardRate)) ? parseFloat(formData.standardRate) : undefined,
-        frequency: formData.frequency || undefined,
-        departureTime: formData.departureTime || undefined,
-        arrivalTime: formData.arrivalTime || undefined
+        frequency: cleanValue(formData.frequency),
+        departureTime: formatTime(formData.departureTime),
+        arrivalTime: formatTime(formData.arrivalTime)
       };
       
       const response = await api.put(`/routes/${route.id}`, payload);
       onSave(response.data);
     } catch (error) {
       console.error('Error updating route:', error);
+      // TODO: Add proper error handling similar to AddRouteModal
     } finally {
       setIsSubmitting(false);
     }
@@ -1119,6 +1134,17 @@ const AddRouteModal: React.FC<AddRouteModalProps> = ({ onClose, onSave, copyFrom
       // Clean empty strings to undefined
       const cleanValue = (val: string) => val?.trim() || undefined;
       
+      // Format time to ensure HH:mm format (remove seconds if present)
+      const formatTime = (timeStr: string) => {
+        if (!timeStr || !timeStr.trim()) return undefined;
+        // If time includes seconds (HH:mm:ss), remove them
+        const timeParts = timeStr.split(':');
+        if (timeParts.length >= 2) {
+          return `${timeParts[0]}:${timeParts[1]}`;
+        }
+        return timeStr;
+      };
+      
       const payload = {
         name: formData.name.trim(),
         origin: formData.origin.trim(),
@@ -1138,8 +1164,8 @@ const AddRouteModal: React.FC<AddRouteModalProps> = ({ onClose, onSave, copyFrom
         active: formData.active,
         standardRate: formData.standardRate && !isNaN(parseFloat(formData.standardRate)) ? parseFloat(formData.standardRate) : undefined,
         frequency: cleanValue(formData.frequency),
-        departureTime: cleanValue(formData.departureTime),
-        arrivalTime: cleanValue(formData.arrivalTime)
+        departureTime: formatTime(formData.departureTime),
+        arrivalTime: formatTime(formData.arrivalTime)
       };
       
       console.log('Submitting route payload:', payload);

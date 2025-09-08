@@ -30,6 +30,8 @@ export const NewBooking: React.FC = () => {
   const [rate, setRate] = useState('');
   const [notes, setNotes] = useState('');
   const [billable, setBillable] = useState(true);
+  const [bookingType, setBookingType] = useState<'POWER_ONLY' | 'POWER_AND_TRAILER'>('POWER_ONLY');
+  const [trailerLength, setTrailerLength] = useState('');
   const [singleRouteRateType, setSingleRouteRateType] = useState<RateType>('FLAT_RATE');
   const [singleRouteBaseRate, setSingleRouteBaseRate] = useState('');
   const [carrierSearch, setCarrierSearch] = useState('');
@@ -392,6 +394,8 @@ export const NewBooking: React.FC = () => {
           baseRate: totalRate.toFixed(2),
           billable,
           notes: combinedNotes,
+          type: bookingType,
+          trailerLength: bookingType === 'POWER_AND_TRAILER' && trailerLength ? parseInt(trailerLength) : null,
           status: carrierId ? 'CONFIRMED' : 'PENDING',
           legNumber: 1,
           isParent: true
@@ -399,7 +403,7 @@ export const NewBooking: React.FC = () => {
         
         // Remove null values that should be omitted
         Object.keys(bookingData).forEach(key => {
-          if (bookingData[key] === null && key !== 'carrierId' && key !== 'notes') {
+          if (bookingData[key] === null && key !== 'carrierId' && key !== 'notes' && key !== 'trailerLength') {
             delete bookingData[key];
           }
         });
@@ -448,6 +452,8 @@ export const NewBooking: React.FC = () => {
           fscRate: singleRouteRateType === 'MILE_FSC' ? fuelSurchargeRate.toFixed(2) : undefined,
           billable,
           notes: dateNotes,
+          type: bookingType,
+          trailerLength: bookingType === 'POWER_AND_TRAILER' && trailerLength ? parseInt(trailerLength) : null,
           status: carrierId ? 'CONFIRMED' : 'PENDING',
           legNumber: 1,
           isParent: true
@@ -455,7 +461,7 @@ export const NewBooking: React.FC = () => {
         
         // Remove null values that should be omitted
         Object.keys(bookingData).forEach(key => {
-          if (bookingData[key] === null && key !== 'carrierId' && key !== 'notes') {
+          if (bookingData[key] === null && key !== 'carrierId' && key !== 'notes' && key !== 'trailerLength') {
             delete bookingData[key];
           }
         });
@@ -1460,6 +1466,55 @@ export const NewBooking: React.FC = () => {
           </div>
         )}
 
+        {/* Booking Type */}
+        <div>
+          <label className="block text-sm font-medium text-gray-700 mb-2">
+            Type
+          </label>
+          <div className="space-y-2">
+            <label className="flex items-center gap-2">
+              <input
+                type="radio"
+                name="bookingType"
+                value="POWER_ONLY"
+                checked={bookingType === 'POWER_ONLY'}
+                onChange={(e) => setBookingType(e.target.value as 'POWER_ONLY' | 'POWER_AND_TRAILER')}
+                className="w-4 h-4 text-blue-600 border-gray-300 focus:ring-blue-500"
+              />
+              <span className="text-sm text-gray-700">Power Only</span>
+            </label>
+            <label className="flex items-center gap-2">
+              <input
+                type="radio"
+                name="bookingType"
+                value="POWER_AND_TRAILER"
+                checked={bookingType === 'POWER_AND_TRAILER'}
+                onChange={(e) => setBookingType(e.target.value as 'POWER_ONLY' | 'POWER_AND_TRAILER')}
+                className="w-4 h-4 text-blue-600 border-gray-300 focus:ring-blue-500"
+              />
+              <span className="text-sm text-gray-700">Power and Trailer</span>
+            </label>
+          </div>
+          
+          {/* Trailer Length - only show when Power and Trailer is selected */}
+          {bookingType === 'POWER_AND_TRAILER' && (
+            <div className="mt-3">
+              <label className="block text-sm font-medium text-gray-700 mb-1">
+                Trailer Length (feet)
+              </label>
+              <input
+                type="number"
+                value={trailerLength}
+                onChange={(e) => setTrailerLength(e.target.value)}
+                className="w-full px-3 py-2 border border-gray-300 rounded-md focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
+                placeholder="Enter trailer length..."
+                min="1"
+                step="1"
+              />
+            </div>
+          )}
+        </div>
+        
         {/* Billable */}
         <div className="flex items-center gap-2">
           <input
