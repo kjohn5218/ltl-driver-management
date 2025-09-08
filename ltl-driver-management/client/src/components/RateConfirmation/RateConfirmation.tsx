@@ -137,7 +137,7 @@ export const RateConfirmation: React.FC<RateConfirmationProps> = ({ booking, shi
         <div className="border-2 border-black p-2 bg-gray-100">
           <div className="font-bold text-center mb-2">NOTES</div>
           <div className="text-sm">
-            After hours dispatch between the hours of 10PM - 5AM Please call 701-204-0480. If you are going to be delayed for any
+            After hours dispatch between the hours of 9:30 PM -6:30 AM CT please call 701-204-0480. If you are going to be delayed for any
             reason during these hours, please make sure to call and notify us. Or if you are needing assistance of any kind during
             these hours, please call us.
           </div>
