@@ -5,6 +5,7 @@ import { api } from '../services/api';
 import { Booking } from '../types';
 import { Plus, Search, Edit, Eye, Calendar, MapPin, User, DollarSign, X, ChevronUp, ChevronDown, Trash2 } from 'lucide-react';
 import { format, isAfter, isBefore, isSameDay, parseISO } from 'date-fns';
+import { RouteDetails } from '../components/LocationDisplay';
 
 type SortField = 'id' | 'carrier' | 'route' | 'bookingDate' | 'rate' | 'status';
 type SortDirection = 'asc' | 'desc';
@@ -380,13 +381,13 @@ export const Bookings: React.FC = () => {
                     <MapPin className="w-4 h-4 mr-2 text-gray-400" />
                     <div>
                       {(() => {
-                        const multiLegInfo = parseMultiLegBooking(booking.notes);
+                        const multiLegInfo = parseMultiLegBooking(booking.notes || null);
                         if (multiLegInfo) {
                           return (
                             <>
                               <div className="text-sm font-medium text-gray-900">Multi-Leg Booking</div>
-                              {multiLegInfo.map((leg) => (
-                                <div key={leg.legNumber} className="text-xs text-gray-500">
+                              {multiLegInfo.map((leg: { legNumber: number; origin: string; destination: string; rate: string }, index: number) => (
+                                <div key={index} className="text-xs text-gray-500">
                                   Leg {leg.legNumber}: {leg.origin} → {leg.destination}
                                 </div>
                               ))}
@@ -565,16 +566,13 @@ const BookingViewModal: React.FC<BookingViewModalProps> = ({ booking, onClose, g
             </div>
           </div>
           
-          <div>
-            <label className="block text-sm font-medium text-gray-700 mb-1">Route</label>
-            <div className="text-sm text-gray-900">
-              <p className="font-medium">{booking.route?.name}</p>
-              <p className="text-gray-600">{booking.route?.origin} → {booking.route?.destination}</p>
-              {booking.route?.distance && (
-                <p className="text-gray-600">{booking.route.distance} miles</p>
-              )}
-            </div>
-          </div>
+          {booking.route && (
+            <RouteDetails 
+              route={booking.route} 
+              showDistance={true} 
+              compact={true} 
+            />
+          )}
           
           <div className="grid grid-cols-2 gap-4">
             <div>
@@ -894,16 +892,18 @@ const BookingEditModal: React.FC<BookingEditModalProps> = ({ booking, onClose, o
             </div>
           </div>
           
-          <div>
-            <label className="block text-sm font-medium text-gray-700 mb-1">Route</label>
-            <div className="text-sm text-gray-500 bg-gray-50 p-2 rounded">
-              <p className="font-medium">{booking.route?.name}</p>
-              <p>{booking.route?.origin} → {booking.route?.destination}</p>
-              {booking.route?.distance && (
-                <p className="text-gray-600">{booking.route.distance} miles</p>
-              )}
+          {booking.route && (
+            <div>
+              <label className="block text-sm font-medium text-gray-700 mb-1">Route</label>
+              <div className="text-sm text-gray-500 bg-gray-50 p-2 rounded">
+                <RouteDetails 
+                  route={booking.route} 
+                  showDistance={true} 
+                  compact={true} 
+                />
+              </div>
             </div>
-          </div>
+          )}
           
           <div className="grid grid-cols-2 gap-4">
             <div>
@@ -917,7 +917,6 @@ const BookingEditModal: React.FC<BookingEditModalProps> = ({ booking, onClose, o
             </div>
             <div>
               <label className="block text-sm font-medium text-gray-700 mb-1">Rate Type</label>
-              {console.log('Rendering radio buttons with formData.rateType:', formData.rateType)}
               <div className="flex gap-2">
                 <label className="flex items-center gap-1.5 text-sm">
                   <input

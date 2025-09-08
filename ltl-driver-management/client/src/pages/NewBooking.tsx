@@ -5,6 +5,7 @@ import { api } from '../services/api';
 import { Carrier, Route } from '../types';
 import { Calendar, Truck, MapPin, DollarSign, AlertCircle, Search, X } from 'lucide-react';
 import { format, eachDayOfInterval, parseISO } from 'date-fns';
+import { LocationWithTooltip } from '../components/LocationDisplay';
 
 type RateType = 'MILE' | 'MILE_FSC' | 'FLAT_RATE';
 
@@ -989,8 +990,22 @@ export const NewBooking: React.FC = () => {
                               className="w-full px-3 py-2 text-left hover:bg-blue-50 border-b border-gray-100 last:border-b-0"
                             >
                               <div className="font-medium text-gray-900">{route.name}</div>
-                              <div className="text-xs text-gray-500">
-                                {route.origin} → {route.destination} • {route.distance} miles
+                              <div className="text-xs text-gray-500 flex items-center gap-1">
+                                <LocationWithTooltip 
+                                  location={route.origin}
+                                  address={route.originAddress}
+                                  city={route.originCity}
+                                  state={route.originState}
+                                  zipCode={route.originZipCode}
+                                  contact={route.originContact}
+                                /> → <LocationWithTooltip 
+                                  location={route.destination}
+                                  address={route.destinationAddress}
+                                  city={route.destinationCity}
+                                  state={route.destinationState}
+                                  zipCode={route.destinationZipCode}
+                                  contact={route.destinationContact}
+                                /> • {route.distance} miles
                               </div>
                             </button>
                           ))
@@ -1015,8 +1030,22 @@ export const NewBooking: React.FC = () => {
                             <p className="text-sm font-medium text-gray-900">
                               Leg {index + 1}: {leg.route?.name}
                             </p>
-                            <p className="text-xs text-gray-600">
-                              {leg.route?.origin} → {leg.route?.destination} • {leg.route?.distance} miles
+                            <p className="text-xs text-gray-600 flex items-center gap-1">
+                              <LocationWithTooltip 
+                                location={leg.route?.origin || ''}
+                                address={leg.route?.originAddress}
+                                city={leg.route?.originCity}
+                                state={leg.route?.originState}
+                                zipCode={leg.route?.originZipCode}
+                                contact={leg.route?.originContact}
+                              /> → <LocationWithTooltip 
+                                location={leg.route?.destination || ''}
+                                address={leg.route?.destinationAddress}
+                                city={leg.route?.destinationCity}
+                                state={leg.route?.destinationState}
+                                zipCode={leg.route?.destinationZipCode}
+                                contact={leg.route?.destinationContact}
+                              /> • {leg.route?.distance} miles
                             </p>
                             {leg.route?.departureTime && leg.route?.arrivalTime && (
                               <p className="text-xs text-gray-500">
@@ -1196,8 +1225,22 @@ export const NewBooking: React.FC = () => {
                               className="w-full px-3 py-2 text-left hover:bg-blue-50 border-b border-gray-100 last:border-b-0"
                             >
                               <div className="font-medium text-gray-900">{route.name}</div>
-                              <div className="text-xs text-gray-500">
-                                {route.origin} → {route.destination} • {route.distance} miles
+                              <div className="text-xs text-gray-500 flex items-center gap-1">
+                                <LocationWithTooltip 
+                                  location={route.origin}
+                                  address={route.originAddress}
+                                  city={route.originCity}
+                                  state={route.originState}
+                                  zipCode={route.originZipCode}
+                                  contact={route.originContact}
+                                /> → <LocationWithTooltip 
+                                  location={route.destination}
+                                  address={route.destinationAddress}
+                                  city={route.destinationCity}
+                                  state={route.destinationState}
+                                  zipCode={route.destinationZipCode}
+                                  contact={route.destinationContact}
+                                /> • {route.distance} miles
                               </div>
                             </button>
                           ))

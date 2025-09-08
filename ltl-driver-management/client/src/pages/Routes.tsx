@@ -2,50 +2,10 @@ import React, { useState, useEffect } from 'react';
 import { useQuery, useQueryClient } from '@tanstack/react-query';
 import { api } from '../services/api';
 import { Route } from '../types';
-import { Plus, Search, Edit, Eye, Trash2, MapPin, Clock, DollarSign, Filter, X, Calculator } from 'lucide-react';
+import { Plus, Search, Edit, Eye, Trash2, MapPin, Clock, DollarSign, Filter, X, Calculator, Copy } from 'lucide-react';
 import { calculateRoute, calculateArrivalTime, formatRunTime, hasAddressInfo } from '../utils/routeCalculations';
+import { LocationWithTooltip, RouteDetails } from '../components/LocationDisplay';
 
-// Location tooltip component
-interface LocationWithTooltipProps {
-  location: string;
-  address?: string;
-  city?: string;
-  state?: string;
-  zipCode?: string;
-  contact?: string;
-}
-
-const LocationWithTooltip: React.FC<LocationWithTooltipProps> = ({ 
-  location, address, city, state, zipCode, contact 
-}) => {
-  const hasDetails = address || city || state || zipCode || contact;
-  
-  if (!hasDetails) {
-    return <span className="font-medium">{location}</span>;
-  }
-
-  return (
-    <div className="relative group inline-block">
-      <span className="font-medium cursor-help border-b border-dotted border-gray-400">
-        {location}
-      </span>
-      <div className="absolute bottom-full left-0 mb-2 hidden group-hover:block z-10 w-64 p-3 bg-gray-900 text-white text-xs rounded shadow-lg">
-        <div className="space-y-1">
-          <div className="font-medium">{location}</div>
-          {address && <div>{address}</div>}
-          {(city || state || zipCode) && (
-            <div>
-              {city}{city && (state || zipCode) ? ', ' : ''}
-              {state} {zipCode}
-            </div>
-          )}
-          {contact && <div className="pt-1 border-t border-gray-700">Contact: {contact}</div>}
-        </div>
-        <div className="absolute top-full left-4 border-4 border-transparent border-t-gray-900"></div>
-      </div>
-    </div>
-  );
-};
 
 export const Routes: React.FC = () => {
   const queryClient = useQueryClient();
@@ -56,6 +16,7 @@ export const Routes: React.FC = () => {
   const [editingRoute, setEditingRoute] = useState<Route | null>(null);
   const [deletingRoute, setDeletingRoute] = useState<Route | null>(null);
   const [showAddModal, setShowAddModal] = useState(false);
+  const [copyFromRoute, setCopyFromRoute] = useState<Route | null>(null);
 
   const { data: routesData, isLoading, error } = useQuery({
     queryKey: ['routes'],
@@ -133,11 +94,18 @@ export const Routes: React.FC = () => {
   };
 
   const handleOpenAddModal = () => {
+    setCopyFromRoute(null);
+    setShowAddModal(true);
+  };
+
+  const handleCopyRoute = (route: Route) => {
+    setCopyFromRoute(route);
     setShowAddModal(true);
   };
 
   const handleCloseAddModal = () => {
     setShowAddModal(false);
+    setCopyFromRoute(null);
   };
 
   const confirmDelete = async () => {
@@ -290,6 +258,13 @@ export const Routes: React.FC = () => {
                       <Edit className="w-4 h-4" />
                     </button>
                     <button 
+                      onClick={() => handleCopyRoute(route)}
+                      className="text-gray-500 hover:text-green-600 transition-colors" 
+                      title="Copy Route"
+                    >
+                      <Copy className="w-4 h-4" />
+                    </button>
+                    <button 
                       onClick={() => handleDeleteRoute(route)}
                       className="text-gray-500 hover:text-red-600 transition-colors" 
                       title="Delete Route"
@@ -351,6 +326,7 @@ export const Routes: React.FC = () => {
       {showAddModal && (
         <AddRouteModal 
           onClose={handleCloseAddModal}
+          copyFromRoute={copyFromRoute || undefined}
           onSave={(newRoute) => {
             queryClient.invalidateQueries({ queryKey: ['routes'] });
             setShowAddModal(false);
@@ -382,54 +358,11 @@ const RouteViewModal: React.FC<RouteViewModalProps> = ({ route, onClose }) => {
         </div>
         
         <div className="space-y-4">
-          <div>
-            <label className="block text-sm font-medium text-gray-700 mb-1">Route Name</label>
-            <p className="text-lg font-semibold text-gray-900">{route.name}</p>
-          </div>
-          
-          {/* Origin Details */}
-          <div>
-            <label className="block text-sm font-medium text-gray-700 mb-2">Origin</label>
-            <div className="bg-gray-50 p-3 rounded-md">
-              <p className="text-sm font-medium text-gray-900 mb-1">{route.origin}</p>
-              {route.originAddress && (
-                <p className="text-sm text-gray-600">{route.originAddress}</p>
-              )}
-              {(route.originCity || route.originState || route.originZipCode) && (
-                <p className="text-sm text-gray-600">
-                  {route.originCity}{route.originCity && (route.originState || route.originZipCode) ? ', ' : ''}
-                  {route.originState} {route.originZipCode}
-                </p>
-              )}
-              {route.originContact && (
-                <p className="text-sm text-gray-600 mt-1">
-                  <span className="font-medium">Contact:</span> {route.originContact}
-                </p>
-              )}
-            </div>
-          </div>
-
-          {/* Destination Details */}
-          <div>
-            <label className="block text-sm font-medium text-gray-700 mb-2">Destination</label>
-            <div className="bg-gray-50 p-3 rounded-md">
-              <p className="text-sm font-medium text-gray-900 mb-1">{route.destination}</p>
-              {route.destinationAddress && (
-                <p className="text-sm text-gray-600">{route.destinationAddress}</p>
-              )}
-              {(route.destinationCity || route.destinationState || route.destinationZipCode) && (
-                <p className="text-sm text-gray-600">
-                  {route.destinationCity}{route.destinationCity && (route.destinationState || route.destinationZipCode) ? ', ' : ''}
-                  {route.destinationState} {route.destinationZipCode}
-                </p>
-              )}
-              {route.destinationContact && (
-                <p className="text-sm text-gray-600 mt-1">
-                  <span className="font-medium">Contact:</span> {route.destinationContact}
-                </p>
-              )}
-            </div>
-          </div>
+          <RouteDetails 
+            route={route} 
+            showDistance={false} 
+            compact={false} 
+          />
           
           <div className="grid grid-cols-3 gap-4">
             <div>
@@ -642,9 +575,9 @@ const RouteEditModal: React.FC<RouteEditModalProps> = ({ route, onClose, onSave 
         destinationZipCode: formData.destinationZipCode || undefined,
         destinationContact: formData.destinationContact || undefined,
         distance: parseFloat(formData.distance),
-        runTime: formData.runTime ? parseInt(formData.runTime) : undefined,
+        runTime: formData.runTime && !isNaN(parseInt(formData.runTime)) ? parseInt(formData.runTime) : undefined,
         active: formData.active,
-        standardRate: formData.standardRate ? parseFloat(formData.standardRate) : undefined,
+        standardRate: formData.standardRate && !isNaN(parseFloat(formData.standardRate)) ? parseFloat(formData.standardRate) : undefined,
         frequency: formData.frequency || undefined,
         departureTime: formData.departureTime || undefined,
         arrivalTime: formData.arrivalTime || undefined
@@ -1006,34 +939,82 @@ const RouteDeleteModal: React.FC<RouteDeleteModalProps> = ({ route, onClose, onC
 interface AddRouteModalProps {
   onClose: () => void;
   onSave: (route: Route) => void;
+  copyFromRoute?: Route;
 }
 
-const AddRouteModal: React.FC<AddRouteModalProps> = ({ onClose, onSave }) => {
+const AddRouteModal: React.FC<AddRouteModalProps> = ({ onClose, onSave, copyFromRoute }) => {
+  const { data: routesData } = useQuery({
+    queryKey: ['routes'],
+    queryFn: async () => {
+      const response = await api.get('/routes?limit=1500');
+      return response.data;
+    }
+  });
+  
+  const allRoutes = routesData?.routes || [];
   const [formData, setFormData] = useState({
-    name: '',
-    origin: '',
-    destination: '',
-    originAddress: '',
-    originCity: '',
-    originState: '',
-    originZipCode: '',
-    originContact: '',
-    destinationAddress: '',
-    destinationCity: '',
-    destinationState: '',
-    destinationZipCode: '',
-    destinationContact: '',
-    distance: '',
-    runTime: '',
-    active: true,
-    standardRate: '',
-    frequency: '',
-    departureTime: '',
-    arrivalTime: ''
+    name: copyFromRoute ? `${copyFromRoute.name}_copy` : '',
+    origin: copyFromRoute?.origin || '',
+    destination: copyFromRoute?.destination || '',
+    originAddress: copyFromRoute?.originAddress || '',
+    originCity: copyFromRoute?.originCity || '',
+    originState: copyFromRoute?.originState || '',
+    originZipCode: copyFromRoute?.originZipCode || '',
+    originContact: copyFromRoute?.originContact || '',
+    destinationAddress: copyFromRoute?.destinationAddress || '',
+    destinationCity: copyFromRoute?.destinationCity || '',
+    destinationState: copyFromRoute?.destinationState || '',
+    destinationZipCode: copyFromRoute?.destinationZipCode || '',
+    destinationContact: copyFromRoute?.destinationContact || '',
+    distance: copyFromRoute ? copyFromRoute.distance.toString() : '',
+    runTime: copyFromRoute ? (copyFromRoute.runTime?.toString() || '') : '',
+    active: copyFromRoute?.active ?? true,
+    standardRate: copyFromRoute ? (copyFromRoute.standardRate?.toString() || '') : '',
+    frequency: copyFromRoute?.frequency || '',
+    departureTime: copyFromRoute?.departureTime || '',
+    arrivalTime: copyFromRoute?.arrivalTime || ''
   });
   
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [isCalculating, setIsCalculating] = useState(false);
+  const [showRouteSelector, setShowRouteSelector] = useState(false);
+  const [routeSearchInput, setRouteSearchInput] = useState('');
+  const [errorMessage, setErrorMessage] = useState<string | null>(null);
+  
+  const handleCopyFromRoute = (route: Route) => {
+    setFormData({
+      name: `${route.name}_copy`,
+      origin: route.origin || '',
+      destination: route.destination || '',
+      originAddress: route.originAddress || '',
+      originCity: route.originCity || '',
+      originState: route.originState || '',
+      originZipCode: route.originZipCode || '',
+      originContact: route.originContact || '',
+      destinationAddress: route.destinationAddress || '',
+      destinationCity: route.destinationCity || '',
+      destinationState: route.destinationState || '',
+      destinationZipCode: route.destinationZipCode || '',
+      destinationContact: route.destinationContact || '',
+      distance: route.distance.toString(),
+      runTime: route.runTime?.toString() || '',
+      active: route.active,
+      standardRate: route.standardRate?.toString() || '',
+      frequency: route.frequency || '',
+      departureTime: route.departureTime || '',
+      arrivalTime: route.arrivalTime || ''
+    });
+    setShowRouteSelector(false);
+    setRouteSearchInput('');
+  };
+  
+  const filteredRoutes = allRoutes.filter((route: Route) => {
+    if (!routeSearchInput) return true;
+    const searchLower = routeSearchInput.toLowerCase();
+    return route.name.toLowerCase().includes(searchLower) ||
+           route.origin.toLowerCase().includes(searchLower) ||
+           route.destination.toLowerCase().includes(searchLower);
+  });
 
   // Auto-calculate arrival time when departure time or run time changes
   useEffect(() => {
@@ -1125,35 +1106,66 @@ const AddRouteModal: React.FC<AddRouteModalProps> = ({ onClose, onSave }) => {
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     setIsSubmitting(true);
+    setErrorMessage(null);
     
     try {
+      // Validate required fields
+      if (!formData.distance || isNaN(parseFloat(formData.distance))) {
+        setErrorMessage('Please enter a valid distance');
+        setIsSubmitting(false);
+        return;
+      }
+      
+      // Clean empty strings to undefined
+      const cleanValue = (val: string) => val?.trim() || undefined;
+      
       const payload = {
-        name: formData.name,
-        origin: formData.origin,
-        destination: formData.destination,
-        originAddress: formData.originAddress || undefined,
-        originCity: formData.originCity || undefined,
-        originState: formData.originState || undefined,
-        originZipCode: formData.originZipCode || undefined,
-        originContact: formData.originContact || undefined,
-        destinationAddress: formData.destinationAddress || undefined,
-        destinationCity: formData.destinationCity || undefined,
-        destinationState: formData.destinationState || undefined,
-        destinationZipCode: formData.destinationZipCode || undefined,
-        destinationContact: formData.destinationContact || undefined,
+        name: formData.name.trim(),
+        origin: formData.origin.trim(),
+        destination: formData.destination.trim(),
+        originAddress: cleanValue(formData.originAddress),
+        originCity: cleanValue(formData.originCity),
+        originState: cleanValue(formData.originState),
+        originZipCode: cleanValue(formData.originZipCode),
+        originContact: cleanValue(formData.originContact),
+        destinationAddress: cleanValue(formData.destinationAddress),
+        destinationCity: cleanValue(formData.destinationCity),
+        destinationState: cleanValue(formData.destinationState),
+        destinationZipCode: cleanValue(formData.destinationZipCode),
+        destinationContact: cleanValue(formData.destinationContact),
         distance: parseFloat(formData.distance),
-        runTime: formData.runTime ? parseInt(formData.runTime) : undefined,
+        runTime: formData.runTime && !isNaN(parseInt(formData.runTime)) ? parseInt(formData.runTime) : undefined,
         active: formData.active,
-        standardRate: formData.standardRate ? parseFloat(formData.standardRate) : undefined,
-        frequency: formData.frequency || undefined,
-        departureTime: formData.departureTime || undefined,
-        arrivalTime: formData.arrivalTime || undefined
+        standardRate: formData.standardRate && !isNaN(parseFloat(formData.standardRate)) ? parseFloat(formData.standardRate) : undefined,
+        frequency: cleanValue(formData.frequency),
+        departureTime: cleanValue(formData.departureTime),
+        arrivalTime: cleanValue(formData.arrivalTime)
       };
       
+      console.log('Submitting route payload:', payload);
       const response = await api.post('/routes', payload);
       onSave(response.data);
-    } catch (error) {
+    } catch (error: any) {
       console.error('Error creating route:', error);
+      
+      // Show detailed error message
+      if (error.response?.data?.errors) {
+        // Handle validation errors
+        const errorMessages = error.response.data.errors.map((err: any) => {
+          const field = err.path || err.param;
+          const message = err.msg;
+          return `${field}: ${message}`;
+        }).join(', ');
+        setErrorMessage(`Validation errors: ${errorMessages}`);
+      } else if (error.response?.data?.message) {
+        setErrorMessage(error.response.data.message);
+      } else if (error.response?.status === 401) {
+        setErrorMessage('You are not authenticated. Please log in again.');
+      } else if (error.response?.status === 403) {
+        setErrorMessage('You do not have permission to create routes. Only Admins and Dispatchers can create routes.');
+      } else {
+        setErrorMessage('Failed to create route. Please check your input and try again.');
+      }
     } finally {
       setIsSubmitting(false);
     }
@@ -1163,7 +1175,9 @@ const AddRouteModal: React.FC<AddRouteModalProps> = ({ onClose, onSave }) => {
     <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50">
       <div className="bg-white rounded-lg p-6 w-full max-w-2xl max-h-[90vh] overflow-y-auto">
         <div className="flex justify-between items-center mb-6">
-          <h2 className="text-xl font-bold text-gray-900">Add New Route</h2>
+          <h2 className="text-xl font-bold text-gray-900">
+            {copyFromRoute ? `Copy Route: ${copyFromRoute.name}` : 'Add New Route'}
+          </h2>
           <button 
             onClick={onClose}
             className="text-gray-400 hover:text-gray-600"
@@ -1172,7 +1186,95 @@ const AddRouteModal: React.FC<AddRouteModalProps> = ({ onClose, onSave }) => {
           </button>
         </div>
         
+        {copyFromRoute && (
+          <div className="mb-4 p-3 bg-blue-50 border border-blue-200 rounded-md">
+            <div className="flex items-center gap-2">
+              <Copy className="w-4 h-4 text-blue-600" />
+              <span className="text-sm text-blue-800">
+                Copying from route: <strong>{copyFromRoute.name}</strong> ({copyFromRoute.origin} → {copyFromRoute.destination})
+              </span>
+            </div>
+            <p className="text-xs text-blue-600 mt-1">
+              Modify the information below to create your new route.
+            </p>
+          </div>
+        )}
+        
+        {!copyFromRoute && (
+          <div className="mb-4">
+            <div className="flex items-center gap-2 mb-2">
+              <label className="block text-sm font-medium text-gray-700">Copy from existing route (optional)</label>
+              <button
+                type="button"
+                onClick={() => setShowRouteSelector(!showRouteSelector)}
+                className="text-sm text-blue-600 hover:text-blue-800 underline"
+              >
+                {showRouteSelector ? 'Hide' : 'Select Route to Copy'}
+              </button>
+            </div>
+            
+            {showRouteSelector && (
+              <div className="relative">
+                <div className="relative">
+                  <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 text-gray-400 w-4 h-4" />
+                  <input
+                    type="text"
+                    placeholder="Search routes by name, origin, or destination..."
+                    className="w-full pl-10 pr-4 py-2 border border-gray-300 rounded-md focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
+                    value={routeSearchInput}
+                    onChange={(e) => setRouteSearchInput(e.target.value)}
+                  />
+                </div>
+                
+                {routeSearchInput && (
+                  <div className="absolute z-10 w-full mt-1 bg-white border border-gray-300 rounded-md shadow-lg max-h-48 overflow-y-auto">
+                    {filteredRoutes.length > 0 ? (
+                      filteredRoutes.slice(0, 10).map((route: Route) => (
+                        <button
+                          key={route.id}
+                          type="button"
+                          onClick={() => handleCopyFromRoute(route)}
+                          className="w-full text-left p-3 hover:bg-blue-50 border-b border-gray-100 last:border-b-0"
+                        >
+                          <div className="font-medium text-gray-900">{route.name}</div>
+                          <div className="text-xs text-gray-500 flex items-center gap-1">
+                            <LocationWithTooltip 
+                              location={route.origin}
+                              address={route.originAddress}
+                              city={route.originCity}
+                              state={route.originState}
+                              zipCode={route.originZipCode}
+                              contact={route.originContact}
+                            /> → <LocationWithTooltip 
+                              location={route.destination}
+                              address={route.destinationAddress}
+                              city={route.destinationCity}
+                              state={route.destinationState}
+                              zipCode={route.destinationZipCode}
+                              contact={route.destinationContact}
+                            /> • {route.distance} miles
+                          </div>
+                        </button>
+                      ))
+                    ) : (
+                      <div className="p-3 text-gray-500 text-sm">
+                        No routes found matching "{routeSearchInput}"
+                      </div>
+                    )}
+                  </div>
+                )}
+              </div>
+            )}
+          </div>
+        )}
+        
         <form onSubmit={handleSubmit} className="space-y-4">
+          {errorMessage && (
+            <div className="bg-red-50 border border-red-200 text-red-700 px-4 py-3 rounded-md">
+              <p className="text-sm">{errorMessage}</p>
+            </div>
+          )}
+          
           <div>
             <label className="block text-sm font-medium text-gray-700 mb-1">Route Name *</label>
             <input

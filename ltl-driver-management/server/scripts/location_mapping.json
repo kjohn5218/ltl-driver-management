@@ -1,0 +1,578 @@
+{
+  "ALBUQUERQUE": {
+    "address": "4200 Ellison St NE",
+    "city": "Albuquerque",
+    "state": "NM",
+    "zipcode": "87109.0"
+  },
+  "ASHTON HILL": {
+    "address": "",
+    "city": "Ashton Hill",
+    "state": "ID",
+    "zipcode": "83420.0"
+  },
+  "ALPINE": {
+    "address": "2407 Old Marathon Rd",
+    "city": "Alpine",
+    "state": "TX",
+    "zipcode": "79831.0"
+  },
+  "AMARILLO": {
+    "address": "715 S Lakeside Dr",
+    "city": "Amarillo",
+    "state": "TX",
+    "zipcode": "79118.0"
+  },
+  "BELFIELD": {
+    "address": "804 US-85",
+    "city": "Belfield",
+    "state": "ND",
+    "zipcode": "58622.0"
+  },
+  "BILLINGS": {
+    "address": "2660 Gabel Rd",
+    "city": "Billings",
+    "state": "MT",
+    "zipcode": "59102.0"
+  },
+  "BISMARCK": {
+    "address": "1841 Hancock Dr",
+    "city": "Bismarck",
+    "state": "ND",
+    "zipcode": "58501.0"
+  },
+  "BOISE": {
+    "address": "2840 S Cole Rd",
+    "city": "Boise",
+    "state": "ID",
+    "zipcode": "83709.0"
+  },
+  "BRAMAN": {
+    "address": "9695 177 N Highway",
+    "city": "Braman",
+    "state": "OK",
+    "zipcode": "74632.0"
+  },
+  "BUTTE": {
+    "address": "2755 Lexington Ave",
+    "city": "Butte",
+    "state": "MT",
+    "zipcode": "59701.0"
+  },
+  "BEAVER": {
+    "address": "1401 S Main St",
+    "city": "Beaver",
+    "state": "UT",
+    "zipcode": "84713.0"
+  },
+  "BURLEY": {
+    "address": "511 Hansen",
+    "city": "Burley",
+    "state": "ID",
+    "zipcode": "83318.0"
+  },
+  "BELGRADE": {
+    "address": "48 Woodbury Ave",
+    "city": "Belgrade",
+    "state": "MT",
+    "zipcode": "59714.0"
+  },
+  "CARLIN": {
+    "address": "791 10th Street",
+    "city": "Carlin",
+    "state": "NV",
+    "zipcode": "89822.0"
+  },
+  "ELK GROVE VILLAGE": {
+    "address": "2401 Arthur Ave",
+    "city": "Elk Grove Village",
+    "state": "IL",
+    "zipcode": "60007.0"
+  },
+  "CICERO": {
+    "address": "975 W Pershing Rd",
+    "city": "Cicero",
+    "state": "IL",
+    "zipcode": "60804.0"
+  },
+  "CASPER": {
+    "address": "150 Walsh Dr",
+    "city": "Casper",
+    "state": "WY",
+    "zipcode": "82609.0"
+  },
+  "CHIRIACO SUMMIT": {
+    "address": "62450 Chiriaco Rd",
+    "city": "Chiriaco Summit",
+    "state": "CA",
+    "zipcode": "92201.0"
+  },
+  "DAYTON": {
+    "address": "12700 West French Lake Rd",
+    "city": "Dayton",
+    "state": "MN",
+    "zipcode": "55369.0"
+  },
+  "COMMERCE CITY": {
+    "address": "6050 E 56th Ave",
+    "city": "Commerce City",
+    "state": "CO",
+    "zipcode": "80022.0"
+  },
+  "IRVING": {
+    "address": "2600 E Pioneer Dr",
+    "city": "Irving",
+    "state": "TX",
+    "zipcode": "75061.0"
+  },
+  "DICKINSON": {
+    "address": "416 23rd Ave E",
+    "city": "Dickinson",
+    "state": "ND",
+    "zipcode": "58601.0"
+  },
+  "DEER LODGE": {
+    "address": "1220 N Main St",
+    "city": "Deer Lodge",
+    "state": "MT",
+    "zipcode": "59722.0"
+  },
+  "DURANGO": {
+    "address": "159 Turner Dr",
+    "city": "Durango",
+    "state": "CO",
+    "zipcode": "81303.0"
+  },
+  "DES MOINES": {
+    "address": "5299 NE 22nd St",
+    "city": "Des Moines",
+    "state": "IA",
+    "zipcode": "50313.0"
+  },
+  "DUBOIS": {
+    "address": "424 W Main St",
+    "city": "Dubois",
+    "state": "ID",
+    "zipcode": "83423.0"
+  },
+  "ESKO": {
+    "address": "7 Progress Dr",
+    "city": "Esko",
+    "state": "MN",
+    "zipcode": "55733.0"
+  },
+  "EL PASO": {
+    "address": "1451 Goodyear Dr",
+    "city": "El Paso",
+    "state": "TX",
+    "zipcode": "79936.0"
+  },
+  "FARGO": {
+    "address": "5669 13th Ave N",
+    "city": "Fargo",
+    "state": "ND",
+    "zipcode": "58102.0"
+  },
+  "FILLMORE": {
+    "address": "965 UT-99",
+    "city": "Fillmore",
+    "state": "UT",
+    "zipcode": "84631.0"
+  },
+  "FOSSTON": {
+    "address": "920 Airport Rd",
+    "city": "Fosston",
+    "state": "MN",
+    "zipcode": "56542.0"
+  },
+  "FRUITA": {
+    "address": "",
+    "city": "Fruita",
+    "state": "CO",
+    "zipcode": "81521.0"
+  },
+  "VAN BUREN": {
+    "address": "323 Access Rd",
+    "city": "Van Buren",
+    "state": "AR",
+    "zipcode": "72956.0"
+  },
+  "GARDEN CITY": {
+    "address": "240 Industrial Dr",
+    "city": "Garden City",
+    "state": "KS",
+    "zipcode": "67846.0"
+  },
+  "GRAND FORKS": {
+    "address": "5028 Gateway Dr",
+    "city": "Grand Forks",
+    "state": "ND",
+    "zipcode": "58201.0"
+  },
+  "GRAND JUNCTION": {
+    "address": "745 23 1/2 Rd",
+    "city": "Grand Junction",
+    "state": "CO",
+    "zipcode": "81505.0"
+  },
+  "GRAND ISLAND": {
+    "address": "5162 S Elk Dr",
+    "city": "Grand Island",
+    "state": "NE",
+    "zipcode": "68801.0"
+  },
+  "GREAT FALLS": {
+    "address": "4144 N Park Trail",
+    "city": "Great Falls",
+    "state": "MT",
+    "zipcode": "59405.0"
+  },
+  "HAYS": {
+    "address": "1198 280th Ave",
+    "city": "Hays",
+    "state": "KS",
+    "zipcode": "67601.0"
+  },
+  "HOLBROOK": {
+    "address": "3747 Express Dr",
+    "city": "Holbrook",
+    "state": "AZ",
+    "zipcode": "86025.0"
+  },
+  "HELENA": {
+    "address": "1450 Carter Dr",
+    "city": "Helena",
+    "state": "MT",
+    "zipcode": "59601.0"
+  },
+  "HOUSTON": {
+    "address": "3340-D Greens Rd, Suite 800",
+    "city": "Houston",
+    "state": "TX",
+    "zipcode": "77032.0"
+  },
+  "IDAHO FALLS": {
+    "address": "1545 W Sunnyside Rd",
+    "city": "Idaho Falls",
+    "state": "ID",
+    "zipcode": "83402.0"
+  },
+  "SPRINGFIELD": {
+    "address": "1454 N Hampton Ave",
+    "city": "Springfield",
+    "state": "MO",
+    "zipcode": "65802.0"
+  },
+  "LONG PRAIRIE": {
+    "address": "22401 County Rd 36",
+    "city": "Long Prairie",
+    "state": "MN",
+    "zipcode": "56347.0"
+  },
+  "JAMESTOWN": {
+    "address": "1910 27th Ave SE",
+    "city": "Jamestown",
+    "state": "ND",
+    "zipcode": "58401.0"
+  },
+  "KANSAS CITY": {
+    "address": "5010 Speaker Rd",
+    "city": "Kansas City",
+    "state": "KS",
+    "zipcode": "66106.0"
+  },
+  "KINGMAN": {
+    "address": "3300 E Andy Devine Ave",
+    "city": "Kingman",
+    "state": "AZ",
+    "zipcode": "86401.0"
+  },
+  "KALISPELL": {
+    "address": "3340 Hwy 2 East",
+    "city": "Kalispell",
+    "state": "MT",
+    "zipcode": "59901.0"
+  },
+  "LAS VEGAS": {
+    "address": "4480 E Cheyenne Ave",
+    "city": "Las Vegas",
+    "state": "NV",
+    "zipcode": "89115.0"
+  },
+  "LEXINGTON": {
+    "address": "",
+    "city": "Lexington",
+    "state": "NE",
+    "zipcode": "nan"
+  },
+  "LIMA": {
+    "address": "",
+    "city": "Lima",
+    "state": "MT",
+    "zipcode": "59739.0"
+  },
+  "LITCHFIELD": {
+    "address": "520 Polydome Drive",
+    "city": "Litchfield",
+    "state": "MN",
+    "zipcode": "55355.0"
+  },
+  "ROGERS": {
+    "address": "12999 Wilfred Ln N",
+    "city": "Rogers",
+    "state": "MN",
+    "zipcode": "55374.0"
+  },
+  "MIDLAND": {
+    "address": "3302 Garden City Highway",
+    "city": "Midland",
+    "state": "TX",
+    "zipcode": "79706.0"
+  },
+  "PLANKINTON": {
+    "address": "25471 US-281",
+    "city": "Plankinton",
+    "state": "SD",
+    "zipcode": "57368.0"
+  },
+  "MINOT": {
+    "address": "2108 20th Ave SW",
+    "city": "Minot",
+    "state": "ND",
+    "zipcode": "58701.0"
+  },
+  "MISSOULA": {
+    "address": "6201 Expressway",
+    "city": "Missoula",
+    "state": "MT",
+    "zipcode": "59808.0"
+  },
+  "EAGAN": {
+    "address": "2750 Lexington Ave S",
+    "city": "Eagan",
+    "state": "MN",
+    "zipcode": "55121.0"
+  },
+  "NEW CASTLE": {
+    "address": "6299 County Rd 335",
+    "city": "New Castle",
+    "state": "CO",
+    "zipcode": "81647.0"
+  },
+  "PERU": {
+    "address": "2930 May Road",
+    "city": "Peru",
+    "state": "IL",
+    "zipcode": "61354.0"
+  },
+  "NORTH PLATTE": {
+    "address": "301 E Fremont Dr",
+    "city": "North Platte",
+    "state": "NE",
+    "zipcode": "69101.0"
+  },
+  "OAKLEY": {
+    "address": "1001 US-40",
+    "city": "Oakley",
+    "state": "KS",
+    "zipcode": "67748.0"
+  },
+  "OKLAHOMA CITY": {
+    "address": "5400 SW 29th St",
+    "city": "Oklahoma City",
+    "state": "OK",
+    "zipcode": "73179.0"
+  },
+  "LA VISTA": {
+    "address": "12021 Roberts Rd",
+    "city": "La Vista",
+    "state": "NE",
+    "zipcode": "68128.0"
+  },
+  "RANCHO CUCAMONGA": {
+    "address": "9278 Charles Smith Ave",
+    "city": "Rancho Cucamonga",
+    "state": "CA",
+    "zipcode": "91730.0"
+  },
+  "CHENOA": {
+    "address": "501 W E Cemetery Ave",
+    "city": "Chenoa",
+    "state": "IL",
+    "zipcode": "61726.0"
+  },
+  "OSBOURNE BRIDGE": {
+    "address": "",
+    "city": "Osbourne Bridge",
+    "state": "ID",
+    "zipcode": "83429.0"
+  },
+  "OSKALOOSA": {
+    "address": "2201 A Ave W",
+    "city": "Oskaloosa",
+    "state": "IA",
+    "zipcode": "52577.0"
+  },
+  "PHOENIX": {
+    "address": "1845 N 27th Ave",
+    "city": "Phoenix",
+    "state": "AZ",
+    "zipcode": "85009.0"
+  },
+  "PIERRE": {
+    "address": "1875 N Airport Rd",
+    "city": "Pierre",
+    "state": "SD",
+    "zipcode": "57501.0"
+  },
+  "PERRY": {
+    "address": "2805 Fir St",
+    "city": "Perry",
+    "state": "OK",
+    "zipcode": "73077.0"
+  },
+  "PUEBLO": {
+    "address": "400 W D St",
+    "city": "Pueblo",
+    "state": "CO",
+    "zipcode": "81003.0"
+  },
+  "SPARKS": {
+    "address": "985 Glendale Ave",
+    "city": "Sparks",
+    "state": "NV",
+    "zipcode": "89431.0"
+  },
+  "ROSWELL": {
+    "address": "601 E College Blvd",
+    "city": "Roswell",
+    "state": "NM",
+    "zipcode": "88201.0"
+  },
+  "RAPID CITY": {
+    "address": "540 Deadwood Ave",
+    "city": "Rapid City",
+    "state": "SD",
+    "zipcode": "57702.0"
+  },
+  "ABILENE": {
+    "address": "909 N Van Buren St",
+    "city": "Abilene",
+    "state": "KS",
+    "zipcode": "67410.0"
+  },
+  "GERING": {
+    "address": "1225 Country Club Rd",
+    "city": "Gering",
+    "state": "NE",
+    "zipcode": "69341.0"
+  },
+  "STOCKTON": {
+    "address": "2800 S El Dorado St",
+    "city": "Stockton",
+    "state": "CA",
+    "zipcode": "95206.0"
+  },
+  "SOUTH FORK": {
+    "address": "30279 US-160",
+    "city": "South Fork",
+    "state": "CO",
+    "zipcode": "81154.0"
+  },
+  "SAGE JUNCTION": {
+    "address": "",
+    "city": "Sage Junction",
+    "state": "ID",
+    "zipcode": "83444.0"
+  },
+  "HURRICANE": {
+    "address": "321 N Old Hwy 91",
+    "city": "Hurricane",
+    "state": "UT",
+    "zipcode": "84737.0"
+  },
+  "NORTH SALT LAKE": {
+    "address": "185 S Redwood Rd",
+    "city": "North Salt Lake",
+    "state": "UT",
+    "zipcode": "84054.0"
+  },
+  "SNOWVILLE": {
+    "address": "90 S Stone Rd",
+    "city": "Snowville",
+    "state": "UT",
+    "zipcode": "84336.0"
+  },
+  "ST LOUIS": {
+    "address": "164 NW Industrial Ct",
+    "city": "St Louis",
+    "state": "MO",
+    "zipcode": "63044.0"
+  },
+  "SIOUX FALLS": {
+    "address": "1508 E Robur Dr",
+    "city": "Sioux Falls",
+    "state": "SD",
+    "zipcode": "57104.0"
+  },
+  "TRINIDAD": {
+    "address": "2704 Freedom Rd",
+    "city": "Trinidad",
+    "state": "CO",
+    "zipcode": "81082.0"
+  },
+  "TONOPAH": {
+    "address": "",
+    "city": "Tonopah",
+    "state": "NV",
+    "zipcode": "89049.0"
+  },
+  "TUCSON": {
+    "address": "3350 E Ajo Way",
+    "city": "Tucson",
+    "state": "AZ",
+    "zipcode": "85713.0"
+  },
+  "VILLA GROVE": {
+    "address": "34108 US Hwy 285",
+    "city": "Villa Grove",
+    "state": "CO",
+    "zipcode": "81155.0"
+  },
+  "WAKEENEY": {
+    "address": "745 S 1st St",
+    "city": "Wakeeney",
+    "state": "KS",
+    "zipcode": "67672.0"
+  },
+  "WAMSUTTER": {
+    "address": "314 Kelly Rd",
+    "city": "Wamsutter",
+    "state": "WY",
+    "zipcode": "82336.0"
+  },
+  "WICKENBURG": {
+    "address": "",
+    "city": "Wickenburg",
+    "state": "AZ",
+    "zipcode": "85358.0"
+  },
+  "WICHITA": {
+    "address": "4931 S Victoria St",
+    "city": "Wichita",
+    "state": "KS",
+    "zipcode": "67216.0"
+  },
+  "WILLMAR": {
+    "address": "2508 Airport Dr SW",
+    "city": "Willmar",
+    "state": "MN",
+    "zipcode": "56201.0"
+  },
+  "WATERTOWN": {
+    "address": "600 Pheasant Ridge Dr",
+    "city": "Watertown",
+    "state": "SD",
+    "zipcode": "57201.0"
+  }
+}
