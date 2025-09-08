@@ -102,3 +102,48 @@ export const sendInsuranceExpiryReminder = async (carrier: Carrier) => {
     console.error('Failed to send insurance reminder:', error);
   }
 };
+
+export const sendRateConfirmationEmail = async (
+  booking: BookingWithRelations,
+  pdfAttachment: Buffer,
+  fileName: string
+) => {
+  try {
+    if (!booking.carrier || !booking.carrier.email) return;
+
+    const shipmentNumber = `CCFS${booking.id.toString().padStart(5, '0')}`;
+    
+    const mailOptions = {
+      from: 'ratecon@ccfs.com',
+      replyTo: 'ratecon@ccfs.com',
+      to: booking.carrier.email,
+      subject: `Rate Confirmation - ${shipmentNumber}`,
+      html: `
+        <h2>Rate Confirmation</h2>
+        <p>Dear ${booking.carrier.name},</p>
+        <p>Please find attached the rate confirmation for your upcoming shipment:</p>
+        <ul>
+          <li><strong>Shipment #:</strong> ${shipmentNumber}</li>
+          <li><strong>Route:</strong> ${booking.route.origin} to ${booking.route.destination}</li>
+          <li><strong>Date:</strong> ${booking.bookingDate.toLocaleDateString()}</li>
+          <li><strong>Rate:</strong> $${booking.rate}</li>
+        </ul>
+        <p>Please review the attached rate confirmation and contact us if you have any questions.</p>
+        <p>Best regards,<br>CrossCounty Freight Solutions</p>
+      `,
+      attachments: [
+        {
+          filename: fileName,
+          content: pdfAttachment,
+          contentType: 'application/pdf'
+        }
+      ]
+    };
+
+    await transporter.sendMail(mailOptions);
+    console.log(`Rate confirmation sent to ${booking.carrier.email}`);
+  } catch (error) {
+    console.error('Failed to send rate confirmation:', error);
+    throw error;
+  }
+};

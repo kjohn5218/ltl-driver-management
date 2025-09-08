@@ -1,25 +1,28 @@
 <svg width="200" height="80" viewBox="0 0 200 80" xmlns="http://www.w3.org/2000/svg">
-  <!-- Red Bull/Bison silhouette -->
+  <!-- Red Buffalo/Bison silhouette -->
   <g fill="#B91C1C">
-    <!-- Body -->
-    <ellipse cx="50" cy="45" rx="30" ry="20" />
+    <!-- Main body -->
+    <path d="M25 35 Q35 25 55 35 Q75 30 75 40 Q75 55 65 60 Q45 65 25 55 Q15 45 25 35Z" />
     <!-- Head -->
-    <circle cx="25" cy="40" r="15" />
+    <path d="M10 30 Q5 25 8 20 Q15 15 25 20 Q30 25 25 35 Q20 40 15 35 Q10 35 10 30Z" />
     <!-- Horns -->
-    <path d="M15 35 Q10 25 15 20 M20 32 Q15 22 20 17" stroke="#B91C1C" stroke-width="3" fill="none"/>
-    <!-- Legs -->
-    <rect x="35" y="50" width="6" height="20" />
-    <rect x="45" y="50" width="6" height="20" />
-    <rect x="55" y="50" width="6" height="20" />
-    <rect x="65" y="50" width="6" height="20" />
+    <path d="M12 25 Q8 18 10 15 Q12 12 15 18" fill="#B91C1C"/>
+    <path d="M20 22 Q16 15 18 12 Q20 9 23 15" fill="#B91C1C"/>
+    <!-- Front legs -->
+    <rect x="20" y="50" width="4" height="15" />
+    <rect x="26" y="50" width="4" height="15" />
+    <!-- Back legs -->
+    <rect x="50" y="50" width="4" height="15" />
+    <rect x="56" y="50" width="4" height="15" />
+    <!-- Tail -->
+    <path d="M65 45 Q70 42 72 48 Q70 52 65 50" />
+    <!-- Hump -->
+    <path d="M30 30 Q40 22 50 30 Q45 35 35 32 Q30 30 30 30Z" />
   </g>
   
   <!-- CCFS Text -->
   <text x="90" y="40" font-family="Arial, sans-serif" font-size="36" font-weight="bold" fill="#1E40AF">CCFS</text>
   
-  <!-- Subtitle -->
-  <text x="90" y="60" font-family="Arial, sans-serif" font-size="12" fill="#1E40AF">NORTH AMERICAN</text>
-  
   <!-- LTL LOGISTICS text -->
-  <text x="90" y="75" font-family="Arial, sans-serif" font-size="10" fill="#666666">LTL • LOGISTICS</text>
+  <text x="90" y="60" font-family="Arial, sans-serif" font-size="14" fill="#1E40AF">LTL • LOGISTICS</text>
 </svg>

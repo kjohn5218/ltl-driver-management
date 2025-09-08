@@ -169,7 +169,7 @@ export const RateConfirmation: React.FC<RateConfirmationProps> = ({ booking, shi
 
       {/* Pickup Location */}
       <div className="border-2 border-black mb-4">
-        <div className="bg-black text-white p-2 text-center font-bold">Pickup Location (Stop # 1)</div>
+        <div className="bg-black text-white p-2 text-center font-bold">Pickup Location (Leg 1)</div>
         <div className="p-4">
           <div className="grid grid-cols-2 gap-4">
             <div>
@@ -198,7 +198,7 @@ export const RateConfirmation: React.FC<RateConfirmationProps> = ({ booking, shi
 
       {/* Drop Location */}
       <div className="border-2 border-black mb-4">
-        <div className="bg-black text-white p-2 text-center font-bold">Drop Location (Stop # 2)</div>
+        <div className="bg-black text-white p-2 text-center font-bold">Drop Location (Leg 2)</div>
         <div className="p-4">
           <div className="grid grid-cols-2 gap-4">
             <div>
