@@ -588,6 +588,42 @@ interface BookingViewModalProps {
 }
 
 const BookingViewModal: React.FC<BookingViewModalProps> = ({ booking, onClose, getStatusBadge, onRateConfirmation }) => {
+  // Fetch routes for distance lookup
+  const { data: routesData } = useQuery({
+    queryKey: ['routes'],
+    queryFn: async () => {
+      const response = await api.get('/routes?limit=5000'); // Fetch all routes
+      return response.data;
+    }
+  });
+
+  // Helper function to get distance for a leg by looking up route in database
+  const getDistanceForLeg = (origin: string, destination: string): number => {
+    if (!routesData?.routes) {
+      console.warn('Routes data not available for distance lookup');
+      return 100; // Default fallback
+    }
+    
+    // Find matching route by origin and destination
+    const matchingRoute = routesData.routes.find((route: any) => {
+      const routeOrigin = route.origin?.toLowerCase().trim();
+      const routeDestination = route.destination?.toLowerCase().trim();
+      const legOrigin = origin.toLowerCase().trim();
+      const legDestination = destination.toLowerCase().trim();
+      
+      return routeOrigin === legOrigin && routeDestination === legDestination;
+    });
+    
+    if (matchingRoute && matchingRoute.distance) {
+      const distance = Number(matchingRoute.distance);
+      console.log(`Found route distance for ${origin} → ${destination}: ${distance} miles`);
+      return distance;
+    }
+    
+    console.warn(`No route found for ${origin} → ${destination}, using default distance`);
+    return 100; // Default distance if route not found
+  };
+
   return (
     <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50">
       <div className="bg-white rounded-lg p-6 w-full max-w-2xl max-h-[90vh] overflow-y-auto">
@@ -646,7 +682,7 @@ const BookingViewModal: React.FC<BookingViewModalProps> = ({ booking, onClose, g
             <label className="block text-sm font-medium text-gray-700 mb-2">Route Information</label>
             <div className="bg-gray-50 p-4 rounded-lg space-y-3">
               {(() => {
-                const multiLegInfo = parseMultiLegBooking(booking.notes);
+                const multiLegInfo = parseMultiLegBooking(booking.notes || null);
                 return multiLegInfo ? (
                   // Multi-leg booking display
                   <div className="space-y-3">
@@ -657,18 +693,33 @@ const BookingViewModal: React.FC<BookingViewModalProps> = ({ booking, onClose, g
                     
                     {/* Show all legs */}
                     <div className="space-y-2">
-                      {multiLegInfo.map((leg: any, index: number) => (
-                        <div key={index} className="bg-white p-3 rounded border border-gray-200">
-                          <div className="flex justify-between items-center">
-                            <div className="font-medium text-sm text-gray-900">
-                              Leg {leg.legNumber}: {leg.origin} → {leg.destination}
-                            </div>
-                            <div className="text-xs text-gray-500">
-                              ${leg.rate}
+                      {multiLegInfo.map((leg: any, index: number) => {
+                        const legDistance = getDistanceForLeg(leg.origin, leg.destination);
+                        return (
+                          <div key={index} className="bg-white p-3 rounded border border-gray-200">
+                            <div className="flex justify-between items-center">
+                              <div className="font-medium text-sm text-gray-900">
+                                Leg {leg.legNumber}: {leg.origin} → {leg.destination}
+                              </div>
+                              <div className="text-right">
+                                <div className="text-xs text-gray-500">
+                                  {legDistance} miles
+                                </div>
+                                <div className="text-xs text-gray-500">
+                                  ${leg.rate}
+                                </div>
+                              </div>
                             </div>
                           </div>
-                        </div>
-                      ))}
+                        );
+                      })}
+                    </div>
+                    
+                    {/* Total distance */}
+                    <div className="text-xs text-gray-500 pt-2 border-t border-gray-200">
+                      Total Distance: {multiLegInfo.reduce((total: number, leg: any) => {
+                        return total + getDistanceForLeg(leg.origin, leg.destination);
+                      }, 0)} miles
                     </div>
                   </div>
                 ) : booking.route ? (
@@ -978,6 +1029,9 @@ const BookingEditModal: React.FC<BookingEditModalProps> = ({ booking, onClose, o
       return 100; // Default fallback
     }
     
+    // Debug logging
+    console.log(`Looking for route: ${origin} → ${destination}`);
+    
     // Find matching route by origin and destination
     const matchingRoute = routesData.routes.find((route: any) => {
       const routeOrigin = route.origin?.toLowerCase().trim();
@@ -985,16 +1039,34 @@ const BookingEditModal: React.FC<BookingEditModalProps> = ({ booking, onClose, o
       const legOrigin = origin.toLowerCase().trim();
       const legDestination = destination.toLowerCase().trim();
       
-      return routeOrigin === legOrigin && routeDestination === legDestination;
+      const match = routeOrigin === legOrigin && routeDestination === legDestination;
+      return match;
     });
     
     if (matchingRoute && matchingRoute.distance) {
       const distance = Number(matchingRoute.distance);
-      console.log(`Found route distance for ${origin} → ${destination}: ${distance} miles`);
+      console.log(`✓ Found route distance for ${origin} → ${destination}: ${distance} miles`);
       return distance;
     }
     
-    console.warn(`No route found for ${origin} → ${destination}, using default distance`);
+    // Try fuzzy matching if exact match fails
+    const fuzzyMatch = routesData.routes.find((route: any) => {
+      const routeOrigin = route.origin?.toLowerCase();
+      const routeDestination = route.destination?.toLowerCase();
+      const legOrigin = origin.toLowerCase();
+      const legDestination = destination.toLowerCase();
+      
+      return (routeOrigin?.includes(legOrigin) || legOrigin?.includes(routeOrigin)) &&
+             (routeDestination?.includes(legDestination) || legDestination?.includes(routeDestination));
+    });
+    
+    if (fuzzyMatch && fuzzyMatch.distance) {
+      const distance = Number(fuzzyMatch.distance);
+      console.log(`⚠️ Found fuzzy match for ${origin} → ${destination}: ${fuzzyMatch.origin} → ${fuzzyMatch.destination} (${distance} miles)`);
+      return distance;
+    }
+    
+    console.warn(`❌ No route found for ${origin} → ${destination}, using default distance`);
     return 100; // Default distance if route not found
   };
 
@@ -1053,6 +1125,17 @@ const BookingEditModal: React.FC<BookingEditModalProps> = ({ booking, onClose, o
       return sum + legRate;
     }, 0);
     setFormData(prev => ({ ...prev, rate: Number(totalRate.toFixed(2)) }));
+    
+    // Update notes with new leg information
+    updateMultiLegNotes(updatedLegs);
+  };
+
+  // Update leg addresses
+  const updateLegAddress = (legIndex: number, field: 'origin' | 'destination', newValue: string) => {
+    const updatedLegs = editableLegs.map((leg, index) => 
+      index === legIndex ? { ...leg, [field]: newValue } : leg
+    );
+    setEditableLegs(updatedLegs);
     
     // Update notes with new leg information
     updateMultiLegNotes(updatedLegs);
@@ -1566,13 +1649,40 @@ const BookingEditModal: React.FC<BookingEditModalProps> = ({ booking, onClose, o
               {editableLegs.map((leg, index) => {
                 const distance = getDistanceForLeg(leg.origin, leg.destination);
                 return (
-                  <div key={index} className="bg-white p-3 rounded border mb-2">
+                  <div key={index} className="bg-white p-4 rounded border mb-3">
+                    <div className="mb-3">
+                      <div className="text-sm font-medium text-gray-800 mb-2">
+                        Leg {leg.legNumber}
+                      </div>
+                      
+                      {/* Origin and Destination Address Fields */}
+                      <div className="grid grid-cols-2 gap-4 mb-3">
+                        <div>
+                          <label className="block text-xs font-medium text-gray-600 mb-1">Origin</label>
+                          <input
+                            type="text"
+                            value={leg.origin}
+                            onChange={(e) => updateLegAddress(index, 'origin', e.target.value)}
+                            className="w-full px-2 py-1 border border-gray-300 rounded text-sm focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
+                            placeholder="Enter origin address..."
+                          />
+                        </div>
+                        <div>
+                          <label className="block text-xs font-medium text-gray-600 mb-1">Destination</label>
+                          <input
+                            type="text"
+                            value={leg.destination}
+                            onChange={(e) => updateLegAddress(index, 'destination', e.target.value)}
+                            className="w-full px-2 py-1 border border-gray-300 rounded text-sm focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
+                            placeholder="Enter destination address..."
+                          />
+                        </div>
+                      </div>
+                    </div>
+                    
                     <div className="flex items-center justify-between">
                       <div className="flex-1">
-                        <div className="text-sm font-medium text-gray-800">
-                          Leg {leg.legNumber}: {leg.origin} → {leg.destination}
-                        </div>
-                        <div className="text-xs text-gray-500 mt-1">
+                        <div className="text-xs text-gray-500">
                           Distance: {distance} miles
                           {formData.rateType !== 'FLAT_RATE' && (
                             <span className="ml-2">
