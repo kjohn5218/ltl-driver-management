@@ -692,12 +692,22 @@ const BookingViewModal: React.FC<BookingViewModalProps> = ({ booking, onClose, g
                     </div>
                     
                     {/* Show all legs */}
-                    <div className="space-y-2">
+                    <div className="space-y-3">
                       {multiLegInfo.map((leg: any, index: number) => {
                         const legDistance = getDistanceForLeg(leg.origin, leg.destination);
+                        
+                        // Find route details for this leg
+                        const legRoute = routesData?.routes.find((route: any) => {
+                          const routeOrigin = route.origin?.toLowerCase().trim();
+                          const routeDestination = route.destination?.toLowerCase().trim();
+                          const legOrigin = leg.origin.toLowerCase().trim();
+                          const legDestination = leg.destination.toLowerCase().trim();
+                          return routeOrigin === legOrigin && routeDestination === legDestination;
+                        });
+                        
                         return (
-                          <div key={index} className="bg-white p-3 rounded border border-gray-200">
-                            <div className="flex justify-between items-center">
+                          <div key={index} className="bg-white p-4 rounded border border-gray-200">
+                            <div className="flex justify-between items-center mb-3">
                               <div className="font-medium text-sm text-gray-900">
                                 Leg {leg.legNumber}: {leg.origin} → {leg.destination}
                               </div>
@@ -710,6 +720,53 @@ const BookingViewModal: React.FC<BookingViewModalProps> = ({ booking, onClose, g
                                 </div>
                               </div>
                             </div>
+                            
+                            {/* Detailed address information if available */}
+                            {legRoute && (
+                              <div className="grid grid-cols-1 md:grid-cols-2 gap-4 text-xs">
+                                {/* Origin Information */}
+                                <div className="space-y-1">
+                                  <h5 className="font-medium text-gray-700">Origin</h5>
+                                  <div className="text-gray-600 space-y-1">
+                                    <div className="font-medium">{legRoute.origin}</div>
+                                    {legRoute.originAddress && (
+                                      <div>{legRoute.originAddress}</div>
+                                    )}
+                                    {(legRoute.originCity || legRoute.originState || legRoute.originZipCode) && (
+                                      <div>
+                                        {legRoute.originCity && `${legRoute.originCity}, `}
+                                        {legRoute.originState && `${legRoute.originState} `}
+                                        {legRoute.originZipCode}
+                                      </div>
+                                    )}
+                                    {legRoute.originContact && (
+                                      <div className="text-xs text-gray-500">Contact: {legRoute.originContact}</div>
+                                    )}
+                                  </div>
+                                </div>
+                                
+                                {/* Destination Information */}
+                                <div className="space-y-1">
+                                  <h5 className="font-medium text-gray-700">Destination</h5>
+                                  <div className="text-gray-600 space-y-1">
+                                    <div className="font-medium">{legRoute.destination}</div>
+                                    {legRoute.destinationAddress && (
+                                      <div>{legRoute.destinationAddress}</div>
+                                    )}
+                                    {(legRoute.destinationCity || legRoute.destinationState || legRoute.destinationZipCode) && (
+                                      <div>
+                                        {legRoute.destinationCity && `${legRoute.destinationCity}, `}
+                                        {legRoute.destinationState && `${legRoute.destinationState} `}
+                                        {legRoute.destinationZipCode}
+                                      </div>
+                                    )}
+                                    {legRoute.destinationContact && (
+                                      <div className="text-xs text-gray-500">Contact: {legRoute.destinationContact}</div>
+                                    )}
+                                  </div>
+                                </div>
+                              </div>
+                            )}
                           </div>
                         );
                       })}
@@ -1049,6 +1106,20 @@ const BookingEditModal: React.FC<BookingEditModalProps> = ({ booking, onClose, o
       return distance;
     }
     
+    // For multi-leg bookings, if this is a round trip and we know the total distance,
+    // try to calculate proportional distances
+    if (booking.route?.distance && multiLegInfo && multiLegInfo.length === 2) {
+      const totalDistance = Number(booking.route.distance);
+      // If it's a round trip (same origin/destination reversed), split distance equally
+      if (multiLegInfo.length === 2 && 
+          multiLegInfo[0].origin === multiLegInfo[1].destination && 
+          multiLegInfo[0].destination === multiLegInfo[1].origin) {
+        const legDistance = totalDistance / 2;
+        console.log(`✓ Round trip detected, splitting ${totalDistance} miles equally: ${legDistance} miles per leg`);
+        return legDistance;
+      }
+    }
+    
     // Try fuzzy matching if exact match fails
     const fuzzyMatch = routesData.routes.find((route: any) => {
       const routeOrigin = route.origin?.toLowerCase();
@@ -1056,6 +1127,7 @@ const BookingEditModal: React.FC<BookingEditModalProps> = ({ booking, onClose, o
       const legOrigin = origin.toLowerCase();
       const legDestination = destination.toLowerCase();
       
+      // Fixed fuzzy matching logic
       return (routeOrigin?.includes(legOrigin) || legOrigin?.includes(routeOrigin)) &&
              (routeDestination?.includes(legDestination) || legDestination?.includes(routeDestination));
     });
@@ -1067,6 +1139,10 @@ const BookingEditModal: React.FC<BookingEditModalProps> = ({ booking, onClose, o
     }
     
     console.warn(`❌ No route found for ${origin} → ${destination}, using default distance`);
+    console.log(`Debug info: Total routes available: ${routesData.routes.length}`);
+    if (routesData.routes.length > 0) {
+      console.log(`Sample routes:`, routesData.routes.slice(0, 3).map((r: any) => `${r.origin} → ${r.destination} (${r.distance} miles)`));
+    }
     return 100; // Default distance if route not found
   };
 
@@ -1326,19 +1402,81 @@ const BookingEditModal: React.FC<BookingEditModalProps> = ({ booking, onClose, o
                   </div>
                   
                   {/* Show all legs */}
-                  <div className="space-y-2">
+                  <div className="space-y-3">
                     {multiLegInfo.map((leg: any, index: number) => {
                       const legDistance = getDistanceForLeg(leg.origin, leg.destination);
+                      
+                      // Find route details for this leg
+                      const legRoute = routesData?.routes.find((route: any) => {
+                        const routeOrigin = route.origin?.toLowerCase().trim();
+                        const routeDestination = route.destination?.toLowerCase().trim();
+                        const legOrigin = leg.origin.toLowerCase().trim();
+                        const legDestination = leg.destination.toLowerCase().trim();
+                        return routeOrigin === legOrigin && routeDestination === legDestination;
+                      });
+                      
                       return (
-                        <div key={index} className="bg-white p-3 rounded border border-gray-200">
-                          <div className="flex justify-between items-center">
+                        <div key={index} className="bg-white p-4 rounded border border-gray-200">
+                          <div className="flex justify-between items-center mb-3">
                             <div className="font-medium text-sm text-gray-900">
                               Leg {leg.legNumber}: {leg.origin} → {leg.destination}
                             </div>
-                            <div className="text-xs text-gray-500">
-                              {legDistance} miles
+                            <div className="text-right">
+                              <div className="text-xs text-gray-500">
+                                {legDistance} miles
+                              </div>
+                              <div className="text-xs text-gray-500">
+                                ${leg.rate}
+                              </div>
                             </div>
                           </div>
+                          
+                          {/* Detailed address information if available */}
+                          {legRoute && (
+                            <div className="grid grid-cols-1 md:grid-cols-2 gap-4 text-xs">
+                              {/* Origin Information */}
+                              <div className="space-y-1">
+                                <h5 className="font-medium text-gray-700">Origin</h5>
+                                <div className="text-gray-600 space-y-1">
+                                  <div className="font-medium">{legRoute.origin}</div>
+                                  {legRoute.originAddress && (
+                                    <div>{legRoute.originAddress}</div>
+                                  )}
+                                  {(legRoute.originCity || legRoute.originState || legRoute.originZipCode) && (
+                                    <div>
+                                      {legRoute.originCity && `${legRoute.originCity}, `}
+                                      {legRoute.originState && `${legRoute.originState} `}
+                                      {legRoute.originZipCode}
+                                    </div>
+                                  )}
+                                  {legRoute.originContact && (
+                                    <div className="text-xs text-gray-500">Contact: {legRoute.originContact}</div>
+                                  )}
+                                </div>
+                              </div>
+                              
+                              {/* Destination Information */}
+                              <div className="space-y-1">
+                                <h5 className="font-medium text-gray-700">Destination</h5>
+                                <div className="text-gray-600 space-y-1">
+                                  <div className="font-medium">{legRoute.destination}</div>
+                                  {legRoute.destinationAddress && (
+                                    <div>{legRoute.destinationAddress}</div>
+                                  )}
+                                  {(legRoute.destinationCity || legRoute.destinationState || legRoute.destinationZipCode) && (
+                                    <div>
+                                      {legRoute.destinationCity && `${legRoute.destinationCity}, `}
+                                      {legRoute.destinationState && `${legRoute.destinationState} `}
+                                      {legRoute.destinationZipCode}
+                                    </div>
+                                  )}
+                                  {legRoute.destinationContact && (
+                                    <div className="text-xs text-gray-500">Contact: {legRoute.destinationContact}</div>
+                                  )}
+                                </div>
+                              </div>
+                            </div>
+                          )}
                         </div>
                       );
                     })}
