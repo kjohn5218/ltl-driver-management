@@ -806,7 +806,14 @@ const BookingEditModal: React.FC<BookingEditModalProps> = ({ booking, onClose, o
   // Initialize form data with better handling of rate type
   const initializeFormData = useCallback(() => {
     const initialRateType = booking.rateType; // Don't default to FLAT_RATE
-    console.log('Initializing with rate type:', initialRateType, 'from booking:', booking.rateType);
+    console.log('=== BOOKING INITIALIZATION DEBUG ===');
+    console.log('Full booking object:', booking);
+    console.log('Rate type from booking.rateType:', booking.rateType);
+    console.log('Base rate from booking.baseRate:', booking.baseRate);
+    console.log('FSC rate from booking.fscRate:', booking.fscRate);
+    console.log('Final rate from booking.rate:', booking.rate);
+    console.log('Calculated baseRate fallback:', Number(booking.baseRate) || Number(booking.rate) || 0);
+    console.log('========================================');
     
     return {
       carrierId: booking.carrierId,
@@ -871,6 +878,15 @@ const BookingEditModal: React.FC<BookingEditModalProps> = ({ booking, onClose, o
     }
   });
 
+  // Fetch routes for distance lookup
+  const { data: routesData } = useQuery({
+    queryKey: ['routes'],
+    queryFn: async () => {
+      const response = await api.get('/routes?limit=5000'); // Fetch all routes
+      return response.data;
+    }
+  });
+
   // Calculate total rate based on rate type and values
   const calculateTotalRate = (rateType: string, baseRate: number, fscRate: number) => {
     const validBaseRate = Number(baseRate) || 0;
@@ -924,22 +940,42 @@ const BookingEditModal: React.FC<BookingEditModalProps> = ({ booking, onClose, o
     }
   };
 
-  // Helper function to get distance for a leg (simplified - in real implementation, you'd lookup route distance)
+  // Helper function to get distance for a leg by looking up route in database
   const getDistanceForLeg = (origin: string, destination: string): number => {
-    // For now, return a default distance. In a real implementation, you'd:
-    // 1. Look up the route in your routes database
-    // 2. Or calculate distance using coordinates
-    // 3. Or parse it from the route name if it includes distance
-    return 100; // Default distance
+    if (!routesData?.routes) {
+      console.warn('Routes data not available for distance lookup');
+      return 100; // Default fallback
+    }
+    
+    // Find matching route by origin and destination
+    const matchingRoute = routesData.routes.find((route: any) => {
+      const routeOrigin = route.origin?.toLowerCase().trim();
+      const routeDestination = route.destination?.toLowerCase().trim();
+      const legOrigin = origin.toLowerCase().trim();
+      const legDestination = destination.toLowerCase().trim();
+      
+      return routeOrigin === legOrigin && routeDestination === legDestination;
+    });
+    
+    if (matchingRoute && matchingRoute.distance) {
+      const distance = Number(matchingRoute.distance);
+      console.log(`Found route distance for ${origin} → ${destination}: ${distance} miles`);
+      return distance;
+    }
+    
+    console.warn(`No route found for ${origin} → ${destination}, using default distance`);
+    return 100; // Default distance if route not found
   };
 
   // Recalculate multi-leg rates when rate type or base rate changes
   useEffect(() => {
-    if (multiLegInfo && editableLegs.length > 0 && formData.rateType !== 'FLAT_RATE') {
+    if (multiLegInfo && editableLegs.length > 0 && formData.rateType !== 'FLAT_RATE' && routesData?.routes) {
+      console.log('Recalculating multi-leg rates with actual route distances...');
       const updatedLegs = editableLegs.map(leg => {
         // Calculate new rate for this leg based on the current rate type and base rate
         const distance = getDistanceForLeg(leg.origin, leg.destination);
         const newRate = calculateLegRate(formData.rateType, formData.baseRate, formData.fscRate, distance);
+        console.log(`Leg ${leg.legNumber} (${leg.origin} → ${leg.destination}): ${distance} miles × $${formData.baseRate}/mile = $${newRate.toFixed(2)}`);
         return {
           ...leg,
           rate: newRate.toFixed(2)
@@ -953,12 +989,13 @@ const BookingEditModal: React.FC<BookingEditModalProps> = ({ booking, onClose, o
         const legRate = parseFloat(leg.rate) || 0;
         return sum + legRate;
       }, 0);
+      console.log(`Multi-leg total rate calculated: $${totalRate.toFixed(2)}`);
       setFormData(prev => ({ ...prev, rate: Number(totalRate.toFixed(2)) }));
       
       // Update notes with new leg information
       updateMultiLegNotes(updatedLegs);
     }
-  }, [formData.rateType, formData.baseRate, formData.fscRate, multiLegInfo]);
+  }, [formData.rateType, formData.baseRate, formData.fscRate, multiLegInfo, routesData]);
 
   // Update leg rate
   const updateLegRate = (legIndex: number, newRate: string) => {
@@ -1445,29 +1482,42 @@ const BookingEditModal: React.FC<BookingEditModalProps> = ({ booking, onClose, o
               </div>
 
               {/* Individual leg rates */}
-              {editableLegs.map((leg, index) => (
-                <div key={index} className="bg-white p-3 rounded border mb-2">
-                  <div className="flex items-center justify-between">
-                    <div className="flex-1">
-                      <div className="text-sm font-medium text-gray-800">
-                        Leg {leg.legNumber}: {leg.origin} → {leg.destination}
+              {editableLegs.map((leg, index) => {
+                const distance = getDistanceForLeg(leg.origin, leg.destination);
+                return (
+                  <div key={index} className="bg-white p-3 rounded border mb-2">
+                    <div className="flex items-center justify-between">
+                      <div className="flex-1">
+                        <div className="text-sm font-medium text-gray-800">
+                          Leg {leg.legNumber}: {leg.origin} → {leg.destination}
+                        </div>
+                        <div className="text-xs text-gray-500 mt-1">
+                          Distance: {distance} miles
+                          {formData.rateType !== 'FLAT_RATE' && (
+                            <span className="ml-2">
+                              ({distance} miles × ${formData.baseRate}/mile
+                              {formData.rateType === 'MILE_FSC' && ` + ${formData.fscRate}% FSC`} 
+                              = ${leg.rate})
+                            </span>
+                          )}
+                        </div>
+                      </div>
+                      <div className="ml-4">
+                        <label className="block text-xs font-medium text-gray-600 mb-1">Rate ($)</label>
+                        <input
+                          type="number"
+                          step="0.01"
+                          value={leg.rate}
+                          onChange={(e) => updateLegRate(index, e.target.value)}
+                          className="w-24 px-2 py-1 border border-gray-300 rounded text-sm focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
+                          placeholder="0.00"
+                          readOnly={formData.rateType !== 'FLAT_RATE'}
+                        />
                       </div>
                     </div>
-                    <div className="ml-4">
-                      <label className="block text-xs font-medium text-gray-600 mb-1">Rate ($)</label>
-                      <input
-                        type="number"
-                        step="0.01"
-                        value={leg.rate}
-                        onChange={(e) => updateLegRate(index, e.target.value)}
-                        className="w-24 px-2 py-1 border border-gray-300 rounded text-sm focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
-                        placeholder="0.00"
-                        readOnly={formData.rateType !== 'FLAT_RATE'}
-                      />
-                    </div>
                   </div>
-                </div>
-              ))}
+                );
+              })}
               <div className="text-xs text-blue-600 mt-2">
                 Total Rate: ${editableLegs.reduce((sum, leg) => sum + parseFloat(leg.rate || '0'), 0).toFixed(2)}
                 {formData.rateType !== 'FLAT_RATE' && <span className="ml-2 text-gray-500">(Auto-calculated based on rate type)</span>}

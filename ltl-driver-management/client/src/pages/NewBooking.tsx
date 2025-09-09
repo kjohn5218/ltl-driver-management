@@ -354,13 +354,28 @@ export const NewBooking: React.FC = () => {
       }
 
       // Create consolidated multi-leg booking(s)
-      // Calculate total rate across all legs
+      // Calculate total rate across all legs and determine predominant rate type
       let totalRate = 0;
       const legDetails: string[] = [];
+      const rateTypeCounts: Record<string, number> = {};
+      let totalMiles = 0;
+      let calculatedBaseRate = 0;
       
       bookingLegs.forEach((leg, index) => {
         const legRate = parseFloat(leg.rate);
         totalRate += legRate;
+        
+        // Count rate types to determine predominant type
+        rateTypeCounts[leg.rateType] = (rateTypeCounts[leg.rateType] || 0) + 1;
+        
+        // Calculate weighted average base rate for mile-based legs
+        if (leg.rateType !== 'FLAT_RATE' && leg.route?.distance) {
+          const legMiles = parseFloat(leg.route.distance.toString());
+          totalMiles += legMiles;
+          if (leg.baseRate) {
+            calculatedBaseRate += parseFloat(leg.baseRate) * legMiles;
+          }
+        }
         
         // Build leg description
         const route = leg.route;
@@ -368,6 +383,14 @@ export const NewBooking: React.FC = () => {
           legDetails.push(`Leg ${index + 1}: ${route.origin} → ${route.destination} ($${legRate.toFixed(2)})`);
         }
       });
+      
+      // Determine the predominant rate type
+      const predominantRateType = Object.keys(rateTypeCounts).reduce((a, b) => 
+        rateTypeCounts[a] > rateTypeCounts[b] ? a : b
+      );
+      
+      // Calculate weighted average base rate if applicable
+      const averageBaseRate = totalMiles > 0 ? calculatedBaseRate / totalMiles : totalRate;
       
       // Use the first route as the primary route (for database constraint)
       const primaryRouteId = bookingLegs[0].routeId;
@@ -390,8 +413,9 @@ export const NewBooking: React.FC = () => {
           routeId: parseInt(primaryRouteId),
           bookingDate: date,
           rate: totalRate.toFixed(2),
-          rateType: 'FLAT_RATE', // Multi-leg bookings use flat rate for the total
-          baseRate: totalRate.toFixed(2),
+          rateType: predominantRateType, // Use predominant rate type from legs
+          baseRate: predominantRateType === 'FLAT_RATE' ? totalRate.toFixed(2) : averageBaseRate.toFixed(2),
+          fscRate: predominantRateType === 'MILE_FSC' ? settingsData?.fuelSurchargeRate || 0 : null,
           billable,
           notes: combinedNotes,
           type: bookingType,
