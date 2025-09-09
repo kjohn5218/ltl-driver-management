@@ -11,6 +11,30 @@ import { RateConfirmationModal } from '../components/RateConfirmation';
 type SortField = 'id' | 'carrier' | 'route' | 'bookingDate' | 'rate' | 'status';
 type SortDirection = 'asc' | 'desc';
 
+// Parse multi-leg booking information from notes
+const parseMultiLegBooking = (notes: string | null) => {
+  if (!notes || !notes.includes('--- Multi-Leg Booking ---')) {
+    return null;
+  }
+  
+  const lines = notes.split('\n');
+  const legs = [];
+  
+  for (const line of lines) {
+    const legMatch = line.match(/^Leg (\d+): (.+) → (.+) \(\$(.+)\)$/);
+    if (legMatch) {
+      legs.push({
+        legNumber: parseInt(legMatch[1]),
+        origin: legMatch[2],
+        destination: legMatch[3],
+        rate: legMatch[4]
+      });
+    }
+  }
+  
+  return legs.length > 0 ? legs : null;
+};
+
 export const Bookings: React.FC = () => {
   const navigate = useNavigate();
   const queryClient = useQueryClient();
@@ -49,30 +73,6 @@ export const Bookings: React.FC = () => {
       alert('Failed to delete booking. Please try again.');
     }
   });
-
-  // Parse multi-leg booking information from notes
-  const parseMultiLegBooking = (notes: string | null) => {
-    if (!notes || !notes.includes('--- Multi-Leg Booking ---')) {
-      return null;
-    }
-    
-    const lines = notes.split('\n');
-    const legs = [];
-    
-    for (const line of lines) {
-      const legMatch = line.match(/^Leg (\d+): (.+) → (.+) \(\$(.+)\)$/);
-      if (legMatch) {
-        legs.push({
-          legNumber: parseInt(legMatch[1]),
-          origin: legMatch[2],
-          destination: legMatch[3],
-          rate: legMatch[4]
-        });
-      }
-    }
-    
-    return legs.length > 0 ? legs : null;
-  };
 
   const filteredAndSortedBookings = useMemo(() => {
     if (!bookings) return [];
@@ -711,9 +711,9 @@ const BookingViewModal: React.FC<BookingViewModalProps> = ({ booking, onClose, g
             <div>
               <label className="block text-sm font-medium text-gray-700 mb-1">Rate Type</label>
               <p className="text-sm text-gray-900">
-                {booking.rateType === 'MILE' && 'Per Mile'}
-                {booking.rateType === 'MILE_FSC' && 'Per Mile + FSC'}
-                {booking.rateType === 'FLAT_RATE' && 'Flat Rate'}
+                {booking.rateType === 'MILE' ? 'Per Mile' : 
+                 booking.rateType === 'MILE_FSC' ? 'Per Mile + FSC' :
+                 booking.rateType === 'FLAT_RATE' ? 'Flat Rate' : 'Unknown'}
               </p>
             </div>
           </div>
@@ -805,8 +805,8 @@ const BookingEditModal: React.FC<BookingEditModalProps> = ({ booking, onClose, o
   
   // Initialize form data with better handling of rate type
   const initializeFormData = useCallback(() => {
-    const initialRateType = booking.rateType || 'FLAT_RATE';
-    console.log('Initializing with rate type:', initialRateType);
+    const initialRateType = booking.rateType; // Don't default to FLAT_RATE
+    console.log('Initializing with rate type:', initialRateType, 'from booking:', booking.rateType);
     
     return {
       carrierId: booking.carrierId,
@@ -839,6 +839,19 @@ const BookingEditModal: React.FC<BookingEditModalProps> = ({ booking, onClose, o
   const [selectedCarrierName, setSelectedCarrierName] = useState(
     booking.carrier?.name || ''
   );
+
+  // Multi-leg booking support
+  const [multiLegInfo, setMultiLegInfo] = useState(() => {
+    const legs = parseMultiLegBooking(booking.notes || null);
+    console.log('MultiLeg detection for booking', booking.id, ':', legs);
+    return legs;
+  });
+  
+  const [editableLegs, setEditableLegs] = useState(() => {
+    const legs = parseMultiLegBooking(booking.notes || null);
+    console.log('Editable legs initialized:', legs);
+    return legs || [];
+  });
 
   // Fetch carriers for carrier selection
   const { data: carriersData } = useQuery({
@@ -876,12 +889,15 @@ const BookingEditModal: React.FC<BookingEditModalProps> = ({ booking, onClose, o
     }
   };
 
-  // Update total rate when rate type or values change
+  // Update total rate when rate type or values change (only for non-multi-leg bookings)
   useEffect(() => {
-    const totalRate = calculateTotalRate(formData.rateType, formData.baseRate, formData.fscRate);
-    const validTotalRate = Number(totalRate) || 0;
-    setFormData(prev => ({ ...prev, rate: Number(validTotalRate.toFixed(2)) }));
-  }, [formData.rateType, formData.baseRate, formData.fscRate]);
+    // Don't auto-calculate for multi-leg bookings since they have manual leg rates
+    if (!multiLegInfo || editableLegs.length === 0) {
+      const totalRate = calculateTotalRate(formData.rateType, formData.baseRate, formData.fscRate);
+      const validTotalRate = Number(totalRate) || 0;
+      setFormData(prev => ({ ...prev, rate: Number(validTotalRate.toFixed(2)) }));
+    }
+  }, [formData.rateType, formData.baseRate, formData.fscRate, multiLegInfo, editableLegs.length]);
 
   // Set FSC rate from system settings when available
   useEffect(() => {
@@ -889,6 +905,45 @@ const BookingEditModal: React.FC<BookingEditModalProps> = ({ booking, onClose, o
       setFormData(prev => ({ ...prev, fscRate: Number(settingsData.fuelSurchargeRate) }));
     }
   }, [settingsData?.fuelSurchargeRate, formData.rateType]);
+
+  // Update leg rate
+  const updateLegRate = (legIndex: number, newRate: string) => {
+    const updatedLegs = editableLegs.map((leg, index) => 
+      index === legIndex ? { ...leg, rate: newRate } : leg
+    );
+    setEditableLegs(updatedLegs);
+    
+    // Update total rate and notes
+    const totalRate = updatedLegs.reduce((sum, leg) => {
+      const legRate = parseFloat(leg.rate) || 0;
+      return sum + legRate;
+    }, 0);
+    setFormData(prev => ({ ...prev, rate: Number(totalRate.toFixed(2)) }));
+    
+    // Update notes with new leg information
+    updateMultiLegNotes(updatedLegs);
+  };
+  
+  // Update notes with multi-leg information
+  const updateMultiLegNotes = (legs: any[]) => {
+    const notes = formData.notes || '';
+    const nonLegLines = notes.split('\n').filter(line => 
+      !line.startsWith('--- Multi-Leg Booking') && 
+      !line.match(/^Leg \d+:/)
+    );
+    
+    const legLines = legs.map(leg => 
+      `Leg ${leg.legNumber}: ${leg.origin} → ${leg.destination} ($${leg.rate})`
+    );
+    
+    const updatedNotes = [
+      '--- Multi-Leg Booking ---',
+      ...legLines,
+      ...nonLegLines
+    ].join('\n');
+    
+    setFormData(prev => ({ ...prev, notes: updatedNotes }));
+  };
 
   const carriers = carriersData?.carriers || [];
   const canChangeCarrier = formData.status === 'PENDING' || formData.status === 'CONFIRMED';
@@ -1258,6 +1313,38 @@ const BookingEditModal: React.FC<BookingEditModalProps> = ({ booking, onClose, o
               </div>
             </div>
           </div>
+
+          {/* Multi-leg booking editor */}
+          {multiLegInfo && editableLegs.length > 0 && (
+            <div className="border-2 border-blue-200 rounded-lg p-4 bg-blue-50">
+              <h4 className="text-sm font-medium text-gray-700 mb-3">Multi-Leg Booking - Edit Individual Leg Rates:</h4>
+              {editableLegs.map((leg, index) => (
+                <div key={index} className="bg-white p-3 rounded border mb-2">
+                  <div className="flex items-center justify-between">
+                    <div className="flex-1">
+                      <div className="text-sm font-medium text-gray-800">
+                        Leg {leg.legNumber}: {leg.origin} → {leg.destination}
+                      </div>
+                    </div>
+                    <div className="ml-4">
+                      <label className="block text-xs font-medium text-gray-600 mb-1">Rate ($)</label>
+                      <input
+                        type="number"
+                        step="0.01"
+                        value={leg.rate}
+                        onChange={(e) => updateLegRate(index, e.target.value)}
+                        className="w-24 px-2 py-1 border border-gray-300 rounded text-sm focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
+                        placeholder="0.00"
+                      />
+                    </div>
+                  </div>
+                </div>
+              ))}
+              <div className="text-xs text-blue-600 mt-2">
+                Total Rate: ${editableLegs.reduce((sum, leg) => sum + parseFloat(leg.rate), 0).toFixed(2)}
+              </div>
+            </div>
+          )}
           
           <div>
             <label className="flex items-center">

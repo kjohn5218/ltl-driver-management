@@ -12,23 +12,27 @@ export const RateConfirmation: React.FC<RateConfirmationProps> = ({ booking, shi
   
   return (
     <div className="rate-confirmation bg-white p-8" style={{ width: '8.5in', minHeight: '11in', fontFamily: 'Arial, sans-serif' }}>
-      {/* Header */}
-      <div className="flex justify-between items-start mb-6">
-        <div>
-          <div className="font-bold text-lg">Shipment # {shipmentNumber}</div>
-        </div>
-        <div className="text-center">
-          <img src="/ccfs-logo.svg" alt="CCFS Logo" className="h-16 mx-auto mb-2" />
-          <div className="text-lg font-bold">Rate Confirmation</div>
-          <div className="text-sm text-gray-600">{currentDate} (Central Standard Time)</div>
-        </div>
+      {/* Logo */}
+      <div className="text-center mb-4">
+        <img src="/ccfs-logo.svg" alt="CCFS Logo" className="h-20 mx-auto" />
       </div>
 
       {/* Company Info */}
-      <div className="mb-4">
-        <div className="font-bold">CrossCounty Freight Solutions</div>
+      <div className="text-center mb-4">
+        <div className="font-bold text-xl">CrossCounty Freight Solutions</div>
         <div>1929 Hancock Dr</div>
         <div>Bismarck, ND 58502</div>
+      </div>
+
+      {/* Header */}
+      <div className="flex justify-between items-start mb-6">
+        <div>
+          <div className="font-bold text-lg">Load # {shipmentNumber}</div>
+        </div>
+        <div className="text-center">
+          <div className="text-lg font-bold">Rate Confirmation</div>
+          <div className="text-sm text-gray-600">{currentDate} (Central Standard Time)</div>
+        </div>
       </div>
 
       {/* From/To Section */}
@@ -247,7 +251,7 @@ export const RateConfirmation: React.FC<RateConfirmationProps> = ({ booking, shi
       {/* Footer */}
       <div className="text-center text-sm text-gray-600 mt-8">
         <div className="mb-2">
-          <span className="font-bold">Shipment # </span>
+          <span className="font-bold">Load # </span>
           <span className="italic">{shipmentNumber}</span>
           <span className="ml-8">Page 1 of 2</span>
           <span className="ml-8 italic">Rate Confirmation</span>

@@ -58,7 +58,7 @@ export const RateConfirmationPage2: React.FC<RateConfirmationPage2Props> = ({ sh
       {/* Footer */}
       <div className="text-center text-sm text-gray-600 mt-8">
         <div className="mb-2">
-          <span className="font-bold">Shipment # </span>
+          <span className="font-bold">Load # </span>
           <span className="italic">{shipmentNumber}</span>
           <span className="ml-8">Page 2 of 2</span>
           <span className="ml-8 italic">Rate Confirmation</span>
