@@ -641,67 +641,98 @@ const BookingViewModal: React.FC<BookingViewModalProps> = ({ booking, onClose, g
             )}
           </div>
           
-          {booking.route && (
-            <div>
-              <label className="block text-sm font-medium text-gray-700 mb-2">Route Information</label>
-              <div className="bg-gray-50 p-4 rounded-lg space-y-3">
-                <div className="flex items-center gap-2 text-sm font-medium text-gray-900">
-                  <MapPin className="w-4 h-4 text-blue-500" />
-                  {booking.route.name}
-                </div>
-                
-                <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                  {/* Origin Information */}
-                  <div className="space-y-2">
-                    <h4 className="font-medium text-gray-800 text-sm">Origin</h4>
-                    <div className="text-sm text-gray-600 space-y-1">
-                      <div className="font-medium">{booking.route.origin}</div>
-                      {booking.route.originAddress && (
-                        <div>{booking.route.originAddress}</div>
-                      )}
-                      {(booking.route.originCity || booking.route.originState || booking.route.originZipCode) && (
-                        <div>
-                          {booking.route.originCity && `${booking.route.originCity}, `}
-                          {booking.route.originState && `${booking.route.originState} `}
-                          {booking.route.originZipCode}
+          {/* Route Information - Multi-leg vs Single-leg display */}
+          <div>
+            <label className="block text-sm font-medium text-gray-700 mb-2">Route Information</label>
+            <div className="bg-gray-50 p-4 rounded-lg space-y-3">
+              {(() => {
+                const multiLegInfo = parseMultiLegBooking(booking.notes);
+                return multiLegInfo ? (
+                  // Multi-leg booking display
+                  <div className="space-y-3">
+                    <div className="flex items-center gap-2 text-sm font-medium text-gray-900">
+                      <MapPin className="w-4 h-4 text-blue-500" />
+                      Multi-Leg Journey ({multiLegInfo.length} legs)
+                    </div>
+                    
+                    {/* Show all legs */}
+                    <div className="space-y-2">
+                      {multiLegInfo.map((leg: any, index: number) => (
+                        <div key={index} className="bg-white p-3 rounded border border-gray-200">
+                          <div className="flex justify-between items-center">
+                            <div className="font-medium text-sm text-gray-900">
+                              Leg {leg.legNumber}: {leg.origin} → {leg.destination}
+                            </div>
+                            <div className="text-xs text-gray-500">
+                              ${leg.rate}
+                            </div>
+                          </div>
                         </div>
-                      )}
-                      {booking.route.originContact && (
-                        <div className="text-xs text-gray-500">Contact: {booking.route.originContact}</div>
-                      )}
+                      ))}
                     </div>
                   </div>
-                  
-                  {/* Destination Information */}
-                  <div className="space-y-2">
-                    <h4 className="font-medium text-gray-800 text-sm">Destination</h4>
-                    <div className="text-sm text-gray-600 space-y-1">
-                      <div className="font-medium">{booking.route.destination}</div>
-                      {booking.route.destinationAddress && (
-                        <div>{booking.route.destinationAddress}</div>
-                      )}
-                      {(booking.route.destinationCity || booking.route.destinationState || booking.route.destinationZipCode) && (
-                        <div>
-                          {booking.route.destinationCity && `${booking.route.destinationCity}, `}
-                          {booking.route.destinationState && `${booking.route.destinationState} `}
-                          {booking.route.destinationZipCode}
-                        </div>
-                      )}
-                      {booking.route.destinationContact && (
-                        <div className="text-xs text-gray-500">Contact: {booking.route.destinationContact}</div>
-                      )}
+                ) : booking.route ? (
+                  // Single-leg booking display (existing behavior)
+                  <div>
+                    <div className="flex items-center gap-2 text-sm font-medium text-gray-900">
+                      <MapPin className="w-4 h-4 text-blue-500" />
+                      {booking.route.name}
                     </div>
+                    
+                    <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                      {/* Origin Information */}
+                      <div className="space-y-2">
+                        <h4 className="font-medium text-gray-800 text-sm">Origin</h4>
+                        <div className="text-sm text-gray-600 space-y-1">
+                          <div className="font-medium">{booking.route.origin}</div>
+                          {booking.route.originAddress && (
+                            <div>{booking.route.originAddress}</div>
+                          )}
+                          {(booking.route.originCity || booking.route.originState || booking.route.originZipCode) && (
+                            <div>
+                              {booking.route.originCity && `${booking.route.originCity}, `}
+                              {booking.route.originState && `${booking.route.originState} `}
+                              {booking.route.originZipCode}
+                            </div>
+                          )}
+                          {booking.route.originContact && (
+                            <div className="text-xs text-gray-500">Contact: {booking.route.originContact}</div>
+                          )}
+                        </div>
+                      </div>
+                      
+                      {/* Destination Information */}
+                      <div className="space-y-2">
+                        <h4 className="font-medium text-gray-800 text-sm">Destination</h4>
+                        <div className="text-sm text-gray-600 space-y-1">
+                          <div className="font-medium">{booking.route.destination}</div>
+                          {booking.route.destinationAddress && (
+                            <div>{booking.route.destinationAddress}</div>
+                          )}
+                          {(booking.route.destinationCity || booking.route.destinationState || booking.route.destinationZipCode) && (
+                            <div>
+                              {booking.route.destinationCity && `${booking.route.destinationCity}, `}
+                              {booking.route.destinationState && `${booking.route.destinationState} `}
+                              {booking.route.destinationZipCode}
+                            </div>
+                          )}
+                          {booking.route.destinationContact && (
+                            <div className="text-xs text-gray-500">Contact: {booking.route.destinationContact}</div>
+                          )}
+                        </div>
+                      </div>
+                    </div>
+                    
+                    {booking.route.distance && (
+                      <div className="text-xs text-gray-500 pt-2 border-t border-gray-200">
+                        Distance: {booking.route.distance} miles
+                      </div>
+                    )}
                   </div>
-                </div>
-                
-                {booking.route.distance && (
-                  <div className="text-xs text-gray-500 pt-2 border-t border-gray-200">
-                    Distance: {booking.route.distance} miles
-                  </div>
-                )}
-              </div>
+                ) : null;
+              })()}
             </div>
-          )}
+          </div>
           
           <div className="grid grid-cols-2 gap-4">
             <div>
@@ -1199,67 +1230,105 @@ const BookingEditModal: React.FC<BookingEditModalProps> = ({ booking, onClose, o
             </div>
           </div>
           
-          {booking.route && (
-            <div>
-              <label className="block text-sm font-medium text-gray-700 mb-2">Route Information</label>
-              <div className="bg-gray-50 p-4 rounded-lg space-y-3">
-                <div className="flex items-center gap-2 text-sm font-medium text-gray-900">
-                  <MapPin className="w-4 h-4 text-blue-500" />
-                  {booking.route.name}
-                </div>
-                
-                <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                  {/* Origin Information */}
+          {/* Route Information - Multi-leg vs Single-leg display */}
+          <div>
+            <label className="block text-sm font-medium text-gray-700 mb-2">Route Information</label>
+            <div className="bg-gray-50 p-4 rounded-lg space-y-3">
+              {multiLegInfo ? (
+                // Multi-leg booking display
+                <div className="space-y-3">
+                  <div className="flex items-center gap-2 text-sm font-medium text-gray-900">
+                    <MapPin className="w-4 h-4 text-blue-500" />
+                    Multi-Leg Journey ({multiLegInfo.length} legs)
+                  </div>
+                  
+                  {/* Show all legs */}
                   <div className="space-y-2">
-                    <h4 className="font-medium text-gray-800 text-sm">Origin</h4>
-                    <div className="text-sm text-gray-600 space-y-1">
-                      <div className="font-medium">{booking.route.origin}</div>
-                      {booking.route.originAddress && (
-                        <div>{booking.route.originAddress}</div>
-                      )}
-                      {(booking.route.originCity || booking.route.originState || booking.route.originZipCode) && (
-                        <div>
-                          {booking.route.originCity && `${booking.route.originCity}, `}
-                          {booking.route.originState && `${booking.route.originState} `}
-                          {booking.route.originZipCode}
+                    {multiLegInfo.map((leg: any, index: number) => {
+                      const legDistance = getDistanceForLeg(leg.origin, leg.destination);
+                      return (
+                        <div key={index} className="bg-white p-3 rounded border border-gray-200">
+                          <div className="flex justify-between items-center">
+                            <div className="font-medium text-sm text-gray-900">
+                              Leg {leg.legNumber}: {leg.origin} → {leg.destination}
+                            </div>
+                            <div className="text-xs text-gray-500">
+                              {legDistance} miles
+                            </div>
+                          </div>
                         </div>
-                      )}
-                      {booking.route.originContact && (
-                        <div className="text-xs text-gray-500">Contact: {booking.route.originContact}</div>
-                      )}
+                      );
+                    })}
+                  </div>
+                  
+                  {/* Total distance */}
+                  <div className="text-xs text-gray-500 pt-2 border-t border-gray-200">
+                    Total Distance: {multiLegInfo.reduce((total: number, leg: any) => {
+                      return total + getDistanceForLeg(leg.origin, leg.destination);
+                    }, 0)} miles
+                  </div>
+                </div>
+              ) : booking.route ? (
+                // Single-leg booking display (existing behavior)
+                <div>
+                  <div className="flex items-center gap-2 text-sm font-medium text-gray-900">
+                    <MapPin className="w-4 h-4 text-blue-500" />
+                    {booking.route.name}
+                  </div>
+                  
+                  <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                    {/* Origin Information */}
+                    <div className="space-y-2">
+                      <h4 className="font-medium text-gray-800 text-sm">Origin</h4>
+                      <div className="text-sm text-gray-600 space-y-1">
+                        <div className="font-medium">{booking.route.origin}</div>
+                        {booking.route.originAddress && (
+                          <div>{booking.route.originAddress}</div>
+                        )}
+                        {(booking.route.originCity || booking.route.originState || booking.route.originZipCode) && (
+                          <div>
+                            {booking.route.originCity && `${booking.route.originCity}, `}
+                            {booking.route.originState && `${booking.route.originState} `}
+                            {booking.route.originZipCode}
+                          </div>
+                        )}
+                        {booking.route.originContact && (
+                          <div className="text-xs text-gray-500">Contact: {booking.route.originContact}</div>
+                        )}
+                      </div>
+                    </div>
+                    
+                    {/* Destination Information */}
+                    <div className="space-y-2">
+                      <h4 className="font-medium text-gray-800 text-sm">Destination</h4>
+                      <div className="text-sm text-gray-600 space-y-1">
+                        <div className="font-medium">{booking.route.destination}</div>
+                        {booking.route.destinationAddress && (
+                          <div>{booking.route.destinationAddress}</div>
+                        )}
+                        {(booking.route.destinationCity || booking.route.destinationState || booking.route.destinationZipCode) && (
+                          <div>
+                            {booking.route.destinationCity && `${booking.route.destinationCity}, `}
+                            {booking.route.destinationState && `${booking.route.destinationState} `}
+                            {booking.route.destinationZipCode}
+                          </div>
+                        )}
+                        {booking.route.destinationContact && (
+                          <div className="text-xs text-gray-500">Contact: {booking.route.destinationContact}</div>
+                        )}
+                      </div>
                     </div>
                   </div>
                   
-                  {/* Destination Information */}
-                  <div className="space-y-2">
-                    <h4 className="font-medium text-gray-800 text-sm">Destination</h4>
-                    <div className="text-sm text-gray-600 space-y-1">
-                      <div className="font-medium">{booking.route.destination}</div>
-                      {booking.route.destinationAddress && (
-                        <div>{booking.route.destinationAddress}</div>
-                      )}
-                      {(booking.route.destinationCity || booking.route.destinationState || booking.route.destinationZipCode) && (
-                        <div>
-                          {booking.route.destinationCity && `${booking.route.destinationCity}, `}
-                          {booking.route.destinationState && `${booking.route.destinationState} `}
-                          {booking.route.destinationZipCode}
-                        </div>
-                      )}
-                      {booking.route.destinationContact && (
-                        <div className="text-xs text-gray-500">Contact: {booking.route.destinationContact}</div>
-                      )}
+                  {booking.route.distance && (
+                    <div className="text-xs text-gray-500 pt-2 border-gray-200">
+                      Distance: {booking.route.distance} miles
                     </div>
-                  </div>
+                  )}
                 </div>
-                
-                {booking.route.distance && (
-                  <div className="text-xs text-gray-500 pt-2 border-t border-gray-200">
-                    Distance: {booking.route.distance} miles
-                  </div>
-                )}
-              </div>
+              ) : null}
             </div>
-          )}
+          </div>
           
           <div className="grid grid-cols-2 gap-4">
             <div>
