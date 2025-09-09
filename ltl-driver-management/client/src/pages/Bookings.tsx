@@ -970,26 +970,38 @@ const BookingEditModal: React.FC<BookingEditModalProps> = ({ booking, onClose, o
   // Recalculate multi-leg rates when rate type or base rate changes
   useEffect(() => {
     if (multiLegInfo && editableLegs.length > 0 && formData.rateType !== 'FLAT_RATE' && routesData?.routes) {
-      console.log('Recalculating multi-leg rates with actual route distances...');
-      const updatedLegs = editableLegs.map(leg => {
-        // Calculate new rate for this leg based on the current rate type and base rate
+      console.log('Recalculating multi-leg rates preserving original booking structure...');
+      
+      // Calculate total distance for the entire multi-leg journey
+      let totalDistance = 0;
+      const legsWithDistances = editableLegs.map(leg => {
         const distance = getDistanceForLeg(leg.origin, leg.destination);
-        const newRate = calculateLegRate(formData.rateType, formData.baseRate, formData.fscRate, distance);
-        console.log(`Leg ${leg.legNumber} (${leg.origin} → ${leg.destination}): ${distance} miles × $${formData.baseRate}/mile = $${newRate.toFixed(2)}`);
+        totalDistance += distance;
+        return { ...leg, distance };
+      });
+      
+      console.log(`Total multi-leg journey distance: ${totalDistance} miles`);
+      
+      // Calculate the total rate based on the entire journey distance
+      const totalRate = calculateLegRate(formData.rateType, formData.baseRate, formData.fscRate, totalDistance);
+      console.log(`Total rate for ${totalDistance} miles at $${formData.baseRate}/mile: $${totalRate.toFixed(2)}`);
+      
+      // Proportionally distribute the total rate among legs based on their distance
+      const updatedLegs = legsWithDistances.map(leg => {
+        const legProportion = leg.distance / totalDistance;
+        const legRate = totalRate * legProportion;
+        console.log(`Leg ${leg.legNumber} (${leg.origin} → ${leg.destination}): ${leg.distance} miles (${(legProportion * 100).toFixed(1)}% of journey) = $${legRate.toFixed(2)}`);
         return {
-          ...leg,
-          rate: newRate.toFixed(2)
+          legNumber: leg.legNumber,
+          origin: leg.origin,
+          destination: leg.destination,
+          rate: legRate.toFixed(2)
         };
       });
       
       setEditableLegs(updatedLegs);
       
-      // Update total rate
-      const totalRate = updatedLegs.reduce((sum, leg) => {
-        const legRate = parseFloat(leg.rate) || 0;
-        return sum + legRate;
-      }, 0);
-      console.log(`Multi-leg total rate calculated: $${totalRate.toFixed(2)}`);
+      console.log(`Multi-leg total rate: $${totalRate.toFixed(2)}`);
       setFormData(prev => ({ ...prev, rate: Number(totalRate.toFixed(2)) }));
       
       // Update notes with new leg information
