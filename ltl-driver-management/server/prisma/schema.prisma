@@ -137,6 +137,10 @@ model Booking {
   status        BookingStatus @default(PENDING)
   billable      Boolean       @default(false)
   notes         String?       @db.Text
+  driverName    String?       // Driver name for the booking
+  phoneNumber   String?       // Driver phone number
+  type          BookingType   @default(POWER_ONLY) // Power Only or Power and Trailer
+  trailerLength Int?          // Trailer length in feet (for Power and Trailer bookings)
   
   // Rate calculation fields
   rateType      RateType      @default(FLAT_RATE) // How the rate was calculated
@@ -176,6 +180,11 @@ enum RateType {
   MILE
   MILE_FSC
   FLAT_RATE
+}
+
+enum BookingType {
+  POWER_ONLY
+  POWER_AND_TRAILER
 }
 
 // Carrier Preferred Routes (many-to-many)

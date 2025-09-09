@@ -906,6 +906,60 @@ const BookingEditModal: React.FC<BookingEditModalProps> = ({ booking, onClose, o
     }
   }, [settingsData?.fuelSurchargeRate, formData.rateType]);
 
+  // Helper function to calculate leg rate based on rate type
+  const calculateLegRate = (rateType: string, baseRate: number, fscRate: number, distance: number = 100): number => {
+    const validBaseRate = Number(baseRate) || 0;
+    const validFscRate = Number(fscRate) || 0;
+    const validDistance = Number(distance) || 100; // Default distance if not available
+    
+    switch (rateType) {
+      case 'MILE':
+        return validBaseRate * validDistance;
+      case 'MILE_FSC':
+        const mileRate = validBaseRate * validDistance;
+        return mileRate + (mileRate * (validFscRate / 100));
+      case 'FLAT_RATE':
+      default:
+        return validBaseRate;
+    }
+  };
+
+  // Helper function to get distance for a leg (simplified - in real implementation, you'd lookup route distance)
+  const getDistanceForLeg = (origin: string, destination: string): number => {
+    // For now, return a default distance. In a real implementation, you'd:
+    // 1. Look up the route in your routes database
+    // 2. Or calculate distance using coordinates
+    // 3. Or parse it from the route name if it includes distance
+    return 100; // Default distance
+  };
+
+  // Recalculate multi-leg rates when rate type or base rate changes
+  useEffect(() => {
+    if (multiLegInfo && editableLegs.length > 0 && formData.rateType !== 'FLAT_RATE') {
+      const updatedLegs = editableLegs.map(leg => {
+        // Calculate new rate for this leg based on the current rate type and base rate
+        const distance = getDistanceForLeg(leg.origin, leg.destination);
+        const newRate = calculateLegRate(formData.rateType, formData.baseRate, formData.fscRate, distance);
+        return {
+          ...leg,
+          rate: newRate.toFixed(2)
+        };
+      });
+      
+      setEditableLegs(updatedLegs);
+      
+      // Update total rate
+      const totalRate = updatedLegs.reduce((sum, leg) => {
+        const legRate = parseFloat(leg.rate) || 0;
+        return sum + legRate;
+      }, 0);
+      setFormData(prev => ({ ...prev, rate: Number(totalRate.toFixed(2)) }));
+      
+      // Update notes with new leg information
+      updateMultiLegNotes(updatedLegs);
+    }
+  }, [formData.rateType, formData.baseRate, formData.fscRate, multiLegInfo]);
+
   // Update leg rate
   const updateLegRate = (legIndex: number, newRate: string) => {
     const updatedLegs = editableLegs.map((leg, index) => 
@@ -1318,6 +1372,79 @@ const BookingEditModal: React.FC<BookingEditModalProps> = ({ booking, onClose, o
           {multiLegInfo && editableLegs.length > 0 && (
             <div className="border-2 border-blue-200 rounded-lg p-4 bg-blue-50">
               <h4 className="text-sm font-medium text-gray-700 mb-3">Multi-Leg Booking - Edit Individual Leg Rates:</h4>
+              
+              {/* Global rate type controls for multi-leg */}
+              <div className="bg-white p-3 rounded border mb-3">
+                <div className="text-xs font-medium text-gray-600 mb-2">Global Rate Settings (applies to all legs):</div>
+                <div className="grid grid-cols-3 gap-3">
+                  <div>
+                    <label className="block text-xs font-medium text-gray-600 mb-1">Rate Type</label>
+                    <div className="flex gap-2 text-xs">
+                      <label className="flex items-center gap-1">
+                        <input
+                          type="radio"
+                          name="multiLegRateType"
+                          value="MILE"
+                          checked={formData.rateType === 'MILE'}
+                          onChange={(e) => setFormData({ ...formData, rateType: e.target.value as any })}
+                          className="text-blue-600"
+                        />
+                        <span>Per Mile</span>
+                      </label>
+                      <label className="flex items-center gap-1">
+                        <input
+                          type="radio"
+                          name="multiLegRateType"
+                          value="MILE_FSC"
+                          checked={formData.rateType === 'MILE_FSC'}
+                          onChange={(e) => setFormData({ ...formData, rateType: e.target.value as any })}
+                          className="text-blue-600"
+                        />
+                        <span>Mile + FSC</span>
+                      </label>
+                      <label className="flex items-center gap-1">
+                        <input
+                          type="radio"
+                          name="multiLegRateType"
+                          value="FLAT_RATE"
+                          checked={formData.rateType === 'FLAT_RATE'}
+                          onChange={(e) => setFormData({ ...formData, rateType: e.target.value as any })}
+                          className="text-blue-600"
+                        />
+                        <span>Manual</span>
+                      </label>
+                    </div>
+                  </div>
+                  {(formData.rateType === 'MILE' || formData.rateType === 'MILE_FSC') && (
+                    <div>
+                      <label className="block text-xs font-medium text-gray-600 mb-1">Base Rate ($/mile)</label>
+                      <input
+                        type="number"
+                        step="0.01"
+                        value={formData.baseRate}
+                        onChange={(e) => setFormData({ ...formData, baseRate: parseFloat(e.target.value) || 0 })}
+                        className="w-full px-2 py-1 border border-gray-300 rounded text-sm focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
+                        placeholder="0.00"
+                      />
+                    </div>
+                  )}
+                  {formData.rateType === 'MILE_FSC' && (
+                    <div>
+                      <label className="block text-xs font-medium text-gray-600 mb-1">FSC Rate (%)</label>
+                      <input
+                        type="number"
+                        step="0.01"
+                        value={formData.fscRate}
+                        onChange={(e) => setFormData({ ...formData, fscRate: parseFloat(e.target.value) || 0 })}
+                        className="w-full px-2 py-1 border border-gray-300 rounded text-sm focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
+                        placeholder="0.00"
+                      />
+                    </div>
+                  )}
+                </div>
+              </div>
+
+              {/* Individual leg rates */}
               {editableLegs.map((leg, index) => (
                 <div key={index} className="bg-white p-3 rounded border mb-2">
                   <div className="flex items-center justify-between">
@@ -1335,13 +1462,15 @@ const BookingEditModal: React.FC<BookingEditModalProps> = ({ booking, onClose, o
                         onChange={(e) => updateLegRate(index, e.target.value)}
                         className="w-24 px-2 py-1 border border-gray-300 rounded text-sm focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
                         placeholder="0.00"
+                        readOnly={formData.rateType !== 'FLAT_RATE'}
                       />
                     </div>
                   </div>
                 </div>
               ))}
               <div className="text-xs text-blue-600 mt-2">
-                Total Rate: ${editableLegs.reduce((sum, leg) => sum + parseFloat(leg.rate), 0).toFixed(2)}
+                Total Rate: ${editableLegs.reduce((sum, leg) => sum + parseFloat(leg.rate || '0'), 0).toFixed(2)}
+                {formData.rateType !== 'FLAT_RATE' && <span className="ml-2 text-gray-500">(Auto-calculated based on rate type)</span>}
               </div>
             </div>
           )}

@@ -182,7 +182,14 @@ export const updateBooking = async (req: Request, res: Response) => {
         billable: updateData.billable,
         notes: updateData.notes,
         status: updateData.status,
-        carrierId: updateData.carrierId !== undefined ? (updateData.carrierId ? parseInt(updateData.carrierId) : undefined) : undefined
+        carrierId: updateData.carrierId !== undefined ? (updateData.carrierId ? parseInt(updateData.carrierId) : undefined) : undefined,
+        rateType: updateData.rateType || undefined,
+        baseRate: updateData.baseRate ? parseFloat(updateData.baseRate) : undefined,
+        fscRate: updateData.fscRate ? parseFloat(updateData.fscRate) : undefined,
+        driverName: updateData.driverName || undefined,
+        phoneNumber: updateData.phoneNumber || undefined,
+        type: updateData.type || undefined,
+        trailerLength: updateData.trailerLength ? parseInt(updateData.trailerLength) : undefined
       },
       include: {
         carrier: true,
