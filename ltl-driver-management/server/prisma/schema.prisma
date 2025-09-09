@@ -92,11 +92,17 @@ model Route {
   originState          String?
   originZipCode        String?
   originContact        String?
+  originTimeZone       String?                  // Time zone for origin location (MST, CST, PST, AZST)
+  originLatitude       Decimal?                 @db.Decimal(10, 7) // GPS coordinates for origin
+  originLongitude      Decimal?                 @db.Decimal(10, 7)
   destinationAddress   String?
   destinationCity      String?
   destinationState     String?
   destinationZipCode   String?
   destinationContact   String?
+  destinationTimeZone  String?                  // Time zone for destination location (MST, CST, PST, AZST)
+  destinationLatitude  Decimal?                 @db.Decimal(10, 7) // GPS coordinates for destination
+  destinationLongitude Decimal?                 @db.Decimal(10, 7)
   distance             Decimal                  @db.Decimal(6, 1)
   runTime              Int?                     // Run time in minutes
   active               Boolean                  @default(true)
