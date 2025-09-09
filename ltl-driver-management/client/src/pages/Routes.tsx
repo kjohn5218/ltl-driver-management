@@ -583,11 +583,17 @@ const RouteEditModal: React.FC<RouteEditModalProps> = ({ route, onClose, onSave 
         originState: cleanValue(formData.originState),
         originZipCode: cleanValue(formData.originZipCode),
         originContact: cleanValue(formData.originContact),
+        originTimeZone: cleanValue(formData.originTimeZone),
+        originLatitude: formData.originLatitude ? parseFloat(formData.originLatitude) : undefined,
+        originLongitude: formData.originLongitude ? parseFloat(formData.originLongitude) : undefined,
         destinationAddress: cleanValue(formData.destinationAddress),
         destinationCity: cleanValue(formData.destinationCity),
         destinationState: cleanValue(formData.destinationState),
         destinationZipCode: cleanValue(formData.destinationZipCode),
         destinationContact: cleanValue(formData.destinationContact),
+        destinationTimeZone: cleanValue(formData.destinationTimeZone),
+        destinationLatitude: formData.destinationLatitude ? parseFloat(formData.destinationLatitude) : undefined,
+        destinationLongitude: formData.destinationLongitude ? parseFloat(formData.destinationLongitude) : undefined,
         distance: parseFloat(formData.distance),
         runTime: formData.runTime && !isNaN(parseInt(formData.runTime)) ? parseInt(formData.runTime) : undefined,
         active: formData.active,
@@ -1166,11 +1172,17 @@ const AddRouteModal: React.FC<AddRouteModalProps> = ({ onClose, onSave, copyFrom
         originState: cleanValue(formData.originState),
         originZipCode: cleanValue(formData.originZipCode),
         originContact: cleanValue(formData.originContact),
+        originTimeZone: cleanValue(formData.originTimeZone),
+        originLatitude: formData.originLatitude ? parseFloat(formData.originLatitude) : undefined,
+        originLongitude: formData.originLongitude ? parseFloat(formData.originLongitude) : undefined,
         destinationAddress: cleanValue(formData.destinationAddress),
         destinationCity: cleanValue(formData.destinationCity),
         destinationState: cleanValue(formData.destinationState),
         destinationZipCode: cleanValue(formData.destinationZipCode),
         destinationContact: cleanValue(formData.destinationContact),
+        destinationTimeZone: cleanValue(formData.destinationTimeZone),
+        destinationLatitude: formData.destinationLatitude ? parseFloat(formData.destinationLatitude) : undefined,
+        destinationLongitude: formData.destinationLongitude ? parseFloat(formData.destinationLongitude) : undefined,
         distance: parseFloat(formData.distance),
         runTime: formData.runTime && !isNaN(parseInt(formData.runTime)) ? parseInt(formData.runTime) : undefined,
         active: formData.active,
@@ -1402,6 +1414,19 @@ const AddRouteModal: React.FC<AddRouteModalProps> = ({ onClose, onSave, copyFrom
                 />
               </div>
             </div>
+            <div className="mt-2">
+              <select
+                value={formData.originTimeZone}
+                onChange={(e) => setFormData({ ...formData, originTimeZone: e.target.value })}
+                className="w-full px-3 py-2 border border-gray-300 rounded-md focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
+              >
+                <option value="">Select Origin Time Zone</option>
+                <option value="PST">PST (Pacific)</option>
+                <option value="MST">MST (Mountain)</option>
+                <option value="CST">CST (Central)</option>
+                <option value="AZST">AZST (Arizona)</option>
+              </select>
+            </div>
           </div>
 
           {/* Destination Address Details */}
@@ -1455,6 +1480,19 @@ const AddRouteModal: React.FC<AddRouteModalProps> = ({ onClose, onSave, copyFrom
                   placeholder="Contact"
                 />
               </div>
+            </div>
+            <div className="mt-2">
+              <select
+                value={formData.destinationTimeZone}
+                onChange={(e) => setFormData({ ...formData, destinationTimeZone: e.target.value })}
+                className="w-full px-3 py-2 border border-gray-300 rounded-md focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
+              >
+                <option value="">Select Destination Time Zone</option>
+                <option value="PST">PST (Pacific)</option>
+                <option value="MST">MST (Mountain)</option>
+                <option value="CST">CST (Central)</option>
+                <option value="AZST">AZST (Arizona)</option>
+              </select>
             </div>
           </div>
           
