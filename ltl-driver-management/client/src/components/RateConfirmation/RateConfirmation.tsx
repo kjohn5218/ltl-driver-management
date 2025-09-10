@@ -98,7 +98,7 @@ export const RateConfirmation: React.FC<RateConfirmationProps> = ({ booking, shi
   const totalMiles = getTotalMiles();
   
   return (
-    <div className="rate-confirmation bg-white p-2" style={{ width: '8.5in', minHeight: '11in', fontFamily: 'Arial, sans-serif' }}>
+    <div className="rate-confirmation bg-white p-1" style={{ width: '8.5in', minHeight: '11in', fontFamily: 'Arial, sans-serif' }}>
       {/* Logo */}
       <div className="text-center mb-1">
         <img src="/ccfs-logo.svg" alt="CCFS Logo" className="h-8 mx-auto" />
@@ -211,7 +211,7 @@ export const RateConfirmation: React.FC<RateConfirmationProps> = ({ booking, shi
         // Multi-leg booking: render using actual child booking data (limit to first 2 legs)
         booking.childBookings.slice(0, 2).map((childBooking, index) => (
           <div key={childBooking.id} className="border-2 border-black mb-1">
-            <div className="bg-black text-white p-1 text-center font-bold">Leg {childBooking.legNumber}</div>
+            <div className="bg-black text-white p-1 text-center font-bold text-xs">Leg {childBooking.legNumber}</div>
             <div className="p-1">
               <div className="grid grid-cols-2 gap-1">
                 <div>
@@ -245,7 +245,7 @@ export const RateConfirmation: React.FC<RateConfirmationProps> = ({ booking, shi
         // Fallback: Multi-leg booking using notes parsing (legacy support - limit to first 2 legs)
         multiLegBooking.slice(0, 2).map((leg, index) => (
           <div key={leg.legNumber} className="border-2 border-black mb-1">
-            <div className="bg-black text-white p-1 text-center font-bold">Leg {leg.legNumber}</div>
+            <div className="bg-black text-white p-1 text-center font-bold text-xs">Leg {leg.legNumber}</div>
             <div className="p-1">
               <div className="grid grid-cols-2 gap-1">
                 <div>
@@ -308,8 +308,8 @@ export const RateConfirmation: React.FC<RateConfirmationProps> = ({ booking, shi
       )}
 
       <div className="border-2 border-black p-1 mb-1 bg-gray-100">
-        <div className="text-center font-bold mb-1 text-sm">CHECK IN WITH DISPATCH FOR PAPERWORK AND DOOR ASSIGNMENT</div>
-        <div className="text-xs space-y-1">
+        <div className="text-center font-bold mb-1 text-xs">CHECK IN WITH DISPATCH FOR PAPERWORK AND DOOR ASSIGNMENT</div>
+        <div className="text-xs space-y-0">
           <div>Maintain Seal Integrity - seal loads prior to departure and record number on manifest</div>
           <div>Departure and arrival of each stop MUST be recorded in real-time on a mobile browser at driver.ccfs.com.</div>
           <div>To advise of delays or for assistance contact Linehaul Support at 701-204-0480 (M-F 9:30 PM – 6:30 AM CT) or contact the CCFS service center.</div>
@@ -320,43 +320,37 @@ export const RateConfirmation: React.FC<RateConfirmationProps> = ({ booking, shi
       <table className="w-full border-2 border-black mb-1">
         <thead>
           <tr className="bg-black text-white">
-            <th colSpan={2} className="p-2 text-center">CHARGES</th>
+            <th colSpan={2} className="p-1 text-center text-xs">CHARGES</th>
           </tr>
         </thead>
         <tbody>
-          <tr className="border-b border-black">
-            <td className="p-2">Rate Type</td>
-            <td className="p-2 text-right">{booking.rateType || 'FLAT_RATE'}</td>
-          </tr>
           {booking.rateType === 'FLAT_RATE' && (
             <tr className="border-b border-black">
-              <td className="p-2">Rate</td>
-              <td className="p-2 text-right">${booking.rate}</td>
+              <td className="p-1 text-xs">Rate Type: {booking.rateType || 'FLAT_RATE'} - Rate</td>
+              <td className="p-1 text-right text-xs">${booking.rate}</td>
             </tr>
           )}
           {booking.rateType === 'MILE' && (
-            <>
-              <tr className="border-b border-black">
-                <td className="p-2">Base Rate (${booking.baseRate || booking.rate} × {totalMiles} miles)</td>
-                <td className="p-2 text-right">${booking.rate}</td>
-              </tr>
-            </>
+            <tr className="border-b border-black">
+              <td className="p-1 text-xs">Rate Type: {booking.rateType} - Base Rate (${booking.baseRate || booking.rate} × {totalMiles} miles)</td>
+              <td className="p-1 text-right text-xs">${booking.rate}</td>
+            </tr>
           )}
           {booking.rateType === 'MILE_FSC' && (
             <>
               <tr className="border-b border-black">
-                <td className="p-2">Base Rate (${booking.baseRate || '0.00'} × {totalMiles} miles)</td>
-                <td className="p-2 text-right">${((booking.baseRate || 0) * totalMiles).toFixed(2)}</td>
+                <td className="p-1 text-xs">Rate Type: {booking.rateType} - Base Rate (${booking.baseRate || '0.00'} × {totalMiles} miles)</td>
+                <td className="p-1 text-right text-xs">${((booking.baseRate || 0) * totalMiles).toFixed(2)}</td>
               </tr>
               <tr className="border-b border-black">
-                <td className="p-2">Fuel Surcharge ({booking.fscRate || 0}% of base rate)</td>
-                <td className="p-2 text-right">${(((booking.baseRate || 0) * totalMiles) * ((booking.fscRate || 0) / 100)).toFixed(2)}</td>
+                <td className="p-1 text-xs">Fuel Surcharge ({booking.fscRate || 0}% of base rate)</td>
+                <td className="p-1 text-right text-xs">${(((booking.baseRate || 0) * totalMiles) * ((booking.fscRate || 0) / 100)).toFixed(2)}</td>
               </tr>
             </>
           )}
           <tr className="bg-gray-100">
-            <td className="p-2 font-bold">TOTAL RATE</td>
-            <td className="p-2 text-right font-bold">${booking.rate} US Dollars</td>
+            <td className="p-1 font-bold text-xs">TOTAL RATE</td>
+            <td className="p-1 text-right font-bold text-xs">${booking.rate} US Dollars</td>
           </tr>
         </tbody>
       </table>
