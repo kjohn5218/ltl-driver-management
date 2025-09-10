@@ -6,23 +6,19 @@ interface RateConfirmationPage2Props {
 
 export const RateConfirmationPage2: React.FC<RateConfirmationPage2Props> = ({ shipmentNumber }) => {
   return (
-    <div className="rate-confirmation-page-2 bg-white p-8" style={{ width: '8.5in', minHeight: '11in', fontFamily: 'Arial, sans-serif' }}>
-
-      <div className="mb-8 text-center">
-        <div className="font-bold">PLEASE EMAIL A COPY OF THE RATE CONFIRMATION, POD & INVOICE TO: splinehaul@necompanies.com</div>
-      </div>
+    <div className="rate-confirmation-page-2 bg-white p-6" style={{ width: '8.5in', minHeight: '11in', fontFamily: 'Arial, sans-serif' }}>
 
       {/* E-Signature Agreement Section */}
-      <div className="border-2 border-black">
+      <div className="border-2 border-black mb-4">
         <div className="bg-black text-white p-2 text-center font-bold">
           E-SIGNATURE AGREEMENT
         </div>
-        <div style={{ minHeight: '600px' }} className="p-4">
-          {/* Large blank space for signature area */}
+        <div style={{ minHeight: '400px' }} className="p-4">
+          {/* Signature area - reduced height to fit on one page */}
         </div>
         
         {/* Signature Line */}
-        <div className="flex justify-between items-end p-8">
+        <div className="flex justify-between items-end p-6">
           <div className="flex-1">
             <div className="mb-2">Carrier Signature</div>
             <div className="border-b-2 border-black w-full"></div>
@@ -38,6 +34,11 @@ export const RateConfirmationPage2: React.FC<RateConfirmationPage2Props> = ({ sh
             </div>
           </div>
         </div>
+      </div>
+
+      {/* Email Instructions */}
+      <div className="mb-6 text-center">
+        <div className="font-bold">Please email a copy of the rate confirmation, load manifest and invoice to: linehaulmanagement@ccfs.com.</div>
       </div>
 
       {/* Footer */}
