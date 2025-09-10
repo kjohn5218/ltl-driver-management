@@ -38,7 +38,7 @@ export const RateConfirmationModal: React.FC<RateConfirmationModalProps> = ({
       });
 
       // Get all pages
-      const pages = confirmationRef.current.querySelectorAll('.rate-confirmation, .rate-confirmation-page-2');
+      const pages = confirmationRef.current.querySelectorAll('.rate-confirmation');
       
       for (let i = 0; i < pages.length; i++) {
         const page = pages[i] as HTMLElement;
@@ -152,9 +152,6 @@ export const RateConfirmationModal: React.FC<RateConfirmationModalProps> = ({
           <div ref={confirmationRef} className="space-y-8">
             <div className="border border-gray-300 shadow-lg">
               <RateConfirmation booking={booking} shipmentNumber={shipmentNumber} />
-            </div>
-            <div className="border border-gray-300 shadow-lg">
-              <RateConfirmationPage2 shipmentNumber={shipmentNumber} />
             </div>
           </div>
         </div>
