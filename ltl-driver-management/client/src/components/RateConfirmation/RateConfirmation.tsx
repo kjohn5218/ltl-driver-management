@@ -35,6 +35,36 @@ export const RateConfirmation: React.FC<RateConfirmationProps> = ({ booking, shi
   const currentDate = format(new Date(), 'EEEE, MMMM d, yyyy h:mm a');
   const multiLegBooking = parseMultiLegBooking(booking.notes);
   
+  // Calculate appointment date considering midnight crossover
+  const getAppointmentDate = (legNumber: number, baseTime: string = '21:00') => {
+    const bookingDate = new Date(booking.bookingDate);
+    
+    // For leg 1, check if arrival crosses midnight
+    if (legNumber === 1 && booking.route?.departureTime && booking.route?.runTime) {
+      try {
+        const [depHours, depMinutes] = booking.route.departureTime.split(':').map(Number);
+        const departureMinutes = depHours * 60 + depMinutes;
+        const arrivalMinutes = departureMinutes + booking.route.runTime;
+        
+        // If arrival is next day (crosses midnight)
+        if (arrivalMinutes >= 24 * 60) {
+          const nextDay = new Date(bookingDate);
+          nextDay.setDate(nextDay.getDate() + 1);
+          return format(nextDay, 'MM/dd/yyyy');
+        }
+      } catch (error) {
+        console.error('Error calculating midnight crossover:', error);
+      }
+    }
+    
+    // For other legs or if no crossover, use base date
+    if (legNumber === 2) {
+      return `${format(bookingDate, 'MM/dd/yyyy')} 02:30`;
+    }
+    
+    return `${format(bookingDate, 'MM/dd/yyyy')} ${baseTime}`;
+  };
+  
   // Calculate total miles using ACTUAL distance data from child bookings
   const getTotalMiles = () => {
     // If this is a multi-leg booking with child bookings, sum up the actual route distances
@@ -96,16 +126,16 @@ export const RateConfirmation: React.FC<RateConfirmationProps> = ({ booking, shi
       <table className="w-full border-2 border-black mb-1">
         <thead>
           <tr className="bg-black text-white">
-            <th className="text-center py-1">CARRIER</th>
-            <th className="text-center py-1">DATE</th>
-            <th className="text-center py-1">TIME</th>
+            <th className="text-center py-1 text-xs">CARRIER</th>
+            <th className="text-center py-1 text-xs">DATE</th>
+            <th className="text-center py-1 text-xs">TIME</th>
           </tr>
         </thead>
         <tbody>
           <tr className="border-b border-black">
-            <td className="p-2">{booking.carrier?.name || 'TBD'}</td>
-            <td className="p-2">{format(new Date(booking.bookingDate), 'MM/dd/yyyy')}</td>
-            <td className="p-2">21:00</td>
+            <td className="p-1 text-xs">{booking.carrier?.name || 'TBD'}</td>
+            <td className="p-1 text-xs">{format(new Date(booking.bookingDate), 'MM/dd/yyyy')}</td>
+            <td className="p-1 text-xs">21:00</td>
           </tr>
         </tbody>
       </table>
@@ -114,22 +144,22 @@ export const RateConfirmation: React.FC<RateConfirmationProps> = ({ booking, shi
       <table className="w-full border-2 border-black mb-1">
         <thead>
           <tr className="bg-gray-200">
-            <th className="border-r border-black p-1 text-left">MC #</th>
-            <th className="border-r border-black p-1 text-left">DOT #</th>
-            <th className="border-r border-black p-1 text-left">TRUCK #</th>
-            <th className="border-r border-black p-1 text-left">TRAILER #</th>
-            <th className="border-r border-black p-1 text-left">DRIVER</th>
-            <th className="p-2 text-left">DRIVER PHONE</th>
+            <th className="border-r border-black p-1 text-left text-xs">MC #</th>
+            <th className="border-r border-black p-1 text-left text-xs">DOT #</th>
+            <th className="border-r border-black p-1 text-left text-xs">TRUCK #</th>
+            <th className="border-r border-black p-1 text-left text-xs">TRAILER #</th>
+            <th className="border-r border-black p-1 text-left text-xs">DRIVER</th>
+            <th className="p-1 text-left text-xs">DRIVER PHONE</th>
           </tr>
         </thead>
         <tbody>
           <tr>
-            <td className="border-r border-black p-1">{booking.carrier?.mcNumber || ''}</td>
-            <td className="border-r border-black p-1">{booking.carrier?.dotNumber || ''}</td>
-            <td className="border-r border-black p-1"></td>
-            <td className="border-r border-black p-1"></td>
-            <td className="border-r border-black p-1">{booking.driverName || ''}</td>
-            <td className="p-2">{booking.phoneNumber || ''}</td>
+            <td className="border-r border-black p-1 text-xs">{booking.carrier?.mcNumber || ''}</td>
+            <td className="border-r border-black p-1 text-xs">{booking.carrier?.dotNumber || ''}</td>
+            <td className="border-r border-black p-1 text-xs"></td>
+            <td className="border-r border-black p-1 text-xs"></td>
+            <td className="border-r border-black p-1 text-xs">{booking.driverName || ''}</td>
+            <td className="p-1 text-xs">{booking.phoneNumber || ''}</td>
           </tr>
         </tbody>
       </table>
@@ -138,26 +168,26 @@ export const RateConfirmation: React.FC<RateConfirmationProps> = ({ booking, shi
       <table className="w-full border-2 border-black mb-1">
         <thead>
           <tr className="bg-gray-200">
-            <th className="border-r border-black p-1 text-left">SIZE & TYPE</th>
-            <th className="border-r border-black p-1 text-left">DESCRIPTION</th>
-            <th className="border-r border-black p-1 text-left">HU</th>
-            <th className="border-r border-black p-1 text-left">HZ</th>
-            <th className="border-r border-black p-1 text-left">TOTAL WEIGHT</th>
-            <th className="p-2 text-left">MILES</th>
+            <th className="border-r border-black p-1 text-left text-xs">SIZE & TYPE</th>
+            <th className="border-r border-black p-1 text-left text-xs">DESCRIPTION</th>
+            <th className="border-r border-black p-1 text-left text-xs">HU</th>
+            <th className="border-r border-black p-1 text-left text-xs">HZ</th>
+            <th className="border-r border-black p-1 text-left text-xs">TOTAL WEIGHT</th>
+            <th className="p-1 text-left text-xs">MILES</th>
           </tr>
         </thead>
         <tbody>
           <tr>
-            <td className="border-r border-black p-1">
+            <td className="border-r border-black p-1 text-xs">
               {booking.type === 'POWER_AND_TRAILER' && booking.trailerLength 
                 ? `${booking.trailerLength} FT` 
                 : 'Van 53 FT'}
             </td>
-            <td className="border-r border-black p-1">FAK</td>
-            <td className="border-r border-black p-1"></td>
-            <td className="border-r border-black p-1"></td>
-            <td className="border-r border-black p-1">35,000.00 LB</td>
-            <td className="p-2">{totalMiles}</td>
+            <td className="border-r border-black p-1 text-xs">FAK</td>
+            <td className="border-r border-black p-1 text-xs"></td>
+            <td className="border-r border-black p-1 text-xs"></td>
+            <td className="border-r border-black p-1 text-xs">35,000.00 LB</td>
+            <td className="p-1 text-xs">{totalMiles}</td>
           </tr>
         </tbody>
       </table>
@@ -178,68 +208,68 @@ export const RateConfirmation: React.FC<RateConfirmationProps> = ({ booking, shi
 
       {/* Legs */}
       {booking.childBookings && booking.childBookings.length > 0 ? (
-        // Multi-leg booking: render using actual child booking data
-        booking.childBookings.map((childBooking, index) => (
+        // Multi-leg booking: render using actual child booking data (limit to first 2 legs)
+        booking.childBookings.slice(0, 2).map((childBooking, index) => (
           <div key={childBooking.id} className="border-2 border-black mb-1">
             <div className="bg-black text-white p-1 text-center font-bold">Leg {childBooking.legNumber}</div>
             <div className="p-1">
               <div className="grid grid-cols-2 gap-1">
                 <div>
-                  <div className="font-bold mb-2">ORIGIN</div>
-                  <div><span className="font-bold">Location:</span> {childBooking.route?.origin}</div>
-                  <div><span className="font-bold">Address:</span> {index === 0 ? (childBooking.route?.originAddress || '985 Glendale Avenue') : ''}</div>
-                  <div><span className="font-bold">City, State Zip:</span> {index === 0 ? `${childBooking.route?.originCity || 'SPARKS'}, ${childBooking.route?.originState || 'NV'} ${childBooking.route?.originZipCode || '89431'}` : ''}</div>
-                  <div><span className="font-bold">Phone:</span> {index === 0 ? '(775) 331-2311' : ''}</div>
-                  <div><span className="font-bold">Contact:</span> {index === 0 ? (childBooking.route?.originContact || 'Brian Smith') : ''}</div>
-                  <div><span className="font-bold">Hours:</span> {index === 0 ? '04:00 -to-10:00' : ''}</div>
+                  <div className="font-bold mb-1 text-xs">ORIGIN</div>
+                  <div className="text-xs"><span className="font-bold">Location:</span> {childBooking.route?.origin}</div>
+                  <div className="text-xs"><span className="font-bold">Address:</span> {index === 0 ? (childBooking.route?.originAddress || '985 Glendale Avenue') : ''}</div>
+                  <div className="text-xs"><span className="font-bold">City, State Zip:</span> {index === 0 ? `${childBooking.route?.originCity || 'SPARKS'}, ${childBooking.route?.originState || 'NV'} ${childBooking.route?.originZipCode || '89431'}` : ''}</div>
+                  <div className="text-xs"><span className="font-bold">Phone:</span> {index === 0 ? '(775) 331-2311' : ''}</div>
+                  <div className="text-xs"><span className="font-bold">Contact:</span> {index === 0 ? (childBooking.route?.originContact || 'Brian Smith') : ''}</div>
+                  <div className="text-xs"><span className="font-bold">Hours:</span> {index === 0 ? '04:00 -to-10:00' : ''}</div>
                   {index === 0 && booking.carrierReportTime && (
-                    <div><span className="font-bold">Carrier Report Time:</span> {booking.carrierReportTime}</div>
+                    <div className="text-xs"><span className="font-bold">Carrier Report Time:</span> {booking.carrierReportTime}</div>
                   )}
-                  <div><span className="font-bold">Distance:</span> {childBooking.route?.distance || 0} miles</div>
+                  <div className="text-xs"><span className="font-bold">Distance:</span> {childBooking.route?.distance || 0} miles</div>
                 </div>
                 <div>
-                  <div className="font-bold mb-2">DESTINATION</div>
-                  <div><span className="font-bold">Location:</span> {childBooking.route?.destination}</div>
-                  <div><span className="font-bold">Address:</span> {index === booking.childBookings.length - 1 ? (childBooking.route?.destinationAddress || '2800 S El Dorado ST') : ''}</div>
-                  <div><span className="font-bold">City, State Zip:</span> {index === booking.childBookings.length - 1 ? `${childBooking.route?.destinationCity || 'STOCKTON'}, ${childBooking.route?.destinationState || 'CA'} ${childBooking.route?.destinationZipCode || '95206'}` : ''}</div>
-                  <div><span className="font-bold">Phone:</span></div>
-                  <div><span className="font-bold">Contact:</span> {index === booking.childBookings.length - 1 ? (childBooking.route?.destinationContact || '') : ''}</div>
-                  <div><span className="font-bold">Appt Date/Time:</span> {format(new Date(booking.bookingDate), 'MM/dd/yyyy')} {childBooking.legNumber === 1 ? '21:00' : '02:30'}</div>
-                  <div><span className="font-bold">Rate:</span> ${childBooking.rate}</div>
+                  <div className="font-bold mb-1 text-xs">DESTINATION</div>
+                  <div className="text-xs"><span className="font-bold">Location:</span> {childBooking.route?.destination}</div>
+                  <div className="text-xs"><span className="font-bold">Address:</span> {index === booking.childBookings.length - 1 ? (childBooking.route?.destinationAddress || '2800 S El Dorado ST') : ''}</div>
+                  <div className="text-xs"><span className="font-bold">City, State Zip:</span> {index === booking.childBookings.length - 1 ? `${childBooking.route?.destinationCity || 'STOCKTON'}, ${childBooking.route?.destinationState || 'CA'} ${childBooking.route?.destinationZipCode || '95206'}` : ''}</div>
+                  <div className="text-xs"><span className="font-bold">Phone:</span></div>
+                  <div className="text-xs"><span className="font-bold">Contact:</span> {index === booking.childBookings.length - 1 ? (childBooking.route?.destinationContact || '') : ''}</div>
+                  <div className="text-xs"><span className="font-bold">Appt Date/Time:</span> {getAppointmentDate(childBooking.legNumber || 1)}</div>
+                  <div className="text-xs"><span className="font-bold">Rate:</span> ${childBooking.rate}</div>
                 </div>
               </div>
             </div>
           </div>
         ))
       ) : multiLegBooking ? (
-        // Fallback: Multi-leg booking using notes parsing (legacy support)
-        multiLegBooking.map((leg, index) => (
+        // Fallback: Multi-leg booking using notes parsing (legacy support - limit to first 2 legs)
+        multiLegBooking.slice(0, 2).map((leg, index) => (
           <div key={leg.legNumber} className="border-2 border-black mb-1">
             <div className="bg-black text-white p-1 text-center font-bold">Leg {leg.legNumber}</div>
             <div className="p-1">
               <div className="grid grid-cols-2 gap-1">
                 <div>
-                  <div className="font-bold mb-2">ORIGIN</div>
-                  <div><span className="font-bold">Location:</span> {leg.origin}</div>
-                  <div><span className="font-bold">Address:</span> {index === 0 ? (booking.route?.originAddress || '985 Glendale Avenue') : ''}</div>
-                  <div><span className="font-bold">City, State Zip:</span> {index === 0 ? `${booking.route?.originCity || 'SPARKS'}, ${booking.route?.originState || 'NV'} ${booking.route?.originZipCode || '89431'}` : ''}</div>
-                  <div><span className="font-bold">Phone:</span> {index === 0 ? '(775) 331-2311' : ''}</div>
-                  <div><span className="font-bold">Contact:</span> {index === 0 ? (booking.route?.originContact || 'Brian Smith') : ''}</div>
-                  <div><span className="font-bold">Hours:</span> {index === 0 ? '04:00 -to-10:00' : ''}</div>
+                  <div className="font-bold mb-1 text-xs">ORIGIN</div>
+                  <div className="text-xs"><span className="font-bold">Location:</span> {leg.origin}</div>
+                  <div className="text-xs"><span className="font-bold">Address:</span> {index === 0 ? (booking.route?.originAddress || '985 Glendale Avenue') : ''}</div>
+                  <div className="text-xs"><span className="font-bold">City, State Zip:</span> {index === 0 ? `${booking.route?.originCity || 'SPARKS'}, ${booking.route?.originState || 'NV'} ${booking.route?.originZipCode || '89431'}` : ''}</div>
+                  <div className="text-xs"><span className="font-bold">Phone:</span> {index === 0 ? '(775) 331-2311' : ''}</div>
+                  <div className="text-xs"><span className="font-bold">Contact:</span> {index === 0 ? (booking.route?.originContact || 'Brian Smith') : ''}</div>
+                  <div className="text-xs"><span className="font-bold">Hours:</span> {index === 0 ? '04:00 -to-10:00' : ''}</div>
                   {index === 0 && booking.carrierReportTime && (
-                    <div><span className="font-bold">Carrier Report Time:</span> {booking.carrierReportTime}</div>
+                    <div className="text-xs"><span className="font-bold">Carrier Report Time:</span> {booking.carrierReportTime}</div>
                   )}
-                  <div><span className="font-bold">Distance:</span> {booking.route?.distance || 258} miles</div>
+                  <div className="text-xs"><span className="font-bold">Distance:</span> {booking.route?.distance || 258} miles</div>
                 </div>
                 <div>
-                  <div className="font-bold mb-2">DESTINATION</div>
-                  <div><span className="font-bold">Location:</span> {leg.destination}</div>
-                  <div><span className="font-bold">Address:</span> {index === multiLegBooking.length - 1 ? (booking.route?.destinationAddress || '2800 S El Dorado ST') : ''}</div>
-                  <div><span className="font-bold">City, State Zip:</span> {index === multiLegBooking.length - 1 ? `${booking.route?.destinationCity || 'STOCKTON'}, ${booking.route?.destinationState || 'CA'} ${booking.route?.destinationZipCode || '95206'}` : ''}</div>
-                  <div><span className="font-bold">Phone:</span></div>
-                  <div><span className="font-bold">Contact:</span> {index === multiLegBooking.length - 1 ? (booking.route?.destinationContact || '') : ''}</div>
-                  <div><span className="font-bold">Appt Date/Time:</span> {format(new Date(booking.bookingDate), 'MM/dd/yyyy')} {leg.legNumber === 1 ? '21:00' : '02:30'}</div>
-                  <div><span className="font-bold">Rate:</span> ${leg.rate}</div>
+                  <div className="font-bold mb-1 text-xs">DESTINATION</div>
+                  <div className="text-xs"><span className="font-bold">Location:</span> {leg.destination}</div>
+                  <div className="text-xs"><span className="font-bold">Address:</span> {index === multiLegBooking.length - 1 ? (booking.route?.destinationAddress || '2800 S El Dorado ST') : ''}</div>
+                  <div className="text-xs"><span className="font-bold">City, State Zip:</span> {index === multiLegBooking.length - 1 ? `${booking.route?.destinationCity || 'STOCKTON'}, ${booking.route?.destinationState || 'CA'} ${booking.route?.destinationZipCode || '95206'}` : ''}</div>
+                  <div className="text-xs"><span className="font-bold">Phone:</span></div>
+                  <div className="text-xs"><span className="font-bold">Contact:</span> {index === multiLegBooking.length - 1 ? (booking.route?.destinationContact || '') : ''}</div>
+                  <div className="text-xs"><span className="font-bold">Appt Date/Time:</span> {getAppointmentDate(leg.legNumber)}</div>
+                  <div className="text-xs"><span className="font-bold">Rate:</span> ${leg.rate}</div>
                 </div>
               </div>
             </div>
@@ -248,29 +278,29 @@ export const RateConfirmation: React.FC<RateConfirmationProps> = ({ booking, shi
       ) : (
         // Single-leg booking: render original format
         <div className="border-2 border-black mb-1">
-          <div className="bg-black text-white p-2 text-center font-bold">Leg 1</div>
-          <div className="p-4">
-            <div className="grid grid-cols-2 gap-4">
+          <div className="bg-black text-white p-1 text-center font-bold">Leg 1</div>
+          <div className="p-1">
+            <div className="grid grid-cols-2 gap-1">
               <div>
-                <div className="font-bold mb-2">ORIGIN</div>
-                <div><span className="font-bold">Name:</span> CrossCounty Freight Solutions - RNO</div>
-                <div><span className="font-bold">Address:</span> {booking.route?.originAddress || '985 Glendale Avenue'}</div>
-                <div><span className="font-bold">City, State Zip:</span> {booking.route?.originCity || 'SPARKS'}, {booking.route?.originState || 'NV'} {booking.route?.originZipCode || '89431'}</div>
-                <div><span className="font-bold">Phone:</span> (775) 331-2311</div>
-                <div><span className="font-bold">Contact:</span> {booking.route?.originContact || 'Brian Smith'}</div>
-                <div><span className="font-bold">Hours:</span> 04:00 -to-10:00</div>
+                <div className="font-bold mb-1 text-xs">ORIGIN</div>
+                <div className="text-xs"><span className="font-bold">Name:</span> CrossCounty Freight Solutions - RNO</div>
+                <div className="text-xs"><span className="font-bold">Address:</span> {booking.route?.originAddress || '985 Glendale Avenue'}</div>
+                <div className="text-xs"><span className="font-bold">City, State Zip:</span> {booking.route?.originCity || 'SPARKS'}, {booking.route?.originState || 'NV'} {booking.route?.originZipCode || '89431'}</div>
+                <div className="text-xs"><span className="font-bold">Phone:</span> (775) 331-2311</div>
+                <div className="text-xs"><span className="font-bold">Contact:</span> {booking.route?.originContact || 'Brian Smith'}</div>
+                <div className="text-xs"><span className="font-bold">Hours:</span> 04:00 -to-10:00</div>
                 {booking.carrierReportTime && (
-                  <div><span className="font-bold">Carrier Report Time:</span> {booking.carrierReportTime}</div>
+                  <div className="text-xs"><span className="font-bold">Carrier Report Time:</span> {booking.carrierReportTime}</div>
                 )}
               </div>
               <div>
-                <div className="font-bold mb-2">DESTINATION</div>
-                <div><span className="font-bold">Name:</span> DDP</div>
-                <div><span className="font-bold">Address:</span> {booking.route?.destinationAddress || '2800 S El Dorado ST'}</div>
-                <div><span className="font-bold">City, State Zip:</span> {booking.route?.destinationCity || 'STOCKTON'}, {booking.route?.destinationState || 'CA'} {booking.route?.destinationZipCode || '95206'}</div>
-                <div><span className="font-bold">Phone:</span></div>
-                <div><span className="font-bold">Contact:</span> {booking.route?.destinationContact || ''}</div>
-                <div><span className="font-bold">Appt Date/Time:</span> {format(new Date(booking.bookingDate), 'MM/dd/yyyy')} 21:00</div>
+                <div className="font-bold mb-1 text-xs">DESTINATION</div>
+                <div className="text-xs"><span className="font-bold">Name:</span> DDP</div>
+                <div className="text-xs"><span className="font-bold">Address:</span> {booking.route?.destinationAddress || '2800 S El Dorado ST'}</div>
+                <div className="text-xs"><span className="font-bold">City, State Zip:</span> {booking.route?.destinationCity || 'STOCKTON'}, {booking.route?.destinationState || 'CA'} {booking.route?.destinationZipCode || '95206'}</div>
+                <div className="text-xs"><span className="font-bold">Phone:</span></div>
+                <div className="text-xs"><span className="font-bold">Contact:</span> {booking.route?.destinationContact || ''}</div>
+                <div className="text-xs"><span className="font-bold">Appt Date/Time:</span> {getAppointmentDate(1)}</div>
               </div>
             </div>
           </div>
@@ -331,15 +361,6 @@ export const RateConfirmation: React.FC<RateConfirmationProps> = ({ booking, shi
         </tbody>
       </table>
 
-      {/* Footer */}
-      <div className="text-center text-sm text-gray-600 mt-2">
-        <div className="mb-2">
-          <span className="font-bold">Load # </span>
-          <span className="italic">{shipmentNumber}</span>
-          <span className="ml-8">Page 1 of 2</span>
-          <span className="ml-8 italic">Rate Confirmation</span>
-        </div>
-      </div>
     </div>
   );
 };
