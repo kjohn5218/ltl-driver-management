@@ -146,6 +146,7 @@ model Booking {
   driverName    String?       // Driver name for the booking
   phoneNumber   String?       // Driver phone number
   carrierEmail  String?       // Carrier email for rate confirmation
+  carrierReportTime String?   // Time when carrier should report (45 min before route departure)
   type          BookingType   @default(POWER_ONLY) // Power Only or Power and Trailer
   trailerLength Int?          // Trailer length in feet (for Power and Trailer bookings)
   

@@ -116,6 +116,7 @@ export const createBooking = async (req: Request, res: Response) => {
       driverName,
       phoneNumber,
       carrierEmail,
+      carrierReportTime,
       type = 'POWER_ONLY',
       trailerLength,
       bookingGroupId,
@@ -173,6 +174,7 @@ export const createBooking = async (req: Request, res: Response) => {
         driverName: driverName || undefined,
         phoneNumber: phoneNumber || undefined,
         carrierEmail: carrierEmail || undefined,
+        carrierReportTime: carrierReportTime || undefined,
         type: type as any,
         trailerLength: trailerLength ? parseInt(trailerLength) : undefined
       },
@@ -211,6 +213,7 @@ export const updateBooking = async (req: Request, res: Response) => {
         driverName: updateData.driverName || undefined,
         phoneNumber: updateData.phoneNumber || undefined,
         carrierEmail: updateData.carrierEmail || undefined,
+        carrierReportTime: updateData.carrierReportTime || undefined,
         type: updateData.type || undefined,
         trailerLength: updateData.trailerLength ? parseInt(updateData.trailerLength) : undefined
       },

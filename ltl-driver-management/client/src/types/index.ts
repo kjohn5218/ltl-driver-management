@@ -92,6 +92,7 @@ export interface Booking {
   driverName?: string;
   phoneNumber?: string;
   carrierEmail?: string;
+  carrierReportTime?: string;
   type: BookingType;
   trailerLength?: number;
   

@@ -705,9 +705,15 @@ const BookingViewModal: React.FC<BookingViewModalProps> = ({ booking, onClose, g
             </div>
           </div>
 
-          <div>
-            <label className="block text-sm font-medium text-gray-700 mb-1">Carrier Email</label>
-            <p className="text-sm text-gray-900">{bookingToDisplay.carrierEmail || 'N/A'}</p>
+          <div className="grid grid-cols-2 gap-4">
+            <div>
+              <label className="block text-sm font-medium text-gray-700 mb-1">Carrier Email</label>
+              <p className="text-sm text-gray-900">{bookingToDisplay.carrierEmail || 'N/A'}</p>
+            </div>
+            <div>
+              <label className="block text-sm font-medium text-gray-700 mb-1">Carrier Report Time</label>
+              <p className="text-sm text-gray-900">{bookingToDisplay.carrierReportTime || 'N/A'}</p>
+            </div>
           </div>
           
           <div className="grid grid-cols-2 gap-4">
@@ -1099,6 +1105,7 @@ const BookingEditModal: React.FC<BookingEditModalProps> = ({ booking, onClose, o
       driverName: booking.driverName || '',
       phoneNumber: booking.phoneNumber || '',
       carrierEmail: booking.carrierEmail || '',
+      carrierReportTime: booking.carrierReportTime || '',
       type: booking.type || 'POWER_ONLY',
       trailerLength: booking.trailerLength ? booking.trailerLength.toString() : '',
       bookingDate: booking.bookingDate.split('T')[0], // Format for date input
@@ -1731,16 +1738,28 @@ const BookingEditModal: React.FC<BookingEditModalProps> = ({ booking, onClose, o
             </div>
           </div>
 
-          {/* Carrier Email */}
-          <div>
-            <label className="block text-sm font-medium text-gray-700 mb-1">Carrier Email</label>
-            <input
-              type="email"
-              value={formData.carrierEmail}
-              onChange={(e) => setFormData({ ...formData, carrierEmail: e.target.value })}
-              className="w-full px-3 py-2 border border-gray-300 rounded-md focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
+          {/* Carrier Email and Report Time */}
+          <div className="grid grid-cols-2 gap-4">
+            <div>
+              <label className="block text-sm font-medium text-gray-700 mb-1">Carrier Email</label>
+              <input
+                type="email"
+                value={formData.carrierEmail}
+                onChange={(e) => setFormData({ ...formData, carrierEmail: e.target.value })}
+                className="w-full px-3 py-2 border border-gray-300 rounded-md focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
               placeholder="Enter carrier email for rate confirmation..."
             />
+            </div>
+            <div>
+              <label className="block text-sm font-medium text-gray-700 mb-1">Carrier Report Time</label>
+              <input
+                type="time"
+                value={formData.carrierReportTime}
+                onChange={(e) => setFormData({ ...formData, carrierReportTime: e.target.value })}
+                className="w-full px-3 py-2 border border-gray-300 rounded-md focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
+                placeholder="Time when carrier should report"
+              />
+            </div>
           </div>
           
           {/* Booking Type */}

@@ -32,6 +32,7 @@ export const NewBooking: React.FC = () => {
   const [driverName, setDriverName] = useState('');
   const [phoneNumber, setPhoneNumber] = useState('');
   const [carrierEmail, setCarrierEmail] = useState('');
+  const [carrierReportTime, setCarrierReportTime] = useState('');
   const [billable, setBillable] = useState(true);
   const [bookingType, setBookingType] = useState<'POWER_ONLY' | 'POWER_AND_TRAILER'>('POWER_ONLY');
   const [trailerLength, setTrailerLength] = useState('');
@@ -125,6 +126,29 @@ export const NewBooking: React.FC = () => {
     calculateSuggestedRate();
   };
 
+  // Calculate carrier report time (45 minutes before route departure time)
+  const calculateCarrierReportTime = (departureTime: string | undefined): string => {
+    if (!departureTime) return '';
+    
+    try {
+      // Parse the departure time (format: "HH:mm:ss" or "HH:mm")
+      const [hours, minutes] = departureTime.split(':').map(Number);
+      
+      // Create a date object for today with the departure time
+      const departureDate = new Date();
+      departureDate.setHours(hours, minutes, 0, 0);
+      
+      // Subtract 45 minutes
+      const reportDate = new Date(departureDate.getTime() - 45 * 60 * 1000);
+      
+      // Format as HH:mm
+      return reportDate.toTimeString().slice(0, 5);
+    } catch (error) {
+      console.error('Error calculating carrier report time:', error);
+      return '';
+    }
+  };
+
   // Handle carrier search input
   const handleCarrierSearch = (value: string) => {
     setCarrierSearch(value);
@@ -175,6 +199,11 @@ export const NewBooking: React.FC = () => {
     setSelectedRouteName(`${route.name} (${route.origin} → ${route.destination})`);
     setRouteSearchInput('');
     setShowRouteDropdown(false);
+    
+    // Calculate and set carrier report time
+    const reportTime = calculateCarrierReportTime(route.departureTime);
+    setCarrierReportTime(reportTime);
+    
     calculateSuggestedRate();
   };
 
@@ -427,6 +456,7 @@ export const NewBooking: React.FC = () => {
           driverName: driverName || undefined,
           phoneNumber: phoneNumber || undefined,
           carrierEmail: carrierEmail || undefined,
+          carrierReportTime: carrierReportTime || undefined,
           type: bookingType,
           trailerLength: bookingType === 'POWER_AND_TRAILER' && trailerLength ? parseInt(trailerLength) : null,
           status: carrierId ? 'CONFIRMED' : 'PENDING',
@@ -488,6 +518,7 @@ export const NewBooking: React.FC = () => {
           driverName: driverName || undefined,
           phoneNumber: phoneNumber || undefined,
           carrierEmail: carrierEmail || undefined,
+          carrierReportTime: carrierReportTime || undefined,
           type: bookingType,
           trailerLength: bookingType === 'POWER_AND_TRAILER' && trailerLength ? parseInt(trailerLength) : null,
           status: carrierId ? 'CONFIRMED' : 'PENDING',
@@ -1625,6 +1656,23 @@ export const NewBooking: React.FC = () => {
               No email address found for selected carrier. Please enter one manually for rate confirmation.
             </p>
           )}
+        </div>
+
+        {/* Carrier Report Time */}
+        <div>
+          <label className="block text-sm font-medium text-gray-700 mb-2">
+            Carrier Report Time
+          </label>
+          <input
+            type="time"
+            value={carrierReportTime}
+            onChange={(e) => setCarrierReportTime(e.target.value)}
+            className="w-full px-3 py-2 border border-gray-300 rounded-md focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
+            placeholder="Time when carrier should report"
+          />
+          <p className="mt-1 text-sm text-gray-500">
+            Auto-calculated as 45 minutes before route departure time. You can edit this if needed.
+          </p>
         </div>
 
         {/* Error Message */}

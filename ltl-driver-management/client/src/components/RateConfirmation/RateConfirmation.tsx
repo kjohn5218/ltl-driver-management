@@ -162,12 +162,8 @@ export const RateConfirmation: React.FC<RateConfirmationProps> = ({ booking, shi
         </tbody>
       </table>
 
-      {/* Carrier ETA and Notes */}
+      {/* Notes */}
       <div className="mb-4">
-        <div className="flex justify-between mb-2">
-          <div>Carrier ETA:</div>
-          <div>Seal Number:</div>
-        </div>
         <div className="border-2 border-black p-2 bg-gray-100">
           <div className="font-bold text-center mb-2">NOTES</div>
           <div className="text-sm">
@@ -196,6 +192,9 @@ export const RateConfirmation: React.FC<RateConfirmationProps> = ({ booking, shi
                   <div><span className="font-bold">Phone:</span> {index === 0 ? '(775) 331-2311' : ''}</div>
                   <div><span className="font-bold">Contact:</span> {index === 0 ? (childBooking.route?.originContact || 'Brian Smith') : ''}</div>
                   <div><span className="font-bold">Hours:</span> {index === 0 ? '04:00 -to-10:00' : ''}</div>
+                  {index === 0 && booking.carrierReportTime && (
+                    <div><span className="font-bold">Carrier Report Time:</span> {booking.carrierReportTime}</div>
+                  )}
                   <div><span className="font-bold">Distance:</span> {childBooking.route?.distance || 0} miles</div>
                 </div>
                 <div>
@@ -227,6 +226,9 @@ export const RateConfirmation: React.FC<RateConfirmationProps> = ({ booking, shi
                   <div><span className="font-bold">Phone:</span> {index === 0 ? '(775) 331-2311' : ''}</div>
                   <div><span className="font-bold">Contact:</span> {index === 0 ? (booking.route?.originContact || 'Brian Smith') : ''}</div>
                   <div><span className="font-bold">Hours:</span> {index === 0 ? '04:00 -to-10:00' : ''}</div>
+                  {index === 0 && booking.carrierReportTime && (
+                    <div><span className="font-bold">Carrier Report Time:</span> {booking.carrierReportTime}</div>
+                  )}
                   <div><span className="font-bold">Distance:</span> {booking.route?.distance || 258} miles</div>
                 </div>
                 <div>
@@ -257,6 +259,9 @@ export const RateConfirmation: React.FC<RateConfirmationProps> = ({ booking, shi
                 <div><span className="font-bold">Phone:</span> (775) 331-2311</div>
                 <div><span className="font-bold">Contact:</span> {booking.route?.originContact || 'Brian Smith'}</div>
                 <div><span className="font-bold">Hours:</span> 04:00 -to-10:00</div>
+                {booking.carrierReportTime && (
+                  <div><span className="font-bold">Carrier Report Time:</span> {booking.carrierReportTime}</div>
+                )}
               </div>
               <div>
                 <div className="font-bold mb-2">DESTINATION</div>
