@@ -32,7 +32,7 @@ interface RateConfirmationProps {
 }
 
 export const RateConfirmation: React.FC<RateConfirmationProps> = ({ booking, shipmentNumber }) => {
-  const currentDate = format(new Date(), 'EEEE, MMMM d, yyyy h:mm a');
+  const currentDate = format(new Date(), 'MM/dd/yyyy h:mm a');
   const multiLegBooking = parseMultiLegBooking(booking.notes);
   
   // Calculate appointment date considering midnight crossover
@@ -98,7 +98,18 @@ export const RateConfirmation: React.FC<RateConfirmationProps> = ({ booking, shi
   const totalMiles = getTotalMiles();
   
   return (
-    <div className="rate-confirmation bg-white p-1" style={{ width: '8.5in', minHeight: '11in', fontFamily: 'Arial, sans-serif' }}>
+    <div className="rate-confirmation bg-white p-2" style={{ width: '8.5in', minHeight: '11in', fontFamily: 'Arial, sans-serif' }}>
+      {/* Header - Rate Confirmation Title and Date */}
+      <div className="flex justify-between items-start mb-2">
+        <div>
+          <div className="font-bold text-base">Load # {shipmentNumber}</div>
+        </div>
+        <div className="text-center">
+          <div className="text-base font-bold">Rate Confirmation</div>
+          <div className="text-xs text-gray-600">{currentDate} (CST)</div>
+        </div>
+      </div>
+
       {/* Logo */}
       <div className="text-center mb-1">
         <img src="/ccfs-logo.svg" alt="CCFS Logo" className="h-8 mx-auto" />
@@ -109,17 +120,6 @@ export const RateConfirmation: React.FC<RateConfirmationProps> = ({ booking, shi
         <div className="font-bold text-base">CrossCounty Freight Solutions</div>
         <div className="text-xs">1929 Hancock Dr</div>
         <div className="text-xs">Bismarck, ND 58502</div>
-      </div>
-
-      {/* Header */}
-      <div className="flex justify-between items-start mb-2">
-        <div>
-          <div className="font-bold text-base">Load # {shipmentNumber}</div>
-        </div>
-        <div className="text-center">
-          <div className="text-base font-bold">Rate Confirmation</div>
-          <div className="text-xs text-gray-600">{currentDate} (Central Standard Time)</div>
-        </div>
       </div>
 
       {/* Carrier Information */}
