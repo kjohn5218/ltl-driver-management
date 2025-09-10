@@ -7,21 +7,6 @@ interface RateConfirmationPage2Props {
 export const RateConfirmationPage2: React.FC<RateConfirmationPage2Props> = ({ shipmentNumber }) => {
   return (
     <div className="rate-confirmation-page-2 bg-white p-8" style={{ width: '8.5in', minHeight: '11in', fontFamily: 'Arial, sans-serif' }}>
-      {/* Important Notes */}
-      <div className="mb-6 text-sm">
-        <div className="mb-2">
-          <span className="font-bold">Maintain Seal Integrity</span> - seal each load at shippers dock - record on BOL - only allow consignee to remove seal.
-        </div>
-        <div className="mb-2">
-          <span className="font-bold">Notify CCFS of all delays</span>
-        </div>
-        <div className="mb-2">
-          <span className="font-bold">Advise CCFS upon arrival & departure of each stop.</span>
-        </div>
-        <div className="mb-2">
-          <span className="font-bold">Immediately advise CCFS of any discrepancies, over-short or damaged . Do Not leave customer until we have the discrepancy resolved.</span>
-        </div>
-      </div>
 
       <div className="mb-8 text-center">
         <div className="font-bold">PLEASE EMAIL A COPY OF THE RATE CONFIRMATION, POD & INVOICE TO: splinehaul@necompanies.com</div>
