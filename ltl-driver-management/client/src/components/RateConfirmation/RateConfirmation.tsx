@@ -2,6 +2,30 @@ import React from 'react';
 import { Booking } from '../../types';
 import { format } from 'date-fns';
 
+// Parse multi-leg booking information from notes
+const parseMultiLegBooking = (notes: string | null) => {
+  if (!notes || !notes.includes('--- Multi-Leg Booking ---')) {
+    return null;
+  }
+  
+  const lines = notes.split('\n');
+  const legs = [];
+  
+  for (const line of lines) {
+    const legMatch = line.match(/^Leg (\d+): (.+) → (.+) \(\$(.+)\)$/);
+    if (legMatch) {
+      legs.push({
+        legNumber: parseInt(legMatch[1]),
+        origin: legMatch[2],
+        destination: legMatch[3],
+        rate: legMatch[4]
+      });
+    }
+  }
+  
+  return legs.length > 0 ? legs : null;
+};
+
 interface RateConfirmationProps {
   booking: Booking;
   shipmentNumber: string;
@@ -9,6 +33,22 @@ interface RateConfirmationProps {
 
 export const RateConfirmation: React.FC<RateConfirmationProps> = ({ booking, shipmentNumber }) => {
   const currentDate = format(new Date(), 'EEEE, MMMM d, yyyy h:mm a');
+  const multiLegBooking = parseMultiLegBooking(booking.notes);
+  
+  // Calculate total miles using ACTUAL distance data from child bookings
+  const getTotalMiles = () => {
+    // If this is a multi-leg booking with child bookings, sum up the actual route distances
+    if (booking.childBookings && booking.childBookings.length > 0) {
+      return booking.childBookings.reduce((total, childBooking) => {
+        return total + (childBooking.route?.distance || 0);
+      }, 0);
+    }
+    
+    // For single-leg bookings, use the route distance
+    return booking.route?.distance || 184;
+  };
+  
+  const totalMiles = getTotalMiles();
   
   return (
     <div className="rate-confirmation bg-white p-8" style={{ width: '8.5in', minHeight: '11in', fontFamily: 'Arial, sans-serif' }}>
@@ -35,47 +75,20 @@ export const RateConfirmation: React.FC<RateConfirmationProps> = ({ booking, shi
         </div>
       </div>
 
-      {/* From/To Section */}
+      {/* Carrier Information */}
       <table className="w-full border-2 border-black mb-4">
         <thead>
           <tr className="bg-black text-white">
-            <th colSpan={2} className="text-center py-1">FROM</th>
+            <th className="text-center py-1">CARRIER</th>
             <th className="text-center py-1">DATE</th>
             <th className="text-center py-1">TIME</th>
           </tr>
         </thead>
         <tbody>
           <tr className="border-b border-black">
-            <td className="p-2 font-semibold">FROM</td>
-            <td className="p-2" colSpan={3}>{booking.route?.origin}</td>
-          </tr>
-          <tr className="border-b border-black">
-            <td className="p-2 font-semibold">CARRIER</td>
             <td className="p-2">{booking.carrier?.name || 'TBD'}</td>
             <td className="p-2">{format(new Date(booking.bookingDate), 'MM/dd/yyyy')}</td>
             <td className="p-2">21:00</td>
-          </tr>
-        </tbody>
-      </table>
-
-      {/* To Section */}
-      <table className="w-full border-2 border-black mb-4">
-        <thead>
-          <tr className="bg-black text-white">
-            <th colSpan={2} className="text-center py-1">TO</th>
-            <th className="text-center py-1">ATT</th>
-          </tr>
-        </thead>
-        <tbody>
-          <tr className="border-b border-black">
-            <td className="p-2 font-semibold">CARRIER</td>
-            <td className="p-2">{booking.route?.destination}</td>
-            <td className="p-2">{booking.route?.destinationContact || ''}</td>
-          </tr>
-          <tr className="border-b border-black">
-            <td className="p-2 font-semibold bg-black text-white text-center">PHONE</td>
-            <td className="p-2">{booking.carrier?.phone || ''}</td>
-            <td className="p-2 font-semibold bg-black text-white text-center">FAX</td>
           </tr>
         </tbody>
       </table>
@@ -89,8 +102,7 @@ export const RateConfirmation: React.FC<RateConfirmationProps> = ({ booking, shi
             <th className="border-r border-black p-2 text-left">TRUCK #</th>
             <th className="border-r border-black p-2 text-left">TRAILER #</th>
             <th className="border-r border-black p-2 text-left">DRIVER</th>
-            <th className="border-r border-black p-2 text-left">DRIVER CELL</th>
-            <th className="p-2 text-left">PU REF</th>
+            <th className="p-2 text-left">DRIVER CELL</th>
           </tr>
         </thead>
         <tbody>
@@ -100,8 +112,7 @@ export const RateConfirmation: React.FC<RateConfirmationProps> = ({ booking, shi
             <td className="border-r border-black p-2"></td>
             <td className="border-r border-black p-2"></td>
             <td className="border-r border-black p-2">{booking.driverName || 'PJ -'}</td>
-            <td className="border-r border-black p-2">{booking.phoneNumber || '(408) 396-5404'}</td>
-            <td className="p-2"></td>
+            <td className="p-2">{booking.phoneNumber || '(408) 396-5404'}</td>
           </tr>
         </tbody>
       </table>
@@ -112,7 +123,8 @@ export const RateConfirmation: React.FC<RateConfirmationProps> = ({ booking, shi
           <tr className="bg-gray-200">
             <th className="border-r border-black p-2 text-left">SIZE & TYPE</th>
             <th className="border-r border-black p-2 text-left">DESCRIPTION</th>
-            <th className="border-r border-black p-2 text-left">PIECES</th>
+            <th className="border-r border-black p-2 text-left">HU</th>
+            <th className="border-r border-black p-2 text-left">HZ</th>
             <th className="border-r border-black p-2 text-left">TOTAL WEIGHT</th>
             <th className="p-2 text-left">MILES</th>
           </tr>
@@ -125,9 +137,10 @@ export const RateConfirmation: React.FC<RateConfirmationProps> = ({ booking, shi
                 : 'Van 53 FT'}
             </td>
             <td className="border-r border-black p-2">FAK</td>
-            <td className="border-r border-black p-2">0</td>
+            <td className="border-r border-black p-2"></td>
+            <td className="border-r border-black p-2"></td>
             <td className="border-r border-black p-2">35,000.00 LB</td>
-            <td className="p-2">{booking.route?.distance || '184.00'}</td>
+            <td className="p-2">{totalMiles}</td>
           </tr>
         </tbody>
       </table>
@@ -141,9 +154,7 @@ export const RateConfirmation: React.FC<RateConfirmationProps> = ({ booking, shi
         <div className="border-2 border-black p-2 bg-gray-100">
           <div className="font-bold text-center mb-2">NOTES</div>
           <div className="text-sm">
-            After hours dispatch between the hours of 9:30 PM -6:30 AM CT please call 701-204-0480. If you are going to be delayed for any
-            reason during these hours, please make sure to call and notify us. Or if you are needing assistance of any kind during
-            these hours, please call us.
+            For after hours dispatch assistance or to notify CCFS of any delay between the hours of 9:30 PM - 6:30 AM CT please call 701-204-0480.
           </div>
           {booking.notes && (
             <div className="mt-2 text-sm">{booking.notes}</div>
@@ -151,83 +162,103 @@ export const RateConfirmation: React.FC<RateConfirmationProps> = ({ booking, shi
         </div>
       </div>
 
-      {/* Description Table */}
-      <table className="w-full border-2 border-black mb-4">
-        <thead>
-          <tr className="bg-black text-white">
-            <th className="p-2 text-left">DESCRIPTION</th>
-            <th className="p-2 text-left">WEIGHT</th>
-            <th className="p-2 text-left">HANDLING UNITS</th>
-            <th className="p-2 text-left">HAZMAT</th>
-          </tr>
-        </thead>
-        <tbody>
-          <tr>
-            <td className="p-2">FAK</td>
-            <td className="p-2">35,000.00 LB</td>
-            <td className="p-2"></td>
-            <td className="p-2"></td>
-          </tr>
-        </tbody>
-      </table>
 
-      {/* Pickup Location */}
-      <div className="border-2 border-black mb-4">
-        <div className="bg-black text-white p-2 text-center font-bold">Pickup Location (Leg 1)</div>
-        <div className="p-4">
-          <div className="grid grid-cols-2 gap-4">
-            <div>
-              <div><span className="font-bold">Name:</span> CrossCounty Freight Solutions - RNO</div>
-              <div><span className="font-bold">Address:</span> {booking.route?.originAddress || '985 Glendale Avenue'}</div>
-              <div><span className="font-bold">Address:</span></div>
-              <div><span className="font-bold">City, State Zip:</span> {booking.route?.originCity || 'SPARKS'}, {booking.route?.originState || 'NV'} {booking.route?.originZipCode || '89431'}</div>
+      {/* Legs */}
+      {booking.childBookings && booking.childBookings.length > 0 ? (
+        // Multi-leg booking: render using actual child booking data
+        booking.childBookings.map((childBooking, index) => (
+          <div key={childBooking.id} className="border-2 border-black mb-4">
+            <div className="bg-black text-white p-2 text-center font-bold">Leg {childBooking.legNumber}</div>
+            <div className="p-4">
+              <div className="grid grid-cols-2 gap-4">
+                <div>
+                  <div className="font-bold mb-2">ORIGIN</div>
+                  <div><span className="font-bold">Location:</span> {childBooking.route?.origin}</div>
+                  <div><span className="font-bold">Address:</span> {index === 0 ? (childBooking.route?.originAddress || '985 Glendale Avenue') : ''}</div>
+                  <div><span className="font-bold">City, State Zip:</span> {index === 0 ? `${childBooking.route?.originCity || 'SPARKS'}, ${childBooking.route?.originState || 'NV'} ${childBooking.route?.originZipCode || '89431'}` : ''}</div>
+                  <div><span className="font-bold">Phone:</span> {index === 0 ? '(775) 331-2311' : ''}</div>
+                  <div><span className="font-bold">Contact:</span> {index === 0 ? (childBooking.route?.originContact || 'Brian Smith') : ''}</div>
+                  <div><span className="font-bold">Hours:</span> {index === 0 ? '04:00 -to-10:00' : ''}</div>
+                  <div><span className="font-bold">Distance:</span> {childBooking.route?.distance || 0} miles</div>
+                </div>
+                <div>
+                  <div className="font-bold mb-2">DESTINATION</div>
+                  <div><span className="font-bold">Location:</span> {childBooking.route?.destination}</div>
+                  <div><span className="font-bold">Address:</span> {index === booking.childBookings.length - 1 ? (childBooking.route?.destinationAddress || '2800 S El Dorado ST') : ''}</div>
+                  <div><span className="font-bold">City, State Zip:</span> {index === booking.childBookings.length - 1 ? `${childBooking.route?.destinationCity || 'STOCKTON'}, ${childBooking.route?.destinationState || 'CA'} ${childBooking.route?.destinationZipCode || '95206'}` : ''}</div>
+                  <div><span className="font-bold">Phone:</span></div>
+                  <div><span className="font-bold">Contact:</span> {index === booking.childBookings.length - 1 ? (childBooking.route?.destinationContact || '') : ''}</div>
+                  <div><span className="font-bold">Appt Date/Time:</span> {format(new Date(booking.bookingDate), 'MM/dd/yyyy')} {childBooking.legNumber === 1 ? '21:00' : '02:30'}</div>
+                  <div><span className="font-bold">Rate:</span> ${childBooking.rate}</div>
+                </div>
+              </div>
             </div>
-            <div>
-              <div><span className="font-bold">Phone:</span> (775) 331-2311</div>
-              <div><span className="font-bold">Contact:</span> {booking.route?.originContact || 'Brian Smith'}</div>
-              <div><span className="font-bold">Appt Date/Time:</span> {format(new Date(booking.bookingDate), 'MM/dd/yyyy')} 21:00</div>
-              <div className="mt-4">
-                <div><span className="font-bold">PO #:</span></div>
+          </div>
+        ))
+      ) : multiLegBooking ? (
+        // Fallback: Multi-leg booking using notes parsing (legacy support)
+        multiLegBooking.map((leg, index) => (
+          <div key={leg.legNumber} className="border-2 border-black mb-4">
+            <div className="bg-black text-white p-2 text-center font-bold">Leg {leg.legNumber}</div>
+            <div className="p-4">
+              <div className="grid grid-cols-2 gap-4">
+                <div>
+                  <div className="font-bold mb-2">ORIGIN</div>
+                  <div><span className="font-bold">Location:</span> {leg.origin}</div>
+                  <div><span className="font-bold">Address:</span> {index === 0 ? (booking.route?.originAddress || '985 Glendale Avenue') : ''}</div>
+                  <div><span className="font-bold">City, State Zip:</span> {index === 0 ? `${booking.route?.originCity || 'SPARKS'}, ${booking.route?.originState || 'NV'} ${booking.route?.originZipCode || '89431'}` : ''}</div>
+                  <div><span className="font-bold">Phone:</span> {index === 0 ? '(775) 331-2311' : ''}</div>
+                  <div><span className="font-bold">Contact:</span> {index === 0 ? (booking.route?.originContact || 'Brian Smith') : ''}</div>
+                  <div><span className="font-bold">Hours:</span> {index === 0 ? '04:00 -to-10:00' : ''}</div>
+                </div>
+                <div>
+                  <div className="font-bold mb-2">DESTINATION</div>
+                  <div><span className="font-bold">Location:</span> {leg.destination}</div>
+                  <div><span className="font-bold">Address:</span> {index === multiLegBooking.length - 1 ? (booking.route?.destinationAddress || '2800 S El Dorado ST') : ''}</div>
+                  <div><span className="font-bold">City, State Zip:</span> {index === multiLegBooking.length - 1 ? `${booking.route?.destinationCity || 'STOCKTON'}, ${booking.route?.destinationState || 'CA'} ${booking.route?.destinationZipCode || '95206'}` : ''}</div>
+                  <div><span className="font-bold">Phone:</span></div>
+                  <div><span className="font-bold">Contact:</span> {index === multiLegBooking.length - 1 ? (booking.route?.destinationContact || '') : ''}</div>
+                  <div><span className="font-bold">Appt Date/Time:</span> {format(new Date(booking.bookingDate), 'MM/dd/yyyy')} {leg.legNumber === 1 ? '21:00' : '02:30'}</div>
+                  <div><span className="font-bold">Rate:</span> ${leg.rate}</div>
+                </div>
+              </div>
+            </div>
+          </div>
+        ))
+      ) : (
+        // Single-leg booking: render original format
+        <div className="border-2 border-black mb-4">
+          <div className="bg-black text-white p-2 text-center font-bold">Leg 1</div>
+          <div className="p-4">
+            <div className="grid grid-cols-2 gap-4">
+              <div>
+                <div className="font-bold mb-2">ORIGIN</div>
+                <div><span className="font-bold">Name:</span> CrossCounty Freight Solutions - RNO</div>
+                <div><span className="font-bold">Address:</span> {booking.route?.originAddress || '985 Glendale Avenue'}</div>
+                <div><span className="font-bold">City, State Zip:</span> {booking.route?.originCity || 'SPARKS'}, {booking.route?.originState || 'NV'} {booking.route?.originZipCode || '89431'}</div>
+                <div><span className="font-bold">Phone:</span> (775) 331-2311</div>
+                <div><span className="font-bold">Contact:</span> {booking.route?.originContact || 'Brian Smith'}</div>
                 <div><span className="font-bold">Hours:</span> 04:00 -to-10:00</div>
-                <div><span className="font-bold">Pickup Conf#:</span></div>
+              </div>
+              <div>
+                <div className="font-bold mb-2">DESTINATION</div>
+                <div><span className="font-bold">Name:</span> DDP</div>
+                <div><span className="font-bold">Address:</span> {booking.route?.destinationAddress || '2800 S El Dorado ST'}</div>
+                <div><span className="font-bold">City, State Zip:</span> {booking.route?.destinationCity || 'STOCKTON'}, {booking.route?.destinationState || 'CA'} {booking.route?.destinationZipCode || '95206'}</div>
+                <div><span className="font-bold">Phone:</span></div>
+                <div><span className="font-bold">Contact:</span> {booking.route?.destinationContact || ''}</div>
+                <div><span className="font-bold">Appt Date/Time:</span> {format(new Date(booking.bookingDate), 'MM/dd/yyyy')} 21:00</div>
               </div>
             </div>
           </div>
         </div>
-      </div>
+      )}
 
       <div className="border-2 border-black p-2 mb-4 text-center bg-gray-100">
-        CHECK IN WITH DISIPATCH FOR LIVE LOAD AND PAPERWORK
+        CHECK IN WITH DISPATCH FOR PAPERWORK
       </div>
 
-      {/* Drop Location */}
-      <div className="border-2 border-black mb-4">
-        <div className="bg-black text-white p-2 text-center font-bold">Drop Location (Leg 2)</div>
-        <div className="p-4">
-          <div className="grid grid-cols-2 gap-4">
-            <div>
-              <div><span className="font-bold">Name:</span> DDP</div>
-              <div><span className="font-bold">Address:</span> {booking.route?.destinationAddress || '2800 S El Dorado ST'}</div>
-              <div><span className="font-bold">Address:</span></div>
-              <div><span className="font-bold">City, State Zip:</span> {booking.route?.destinationCity || 'STOCKTON'}, {booking.route?.destinationState || 'CA'} {booking.route?.destinationZipCode || '95206'}</div>
-            </div>
-            <div>
-              <div><span className="font-bold">Phone:</span></div>
-              <div><span className="font-bold">Contact:</span> {booking.route?.destinationContact || ''}</div>
-              <div><span className="font-bold">Appt Date/Time:</span> {format(new Date(booking.bookingDate), 'MM/dd/yyyy')} 02:30</div>
-              <div className="mt-4">
-                <div><span className="font-bold">PO #:</span></div>
-                <div><span className="font-bold">Hours:</span></div>
-                <div><span className="font-bold">Delivery Conf#:</span></div>
-              </div>
-            </div>
-          </div>
-        </div>
-      </div>
 
-      <div className="border-2 border-black p-2 mb-6 text-center bg-gray-100">
-        GATE CODE IS 4569. DRIVER CAN BACK IN TO ANY OPEN DOOR BETWEEN 1 THRU 6
-      </div>
 
       {/* Charges */}
       <table className="w-full border-2 border-black mb-4">
@@ -238,9 +269,35 @@ export const RateConfirmation: React.FC<RateConfirmationProps> = ({ booking, shi
         </thead>
         <tbody>
           <tr className="border-b border-black">
-            <td className="p-2">Freight Charge</td>
-            <td className="p-2 text-right">${booking.rate}</td>
+            <td className="p-2">Rate Type</td>
+            <td className="p-2 text-right">{booking.rateType || 'FLAT_RATE'}</td>
           </tr>
+          {booking.rateType === 'FLAT_RATE' && (
+            <tr className="border-b border-black">
+              <td className="p-2">Rate</td>
+              <td className="p-2 text-right">${booking.rate}</td>
+            </tr>
+          )}
+          {booking.rateType === 'MILE' && (
+            <>
+              <tr className="border-b border-black">
+                <td className="p-2">Base Rate (${booking.baseRate || booking.rate} × {totalMiles} miles)</td>
+                <td className="p-2 text-right">${booking.rate}</td>
+              </tr>
+            </>
+          )}
+          {booking.rateType === 'MILE_FSC' && (
+            <>
+              <tr className="border-b border-black">
+                <td className="p-2">Base Rate (${booking.baseRate || '0.00'} × {totalMiles} miles)</td>
+                <td className="p-2 text-right">${((booking.baseRate || 0) * totalMiles).toFixed(2)}</td>
+              </tr>
+              <tr className="border-b border-black">
+                <td className="p-2">Fuel Surcharge ({(booking.fscRate || 0) * 100}% of base rate)</td>
+                <td className="p-2 text-right">${(((booking.baseRate || 0) * totalMiles) * (booking.fscRate || 0)).toFixed(2)}</td>
+              </tr>
+            </>
+          )}
           <tr className="bg-gray-100">
             <td className="p-2 font-bold">TOTAL RATE</td>
             <td className="p-2 text-right font-bold">${booking.rate} US Dollars</td>

@@ -91,8 +91,15 @@ export interface Booking {
   notes?: string;
   driverName?: string;
   phoneNumber?: string;
+  carrierEmail?: string;
   type: BookingType;
   trailerLength?: number;
+  
+  // Multi-leg booking fields
+  parentBookingId?: number;
+  legNumber?: number;
+  isParent?: boolean;
+  bookingGroupId?: string;
   
   // Rate calculation fields
   rateType: RateType;
@@ -104,6 +111,8 @@ export interface Booking {
   carrier?: Carrier;
   route?: Route;
   invoice?: Invoice;
+  childBookings?: Booking[];
+  parentBooking?: Booking;
 }
 
 export interface Invoice {

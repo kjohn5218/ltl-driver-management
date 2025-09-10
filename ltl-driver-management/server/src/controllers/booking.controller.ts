@@ -76,7 +76,13 @@ export const getBookingById = async (req: Request, res: Response) => {
           }
         },
         route: true,
-        invoice: true
+        invoice: true,
+        childBookings: {
+          include: {
+            route: true
+          }
+        },
+        parentBooking: true
       }
     });
 
@@ -101,6 +107,11 @@ export const createBooking = async (req: Request, res: Response) => {
       notes, 
       billable = false, 
       status = 'PENDING',
+      driverName,
+      phoneNumber,
+      carrierEmail,
+      type = 'POWER_ONLY',
+      trailerLength,
       bookingGroupId,
       legNumber = 1,
       isParent = true,
@@ -152,7 +163,12 @@ export const createBooking = async (req: Request, res: Response) => {
         parentBookingId: parentBookingId ? parseInt(parentBookingId) : undefined,
         rateType: rateType as any,
         baseRate: baseRate ? parseFloat(baseRate) : undefined,
-        fscRate: fscRate ? parseFloat(fscRate) : undefined
+        fscRate: fscRate ? parseFloat(fscRate) : undefined,
+        driverName: driverName || undefined,
+        phoneNumber: phoneNumber || undefined,
+        carrierEmail: carrierEmail || undefined,
+        type: type as any,
+        trailerLength: trailerLength ? parseInt(trailerLength) : undefined
       },
       include: {
         carrier: true,
@@ -188,6 +204,7 @@ export const updateBooking = async (req: Request, res: Response) => {
         fscRate: updateData.fscRate ? parseFloat(updateData.fscRate) : undefined,
         driverName: updateData.driverName || undefined,
         phoneNumber: updateData.phoneNumber || undefined,
+        carrierEmail: updateData.carrierEmail || undefined,
         type: updateData.type || undefined,
         trailerLength: updateData.trailerLength ? parseInt(updateData.trailerLength) : undefined
       },

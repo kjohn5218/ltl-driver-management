@@ -145,6 +145,7 @@ model Booking {
   notes         String?       @db.Text
   driverName    String?       // Driver name for the booking
   phoneNumber   String?       // Driver phone number
+  carrierEmail  String?       // Carrier email for rate confirmation
   type          BookingType   @default(POWER_ONLY) // Power Only or Power and Trailer
   trailerLength Int?          // Trailer length in feet (for Power and Trailer bookings)
   

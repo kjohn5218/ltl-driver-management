@@ -109,18 +109,20 @@ export const sendRateConfirmationEmail = async (
   fileName: string
 ) => {
   try {
-    if (!booking.carrier || !booking.carrier.email) return;
+    // Use carrierEmail from booking if available, otherwise fall back to carrier's saved email
+    const emailAddress = booking.carrierEmail || booking.carrier?.email;
+    if (!emailAddress) return;
 
     const shipmentNumber = `CCFS${booking.id.toString().padStart(5, '0')}`;
     
     const mailOptions = {
       from: 'ratecon@ccfs.com',
       replyTo: 'ratecon@ccfs.com',
-      to: booking.carrier.email,
+      to: emailAddress,
       subject: `Rate Confirmation - ${shipmentNumber}`,
       html: `
         <h2>Rate Confirmation</h2>
-        <p>Dear ${booking.carrier.name},</p>
+        <p>Dear ${booking.carrier?.name || 'Valued Partner'},</p>
         <p>Please find attached the rate confirmation for your upcoming shipment:</p>
         <ul>
           <li><strong>Shipment #:</strong> ${shipmentNumber}</li>
@@ -141,7 +143,7 @@ export const sendRateConfirmationEmail = async (
     };
 
     await transporter.sendMail(mailOptions);
-    console.log(`Rate confirmation sent to ${booking.carrier.email}`);
+    console.log(`Rate confirmation sent to ${emailAddress}`);
   } catch (error) {
     console.error('Failed to send rate confirmation:', error);
     throw error;

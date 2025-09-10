@@ -661,6 +661,11 @@ const BookingViewModal: React.FC<BookingViewModalProps> = ({ booking, onClose, g
               <p className="text-sm text-gray-900">{booking.phoneNumber || 'N/A'}</p>
             </div>
           </div>
+
+          <div>
+            <label className="block text-sm font-medium text-gray-700 mb-1">Carrier Email</label>
+            <p className="text-sm text-gray-900">{booking.carrierEmail || 'N/A'}</p>
+          </div>
           
           <div className="grid grid-cols-2 gap-4">
             <div>
@@ -962,6 +967,7 @@ const BookingEditModal: React.FC<BookingEditModalProps> = ({ booking, onClose, o
       notes: booking.notes || '',
       driverName: booking.driverName || '',
       phoneNumber: booking.phoneNumber || '',
+      carrierEmail: booking.carrierEmail || '',
       type: booking.type || 'POWER_ONLY',
       trailerLength: booking.trailerLength ? booking.trailerLength.toString() : '',
       bookingDate: booking.bookingDate.split('T')[0], // Format for date input
@@ -1572,6 +1578,18 @@ const BookingEditModal: React.FC<BookingEditModalProps> = ({ booking, onClose, o
                 placeholder="Enter phone number..."
               />
             </div>
+          </div>
+
+          {/* Carrier Email */}
+          <div>
+            <label className="block text-sm font-medium text-gray-700 mb-1">Carrier Email</label>
+            <input
+              type="email"
+              value={formData.carrierEmail}
+              onChange={(e) => setFormData({ ...formData, carrierEmail: e.target.value })}
+              className="w-full px-3 py-2 border border-gray-300 rounded-md focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
+              placeholder="Enter carrier email for rate confirmation..."
+            />
           </div>
           
           {/* Booking Type */}

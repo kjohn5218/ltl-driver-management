@@ -29,6 +29,9 @@ export const NewBooking: React.FC = () => {
   const [endDate, setEndDate] = useState(format(new Date(), 'yyyy-MM-dd'));
   const [rate, setRate] = useState('');
   const [notes, setNotes] = useState('');
+  const [driverName, setDriverName] = useState('');
+  const [phoneNumber, setPhoneNumber] = useState('');
+  const [carrierEmail, setCarrierEmail] = useState('');
   const [billable, setBillable] = useState(true);
   const [bookingType, setBookingType] = useState<'POWER_ONLY' | 'POWER_AND_TRAILER'>('POWER_ONLY');
   const [trailerLength, setTrailerLength] = useState('');
@@ -116,6 +119,7 @@ export const NewBooking: React.FC = () => {
   const handleCarrierSelect = (carrier: Carrier) => {
     setCarrierId(carrier.id.toString());
     setSelectedCarrierName(carrier.name);
+    setCarrierEmail(carrier.email || ''); // Populate carrier email if available
     setCarrierSearch('');
     setShowCarrierDropdown(false);
     calculateSuggestedRate();
@@ -128,6 +132,7 @@ export const NewBooking: React.FC = () => {
     if (value.length === 0) {
       setSelectedCarrierName('');
       setCarrierId('');
+      setCarrierEmail('');
     }
   };
 
@@ -135,6 +140,7 @@ export const NewBooking: React.FC = () => {
   const clearCarrierSelection = () => {
     setCarrierId('');
     setSelectedCarrierName('');
+    setCarrierEmail('');
     setCarrierSearch('');
     setShowCarrierDropdown(false);
   };
@@ -418,6 +424,9 @@ export const NewBooking: React.FC = () => {
           fscRate: predominantRateType === 'MILE_FSC' ? settingsData?.fuelSurchargeRate || 0 : null,
           billable,
           notes: combinedNotes,
+          driverName: driverName || undefined,
+          phoneNumber: phoneNumber || undefined,
+          carrierEmail: carrierEmail || undefined,
           type: bookingType,
           trailerLength: bookingType === 'POWER_AND_TRAILER' && trailerLength ? parseInt(trailerLength) : null,
           status: carrierId ? 'CONFIRMED' : 'PENDING',
@@ -476,6 +485,9 @@ export const NewBooking: React.FC = () => {
           fscRate: singleRouteRateType === 'MILE_FSC' ? fuelSurchargeRate.toFixed(2) : undefined,
           billable,
           notes: dateNotes,
+          driverName: driverName || undefined,
+          phoneNumber: phoneNumber || undefined,
+          carrierEmail: carrierEmail || undefined,
           type: bookingType,
           trailerLength: bookingType === 'POWER_AND_TRAILER' && trailerLength ? parseInt(trailerLength) : null,
           status: carrierId ? 'CONFIRMED' : 'PENDING',
@@ -759,6 +771,7 @@ export const NewBooking: React.FC = () => {
                             onClick={() => {
                               setCarrierId('');
                               setSelectedCarrierName('');
+                              setCarrierEmail('');
                               setCarrierSearch('');
                               setShowCarrierDropdown(false);
                             }}
@@ -1565,6 +1578,53 @@ export const NewBooking: React.FC = () => {
             className="w-full px-3 py-2 border border-gray-300 rounded-md focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
             placeholder="Add any additional notes..."
           />
+        </div>
+
+        {/* Driver Information */}
+        <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+          <div>
+            <label className="block text-sm font-medium text-gray-700 mb-2">
+              Driver Name
+            </label>
+            <input
+              type="text"
+              value={driverName}
+              onChange={(e) => setDriverName(e.target.value)}
+              className="w-full px-3 py-2 border border-gray-300 rounded-md focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
+              placeholder="Driver name"
+            />
+          </div>
+          <div>
+            <label className="block text-sm font-medium text-gray-700 mb-2">
+              Phone Number
+            </label>
+            <input
+              type="tel"
+              value={phoneNumber}
+              onChange={(e) => setPhoneNumber(e.target.value)}
+              className="w-full px-3 py-2 border border-gray-300 rounded-md focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
+              placeholder="Phone number"
+            />
+          </div>
+        </div>
+
+        {/* Carrier Email */}
+        <div>
+          <label className="block text-sm font-medium text-gray-700 mb-2">
+            Carrier Email
+          </label>
+          <input
+            type="email"
+            value={carrierEmail}
+            onChange={(e) => setCarrierEmail(e.target.value)}
+            className="w-full px-3 py-2 border border-gray-300 rounded-md focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
+            placeholder="Carrier email for rate confirmation"
+          />
+          {carrierId && !carrierEmail && (
+            <p className="mt-1 text-sm text-amber-600">
+              No email address found for selected carrier. Please enter one manually for rate confirmation.
+            </p>
+          )}
         </div>
 
         {/* Error Message */}
