@@ -44,7 +44,13 @@ export const getBookings = async (req: Request, res: Response) => {
       include: {
         carrier: true,
         route: true,
-        invoice: true
+        invoice: true,
+        childBookings: {
+          include: {
+            route: true
+          }
+        },
+        parentBooking: true
       }
     });
 
