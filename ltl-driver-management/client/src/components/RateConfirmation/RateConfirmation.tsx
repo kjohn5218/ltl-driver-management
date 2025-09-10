@@ -44,6 +44,19 @@ export const RateConfirmation: React.FC<RateConfirmationProps> = ({ booking, shi
       }, 0);
     }
     
+    // Fallback: If multi-leg booking exists in notes but no child bookings, try to extract total distance
+    if (multiLegBooking) {
+      // Look for total distance in notes
+      const notesMatch = booking.notes?.match(/Total Distance:\s*(\d+)\s*miles/i);
+      if (notesMatch) {
+        return parseInt(notesMatch[1]);
+      }
+      // Last resort: use route distance if available
+      if (booking.route?.distance) {
+        return booking.route.distance;
+      }
+    }
+    
     // For single-leg bookings, use the route distance
     return booking.route?.distance || 184;
   };
@@ -293,8 +306,8 @@ export const RateConfirmation: React.FC<RateConfirmationProps> = ({ booking, shi
                 <td className="p-2 text-right">${((booking.baseRate || 0) * totalMiles).toFixed(2)}</td>
               </tr>
               <tr className="border-b border-black">
-                <td className="p-2">Fuel Surcharge ({(booking.fscRate || 0) * 100}% of base rate)</td>
-                <td className="p-2 text-right">${(((booking.baseRate || 0) * totalMiles) * (booking.fscRate || 0)).toFixed(2)}</td>
+                <td className="p-2">Fuel Surcharge ({booking.fscRate || 0}% of base rate)</td>
+                <td className="p-2 text-right">${(((booking.baseRate || 0) * totalMiles) * ((booking.fscRate || 0) / 100)).toFixed(2)}</td>
               </tr>
             </>
           )}

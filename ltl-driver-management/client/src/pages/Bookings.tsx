@@ -196,8 +196,17 @@ export const Bookings: React.FC = () => {
     setDeletingBooking(booking);
   };
 
-  const handleRateConfirmation = (booking: Booking) => {
-    setRateConfirmationBooking(booking);
+  const handleRateConfirmation = async (booking: Booking) => {
+    try {
+      // Fetch complete booking data with child bookings
+      const response = await api.get(`/bookings/${booking.id}`);
+      const fullBookingData = response.data;
+      setRateConfirmationBooking(fullBookingData);
+    } catch (error) {
+      console.error('Failed to fetch full booking data:', error);
+      // Fallback to provided booking data
+      setRateConfirmationBooking(booking);
+    }
   };
 
   const handleCloseView = () => {
@@ -588,6 +597,18 @@ interface BookingViewModalProps {
 }
 
 const BookingViewModal: React.FC<BookingViewModalProps> = ({ booking, onClose, getStatusBadge, onRateConfirmation }) => {
+  // Fetch complete booking details with child bookings
+  const { data: fullBookingData } = useQuery({
+    queryKey: ['booking', booking.id],
+    queryFn: async () => {
+      const response = await api.get(`/bookings/${booking.id}`);
+      return response.data;
+    }
+  });
+
+  // Use full booking data if available, otherwise fall back to passed booking
+  const bookingToDisplay = fullBookingData || booking;
+
   // Fetch routes for distance lookup
   const { data: routesData } = useQuery({
     queryKey: ['routes'],
@@ -628,7 +649,7 @@ const BookingViewModal: React.FC<BookingViewModalProps> = ({ booking, onClose, g
     <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50">
       <div className="bg-white rounded-lg p-6 w-full max-w-2xl max-h-[90vh] overflow-y-auto">
         <div className="flex justify-between items-center mb-6">
-          <h2 className="text-xl font-bold text-gray-900">Booking Details #{booking.id}</h2>
+          <h2 className="text-xl font-bold text-gray-900">Booking Details #{bookingToDisplay.id}</h2>
           <button 
             onClick={onClose}
             className="text-gray-400 hover:text-gray-600"
@@ -641,12 +662,12 @@ const BookingViewModal: React.FC<BookingViewModalProps> = ({ booking, onClose, g
           <div className="grid grid-cols-2 gap-4">
             <div>
               <label className="block text-sm font-medium text-gray-700 mb-1">Carrier</label>
-              <p className="text-sm text-gray-900">{booking.carrier?.name || 'N/A'}</p>
+              <p className="text-sm text-gray-900">{bookingToDisplay.carrier?.name || 'N/A'}</p>
             </div>
             <div>
               <label className="block text-sm font-medium text-gray-700 mb-1">Status</label>
-              <span className={`inline-flex px-2 py-1 rounded-full text-xs font-medium ${getStatusBadge(booking.status)}`}>
-                {booking.status === 'PENDING' ? 'UNBOOKED' : booking.status === 'CONFIRMED' ? 'BOOKED' : booking.status.replace('_', ' ')}
+              <span className={`inline-flex px-2 py-1 rounded-full text-xs font-medium ${getStatusBadge(bookingToDisplay.status)}`}>
+                {bookingToDisplay.status === 'PENDING' ? 'UNBOOKED' : bookingToDisplay.status === 'CONFIRMED' ? 'BOOKED' : bookingToDisplay.status.replace('_', ' ')}
               </span>
             </div>
           </div>
@@ -654,30 +675,30 @@ const BookingViewModal: React.FC<BookingViewModalProps> = ({ booking, onClose, g
           <div className="grid grid-cols-2 gap-4">
             <div>
               <label className="block text-sm font-medium text-gray-700 mb-1">Driver Name</label>
-              <p className="text-sm text-gray-900">{booking.driverName || 'N/A'}</p>
+              <p className="text-sm text-gray-900">{bookingToDisplay.driverName || 'N/A'}</p>
             </div>
             <div>
               <label className="block text-sm font-medium text-gray-700 mb-1">Phone Number</label>
-              <p className="text-sm text-gray-900">{booking.phoneNumber || 'N/A'}</p>
+              <p className="text-sm text-gray-900">{bookingToDisplay.phoneNumber || 'N/A'}</p>
             </div>
           </div>
 
           <div>
             <label className="block text-sm font-medium text-gray-700 mb-1">Carrier Email</label>
-            <p className="text-sm text-gray-900">{booking.carrierEmail || 'N/A'}</p>
+            <p className="text-sm text-gray-900">{bookingToDisplay.carrierEmail || 'N/A'}</p>
           </div>
           
           <div className="grid grid-cols-2 gap-4">
             <div>
               <label className="block text-sm font-medium text-gray-700 mb-1">Type</label>
               <p className="text-sm text-gray-900">
-                {booking.type === 'POWER_ONLY' ? 'Power Only' : 'Power and Trailer'}
+                {bookingToDisplay.type === 'POWER_ONLY' ? 'Power Only' : 'Power and Trailer'}
               </p>
             </div>
-            {booking.type === 'POWER_AND_TRAILER' && booking.trailerLength && (
+            {bookingToDisplay.type === 'POWER_AND_TRAILER' && bookingToDisplay.trailerLength && (
               <div>
                 <label className="block text-sm font-medium text-gray-700 mb-1">Trailer Length</label>
-                <p className="text-sm text-gray-900">{booking.trailerLength} feet</p>
+                <p className="text-sm text-gray-900">{bookingToDisplay.trailerLength} feet</p>
               </div>
             )}
           </div>
@@ -687,9 +708,97 @@ const BookingViewModal: React.FC<BookingViewModalProps> = ({ booking, onClose, g
             <label className="block text-sm font-medium text-gray-700 mb-2">Route Information</label>
             <div className="bg-gray-50 p-4 rounded-lg space-y-3">
               {(() => {
-                const multiLegInfo = parseMultiLegBooking(booking.notes || null);
-                return multiLegInfo ? (
-                  // Multi-leg booking display
+                // Prefer child bookings data over notes parsing
+                const hasChildBookings = bookingToDisplay.childBookings && bookingToDisplay.childBookings.length > 0;
+                const multiLegInfo = parseMultiLegBooking(bookingToDisplay.notes || null);
+                
+                return hasChildBookings ? (
+                  // Multi-leg booking display using actual child booking data
+                  <div className="space-y-3">
+                    <div className="flex items-center gap-2 text-sm font-medium text-gray-900">
+                      <MapPin className="w-4 h-4 text-blue-500" />
+                      Multi-Leg Journey ({bookingToDisplay.childBookings.length} legs)
+                    </div>
+                    
+                    {/* Show all legs using child booking data */}
+                    <div className="space-y-3">
+                      {bookingToDisplay.childBookings.map((childBooking: Booking, index: number) => {
+                        return (
+                          <div key={childBooking.id} className="bg-white p-4 rounded border border-gray-200">
+                            <div className="flex justify-between items-center mb-3">
+                              <div className="font-medium text-sm text-gray-900">
+                                Leg {childBooking.legNumber}: {childBooking.route?.origin} → {childBooking.route?.destination}
+                              </div>
+                              <div className="text-right">
+                                <div className="text-xs text-gray-500">
+                                  {childBooking.route?.distance || 0} miles
+                                </div>
+                                <div className="text-xs text-gray-500">
+                                  ${childBooking.rate}
+                                </div>
+                              </div>
+                            </div>
+                            
+                            {/* Detailed address information */}
+                            {childBooking.route && (
+                              <div className="grid grid-cols-1 md:grid-cols-2 gap-4 text-xs">
+                                {/* Origin Information */}
+                                <div className="space-y-1">
+                                  <h5 className="font-medium text-gray-700">Origin</h5>
+                                  <div className="text-gray-600 space-y-1">
+                                    <div className="font-medium">{childBooking.route.origin}</div>
+                                    {childBooking.route.originAddress && (
+                                      <div>{childBooking.route.originAddress}</div>
+                                    )}
+                                    {(childBooking.route.originCity || childBooking.route.originState || childBooking.route.originZipCode) && (
+                                      <div>
+                                        {childBooking.route.originCity && `${childBooking.route.originCity}, `}
+                                        {childBooking.route.originState && `${childBooking.route.originState} `}
+                                        {childBooking.route.originZipCode}
+                                      </div>
+                                    )}
+                                    {childBooking.route.originContact && (
+                                      <div className="text-xs text-gray-500">Contact: {childBooking.route.originContact}</div>
+                                    )}
+                                  </div>
+                                </div>
+                                
+                                {/* Destination Information */}
+                                <div className="space-y-1">
+                                  <h5 className="font-medium text-gray-700">Destination</h5>
+                                  <div className="text-gray-600 space-y-1">
+                                    <div className="font-medium">{childBooking.route.destination}</div>
+                                    {childBooking.route.destinationAddress && (
+                                      <div>{childBooking.route.destinationAddress}</div>
+                                    )}
+                                    {(childBooking.route.destinationCity || childBooking.route.destinationState || childBooking.route.destinationZipCode) && (
+                                      <div>
+                                        {childBooking.route.destinationCity && `${childBooking.route.destinationCity}, `}
+                                        {childBooking.route.destinationState && `${childBooking.route.destinationState} `}
+                                        {childBooking.route.destinationZipCode}
+                                      </div>
+                                    )}
+                                    {childBooking.route.destinationContact && (
+                                      <div className="text-xs text-gray-500">Contact: {childBooking.route.destinationContact}</div>
+                                    )}
+                                  </div>
+                                </div>
+                              </div>
+                            )}
+                          </div>
+                        );
+                      })}
+                    </div>
+                    
+                    {/* Total distance using actual child booking data */}
+                    <div className="text-xs text-gray-500 pt-2 border-t border-gray-200">
+                      Total Distance: {bookingToDisplay.childBookings.reduce((total: number, child: Booking) => {
+                        return total + (child.route?.distance || 0);
+                      }, 0)} miles
+                    </div>
+                  </div>
+                ) : multiLegInfo ? (
+                  // Multi-leg booking display using notes parsing (fallback)
                   <div className="space-y-3">
                     <div className="flex items-center gap-2 text-sm font-medium text-gray-900">
                       <MapPin className="w-4 h-4 text-blue-500" />
@@ -784,12 +893,12 @@ const BookingViewModal: React.FC<BookingViewModalProps> = ({ booking, onClose, g
                       }, 0)} miles
                     </div>
                   </div>
-                ) : booking.route ? (
+                ) : bookingToDisplay.route ? (
                   // Single-leg booking display (existing behavior)
                   <div>
                     <div className="flex items-center gap-2 text-sm font-medium text-gray-900">
                       <MapPin className="w-4 h-4 text-blue-500" />
-                      {booking.route.name}
+                      {bookingToDisplay.route.name}
                     </div>
                     
                     <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
@@ -797,19 +906,19 @@ const BookingViewModal: React.FC<BookingViewModalProps> = ({ booking, onClose, g
                       <div className="space-y-2">
                         <h4 className="font-medium text-gray-800 text-sm">Origin</h4>
                         <div className="text-sm text-gray-600 space-y-1">
-                          <div className="font-medium">{booking.route.origin}</div>
-                          {booking.route.originAddress && (
-                            <div>{booking.route.originAddress}</div>
+                          <div className="font-medium">{bookingToDisplay.route.origin}</div>
+                          {bookingToDisplay.route.originAddress && (
+                            <div>{bookingToDisplay.route.originAddress}</div>
                           )}
-                          {(booking.route.originCity || booking.route.originState || booking.route.originZipCode) && (
+                          {(bookingToDisplay.route.originCity || bookingToDisplay.route.originState || bookingToDisplay.route.originZipCode) && (
                             <div>
-                              {booking.route.originCity && `${booking.route.originCity}, `}
-                              {booking.route.originState && `${booking.route.originState} `}
-                              {booking.route.originZipCode}
+                              {bookingToDisplay.route.originCity && `${bookingToDisplay.route.originCity}, `}
+                              {bookingToDisplay.route.originState && `${bookingToDisplay.route.originState} `}
+                              {bookingToDisplay.route.originZipCode}
                             </div>
                           )}
-                          {booking.route.originContact && (
-                            <div className="text-xs text-gray-500">Contact: {booking.route.originContact}</div>
+                          {bookingToDisplay.route.originContact && (
+                            <div className="text-xs text-gray-500">Contact: {bookingToDisplay.route.originContact}</div>
                           )}
                         </div>
                       </div>
@@ -818,27 +927,27 @@ const BookingViewModal: React.FC<BookingViewModalProps> = ({ booking, onClose, g
                       <div className="space-y-2">
                         <h4 className="font-medium text-gray-800 text-sm">Destination</h4>
                         <div className="text-sm text-gray-600 space-y-1">
-                          <div className="font-medium">{booking.route.destination}</div>
-                          {booking.route.destinationAddress && (
-                            <div>{booking.route.destinationAddress}</div>
+                          <div className="font-medium">{bookingToDisplay.route.destination}</div>
+                          {bookingToDisplay.route.destinationAddress && (
+                            <div>{bookingToDisplay.route.destinationAddress}</div>
                           )}
-                          {(booking.route.destinationCity || booking.route.destinationState || booking.route.destinationZipCode) && (
+                          {(bookingToDisplay.route.destinationCity || bookingToDisplay.route.destinationState || bookingToDisplay.route.destinationZipCode) && (
                             <div>
-                              {booking.route.destinationCity && `${booking.route.destinationCity}, `}
-                              {booking.route.destinationState && `${booking.route.destinationState} `}
-                              {booking.route.destinationZipCode}
+                              {bookingToDisplay.route.destinationCity && `${bookingToDisplay.route.destinationCity}, `}
+                              {bookingToDisplay.route.destinationState && `${bookingToDisplay.route.destinationState} `}
+                              {bookingToDisplay.route.destinationZipCode}
                             </div>
                           )}
-                          {booking.route.destinationContact && (
-                            <div className="text-xs text-gray-500">Contact: {booking.route.destinationContact}</div>
+                          {bookingToDisplay.route.destinationContact && (
+                            <div className="text-xs text-gray-500">Contact: {bookingToDisplay.route.destinationContact}</div>
                           )}
                         </div>
                       </div>
                     </div>
                     
-                    {booking.route.distance && (
+                    {bookingToDisplay.route.distance && (
                       <div className="text-xs text-gray-500 pt-2 border-t border-gray-200">
-                        Distance: {booking.route.distance} miles
+                        Distance: {bookingToDisplay.route.distance} miles
                       </div>
                     )}
                   </div>
@@ -850,57 +959,57 @@ const BookingViewModal: React.FC<BookingViewModalProps> = ({ booking, onClose, g
           <div className="grid grid-cols-2 gap-4">
             <div>
               <label className="block text-sm font-medium text-gray-700 mb-1">Booking Date</label>
-              <p className="text-sm text-gray-900">{format(new Date(booking.bookingDate), 'MMM dd, yyyy')}</p>
+              <p className="text-sm text-gray-900">{format(new Date(bookingToDisplay.bookingDate), 'MMM dd, yyyy')}</p>
             </div>
             <div>
               <label className="block text-sm font-medium text-gray-700 mb-1">Rate Type</label>
               <p className="text-sm text-gray-900">
-                {booking.rateType === 'MILE' ? 'Per Mile' : 
-                 booking.rateType === 'MILE_FSC' ? 'Per Mile + FSC' :
-                 booking.rateType === 'FLAT_RATE' ? 'Flat Rate' : 'Unknown'}
+                {bookingToDisplay.rateType === 'MILE' ? 'Per Mile' : 
+                 bookingToDisplay.rateType === 'MILE_FSC' ? 'Per Mile + FSC' :
+                 bookingToDisplay.rateType === 'FLAT_RATE' ? 'Flat Rate' : 'Unknown'}
               </p>
             </div>
           </div>
           
           <div className="grid grid-cols-3 gap-4">
-            {booking.rateType !== 'FLAT_RATE' && booking.baseRate && (
+            {bookingToDisplay.rateType !== 'FLAT_RATE' && bookingToDisplay.baseRate && (
               <div>
                 <label className="block text-sm font-medium text-gray-700 mb-1">Base Rate</label>
-                <p className="text-sm text-gray-900">${booking.baseRate}</p>
+                <p className="text-sm text-gray-900">${bookingToDisplay.baseRate}</p>
               </div>
             )}
-            {booking.rateType === 'MILE_FSC' && booking.fscRate && (
+            {bookingToDisplay.rateType === 'MILE_FSC' && bookingToDisplay.fscRate && (
               <div>
                 <label className="block text-sm font-medium text-gray-700 mb-1">FSC Rate</label>
-                <p className="text-sm text-gray-900">{booking.fscRate}%</p>
+                <p className="text-sm text-gray-900">{bookingToDisplay.fscRate}%</p>
               </div>
             )}
             <div>
               <label className="block text-sm font-medium text-gray-700 mb-1">Total Rate</label>
-              <p className="text-sm text-gray-900 font-medium text-green-600">${booking.rate}</p>
+              <p className="text-sm text-gray-900 font-medium text-green-600">${bookingToDisplay.rate}</p>
             </div>
           </div>
           
           <div>
             <label className="block text-sm font-medium text-gray-700 mb-1">Billable</label>
-            <p className="text-sm text-gray-900">{booking.billable ? 'Yes' : 'No'}</p>
+            <p className="text-sm text-gray-900">{bookingToDisplay.billable ? 'Yes' : 'No'}</p>
           </div>
           
-          {booking.notes && (
+          {bookingToDisplay.notes && (
             <div>
               <label className="block text-sm font-medium text-gray-700 mb-1">Notes</label>
-              <p className="text-sm text-gray-900 bg-gray-50 p-3 rounded">{booking.notes}</p>
+              <p className="text-sm text-gray-900 bg-gray-50 p-3 rounded">{bookingToDisplay.notes}</p>
             </div>
           )}
           
           <div className="grid grid-cols-2 gap-4 text-xs text-gray-500">
             <div>
               <label className="block font-medium mb-1">Created</label>
-              <p>{format(new Date(booking.createdAt), 'MMM dd, yyyy HH:mm')}</p>
+              <p>{format(new Date(bookingToDisplay.createdAt), 'MMM dd, yyyy HH:mm')}</p>
             </div>
             <div>
               <label className="block font-medium mb-1">Last Updated</label>
-              <p>{format(new Date(booking.updatedAt), 'MMM dd, yyyy HH:mm')}</p>
+              <p>{format(new Date(bookingToDisplay.updatedAt), 'MMM dd, yyyy HH:mm')}</p>
             </div>
           </div>
         </div>
@@ -910,9 +1019,9 @@ const BookingViewModal: React.FC<BookingViewModalProps> = ({ booking, onClose, g
             <button 
               onClick={() => {
                 onClose();
-                onRateConfirmation(booking);
+                onRateConfirmation(bookingToDisplay);
               }}
-              disabled={!booking.carrier}
+              disabled={!bookingToDisplay.carrier}
               className="px-4 py-2 bg-green-600 text-white rounded hover:bg-green-700 disabled:bg-gray-400 disabled:cursor-not-allowed flex items-center gap-2"
             >
               <FileText className="w-4 h-4" />
