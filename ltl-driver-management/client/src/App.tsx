@@ -8,6 +8,7 @@ import { Layout } from './components/layout/Layout';
 import { Dashboard } from './pages/Dashboard';
 import { Carriers } from './pages/Carriers';
 import { Routes as RoutesPage } from './pages/Routes';
+import { Locations } from './pages/Locations';
 import { Bookings } from './pages/Bookings';
 import { NewBooking } from './pages/NewBooking';
 import { Invoices } from './pages/Invoices';
@@ -60,6 +61,16 @@ function App() {
                 <ProtectedRoute>
                   <Layout>
                     <RoutesPage />
+                  </Layout>
+                </ProtectedRoute>
+              }
+            />
+            <Route
+              path="/locations"
+              element={
+                <ProtectedRoute>
+                  <Layout>
+                    <Locations />
                   </Layout>
                 </ProtectedRoute>
               }

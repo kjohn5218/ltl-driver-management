@@ -144,6 +144,23 @@ export interface AuthResponse {
   token: string;
 }
 
+export interface Location {
+  id: number;
+  code: string;
+  name?: string;
+  address?: string;
+  city?: string;
+  state?: string;
+  zipCode?: string;
+  contact?: string;
+  timeZone?: string;
+  latitude?: number;
+  longitude?: number;
+  active: boolean;
+  createdAt: string;
+  updatedAt: string;
+}
+
 export interface PaginatedResponse<T> {
   data: T[];
   pagination: {

@@ -5,6 +5,8 @@ import { Route } from '../types';
 import { Plus, Search, Edit, Eye, Trash2, MapPin, Clock, DollarSign, Filter, X, Calculator, Copy } from 'lucide-react';
 import { calculateRoute, calculateArrivalTime, formatRunTime, hasAddressInfo } from '../utils/routeCalculations';
 import { LocationWithTooltip, RouteDetails } from '../components/LocationDisplay';
+import { LocationAutocomplete } from '../components/LocationAutocomplete';
+import { Location } from '../types';
 
 
 export const Routes: React.FC = () => {
@@ -1007,6 +1009,8 @@ const AddRouteModal: React.FC<AddRouteModalProps> = ({ onClose, onSave, copyFrom
   const [showRouteSelector, setShowRouteSelector] = useState(false);
   const [routeSearchInput, setRouteSearchInput] = useState('');
   const [errorMessage, setErrorMessage] = useState<string | null>(null);
+  const [selectedOriginLocation, setSelectedOriginLocation] = useState<Location | null>(null);
+  const [selectedDestinationLocation, setSelectedDestinationLocation] = useState<Location | null>(null);
   
   const handleCopyFromRoute = (route: Route) => {
     setFormData({
@@ -1039,6 +1043,40 @@ const AddRouteModal: React.FC<AddRouteModalProps> = ({ onClose, onSave, copyFrom
     });
     setShowRouteSelector(false);
     setRouteSearchInput('');
+  };
+
+  const handleOriginLocationSelect = (location: Location | null) => {
+    setSelectedOriginLocation(location);
+    if (location) {
+      setFormData(prev => ({
+        ...prev,
+        originAddress: location.address || prev.originAddress,
+        originCity: location.city || prev.originCity,
+        originState: location.state || prev.originState,
+        originZipCode: location.zipCode || prev.originZipCode,
+        originContact: location.contact || prev.originContact,
+        originTimeZone: location.timeZone || prev.originTimeZone,
+        originLatitude: location.latitude?.toString() || prev.originLatitude,
+        originLongitude: location.longitude?.toString() || prev.originLongitude
+      }));
+    }
+  };
+
+  const handleDestinationLocationSelect = (location: Location | null) => {
+    setSelectedDestinationLocation(location);
+    if (location) {
+      setFormData(prev => ({
+        ...prev,
+        destinationAddress: location.address || prev.destinationAddress,
+        destinationCity: location.city || prev.destinationCity,
+        destinationState: location.state || prev.destinationState,
+        destinationZipCode: location.zipCode || prev.destinationZipCode,
+        destinationContact: location.contact || prev.destinationContact,
+        destinationTimeZone: location.timeZone || prev.destinationTimeZone,
+        destinationLatitude: location.latitude?.toString() || prev.destinationLatitude,
+        destinationLongitude: location.longitude?.toString() || prev.destinationLongitude
+      }));
+    }
   };
   
   const filteredRoutes = allRoutes.filter((route: Route) => {
@@ -1340,24 +1378,24 @@ const AddRouteModal: React.FC<AddRouteModalProps> = ({ onClose, onSave, copyFrom
           <div className="grid grid-cols-2 gap-4">
             <div>
               <label className="block text-sm font-medium text-gray-700 mb-1">Origin *</label>
-              <input
-                type="text"
-                required
+              <LocationAutocomplete
                 value={formData.origin}
-                onChange={(e) => setFormData({ ...formData, origin: e.target.value })}
+                onChange={(value) => setFormData({ ...formData, origin: value })}
+                onLocationSelect={handleOriginLocationSelect}
+                placeholder="Search origin locations (e.g., NYC, PHX)"
+                required
                 className="w-full px-3 py-2 border border-gray-300 rounded-md focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
-                placeholder="e.g., NYC"
               />
             </div>
             <div>
               <label className="block text-sm font-medium text-gray-700 mb-1">Destination *</label>
-              <input
-                type="text"
-                required
+              <LocationAutocomplete
                 value={formData.destination}
-                onChange={(e) => setFormData({ ...formData, destination: e.target.value })}
+                onChange={(value) => setFormData({ ...formData, destination: value })}
+                onLocationSelect={handleDestinationLocationSelect}
+                placeholder="Search destination locations (e.g., LAX, DEN)"
+                required
                 className="w-full px-3 py-2 border border-gray-300 rounded-md focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
-                placeholder="e.g., LAX"
               />
             </div>
           </div>
