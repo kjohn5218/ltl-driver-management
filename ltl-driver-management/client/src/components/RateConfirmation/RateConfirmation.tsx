@@ -68,21 +68,21 @@ export const RateConfirmation: React.FC<RateConfirmationProps> = ({ booking, shi
   const totalMiles = getTotalMiles();
   
   return (
-    <div className="rate-confirmation bg-white p-8" style={{ width: '8.5in', minHeight: '11in', fontFamily: 'Arial, sans-serif' }}>
+    <div className="rate-confirmation bg-white p-4" style={{ width: '8.5in', minHeight: '11in', fontFamily: 'Arial, sans-serif' }}>
       {/* Logo */}
-      <div className="text-center mb-4">
-        <img src="/ccfs-logo.svg" alt="CCFS Logo" className="h-20 mx-auto" />
+      <div className="text-center mb-2">
+        <img src="/ccfs-logo.svg" alt="CCFS Logo" className="h-12 mx-auto" />
       </div>
 
       {/* Company Info */}
-      <div className="text-center mb-4">
-        <div className="font-bold text-xl">CrossCounty Freight Solutions</div>
-        <div>1929 Hancock Dr</div>
-        <div>Bismarck, ND 58502</div>
+      <div className="text-center mb-3">
+        <div className="font-bold text-lg">CrossCounty Freight Solutions</div>
+        <div className="text-sm">1929 Hancock Dr</div>
+        <div className="text-sm">Bismarck, ND 58502</div>
       </div>
 
       {/* Header */}
-      <div className="flex justify-between items-start mb-6">
+      <div className="flex justify-between items-start mb-3">
         <div>
           <div className="font-bold text-lg">Load # {shipmentNumber}</div>
         </div>
@@ -93,7 +93,7 @@ export const RateConfirmation: React.FC<RateConfirmationProps> = ({ booking, shi
       </div>
 
       {/* Carrier Information */}
-      <table className="w-full border-2 border-black mb-4">
+      <table className="w-full border-2 border-black mb-2">
         <thead>
           <tr className="bg-black text-white">
             <th className="text-center py-1">CARRIER</th>
@@ -111,61 +111,61 @@ export const RateConfirmation: React.FC<RateConfirmationProps> = ({ booking, shi
       </table>
 
       {/* Vehicle Information */}
-      <table className="w-full border-2 border-black mb-4">
+      <table className="w-full border-2 border-black mb-2">
         <thead>
           <tr className="bg-gray-200">
-            <th className="border-r border-black p-2 text-left">MC #</th>
-            <th className="border-r border-black p-2 text-left">DOT #</th>
-            <th className="border-r border-black p-2 text-left">TRUCK #</th>
-            <th className="border-r border-black p-2 text-left">TRAILER #</th>
-            <th className="border-r border-black p-2 text-left">DRIVER</th>
+            <th className="border-r border-black p-1 text-left">MC #</th>
+            <th className="border-r border-black p-1 text-left">DOT #</th>
+            <th className="border-r border-black p-1 text-left">TRUCK #</th>
+            <th className="border-r border-black p-1 text-left">TRAILER #</th>
+            <th className="border-r border-black p-1 text-left">DRIVER</th>
             <th className="p-2 text-left">DRIVER PHONE</th>
           </tr>
         </thead>
         <tbody>
           <tr>
-            <td className="border-r border-black p-2">{booking.carrier?.mcNumber || ''}</td>
-            <td className="border-r border-black p-2">{booking.carrier?.dotNumber || ''}</td>
-            <td className="border-r border-black p-2"></td>
-            <td className="border-r border-black p-2"></td>
-            <td className="border-r border-black p-2">{booking.driverName || ''}</td>
+            <td className="border-r border-black p-1">{booking.carrier?.mcNumber || ''}</td>
+            <td className="border-r border-black p-1">{booking.carrier?.dotNumber || ''}</td>
+            <td className="border-r border-black p-1"></td>
+            <td className="border-r border-black p-1"></td>
+            <td className="border-r border-black p-1">{booking.driverName || ''}</td>
             <td className="p-2">{booking.phoneNumber || ''}</td>
           </tr>
         </tbody>
       </table>
 
       {/* Size & Type / Description */}
-      <table className="w-full border-2 border-black mb-4">
+      <table className="w-full border-2 border-black mb-2">
         <thead>
           <tr className="bg-gray-200">
-            <th className="border-r border-black p-2 text-left">SIZE & TYPE</th>
-            <th className="border-r border-black p-2 text-left">DESCRIPTION</th>
-            <th className="border-r border-black p-2 text-left">HU</th>
-            <th className="border-r border-black p-2 text-left">HZ</th>
-            <th className="border-r border-black p-2 text-left">TOTAL WEIGHT</th>
+            <th className="border-r border-black p-1 text-left">SIZE & TYPE</th>
+            <th className="border-r border-black p-1 text-left">DESCRIPTION</th>
+            <th className="border-r border-black p-1 text-left">HU</th>
+            <th className="border-r border-black p-1 text-left">HZ</th>
+            <th className="border-r border-black p-1 text-left">TOTAL WEIGHT</th>
             <th className="p-2 text-left">MILES</th>
           </tr>
         </thead>
         <tbody>
           <tr>
-            <td className="border-r border-black p-2">
+            <td className="border-r border-black p-1">
               {booking.type === 'POWER_AND_TRAILER' && booking.trailerLength 
                 ? `${booking.trailerLength} FT` 
                 : 'Van 53 FT'}
             </td>
-            <td className="border-r border-black p-2">FAK</td>
-            <td className="border-r border-black p-2"></td>
-            <td className="border-r border-black p-2"></td>
-            <td className="border-r border-black p-2">35,000.00 LB</td>
+            <td className="border-r border-black p-1">FAK</td>
+            <td className="border-r border-black p-1"></td>
+            <td className="border-r border-black p-1"></td>
+            <td className="border-r border-black p-1">35,000.00 LB</td>
             <td className="p-2">{totalMiles}</td>
           </tr>
         </tbody>
       </table>
 
       {/* Notes */}
-      <div className="mb-4">
-        <div className="border-2 border-black p-2 bg-gray-100">
-          <div className="font-bold text-center mb-2">NOTES</div>
+      <div className="mb-2">
+        <div className="border-2 border-black p-1 bg-gray-100">
+          <div className="font-bold text-center mb-1">NOTES</div>
           <div className="text-sm">
             For after hours dispatch assistance or to notify CCFS of any delay between the hours of 9:30 PM - 6:30 AM CT please call 701-204-0480.
           </div>
@@ -180,10 +180,10 @@ export const RateConfirmation: React.FC<RateConfirmationProps> = ({ booking, shi
       {booking.childBookings && booking.childBookings.length > 0 ? (
         // Multi-leg booking: render using actual child booking data
         booking.childBookings.map((childBooking, index) => (
-          <div key={childBooking.id} className="border-2 border-black mb-4">
-            <div className="bg-black text-white p-2 text-center font-bold">Leg {childBooking.legNumber}</div>
-            <div className="p-4">
-              <div className="grid grid-cols-2 gap-4">
+          <div key={childBooking.id} className="border-2 border-black mb-2">
+            <div className="bg-black text-white p-1 text-center font-bold">Leg {childBooking.legNumber}</div>
+            <div className="p-2">
+              <div className="grid grid-cols-2 gap-2">
                 <div>
                   <div className="font-bold mb-2">ORIGIN</div>
                   <div><span className="font-bold">Location:</span> {childBooking.route?.origin}</div>
@@ -214,10 +214,10 @@ export const RateConfirmation: React.FC<RateConfirmationProps> = ({ booking, shi
       ) : multiLegBooking ? (
         // Fallback: Multi-leg booking using notes parsing (legacy support)
         multiLegBooking.map((leg, index) => (
-          <div key={leg.legNumber} className="border-2 border-black mb-4">
-            <div className="bg-black text-white p-2 text-center font-bold">Leg {leg.legNumber}</div>
-            <div className="p-4">
-              <div className="grid grid-cols-2 gap-4">
+          <div key={leg.legNumber} className="border-2 border-black mb-2">
+            <div className="bg-black text-white p-1 text-center font-bold">Leg {leg.legNumber}</div>
+            <div className="p-2">
+              <div className="grid grid-cols-2 gap-2">
                 <div>
                   <div className="font-bold mb-2">ORIGIN</div>
                   <div><span className="font-bold">Location:</span> {leg.origin}</div>
@@ -247,7 +247,7 @@ export const RateConfirmation: React.FC<RateConfirmationProps> = ({ booking, shi
         ))
       ) : (
         // Single-leg booking: render original format
-        <div className="border-2 border-black mb-4">
+        <div className="border-2 border-black mb-2">
           <div className="bg-black text-white p-2 text-center font-bold">Leg 1</div>
           <div className="p-4">
             <div className="grid grid-cols-2 gap-4">
@@ -277,8 +277,8 @@ export const RateConfirmation: React.FC<RateConfirmationProps> = ({ booking, shi
         </div>
       )}
 
-      <div className="border-2 border-black p-3 mb-4 bg-gray-100">
-        <div className="text-center font-bold mb-2">CHECK IN WITH DISPATCH FOR PAPERWORK AND DOOR ASSIGNMENT</div>
+      <div className="border-2 border-black p-2 mb-2 bg-gray-100">
+        <div className="text-center font-bold mb-1">CHECK IN WITH DISPATCH FOR PAPERWORK AND DOOR ASSIGNMENT</div>
         <div className="text-sm space-y-1">
           <div>Maintain Seal Integrity - seal loads prior to departure and record number on manifest</div>
           <div>Departure and arrival of each stop MUST be recorded in real-time on a mobile browser at driver.ccfs.com.</div>
@@ -286,10 +286,8 @@ export const RateConfirmation: React.FC<RateConfirmationProps> = ({ booking, shi
         </div>
       </div>
 
-
-
       {/* Charges */}
-      <table className="w-full border-2 border-black mb-4">
+      <table className="w-full border-2 border-black mb-2">
         <thead>
           <tr className="bg-black text-white">
             <th colSpan={2} className="p-2 text-center">CHARGES</th>
@@ -334,7 +332,7 @@ export const RateConfirmation: React.FC<RateConfirmationProps> = ({ booking, shi
       </table>
 
       {/* Footer */}
-      <div className="text-center text-sm text-gray-600 mt-8">
+      <div className="text-center text-sm text-gray-600 mt-4">
         <div className="mb-2">
           <span className="font-bold">Load # </span>
           <span className="italic">{shipmentNumber}</span>
