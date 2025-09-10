@@ -242,3 +242,23 @@ enum InvoiceStatus {
   OVERDUE
   CANCELLED
 }
+
+// Location model for managing origin and destination locations
+model Location {
+  id          Int      @id @default(autoincrement())
+  code        String   @unique                      // Location code (e.g., "LAX", "PHX")
+  name        String?                               // Optional full name
+  address     String?                               // Street address
+  city        String?                               // City
+  state       String?                               // State
+  zipCode     String?                               // ZIP code
+  contact     String?                               // Contact information
+  timeZone    String?                               // Time zone (PST, MST, CST, AZST)
+  latitude    Decimal?                @db.Decimal(10, 7) // GPS coordinates
+  longitude   Decimal?                @db.Decimal(10, 7)
+  active      Boolean                 @default(true)     // Whether location is active
+  createdAt   DateTime                @default(now())
+  updatedAt   DateTime                @updatedAt
+
+  @@map("locations")
+}
