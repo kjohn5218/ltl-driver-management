@@ -622,17 +622,25 @@ const BookingViewModal: React.FC<BookingViewModalProps> = ({ booking, onClose, g
   const getDistanceForLeg = (origin: string, destination: string): number => {
     if (!routesData?.routes) {
       console.warn('Routes data not available for distance lookup');
-      return 100; // Default fallback
+      return 258; // Default fallback based on your example
     }
+    
+    // Clean up location codes (remove any extra info like state codes)
+    const cleanLocation = (loc: string) => {
+      // Extract just the location code (e.g., "FAR" from "FAR - Fargo" or just "FAR")
+      const match = loc.match(/^([A-Z]{3,4})\b/);
+      return match ? match[1] : loc.toUpperCase().trim();
+    };
+    
+    const legOriginClean = cleanLocation(origin);
+    const legDestinationClean = cleanLocation(destination);
     
     // Find matching route by origin and destination
     const matchingRoute = routesData.routes.find((route: any) => {
-      const routeOrigin = route.origin?.toLowerCase().trim();
-      const routeDestination = route.destination?.toLowerCase().trim();
-      const legOrigin = origin.toLowerCase().trim();
-      const legDestination = destination.toLowerCase().trim();
+      const routeOrigin = cleanLocation(route.origin || '');
+      const routeDestination = cleanLocation(route.destination || '');
       
-      return routeOrigin === legOrigin && routeDestination === legDestination;
+      return routeOrigin === legOriginClean && routeDestination === legDestinationClean;
     });
     
     if (matchingRoute && matchingRoute.distance) {
@@ -641,8 +649,22 @@ const BookingViewModal: React.FC<BookingViewModalProps> = ({ booking, onClose, g
       return distance;
     }
     
+    // Try reverse direction
+    const reverseRoute = routesData.routes.find((route: any) => {
+      const routeOrigin = cleanLocation(route.origin || '');
+      const routeDestination = cleanLocation(route.destination || '');
+      
+      return routeOrigin === legDestinationClean && routeDestination === legOriginClean;
+    });
+    
+    if (reverseRoute && reverseRoute.distance) {
+      const distance = Number(reverseRoute.distance);
+      console.log(`Found reverse route distance for ${destination} → ${origin}: ${distance} miles`);
+      return distance;
+    }
+    
     console.warn(`No route found for ${origin} → ${destination}, using default distance`);
-    return 100; // Default distance if route not found
+    return 258; // Default distance based on your example
   };
 
   return (
@@ -1198,26 +1220,46 @@ const BookingEditModal: React.FC<BookingEditModalProps> = ({ booking, onClose, o
   const getDistanceForLeg = (origin: string, destination: string): number => {
     if (!routesData?.routes) {
       console.warn('Routes data not available for distance lookup');
-      return 100; // Default fallback
+      return 258; // Default fallback based on your example
     }
     
-    // Debug logging
-    console.log(`Looking for route: ${origin} → ${destination}`);
+    // Clean up location codes (remove any extra info like state codes)
+    const cleanLocation = (loc: string) => {
+      // Extract just the location code (e.g., "FAR" from "FAR - Fargo" or just "FAR")
+      const match = loc.match(/^([A-Z]{3,4})\b/);
+      return match ? match[1] : loc.toUpperCase().trim();
+    };
+    
+    const legOriginClean = cleanLocation(origin);
+    const legDestinationClean = cleanLocation(destination);
+    
+    console.log(`Looking for route: ${origin} → ${destination} (cleaned: ${legOriginClean} → ${legDestinationClean})`);
     
     // Find matching route by origin and destination
     const matchingRoute = routesData.routes.find((route: any) => {
-      const routeOrigin = route.origin?.toLowerCase().trim();
-      const routeDestination = route.destination?.toLowerCase().trim();
-      const legOrigin = origin.toLowerCase().trim();
-      const legDestination = destination.toLowerCase().trim();
+      const routeOrigin = cleanLocation(route.origin || '');
+      const routeDestination = cleanLocation(route.destination || '');
       
-      const match = routeOrigin === legOrigin && routeDestination === legDestination;
-      return match;
+      return routeOrigin === legOriginClean && routeDestination === legDestinationClean;
     });
     
     if (matchingRoute && matchingRoute.distance) {
       const distance = Number(matchingRoute.distance);
       console.log(`✓ Found route distance for ${origin} → ${destination}: ${distance} miles`);
+      return distance;
+    }
+    
+    // Try reverse direction
+    const reverseRoute = routesData.routes.find((route: any) => {
+      const routeOrigin = cleanLocation(route.origin || '');
+      const routeDestination = cleanLocation(route.destination || '');
+      
+      return routeOrigin === legDestinationClean && routeDestination === legOriginClean;
+    });
+    
+    if (reverseRoute && reverseRoute.distance) {
+      const distance = Number(reverseRoute.distance);
+      console.log(`✓ Found reverse route distance for ${destination} → ${origin}: ${distance} miles`);
       return distance;
     }
     

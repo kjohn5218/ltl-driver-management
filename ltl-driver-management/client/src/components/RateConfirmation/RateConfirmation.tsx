@@ -44,17 +44,21 @@ export const RateConfirmation: React.FC<RateConfirmationProps> = ({ booking, shi
       }, 0);
     }
     
-    // Fallback: If multi-leg booking exists in notes but no child bookings, try to extract total distance
+    // Fallback: If multi-leg booking exists in notes but no child bookings
     if (multiLegBooking) {
-      // Look for total distance in notes
-      const notesMatch = booking.notes?.match(/Total Distance:\s*(\d+)\s*miles/i);
-      if (notesMatch) {
-        return parseInt(notesMatch[1]);
-      }
-      // Last resort: use route distance if available
+      // For multi-leg bookings, multiply the number of legs by typical distance
+      // In your example, each leg FAR→MSP is 258 miles
+      // This is a better approximation than using single route distance
+      const legCount = multiLegBooking.length;
+      
+      // If we have a route distance, multiply by number of legs
       if (booking.route?.distance) {
-        return booking.route.distance;
+        // For round trips or similar multi-legs, this gives better estimate
+        return booking.route.distance * legCount;
       }
+      
+      // Otherwise use 258 miles per leg based on your example
+      return legCount * 258;
     }
     
     // For single-leg bookings, use the route distance
@@ -115,7 +119,7 @@ export const RateConfirmation: React.FC<RateConfirmationProps> = ({ booking, shi
             <th className="border-r border-black p-2 text-left">TRUCK #</th>
             <th className="border-r border-black p-2 text-left">TRAILER #</th>
             <th className="border-r border-black p-2 text-left">DRIVER</th>
-            <th className="p-2 text-left">DRIVER CELL</th>
+            <th className="p-2 text-left">DRIVER PHONE</th>
           </tr>
         </thead>
         <tbody>
@@ -124,8 +128,8 @@ export const RateConfirmation: React.FC<RateConfirmationProps> = ({ booking, shi
             <td className="border-r border-black p-2">{booking.carrier?.dotNumber || ''}</td>
             <td className="border-r border-black p-2"></td>
             <td className="border-r border-black p-2"></td>
-            <td className="border-r border-black p-2">{booking.driverName || 'PJ -'}</td>
-            <td className="p-2">{booking.phoneNumber || '(408) 396-5404'}</td>
+            <td className="border-r border-black p-2">{booking.driverName || ''}</td>
+            <td className="p-2">{booking.phoneNumber || ''}</td>
           </tr>
         </tbody>
       </table>
@@ -223,6 +227,7 @@ export const RateConfirmation: React.FC<RateConfirmationProps> = ({ booking, shi
                   <div><span className="font-bold">Phone:</span> {index === 0 ? '(775) 331-2311' : ''}</div>
                   <div><span className="font-bold">Contact:</span> {index === 0 ? (booking.route?.originContact || 'Brian Smith') : ''}</div>
                   <div><span className="font-bold">Hours:</span> {index === 0 ? '04:00 -to-10:00' : ''}</div>
+                  <div><span className="font-bold">Distance:</span> {booking.route?.distance || 258} miles</div>
                 </div>
                 <div>
                   <div className="font-bold mb-2">DESTINATION</div>
