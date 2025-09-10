@@ -219,23 +219,25 @@ export const RateConfirmation: React.FC<RateConfirmationProps> = ({ booking, shi
                   <div className="text-xs"><span className="font-bold">Location:</span> {childBooking.route?.origin}</div>
                   <div className="text-xs"><span className="font-bold">Address:</span> {index === 0 ? (childBooking.route?.originAddress || '985 Glendale Avenue') : ''}</div>
                   <div className="text-xs"><span className="font-bold">City, State Zip:</span> {index === 0 ? `${childBooking.route?.originCity || 'SPARKS'}, ${childBooking.route?.originState || 'NV'} ${childBooking.route?.originZipCode || '89431'}` : ''}</div>
-                  <div className="text-xs"><span className="font-bold">Phone:</span> {index === 0 ? '(775) 331-2311' : ''}</div>
-                  <div className="text-xs"><span className="font-bold">Contact:</span> {index === 0 ? (childBooking.route?.originContact || 'Brian Smith') : ''}</div>
+                  <div className="text-xs"><span className="font-bold">Phone:</span> {index === 0 ? '(775) 331-2311' : ''} <span className="font-bold">Contact:</span> {index === 0 ? (childBooking.route?.originContact || 'Brian Smith') : ''}</div>
                   <div className="text-xs"><span className="font-bold">Hours:</span> {index === 0 ? '04:00 -to-10:00' : ''}</div>
                   {index === 0 && booking.carrierReportTime && (
                     <div className="text-xs"><span className="font-bold">Carrier Report Time:</span> {booking.carrierReportTime}</div>
                   )}
-                  <div className="text-xs"><span className="font-bold">Distance:</span> {childBooking.route?.distance || 0} miles</div>
                 </div>
                 <div>
-                  <div className="font-bold mb-1 text-xs">DESTINATION</div>
+                  <div className="flex justify-between items-start">
+                    <div className="font-bold mb-1 text-xs">DESTINATION</div>
+                    <div className="text-xs text-right">
+                      <div><span className="font-bold">Distance:</span> {childBooking.route?.distance || 0} miles</div>
+                      <div><span className="font-bold">Rate:</span> ${childBooking.rate}</div>
+                    </div>
+                  </div>
                   <div className="text-xs"><span className="font-bold">Location:</span> {childBooking.route?.destination}</div>
                   <div className="text-xs"><span className="font-bold">Address:</span> {index === booking.childBookings.length - 1 ? (childBooking.route?.destinationAddress || '2800 S El Dorado ST') : ''}</div>
                   <div className="text-xs"><span className="font-bold">City, State Zip:</span> {index === booking.childBookings.length - 1 ? `${childBooking.route?.destinationCity || 'STOCKTON'}, ${childBooking.route?.destinationState || 'CA'} ${childBooking.route?.destinationZipCode || '95206'}` : ''}</div>
-                  <div className="text-xs"><span className="font-bold">Phone:</span></div>
-                  <div className="text-xs"><span className="font-bold">Contact:</span> {index === booking.childBookings.length - 1 ? (childBooking.route?.destinationContact || '') : ''}</div>
+                  <div className="text-xs"><span className="font-bold">Phone:</span> <span className="font-bold">Contact:</span> {index === booking.childBookings.length - 1 ? (childBooking.route?.destinationContact || '') : ''}</div>
                   <div className="text-xs"><span className="font-bold">Appt Date/Time:</span> {getAppointmentDate(childBooking.legNumber || 1)}</div>
-                  <div className="text-xs"><span className="font-bold">Rate:</span> ${childBooking.rate}</div>
                 </div>
               </div>
             </div>
@@ -253,23 +255,25 @@ export const RateConfirmation: React.FC<RateConfirmationProps> = ({ booking, shi
                   <div className="text-xs"><span className="font-bold">Location:</span> {leg.origin}</div>
                   <div className="text-xs"><span className="font-bold">Address:</span> {index === 0 ? (booking.route?.originAddress || '985 Glendale Avenue') : ''}</div>
                   <div className="text-xs"><span className="font-bold">City, State Zip:</span> {index === 0 ? `${booking.route?.originCity || 'SPARKS'}, ${booking.route?.originState || 'NV'} ${booking.route?.originZipCode || '89431'}` : ''}</div>
-                  <div className="text-xs"><span className="font-bold">Phone:</span> {index === 0 ? '(775) 331-2311' : ''}</div>
-                  <div className="text-xs"><span className="font-bold">Contact:</span> {index === 0 ? (booking.route?.originContact || 'Brian Smith') : ''}</div>
+                  <div className="text-xs"><span className="font-bold">Phone:</span> {index === 0 ? '(775) 331-2311' : ''} <span className="font-bold">Contact:</span> {index === 0 ? (booking.route?.originContact || 'Brian Smith') : ''}</div>
                   <div className="text-xs"><span className="font-bold">Hours:</span> {index === 0 ? '04:00 -to-10:00' : ''}</div>
                   {index === 0 && booking.carrierReportTime && (
                     <div className="text-xs"><span className="font-bold">Carrier Report Time:</span> {booking.carrierReportTime}</div>
                   )}
-                  <div className="text-xs"><span className="font-bold">Distance:</span> {booking.route?.distance || 258} miles</div>
                 </div>
                 <div>
-                  <div className="font-bold mb-1 text-xs">DESTINATION</div>
+                  <div className="flex justify-between items-start">
+                    <div className="font-bold mb-1 text-xs">DESTINATION</div>
+                    <div className="text-xs text-right">
+                      <div><span className="font-bold">Distance:</span> {booking.route?.distance || 258} miles</div>
+                      <div><span className="font-bold">Rate:</span> ${leg.rate}</div>
+                    </div>
+                  </div>
                   <div className="text-xs"><span className="font-bold">Location:</span> {leg.destination}</div>
                   <div className="text-xs"><span className="font-bold">Address:</span> {index === multiLegBooking.length - 1 ? (booking.route?.destinationAddress || '2800 S El Dorado ST') : ''}</div>
                   <div className="text-xs"><span className="font-bold">City, State Zip:</span> {index === multiLegBooking.length - 1 ? `${booking.route?.destinationCity || 'STOCKTON'}, ${booking.route?.destinationState || 'CA'} ${booking.route?.destinationZipCode || '95206'}` : ''}</div>
-                  <div className="text-xs"><span className="font-bold">Phone:</span></div>
-                  <div className="text-xs"><span className="font-bold">Contact:</span> {index === multiLegBooking.length - 1 ? (booking.route?.destinationContact || '') : ''}</div>
+                  <div className="text-xs"><span className="font-bold">Phone:</span> <span className="font-bold">Contact:</span> {index === multiLegBooking.length - 1 ? (booking.route?.destinationContact || '') : ''}</div>
                   <div className="text-xs"><span className="font-bold">Appt Date/Time:</span> {getAppointmentDate(leg.legNumber)}</div>
-                  <div className="text-xs"><span className="font-bold">Rate:</span> ${leg.rate}</div>
                 </div>
               </div>
             </div>
@@ -278,7 +282,7 @@ export const RateConfirmation: React.FC<RateConfirmationProps> = ({ booking, shi
       ) : (
         // Single-leg booking: render original format
         <div className="border-2 border-black mb-1">
-          <div className="bg-black text-white p-1 text-center font-bold">Leg 1</div>
+          <div className="bg-black text-white p-1 text-center font-bold text-xs">Leg 1</div>
           <div className="p-1">
             <div className="grid grid-cols-2 gap-1">
               <div>
@@ -286,20 +290,24 @@ export const RateConfirmation: React.FC<RateConfirmationProps> = ({ booking, shi
                 <div className="text-xs"><span className="font-bold">Name:</span> CrossCounty Freight Solutions - RNO</div>
                 <div className="text-xs"><span className="font-bold">Address:</span> {booking.route?.originAddress || '985 Glendale Avenue'}</div>
                 <div className="text-xs"><span className="font-bold">City, State Zip:</span> {booking.route?.originCity || 'SPARKS'}, {booking.route?.originState || 'NV'} {booking.route?.originZipCode || '89431'}</div>
-                <div className="text-xs"><span className="font-bold">Phone:</span> (775) 331-2311</div>
-                <div className="text-xs"><span className="font-bold">Contact:</span> {booking.route?.originContact || 'Brian Smith'}</div>
+                <div className="text-xs"><span className="font-bold">Phone:</span> (775) 331-2311 <span className="font-bold">Contact:</span> {booking.route?.originContact || 'Brian Smith'}</div>
                 <div className="text-xs"><span className="font-bold">Hours:</span> 04:00 -to-10:00</div>
                 {booking.carrierReportTime && (
                   <div className="text-xs"><span className="font-bold">Carrier Report Time:</span> {booking.carrierReportTime}</div>
                 )}
               </div>
               <div>
-                <div className="font-bold mb-1 text-xs">DESTINATION</div>
+                <div className="flex justify-between items-start">
+                  <div className="font-bold mb-1 text-xs">DESTINATION</div>
+                  <div className="text-xs text-right">
+                    <div><span className="font-bold">Distance:</span> {booking.route?.distance || 184} miles</div>
+                    <div><span className="font-bold">Rate:</span> ${booking.rate}</div>
+                  </div>
+                </div>
                 <div className="text-xs"><span className="font-bold">Name:</span> DDP</div>
                 <div className="text-xs"><span className="font-bold">Address:</span> {booking.route?.destinationAddress || '2800 S El Dorado ST'}</div>
                 <div className="text-xs"><span className="font-bold">City, State Zip:</span> {booking.route?.destinationCity || 'STOCKTON'}, {booking.route?.destinationState || 'CA'} {booking.route?.destinationZipCode || '95206'}</div>
-                <div className="text-xs"><span className="font-bold">Phone:</span></div>
-                <div className="text-xs"><span className="font-bold">Contact:</span> {booking.route?.destinationContact || ''}</div>
+                <div className="text-xs"><span className="font-bold">Phone:</span> <span className="font-bold">Contact:</span> {booking.route?.destinationContact || ''}</div>
                 <div className="text-xs"><span className="font-bold">Appt Date/Time:</span> {getAppointmentDate(1)}</div>
               </div>
             </div>

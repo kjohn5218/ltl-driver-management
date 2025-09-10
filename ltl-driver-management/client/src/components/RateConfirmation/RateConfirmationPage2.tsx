@@ -6,31 +6,31 @@ interface RateConfirmationPage2Props {
 
 export const RateConfirmationPage2: React.FC<RateConfirmationPage2Props> = ({ shipmentNumber }) => {
   return (
-    <div className="rate-confirmation-page-2 bg-white p-2" style={{ width: '8.5in', minHeight: '11in', fontFamily: 'Arial, sans-serif' }}>
+    <div className="rate-confirmation-page-2 bg-white p-1" style={{ width: '8.5in', minHeight: '11in', fontFamily: 'Arial, sans-serif' }}>
 
       {/* E-Signature Agreement Section */}
       <div className="border-2 border-black mb-1">
-        <div className="bg-black text-white p-1 text-center font-bold text-sm">
+        <div className="bg-black text-white p-1 text-center font-bold text-xs">
           E-SIGNATURE AGREEMENT
         </div>
-        <div style={{ minHeight: '60px' }} className="p-1">
+        <div style={{ minHeight: '30px' }} className="p-1">
           {/* Minimal signature area */}
         </div>
         
         {/* Signature Line */}
-        <div className="flex justify-between items-end p-2">
+        <div className="flex justify-between items-end p-1">
           <div className="flex-1">
-            <div className="mb-1 text-xs">Carrier Signature</div>
+            <div className="text-xs">Carrier Signature</div>
             <div className="border-b-2 border-black w-full"></div>
           </div>
-          <div className="mx-3">
-            <div className="mb-1 text-xs">Date</div>
+          <div className="mx-2">
+            <div className="text-xs">Date</div>
             <div className="flex gap-1 text-xs">
-              <div className="border-b-2 border-black w-4"></div>
+              <div className="border-b border-black w-4"></div>
               <span>/</span>
-              <div className="border-b-2 border-black w-4"></div>
+              <div className="border-b border-black w-4"></div>
               <span>/</span>
-              <div className="border-b-2 border-black w-8"></div>
+              <div className="border-b border-black w-8"></div>
             </div>
           </div>
         </div>
