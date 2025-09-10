@@ -272,8 +272,13 @@ export const RateConfirmation: React.FC<RateConfirmationProps> = ({ booking, shi
         </div>
       )}
 
-      <div className="border-2 border-black p-2 mb-4 text-center bg-gray-100">
-        CHECK IN WITH DISPATCH FOR PAPERWORK
+      <div className="border-2 border-black p-3 mb-4 bg-gray-100">
+        <div className="text-center font-bold mb-2">CHECK IN WITH DISPATCH FOR PAPERWORK AND DOOR ASSIGNMENT</div>
+        <div className="text-sm space-y-1">
+          <div>Maintain Seal Integrity - seal loads prior to departure and record number on manifest</div>
+          <div>Departure and arrival of each stop MUST be recorded in real-time on a mobile browser at driver.ccfs.com.</div>
+          <div>To advise of delays or for assistance contact Linehaul Support at 701-204-0480 (M-F 9:30 PM – 6:30 AM CT) or contact the CCFS service center.</div>
+        </div>
       </div>
 
 
