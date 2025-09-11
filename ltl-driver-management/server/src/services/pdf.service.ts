@@ -14,6 +14,7 @@ interface BookingData {
     origin: string;
     destination: string;
     distance: number | any; // Handle Prisma Decimal type
+    departureTime?: string | null;
   };
   childBookings?: Array<{
     route: {
@@ -29,6 +30,7 @@ interface BookingData {
   phoneNumber?: string | null;
   confirmationSignedBy?: string | null;
   confirmationSignedAt?: string | Date | null;
+  notes?: string | null;
 }
 
 export class PDFService {
@@ -39,6 +41,93 @@ export class PDFService {
     if (!fs.existsSync(this.uploadsDir)) {
       fs.mkdirSync(this.uploadsDir, { recursive: true });
     }
+  }
+
+  private static generateRouteItemsHTML(booking: BookingData): string {
+    // Parse multi-leg booking from notes if present
+    const notes = booking.notes || '';
+    const hasMultiLeg = notes.includes('--- Multi-Leg Booking ---');
+    
+    if (hasMultiLeg) {
+      const legs = [];
+      const lines = notes.split('\n');
+      for (const line of lines) {
+        // Updated regex to handle optional date information: "Leg 1: A → B (May 15) ($100.00)"
+        const legMatch = line.match(/^Leg (\d+): (.+) → (.+?)(?:\s*\([^$)]+\))?\s*\(\$(.+)\)$/);
+        if (legMatch) {
+          legs.push({
+            legNumber: parseInt(legMatch[1]),
+            origin: legMatch[2],
+            destination: legMatch[3],
+            rate: legMatch[4]
+          });
+        }
+      }
+      
+      if (legs.length > 0) {
+        // Calculate dates for each leg based on booking date
+        let currentLegDate = new Date(booking.bookingDate);
+        
+        return legs.map((leg, index) => {
+          const legDateStr = format(currentLegDate, 'MMM dd, yyyy');
+          const routeHTML = `
+          <div class="route-item">
+            <div class="route-header">
+              <div class="route-path">Leg ${leg.legNumber}: ${leg.origin} → ${leg.destination}</div>
+              <div class="route-rate">$${leg.rate}</div>
+            </div>
+            <div style="margin-top: 10px;">
+              <div style="display: flex; justify-content: space-between;">
+                <span><strong>Departure Date:</strong> ${legDateStr}</span>
+                <span><strong>Departure Time:</strong> ${booking.route?.departureTime || 'TBD'}</span>
+              </div>
+            </div>
+          </div>
+          `;
+          
+          // Advance date if this was a midnight crossing route (check for date in notes)
+          if (index < legs.length - 1) {
+            const nextLegLine = lines.find(line => line.startsWith(`Leg ${index + 2}:`));
+            if (nextLegLine && nextLegLine.includes('(') && !nextLegLine.includes('$')) {
+              currentLegDate = new Date(currentLegDate.getTime() + 24 * 60 * 60 * 1000);
+            }
+          }
+          
+          return routeHTML;
+        }).join('');
+      }
+    }
+    
+    // Fall back to single route or child bookings
+    let singleRouteHTML = `
+    <div class="route-item">
+      <div class="route-header">
+        <div class="route-path">${booking.route.origin} → ${booking.route.destination}</div>
+        <div class="route-rate">$${Number(booking.rate).toFixed(2)}</div>
+      </div>
+      <div>Distance: ${Number(booking.route.distance)} miles</div>
+      <div style="margin-top: 10px;">
+        <div style="display: flex; justify-content: space-between;">
+          <span><strong>Departure Date:</strong> ${format(new Date(booking.bookingDate), 'MMM dd, yyyy')}</span>
+          <span><strong>Departure Time:</strong> ${booking.route?.departureTime || 'TBD'}</span>
+        </div>
+      </div>
+    </div>
+    `;
+    
+    if (booking.childBookings && booking.childBookings.length > 0) {
+      singleRouteHTML += booking.childBookings.map((child) => `
+        <div class="route-item">
+          <div class="route-header">
+            <div class="route-path">${child.route.origin} → ${child.route.destination}</div>
+            <div class="route-rate">$${Number(child.rate).toFixed(2)}</div>
+          </div>
+          <div>Distance: ${Number(child.route.distance)} miles</div>
+        </div>
+      `).join('');
+    }
+    
+    return singleRouteHTML;
   }
 
   static async generateSignedRateConfirmationPDF(
@@ -256,89 +345,7 @@ export class PDFService {
             <div class="section">
               <div class="section-title">Route Information</div>
               <div class="route-section">
-                ${(() => {
-                  // Parse multi-leg booking from notes if present
-                  const notes = booking.notes || '';
-                  const hasMultiLeg = notes.includes('--- Multi-Leg Booking ---');
-                  
-                  if (hasMultiLeg) {
-                    const legs = [];
-                    const lines = notes.split('\\n');
-                    for (const line of lines) {
-                      // Updated regex to handle optional date information: "Leg 1: A → B (May 15) ($100.00)"
-                      const legMatch = line.match(/^Leg (\\d+): (.+) → (.+?)(?:\\s*\\([^$)]+\\))?\\s*\\(\\$(.+)\\)$/);
-                      if (legMatch) {
-                        legs.push({
-                          legNumber: parseInt(legMatch[1]),
-                          origin: legMatch[2],
-                          destination: legMatch[3],
-                          rate: legMatch[4]
-                        });
-                      }
-                    }
-                    
-                    if (legs.length > 0) {
-                      // Calculate dates for each leg based on booking date
-                      let currentLegDate = new Date(booking.bookingDate);
-                      
-                      return legs.map((leg, index) => {
-                        const legDateStr = format(currentLegDate, 'MMM dd, yyyy');
-                        const result = `
-                        <div class="route-item">
-                          <div class="route-header">
-                            <div class="route-path">Leg ${leg.legNumber}: ${leg.origin} → ${leg.destination}</div>
-                            <div class="route-rate">$${leg.rate}</div>
-                          </div>
-                          <div style="margin-top: 10px;">
-                            <div style="display: flex; justify-content: space-between;">
-                              <span><strong>Departure Date:</strong> ${legDateStr}</span>
-                              <span><strong>Departure Time:</strong> ${booking.route?.departureTime || 'TBD'}</span>
-                            </div>
-                          </div>
-                        </div>
-                        `;
-                        
-                        // Advance date if this was a midnight crossing route (indicated by date in next leg)
-                        if (index < legs.length - 1 && notes.includes(\`Leg \${index + 2}:\`) && notes.includes('(') && notes.includes('$')) {
-                          // Check if next leg has a date indicator - if so, advance date
-                          const nextLegLine = lines.find(line => line.startsWith(\`Leg \${index + 2}:\`));
-                          if (nextLegLine && nextLegLine.includes('(') && !nextLegLine.includes('$')) {
-                            currentLegDate = new Date(currentLegDate.getTime() + 24 * 60 * 60 * 1000);
-                          }
-                        }
-                        
-                        return result;
-                      }).join('');
-                    }
-                  }
-                  
-                  // Fall back to single route or child bookings
-                  return \`
-                  <div class="route-item">
-                    <div class="route-header">
-                      <div class="route-path">\${booking.route.origin} → \${booking.route.destination}</div>
-                      <div class="route-rate">$\${Number(booking.rate).toFixed(2)}</div>
-                    </div>
-                    <div>Distance: \${Number(booking.route.distance)} miles</div>
-                    <div style="margin-top: 10px;">
-                      <div style="display: flex; justify-content: space-between;">
-                        <span><strong>Departure Date:</strong> \${format(new Date(booking.bookingDate), 'MMM dd, yyyy')}</span>
-                        <span><strong>Departure Time:</strong> \${booking.route?.departureTime || 'TBD'}</span>
-                      </div>
-                    </div>
-                  </div>
-                  \${booking.childBookings && booking.childBookings.length > 0 ? 
-                    booking.childBookings.map((child) => \`
-                      <div class="route-item">
-                        <div class="route-header">
-                          <div class="route-path">\${child.route.origin} → \${child.route.destination}</div>
-                          <div class="route-rate">$\${Number(child.rate).toFixed(2)}</div>
-                        </div>
-                        <div>Distance: \${Number(child.route.distance)} miles</div>
-                      </div>
-                    \`).join('') : ''
-                  }\`;
-                })()}
+                ${this.generateRouteItemsHTML(booking)}
                 
                 <div class="total-section">
                   <div class="total-rate">Total Rate: $${totalRate.toFixed(2)}</div>
