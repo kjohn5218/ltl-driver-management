@@ -402,35 +402,27 @@ export const NewBooking: React.FC = () => {
         
         console.log(`Checking route times: Departure "${departureTime}", Arrival "${arrivalTime}"`);
         
-        // Helper to parse time and convert to 24-hour format
-        const parseTime = (timeStr: string) => {
-          if (timeStr.includes('AM') || timeStr.includes('PM')) {
-            // 12-hour format parsing
-            const [time, period] = timeStr.split(/\s*(AM|PM)/i);
-            const [hours, minutes] = time.split(':').map(Number);
-            let hour24 = hours;
-            
-            if (period.toUpperCase() === 'AM') {
-              if (hours === 12) hour24 = 0; // 12 AM = 00:00
-            } else { // PM
-              if (hours !== 12) hour24 = hours + 12; // Add 12 for PM (except 12 PM)
-            }
-            
-            return hour24 * 60 + (minutes || 0);
-          } else {
-            // 24-hour format (HH:MM)
-            const [hours, minutes] = timeStr.split(':').map(Number);
-            return hours * 60 + (minutes || 0);
-          }
+        // Parse 24-hour format times (HH:MM)
+        const parseTime24 = (timeStr: string): number => {
+          const [hours, minutes] = timeStr.split(':').map(Number);
+          return hours * 60 + (minutes || 0);
         };
         
-        const depTimeMinutes = parseTime(departureTime);
-        const arrTimeMinutes = parseTime(arrivalTime);
+        const depTimeMinutes = parseTime24(departureTime);
+        const arrTimeMinutes = parseTime24(arrivalTime);
         
-        // Route crosses midnight if arrival time is earlier in the day than departure time
-        const crossesMidnight = arrTimeMinutes < depTimeMinutes;
+        // Route crosses midnight if:
+        // - Departure is late in the day (after 12:00 PM / 12:00)
+        // - Arrival is early in the day (before 12:00 PM / 12:00) 
+        // - AND arrival time is numerically less than departure time
+        const crossesMidnight = depTimeMinutes > arrTimeMinutes && depTimeMinutes >= 12 * 60; // Departure after noon
         
-        console.log(`Route timing check: Dep ${departureTime} (${depTimeMinutes}min) → Arr ${arrivalTime} (${arrTimeMinutes}min) = Crosses midnight: ${crossesMidnight}`);
+        console.log(`Route timing analysis:
+          - Departure: ${departureTime} = ${depTimeMinutes} minutes (${Math.floor(depTimeMinutes/60)}:${String(depTimeMinutes%60).padStart(2,'0')})
+          - Arrival: ${arrivalTime} = ${arrTimeMinutes} minutes (${Math.floor(arrTimeMinutes/60)}:${String(arrTimeMinutes%60).padStart(2,'0')})
+          - Departure after noon: ${depTimeMinutes >= 12 * 60}
+          - Arrival before departure: ${depTimeMinutes > arrTimeMinutes}
+          - Crosses midnight: ${crossesMidnight}`);
         
         return crossesMidnight;
       };
