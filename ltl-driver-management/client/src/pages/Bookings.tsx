@@ -21,7 +21,8 @@ const parseMultiLegBooking = (notes: string | null) => {
   const legs = [];
   
   for (const line of lines) {
-    const legMatch = line.match(/^Leg (\d+): (.+) → (.+) \(\$(.+)\)$/);
+    // Updated regex to handle optional date information: "Leg 1: A → B (May 15) ($100.00)"
+    const legMatch = line.match(/^Leg (\d+): (.+) → (.+?)(?:\s*\([^$)]+\))?\s*\(\$(.+)\)$/);
     if (legMatch) {
       legs.push({
         legNumber: parseInt(legMatch[1]),

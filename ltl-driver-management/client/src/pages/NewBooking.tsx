@@ -4,7 +4,7 @@ import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { api } from '../services/api';
 import { Carrier, Route } from '../types';
 import { Calendar, Truck, MapPin, DollarSign, AlertCircle, Search, X } from 'lucide-react';
-import { format, eachDayOfInterval, parseISO } from 'date-fns';
+import { format, eachDayOfInterval, parseISO, addDays } from 'date-fns';
 import { LocationWithTooltip } from '../components/LocationDisplay';
 
 type RateType = 'MILE' | 'MILE_FSC' | 'FLAT_RATE';
@@ -396,6 +396,25 @@ export const NewBooking: React.FC = () => {
       let totalMiles = 0;
       let calculatedBaseRate = 0;
       
+      // Helper function to check if a route crosses midnight
+      const routeCrossesMidnight = (departureTime: string | undefined, arrivalTime: string | undefined): boolean => {
+        if (!departureTime || !arrivalTime) return false;
+        
+        // Parse times (format: "HH:MM")
+        const [depHour, depMin] = departureTime.split(':').map(Number);
+        const [arrHour, arrMin] = arrivalTime.split(':').map(Number);
+        
+        // Convert to minutes for easier comparison
+        const depTimeMinutes = depHour * 60 + depMin;
+        const arrTimeMinutes = arrHour * 60 + arrMin;
+        
+        // Route crosses midnight if arrival time is earlier in the day than departure time
+        return arrTimeMinutes < depTimeMinutes;
+      };
+      
+      // Calculate leg dates based on route timing
+      let currentLegDate = parseISO(bookingDate);
+      
       bookingLegs.forEach((leg, index) => {
         const legRate = parseFloat(leg.rate);
         totalRate += legRate;
@@ -412,10 +431,16 @@ export const NewBooking: React.FC = () => {
           }
         }
         
-        // Build leg description
+        // Build leg description with date adjustment for subsequent legs
         const route = leg.route;
         if (route) {
-          legDetails.push(`Leg ${index + 1}: ${route.origin} → ${route.destination} ($${legRate.toFixed(2)})`);
+          const legDateStr = index === 0 ? '' : ` (${format(currentLegDate, 'MMM dd')})`;
+          legDetails.push(`Leg ${index + 1}: ${route.origin} → ${route.destination}${legDateStr} ($${legRate.toFixed(2)})`);
+          
+          // Update date for next leg if current route crosses midnight
+          if (index < bookingLegs.length - 1 && routeCrossesMidnight(route.departureTime, route.arrivalTime)) {
+            currentLegDate = addDays(currentLegDate, 1);
+          }
         }
       });
       
