@@ -6,29 +6,29 @@ import { format } from 'date-fns';
 interface BookingData {
   id: number;
   bookingDate: string | Date;
-  rate: number;
+  rate: number | any; // Handle Prisma Decimal type
   carrier: {
     name: string;
   } | null;
   route: {
     origin: string;
     destination: string;
-    distance: number;
+    distance: number | any; // Handle Prisma Decimal type
   };
   childBookings?: Array<{
     route: {
       origin: string;
       destination: string;
-      distance: number;
+      distance: number | any; // Handle Prisma Decimal type
     };
-    rate: number;
+    rate: number | any; // Handle Prisma Decimal type
   }>;
   type: string;
-  trailerLength?: number;
-  driverName?: string;
-  phoneNumber?: string;
-  confirmationSignedBy?: string;
-  confirmationSignedAt?: string;
+  trailerLength?: number | null;
+  driverName?: string | null;
+  phoneNumber?: string | null;
+  confirmationSignedBy?: string | null;
+  confirmationSignedAt?: string | Date | null;
 }
 
 export class PDFService {
@@ -59,21 +59,11 @@ export class PDFService {
       const filename = `signed-confirmation-${shipmentNumber}-${Date.now()}.pdf`;
       const filePath = path.join(this.uploadsDir, filename);
 
-      // Build route display
-      const buildRouteString = () => {
-        const routes = [booking.route.origin + ' to ' + booking.route.destination];
-        if (booking.childBookings && booking.childBookings.length > 0) {
-          booking.childBookings.forEach(child => {
-            routes.push(child.route.origin + ' to ' + child.route.destination);
-          });
-        }
-        return routes.join(' / ');
-      };
 
-      // Calculate total rate
+      // Calculate total rate (convert Decimal to number)
       const totalRate = booking.childBookings 
-        ? booking.rate + booking.childBookings.reduce((sum, child) => sum + child.rate, 0)
-        : booking.rate;
+        ? Number(booking.rate) + booking.childBookings.reduce((sum, child) => sum + Number(child.rate), 0)
+        : Number(booking.rate);
 
       // HTML template for the signed rate confirmation
       const html = `
@@ -269,19 +259,19 @@ export class PDFService {
                 <div class="route-item">
                   <div class="route-header">
                     <div class="route-path">${booking.route.origin} → ${booking.route.destination}</div>
-                    <div class="route-rate">$${booking.rate.toFixed(2)}</div>
+                    <div class="route-rate">$${Number(booking.rate).toFixed(2)}</div>
                   </div>
-                  <div>Distance: ${booking.route.distance} miles</div>
+                  <div>Distance: ${Number(booking.route.distance)} miles</div>
                 </div>
                 
                 ${booking.childBookings && booking.childBookings.length > 0 ? 
-                  booking.childBookings.map((child, index) => `
+                  booking.childBookings.map((child) => `
                     <div class="route-item">
                       <div class="route-header">
                         <div class="route-path">${child.route.origin} → ${child.route.destination}</div>
-                        <div class="route-rate">$${child.rate.toFixed(2)}</div>
+                        <div class="route-rate">$${Number(child.rate).toFixed(2)}</div>
                       </div>
-                      <div>Distance: ${child.route.distance} miles</div>
+                      <div>Distance: ${Number(child.route.distance)} miles</div>
                     </div>
                   `).join('') : ''
                 }
