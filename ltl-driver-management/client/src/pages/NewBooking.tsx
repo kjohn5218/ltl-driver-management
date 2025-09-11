@@ -400,16 +400,39 @@ export const NewBooking: React.FC = () => {
       const routeCrossesMidnight = (departureTime: string | undefined, arrivalTime: string | undefined): boolean => {
         if (!departureTime || !arrivalTime) return false;
         
-        // Parse times (format: "HH:MM")
-        const [depHour, depMin] = departureTime.split(':').map(Number);
-        const [arrHour, arrMin] = arrivalTime.split(':').map(Number);
+        console.log(`Checking route times: Departure "${departureTime}", Arrival "${arrivalTime}"`);
         
-        // Convert to minutes for easier comparison
-        const depTimeMinutes = depHour * 60 + depMin;
-        const arrTimeMinutes = arrHour * 60 + arrMin;
+        // Helper to parse time and convert to 24-hour format
+        const parseTime = (timeStr: string) => {
+          if (timeStr.includes('AM') || timeStr.includes('PM')) {
+            // 12-hour format parsing
+            const [time, period] = timeStr.split(/\s*(AM|PM)/i);
+            const [hours, minutes] = time.split(':').map(Number);
+            let hour24 = hours;
+            
+            if (period.toUpperCase() === 'AM') {
+              if (hours === 12) hour24 = 0; // 12 AM = 00:00
+            } else { // PM
+              if (hours !== 12) hour24 = hours + 12; // Add 12 for PM (except 12 PM)
+            }
+            
+            return hour24 * 60 + (minutes || 0);
+          } else {
+            // 24-hour format (HH:MM)
+            const [hours, minutes] = timeStr.split(':').map(Number);
+            return hours * 60 + (minutes || 0);
+          }
+        };
+        
+        const depTimeMinutes = parseTime(departureTime);
+        const arrTimeMinutes = parseTime(arrivalTime);
         
         // Route crosses midnight if arrival time is earlier in the day than departure time
-        return arrTimeMinutes < depTimeMinutes;
+        const crossesMidnight = arrTimeMinutes < depTimeMinutes;
+        
+        console.log(`Route timing check: Dep ${departureTime} (${depTimeMinutes}min) → Arr ${arrivalTime} (${arrTimeMinutes}min) = Crosses midnight: ${crossesMidnight}`);
+        
+        return crossesMidnight;
       };
       
       // Calculate leg dates based on route timing
@@ -435,11 +458,14 @@ export const NewBooking: React.FC = () => {
         const route = leg.route;
         if (route) {
           const legDateStr = index === 0 ? '' : ` (${format(currentLegDate, 'MMM dd')})`;
+          console.log(`Leg ${index + 1}: Date ${format(currentLegDate, 'MMM dd')}, Route: ${route.origin} → ${route.destination}`);
           legDetails.push(`Leg ${index + 1}: ${route.origin} → ${route.destination}${legDateStr} ($${legRate.toFixed(2)})`);
           
           // Update date for next leg if current route crosses midnight
           if (index < bookingLegs.length - 1 && routeCrossesMidnight(route.departureTime, route.arrivalTime)) {
+            const oldDate = currentLegDate;
             currentLegDate = addDays(currentLegDate, 1);
+            console.log(`Date advanced from ${format(oldDate, 'MMM dd')} to ${format(currentLegDate, 'MMM dd')} due to midnight crossing`);
           }
         }
       });
