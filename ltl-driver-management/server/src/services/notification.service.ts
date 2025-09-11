@@ -15,6 +15,10 @@ const transporter = nodemailer.createTransport({
 interface BookingWithRelations extends Booking {
   carrier: Carrier | null;
   route: Route;
+  childBookings?: Array<{
+    route: Route;
+    [key: string]: any;
+  }>;
 }
 
 export const sendBookingConfirmation = async (booking: BookingWithRelations) => {
@@ -105,37 +109,76 @@ export const sendInsuranceExpiryReminder = async (carrier: Carrier) => {
 
 export const sendRateConfirmationEmail = async (
   booking: BookingWithRelations,
+  recipientEmail: string,
   pdfAttachment: Buffer,
-  fileName: string
+  confirmationUrl: string
 ) => {
+  // Use test email override in development if configured
+  const actualRecipientEmail = process.env.TEST_EMAIL_OVERRIDE || recipientEmail;
+  
   try {
-    // Use carrierEmail from booking if available, otherwise fall back to carrier's saved email
-    const emailAddress = booking.carrierEmail || booking.carrier?.email;
-    if (!emailAddress) return;
-
+    console.log(`Attempting to send rate confirmation email to: ${recipientEmail}`);
     const shipmentNumber = `CCFS${booking.id.toString().padStart(5, '0')}`;
     
+    const fromEmail = process.env.EMAIL_USER || 'ratecon@ccfs.com';
+    
+    if (process.env.TEST_EMAIL_OVERRIDE && process.env.TEST_EMAIL_OVERRIDE !== recipientEmail) {
+      console.log(`📧 Email override: Routing email from ${recipientEmail} to ${process.env.TEST_EMAIL_OVERRIDE}`);
+    }
+    
     const mailOptions = {
-      from: 'ratecon@ccfs.com',
-      replyTo: 'ratecon@ccfs.com',
-      to: emailAddress,
-      subject: `Rate Confirmation - ${shipmentNumber}`,
+      from: fromEmail,
+      replyTo: fromEmail,
+      to: actualRecipientEmail,
+      subject: `Rate Confirmation - ${shipmentNumber}${process.env.TEST_EMAIL_OVERRIDE ? ' [TEST EMAIL]' : ''}`,
       html: `
         <h2>Rate Confirmation</h2>
+        ${process.env.TEST_EMAIL_OVERRIDE && process.env.TEST_EMAIL_OVERRIDE !== recipientEmail ? 
+          `<div style="background-color: #fff3cd; border: 1px solid #ffeaa7; padding: 10px; margin: 10px 0; border-radius: 5px;">
+            <strong>🧪 TEST EMAIL OVERRIDE:</strong> This email was originally intended for <strong>${recipientEmail}</strong> but was redirected to this address for testing purposes.
+          </div>` : ''
+        }
         <p>Dear ${booking.carrier?.name || 'Valued Partner'},</p>
-        <p>Please find attached the rate confirmation for your upcoming shipment:</p>
+        <p>Please find attached the rate confirmation for your upcoming route:</p>
         <ul>
           <li><strong>Shipment #:</strong> ${shipmentNumber}</li>
-          <li><strong>Route:</strong> ${booking.route.origin} to ${booking.route.destination}</li>
+          <li><strong>Route:</strong> ${(() => {
+            // Build route string with all legs
+            const routes = [booking.route.origin + ' to ' + booking.route.destination];
+            if (booking.childBookings && booking.childBookings.length > 0) {
+              booking.childBookings.forEach((child: { route: Route }) => {
+                routes.push(child.route.origin + ' to ' + child.route.destination);
+              });
+            }
+            return routes.join('/');
+          })()}</li>
           <li><strong>Date:</strong> ${booking.bookingDate.toLocaleDateString()}</li>
           <li><strong>Rate:</strong> $${booking.rate}</li>
         </ul>
-        <p>Please review the attached rate confirmation and contact us if you have any questions.</p>
+        
+        <div style="background-color: #f0f8ff; padding: 20px; margin: 20px 0; border-radius: 5px;">
+          <h3 style="color: #0066cc; margin-top: 0;">Action Required: Electronic Signature</h3>
+          <p>Please review and electronically sign this rate confirmation by clicking the button below:</p>
+          
+          <div style="text-align: center; margin: 20px 0;">
+            <a href="${confirmationUrl}" style="display: inline-block; background-color: #0066cc; color: white; padding: 12px 30px; text-decoration: none; border-radius: 5px; font-weight: bold; font-size: 16px;">
+              Sign Rate Confirmation
+            </a>
+          </div>
+          
+          <p style="color: #666; font-size: 14px;">
+            Or copy and paste this link into your browser:<br>
+            <a href="${confirmationUrl}" style="color: #0066cc;">${confirmationUrl}</a>
+          </p>
+        </div>
+        
+        <p>Please review the attached rate confirmation PDF and sign electronically using the link above.</p>
+        <p>If you have any questions, please contact us at ratecon@ccfs.com</p>
         <p>Best regards,<br>CrossCounty Freight Solutions</p>
       `,
       attachments: [
         {
-          filename: fileName,
+          filename: `rate-confirmation-${shipmentNumber}.pdf`,
           content: pdfAttachment,
           contentType: 'application/pdf'
         }
@@ -143,9 +186,25 @@ export const sendRateConfirmationEmail = async (
     };
 
     await transporter.sendMail(mailOptions);
-    console.log(`Rate confirmation sent to ${emailAddress}`);
-  } catch (error) {
-    console.error('Failed to send rate confirmation:', error);
-    throw error;
+    console.log(`✅ Rate confirmation sent successfully to ${actualRecipientEmail}${actualRecipientEmail !== recipientEmail ? ` (originally intended for ${recipientEmail})` : ''}`);
+  } catch (error: any) {
+    console.error('Failed to send rate confirmation email:', {
+      error: error.message,
+      code: error.code,
+      originalRecipient: recipientEmail,
+      actualRecipient: actualRecipientEmail,
+      emailUser: process.env.EMAIL_USER
+    });
+    
+    // Provide more specific error messages
+    if (error.code === 'EAUTH') {
+      throw new Error('Email authentication failed. Please check EMAIL_USER and EMAIL_PASS configuration.');
+    } else if (error.code === 'ENOTFOUND') {
+      throw new Error('Email server not found. Please check EMAIL_HOST configuration.');
+    } else if (error.code === 'ECONNECTION') {
+      throw new Error('Failed to connect to email server.');
+    } else {
+      throw new Error(`Email sending failed: ${error.message}`);
+    }
   }
 };

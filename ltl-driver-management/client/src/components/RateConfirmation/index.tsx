@@ -22,6 +22,19 @@ export const RateConfirmationModal: React.FC<RateConfirmationModalProps> = ({
   const confirmationRef = useRef<HTMLDivElement>(null);
   const [isGeneratingPDF, setIsGeneratingPDF] = React.useState(false);
   
+  // Get the current email address to use (prioritize carrierEmail over carrier.email)
+  const emailAddress = booking.carrierEmail || booking.carrier?.email;
+  
+  // Debug logging to check email address
+  React.useEffect(() => {
+    console.log('RateConfirmationModal - Booking data received:', {
+      id: booking.id,
+      carrierEmail: booking.carrierEmail,
+      carrierOriginalEmail: booking.carrier?.email,
+      finalEmailAddress: emailAddress
+    });
+  }, [booking.id, booking.carrierEmail, booking.carrier?.email, emailAddress]);
+  
   // Generate a shipment number based on booking ID
   const shipmentNumber = `CCFS${booking.id.toString().padStart(5, '0')}`;
 
@@ -117,9 +130,9 @@ export const RateConfirmationModal: React.FC<RateConfirmationModalProps> = ({
             </button>
             <button
               onClick={handleEmail}
-              disabled={isGeneratingPDF || !booking.carrier?.email}
+              disabled={isGeneratingPDF || !emailAddress}
               className="flex items-center gap-2 px-4 py-2 bg-green-600 text-white rounded hover:bg-green-700 disabled:bg-gray-400"
-              title={!booking.carrier?.email ? 'Carrier email not available' : 'Email to carrier'}
+              title={!emailAddress ? 'Carrier email not available' : `Email to ${emailAddress}`}
             >
               <Mail className="w-4 h-4" />
               Email to Carrier
@@ -142,7 +155,7 @@ export const RateConfirmationModal: React.FC<RateConfirmationModalProps> = ({
                 <p className="text-sm text-yellow-800 font-medium">Preview Mode</p>
                 <p className="text-sm text-yellow-700">
                   This is a preview of the rate confirmation that will be sent to the carrier.
-                  Click "Email to Carrier" to send it to {booking.carrier?.email || 'the carrier'}.
+                  Click "Email to Carrier" to send it to {emailAddress || 'the carrier'}.
                 </p>
               </div>
             </div>

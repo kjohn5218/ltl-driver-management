@@ -38,11 +38,10 @@ export const sendRateConfirmationEmail = async (
   pdfBlob: Blob
 ): Promise<any> => {
   const formData = new FormData();
-  formData.append('bookingId', bookingId.toString());
-  formData.append('recipientEmail', recipientEmail);
+  formData.append('email', recipientEmail);
   formData.append('pdf', pdfBlob, `rate-confirmation-${bookingId}.pdf`);
 
-  return api.post('/bookings/rate-confirmation/email', formData, {
+  return api.post(`/bookings/${bookingId}/rate-confirmation/send`, formData, {
     headers: {
       'Content-Type': 'multipart/form-data',
     },

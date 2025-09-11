@@ -1,7 +1,10 @@
 import { Request, Response } from 'express';
 import { prisma } from '../index';
 import { Prisma, BookingStatus } from '@prisma/client';
-import { sendBookingConfirmation, sendBookingCancellation } from '../services/notification.service';
+import { sendBookingConfirmation, sendBookingCancellation, sendRateConfirmationEmail } from '../services/notification.service';
+import { v4 as uuidv4 } from 'uuid';
+import multer from 'multer';
+import { PDFService } from '../services/pdf.service';
 
 export const getBookings = async (req: Request, res: Response) => {
   try {
@@ -377,5 +380,301 @@ export const deleteBooking = async (req: Request, res: Response) => {
   } catch (error) {
     console.error('Delete booking error:', error);
     return res.status(500).json({ message: 'Failed to delete booking' });
+  }
+};
+
+// Configure multer for file upload
+const upload = multer({ 
+  storage: multer.memoryStorage(),
+  limits: {
+    fileSize: 10 * 1024 * 1024 // 10MB limit
+  }
+}).single('pdf');
+
+// Send rate confirmation email
+export const sendRateConfirmation = async (req: Request, res: Response) => {
+  upload(req, res, async (err) => {
+    if (err) {
+      console.error('File upload error:', err);
+      return res.status(400).json({ message: 'File upload failed' });
+    }
+
+    try {
+      const { id } = req.params;
+      const { email, sendMethod = 'email' } = req.body;
+      const pdfBuffer = req.file?.buffer;
+
+      if (!pdfBuffer) {
+        return res.status(400).json({ message: 'PDF file is required' });
+      }
+
+      const booking = await prisma.booking.findUnique({
+        where: { id: parseInt(id) },
+        include: {
+          carrier: true,
+          route: true,
+          childBookings: {
+            include: {
+              route: true
+            }
+          }
+        }
+      });
+
+      if (!booking) {
+        return res.status(404).json({ message: 'Booking not found' });
+      }
+
+      // Generate unique confirmation token
+      const confirmationToken = uuidv4();
+
+      // Update booking with confirmation details
+      await prisma.booking.update({
+        where: { id: parseInt(id) },
+        data: {
+          confirmationToken,
+          confirmationSentAt: new Date(),
+          confirmationSentVia: sendMethod,
+          carrierEmail: email || booking.carrierEmail
+        }
+      });
+
+      // Validate email configuration
+      const recipientEmail = email || booking.carrierEmail || booking.carrier?.email || '';
+      if (!recipientEmail) {
+        return res.status(400).json({ message: 'No recipient email address available' });
+      }
+
+      // Check if email is configured
+      if (!process.env.EMAIL_USER || !process.env.EMAIL_PASS || 
+          process.env.EMAIL_USER === 'your-email@gmail.com' || 
+          process.env.EMAIL_PASS === 'your-gmail-app-password-here') {
+        console.warn('Email not configured - skipping email send');
+        // Still create the confirmation token and URL for testing
+        const confirmationUrl = `${process.env.FRONTEND_URL}/confirm/${confirmationToken}`;
+        return res.json({ 
+          message: 'Rate confirmation created successfully (email not configured)',
+          confirmationToken,
+          confirmationUrl,
+          warning: 'Email sending is not configured. Please set EMAIL_USER and EMAIL_PASS environment variables.'
+        });
+      }
+
+      // Send email with PDF attachment
+      const confirmationUrl = `${process.env.FRONTEND_URL}/confirm/${confirmationToken}`;
+      
+      if (sendMethod === 'email') {
+        await sendRateConfirmationEmail(
+          booking,
+          recipientEmail,
+          pdfBuffer,
+          confirmationUrl
+        );
+      } else if (sendMethod === 'sms') {
+        // TODO: Implement SMS sending
+        return res.status(501).json({ message: 'SMS functionality not yet implemented' });
+      }
+
+      return res.json({ 
+        message: 'Rate confirmation sent successfully',
+        confirmationToken,
+        confirmationUrl
+      });
+    } catch (error) {
+      console.error('Send rate confirmation error:', error);
+      return res.status(500).json({ message: 'Failed to send rate confirmation' });
+    }
+  });
+};
+
+// Get confirmation details by token (public endpoint)
+export const getConfirmationByToken = async (req: Request, res: Response) => {
+  try {
+    const { token } = req.params;
+
+    const booking = await prisma.booking.findFirst({
+      where: { confirmationToken: token },
+      include: {
+        carrier: true,
+        route: true,
+        childBookings: {
+          include: {
+            route: true
+          }
+        }
+      }
+    });
+
+    if (!booking) {
+      return res.status(404).json({ message: 'Confirmation not found' });
+    }
+
+    // Check if already signed
+    if (booking.confirmationSignedAt) {
+      return res.status(400).json({ 
+        message: 'This confirmation has already been signed',
+        signedAt: booking.confirmationSignedAt,
+        signedBy: booking.confirmationSignedBy
+      });
+    }
+
+    return res.json({
+      booking: {
+        id: booking.id,
+        bookingDate: booking.bookingDate,
+        rate: booking.rate,
+        carrier: booking.carrier,
+        route: booking.route,
+        childBookings: booking.childBookings,
+        type: booking.type,
+        trailerLength: booking.trailerLength,
+        driverName: booking.driverName,
+        phoneNumber: booking.phoneNumber
+      }
+    });
+  } catch (error) {
+    console.error('Get confirmation error:', error);
+    return res.status(500).json({ message: 'Failed to get confirmation details' });
+  }
+};
+
+// Submit signed confirmation (public endpoint)
+export const submitSignedConfirmation = async (req: Request, res: Response) => {
+  try {
+    const { token } = req.params;
+    const { signedBy, signature, approved } = req.body;
+
+    if (!signedBy) {
+      return res.status(400).json({ message: 'Signer name is required' });
+    }
+
+    const booking = await prisma.booking.findFirst({
+      where: { confirmationToken: token },
+      include: {
+        carrier: true,
+        route: true,
+        childBookings: {
+          include: {
+            route: true
+          }
+        }
+      }
+    });
+
+    if (!booking) {
+      return res.status(404).json({ message: 'Confirmation not found' });
+    }
+
+    if (booking.confirmationSignedAt) {
+      return res.status(400).json({ message: 'This confirmation has already been signed' });
+    }
+
+    // Get client IP address
+    const ipAddress = req.ip || req.connection.remoteAddress || 'unknown';
+    const signedAt = new Date();
+
+    let signedPdfPath = null;
+
+    // Generate signed PDF if approved
+    if (approved) {
+      try {
+        console.log('Generating signed PDF for booking:', booking.id);
+        signedPdfPath = await PDFService.generateSignedRateConfirmationPDF(
+          booking,
+          signedBy,
+          signedAt
+        );
+        console.log('Signed PDF generated at:', signedPdfPath);
+      } catch (pdfError) {
+        console.error('Error generating signed PDF:', pdfError);
+        // Continue with the signature process even if PDF generation fails
+      }
+    }
+
+    // Update booking with signature details
+    const updatedBooking = await prisma.booking.update({
+      where: { id: booking.id },
+      data: {
+        confirmationSignedAt: signedAt,
+        confirmationSignedBy: signedBy,
+        confirmationIpAddress: ipAddress,
+        confirmationSignature: approved ? 'APPROVED' : (signature || 'REJECTED'),
+        status: approved ? 'CONFIRMED' : booking.status,
+        signedPdfPath: signedPdfPath
+      },
+      include: {
+        carrier: true,
+        route: true
+      }
+    });
+
+    return res.json({ 
+      message: approved ? 'Confirmation approved successfully' : 'Confirmation rejected',
+      booking: updatedBooking,
+      signedPdf: signedPdfPath ? true : false
+    });
+  } catch (error) {
+    console.error('Submit confirmation error:', error);
+    return res.status(500).json({ message: 'Failed to submit confirmation' });
+  }
+};
+
+// Serve signed PDF file
+export const getSignedPDF = async (req: Request, res: Response) => {
+  try {
+    const { id } = req.params;
+
+    const booking = await prisma.booking.findUnique({
+      where: { id: parseInt(id) },
+      select: { signedPdfPath: true }
+    });
+
+    if (!booking || !booking.signedPdfPath) {
+      return res.status(404).json({ message: 'Signed PDF not found' });
+    }
+
+    const fullPath = PDFService.getSignedPDFPath(booking.signedPdfPath);
+    
+    if (!PDFService.signedPDFExists(booking.signedPdfPath)) {
+      return res.status(404).json({ message: 'PDF file not found on disk' });
+    }
+
+    res.setHeader('Content-Type', 'application/pdf');
+    res.setHeader('Content-Disposition', 'inline');
+    res.sendFile(fullPath);
+  } catch (error) {
+    console.error('Get signed PDF error:', error);
+    return res.status(500).json({ message: 'Failed to retrieve signed PDF' });
+  }
+};
+
+// Test email configuration endpoint
+export const testEmailConfig = async (_req: Request, res: Response) => {
+  try {
+    const emailConfigured = process.env.EMAIL_USER && 
+                           process.env.EMAIL_PASS &&
+                           process.env.EMAIL_USER !== 'your-email@gmail.com' &&
+                           process.env.EMAIL_PASS !== 'your-gmail-app-password-here';
+    
+    if (!emailConfigured) {
+      return res.json({
+        configured: false,
+        message: 'Email is not configured',
+        instructions: 'Please set EMAIL_USER and EMAIL_PASS environment variables in your .env file'
+      });
+    }
+
+    return res.json({
+      configured: true,
+      message: 'Email configuration appears to be set up',
+      emailUser: process.env.EMAIL_USER,
+      emailHost: process.env.EMAIL_HOST || 'smtp.gmail.com',
+      emailPort: process.env.EMAIL_PORT || '587',
+      testEmailOverride: process.env.TEST_EMAIL_OVERRIDE || null,
+      testModeActive: !!process.env.TEST_EMAIL_OVERRIDE
+    });
+  } catch (error) {
+    console.error('Test email config error:', error);
+    return res.status(500).json({ message: 'Failed to test email configuration' });
   }
 };

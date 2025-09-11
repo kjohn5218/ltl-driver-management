@@ -8,7 +8,12 @@ import {
   confirmBooking,
   completeBooking,
   cancelBooking,
-  deleteBooking
+  deleteBooking,
+  sendRateConfirmation,
+  getConfirmationByToken,
+  submitSignedConfirmation,
+  getSignedPDF,
+  testEmailConfig
 } from '../controllers/booking.controller';
 import { authenticate, authorize } from '../middleware/auth.middleware';
 import { validateRequest } from '../middleware/validation.middleware';
@@ -16,7 +21,26 @@ import { UserRole } from '@prisma/client';
 
 const router = Router();
 
-// All routes require authentication
+// Public endpoints for rate confirmation (no auth required)
+// Get confirmation details by token
+router.get(
+  '/confirmation/:token',
+  getConfirmationByToken
+);
+
+// Submit signed confirmation
+router.post(
+  '/confirmation/:token/sign',
+  [
+    body('signedBy').trim().notEmpty().withMessage('Signer name is required'),
+    body('signature').optional().trim(),
+    body('approved').isBoolean()
+  ],
+  validateRequest,
+  submitSignedConfirmation
+);
+
+// All routes below this line require authentication
 router.use(authenticate);
 
 // Get all bookings with filtering
@@ -115,6 +139,27 @@ router.delete(
   '/:id',
   authorize(UserRole.ADMIN),
   deleteBooking
+);
+
+// Send rate confirmation email (Admin/Dispatcher only)
+router.post(
+  '/:id/rate-confirmation/send',
+  authorize(UserRole.ADMIN, UserRole.DISPATCHER),
+  sendRateConfirmation
+);
+
+// Get signed PDF for booking (Admin/Dispatcher only)
+router.get(
+  '/:id/signed-pdf',
+  authorize(UserRole.ADMIN, UserRole.DISPATCHER),
+  getSignedPDF
+);
+
+// Test email configuration (Admin/Dispatcher only)
+router.get(
+  '/test-email-config',
+  authorize(UserRole.ADMIN, UserRole.DISPATCHER),
+  testEmailConfig
 );
 
 export default router;

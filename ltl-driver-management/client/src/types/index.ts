@@ -107,6 +107,16 @@ export interface Booking {
   baseRate?: number;
   fscRate?: number;
   
+  // Rate confirmation tracking
+  confirmationToken?: string;
+  confirmationSentAt?: string;
+  confirmationSentVia?: string;
+  confirmationSignedAt?: string;
+  confirmationSignedBy?: string;
+  confirmationIpAddress?: string;
+  confirmationSignature?: string;
+  signedPdfPath?: string;
+  
   createdAt: string;
   updatedAt: string;
   carrier?: Carrier;

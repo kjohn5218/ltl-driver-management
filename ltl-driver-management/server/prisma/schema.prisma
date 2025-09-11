@@ -1,6 +1,3 @@
-// This is your Prisma schema file,
-// learn more about it in the docs: https://pris.ly/d/prisma-schema
-
 generator client {
   provider = "prisma-client-js"
 }
@@ -10,20 +7,191 @@ datasource db {
   url      = env("DATABASE_URL")
 }
 
-// User model for authentication
 model User {
-  id        Int      @id @default(autoincrement())
-  email     String   @unique
-  password  String
-  name      String
-  role      UserRole @default(USER)
-  createdAt DateTime @default(now())
-  updatedAt DateTime @updatedAt
-
-  // Relations
+  id                    Int              @id @default(autoincrement())
+  email                 String           @unique
+  password              String
+  name                  String
+  role                  UserRole         @default(USER)
+  createdAt             DateTime         @default(now())
+  updatedAt             DateTime         @updatedAt
   systemSettingsUpdates SystemSettings[]
 
   @@map("users")
+}
+
+model Carrier {
+  id                  Int                     @id @default(autoincrement())
+  name                String
+  contactPerson       String?
+  phone               String?
+  email               String?
+  mcNumber            String?                 @unique
+  dotNumber           String?                 @unique
+  insuranceExpiration DateTime?
+  status              CarrierStatus           @default(PENDING)
+  rating              Decimal?                @db.Decimal(2, 1)
+  ratePerMile         Decimal?                @db.Decimal(5, 2)
+  onboardingComplete  Boolean                 @default(false)
+  createdAt           DateTime                @default(now())
+  updatedAt           DateTime                @updatedAt
+  carrierType         String?
+  city                String?
+  factoringCompany    String?
+  remittanceContact   String?
+  remittanceEmail     String?
+  safetyRating        String?
+  state               String?
+  streetAddress1      String?
+  streetAddress2      String?
+  taxId               String?
+  zipCode             String?
+  bookings            Booking[]
+  documents           CarrierDocument[]
+  preferredRoutes     CarrierPreferredRoute[]
+
+  @@map("carriers")
+}
+
+model Route {
+  id                   Int                     @id @default(autoincrement())
+  name                 String
+  origin               String
+  destination          String
+  distance             Decimal                 @db.Decimal(6, 1)
+  standardRate         Decimal?                @db.Decimal(5, 2)
+  frequency            String?
+  departureTime        String?
+  arrivalTime          String?
+  createdAt            DateTime                @default(now())
+  updatedAt            DateTime                @updatedAt
+  active               Boolean                 @default(true)
+  destinationAddress   String?
+  destinationCity      String?
+  destinationContact   String?
+  destinationState     String?
+  destinationZipCode   String?
+  originAddress        String?
+  originCity           String?
+  originContact        String?
+  originState          String?
+  originZipCode        String?
+  runTime              Int?
+  destinationLatitude  Decimal?                @db.Decimal(10, 7)
+  destinationLongitude Decimal?                @db.Decimal(10, 7)
+  destinationTimeZone  String?
+  originLatitude       Decimal?                @db.Decimal(10, 7)
+  originLongitude      Decimal?                @db.Decimal(10, 7)
+  originTimeZone       String?
+  bookings             Booking[]
+  preferredBy          CarrierPreferredRoute[]
+
+  @@map("routes")
+}
+
+model SystemSettings {
+  id                Int      @id @default(autoincrement())
+  fuelSurchargeRate Decimal  @default(0.00) @db.Decimal(5, 2)
+  updatedAt         DateTime @updatedAt
+  updatedBy         Int?
+  updatedByUser     User?    @relation(fields: [updatedBy], references: [id])
+
+  @@map("system_settings")
+}
+
+model Booking {
+  id                    Int           @id @default(autoincrement())
+  carrierId             Int?
+  routeId               Int
+  bookingDate           DateTime
+  rate                  Decimal       @db.Decimal(8, 2)
+  status                BookingStatus @default(PENDING)
+  billable              Boolean       @default(false)
+  notes                 String?
+  createdAt             DateTime      @default(now())
+  updatedAt             DateTime      @updatedAt
+  bookingGroupId        String?
+  isParent              Boolean       @default(true)
+  legNumber             Int           @default(1)
+  parentBookingId       Int?
+  baseRate              Decimal?      @db.Decimal(8, 2)
+  fscRate               Decimal?      @db.Decimal(5, 2)
+  rateType              RateType      @default(FLAT_RATE)
+  driverName            String?
+  phoneNumber           String?
+  trailerLength         Int?
+  type                  BookingType   @default(POWER_ONLY)
+  carrierEmail          String?
+  carrierReportTime     String?
+  confirmationIpAddress String?
+  confirmationSentAt    DateTime?
+  confirmationSentVia   String?
+  confirmationSignature String?
+  confirmationSignedAt  DateTime?
+  confirmationSignedBy  String?
+  confirmationToken     String?       @unique
+  signedPdfPath         String?       // Path to signed PDF file
+  carrier               Carrier?      @relation(fields: [carrierId], references: [id])
+  parentBooking         Booking?      @relation("BookingLegs", fields: [parentBookingId], references: [id])
+  childBookings         Booking[]     @relation("BookingLegs")
+  route                 Route         @relation(fields: [routeId], references: [id])
+  invoice               Invoice?
+
+  @@map("bookings")
+}
+
+model CarrierPreferredRoute {
+  carrierId Int
+  routeId   Int
+  carrier   Carrier @relation(fields: [carrierId], references: [id], onDelete: Cascade)
+  route     Route   @relation(fields: [routeId], references: [id], onDelete: Cascade)
+
+  @@id([carrierId, routeId])
+  @@map("carrier_preferred_routes")
+}
+
+model CarrierDocument {
+  id           Int      @id @default(autoincrement())
+  carrierId    Int
+  documentType String
+  filename     String
+  filePath     String
+  uploadedAt   DateTime @default(now())
+  carrier      Carrier  @relation(fields: [carrierId], references: [id], onDelete: Cascade)
+
+  @@map("carrier_documents")
+}
+
+model Invoice {
+  id            Int           @id @default(autoincrement())
+  bookingId     Int           @unique
+  invoiceNumber String        @unique
+  amount        Decimal       @db.Decimal(8, 2)
+  status        InvoiceStatus @default(PENDING)
+  createdAt     DateTime      @default(now())
+  paidAt        DateTime?
+  booking       Booking       @relation(fields: [bookingId], references: [id])
+
+  @@map("invoices")
+}
+
+model Location {
+  id        Int      @id @default(autoincrement())
+  code      String   @unique
+  name      String?
+  address   String?
+  city      String?
+  state     String?
+  zipCode   String?
+  contact   String?
+  timeZone  String?
+  latitude  Decimal? @db.Decimal(10, 7)
+  longitude Decimal? @db.Decimal(10, 7)
+  active    Boolean  @default(true)
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@map("locations")
 }
 
 enum UserRole {
@@ -33,45 +201,6 @@ enum UserRole {
   CARRIER
 }
 
-// Carrier model
-model Carrier {
-  id                   Int                      @id @default(autoincrement())
-  name                 String
-  contactPerson        String?
-  phone                String?
-  email                String?
-  mcNumber             String?                  @unique
-  dotNumber            String?                  @unique
-  insuranceExpiration  DateTime?
-  status               CarrierStatus            @default(PENDING)
-  rating               Decimal?                 @db.Decimal(2, 1)
-  ratePerMile          Decimal?                 @db.Decimal(5, 2)
-  onboardingComplete   Boolean                  @default(false)
-  
-  // Additional fields from Excel import
-  safetyRating         String?                  // From Excel: Safety Rating
-  taxId                String?                  // From Excel: TAX ID
-  carrierType          String?                  // From Excel: Type
-  streetAddress1       String?                  // From Excel: Street Address 1
-  streetAddress2       String?                  // From Excel: Street Address 2
-  city                 String?                  // From Excel: City
-  state                String?                  // From Excel: ST
-  zipCode              String?                  // From Excel: Zip
-  remittanceContact    String?                  // From Excel: Remittance Contact
-  remittanceEmail      String?                  // From Excel: Remittance Email
-  factoringCompany     String?                  // From Excel: Factoring Company
-  
-  createdAt            DateTime                 @default(now())
-  updatedAt            DateTime                 @updatedAt
-
-  // Relations
-  bookings             Booking[]
-  preferredRoutes      CarrierPreferredRoute[]
-  documents            CarrierDocument[]
-
-  @@map("carriers")
-}
-
 enum CarrierStatus {
   PENDING
   ACTIVE
@@ -79,101 +208,6 @@ enum CarrierStatus {
   SUSPENDED
   NOT_ONBOARDED
   ONBOARDED
-}
-
-// Route model
-model Route {
-  id                   Int                      @id @default(autoincrement())
-  name                 String
-  origin               String
-  destination          String
-  originAddress        String?
-  originCity           String?
-  originState          String?
-  originZipCode        String?
-  originContact        String?
-  originTimeZone       String?                  // Time zone for origin location (MST, CST, PST, AZST)
-  originLatitude       Decimal?                 @db.Decimal(10, 7) // GPS coordinates for origin
-  originLongitude      Decimal?                 @db.Decimal(10, 7)
-  destinationAddress   String?
-  destinationCity      String?
-  destinationState     String?
-  destinationZipCode   String?
-  destinationContact   String?
-  destinationTimeZone  String?                  // Time zone for destination location (MST, CST, PST, AZST)
-  destinationLatitude  Decimal?                 @db.Decimal(10, 7) // GPS coordinates for destination
-  destinationLongitude Decimal?                 @db.Decimal(10, 7)
-  distance             Decimal                  @db.Decimal(6, 1)
-  runTime              Int?                     // Run time in minutes
-  active               Boolean                  @default(true)
-  standardRate         Decimal?                 @db.Decimal(5, 2)
-  frequency            String?
-  departureTime        String?                  // Store as time string (HH:mm:ss)
-  arrivalTime          String?                  // Store as time string (HH:mm:ss)
-  createdAt            DateTime                 @default(now())
-  updatedAt            DateTime                 @updatedAt
-
-  // Relations
-  bookings             Booking[]
-  preferredBy          CarrierPreferredRoute[]
-
-  @@map("routes")
-}
-
-// System Settings model
-model SystemSettings {
-  id                Int     @id @default(autoincrement())
-  fuelSurchargeRate Decimal @default(0.00) @db.Decimal(5, 2) // FSC percentage (e.g., 15.50 for 15.5%)
-  updatedAt         DateTime @updatedAt
-  updatedBy         Int?    // User ID who last updated
-  
-  // Relations
-  updatedByUser     User?   @relation(fields: [updatedBy], references: [id])
-  
-  @@map("system_settings")
-}
-
-// Booking model
-model Booking {
-  id            Int           @id @default(autoincrement())
-  carrierId     Int?          // Now nullable to support unbooked bookings
-  routeId       Int
-  bookingDate   DateTime
-  rate          Decimal       @db.Decimal(8, 2) // Final calculated rate
-  status        BookingStatus @default(PENDING)
-  billable      Boolean       @default(false)
-  notes         String?       @db.Text
-  driverName    String?       // Driver name for the booking
-  phoneNumber   String?       // Driver phone number
-  carrierEmail  String?       // Carrier email for rate confirmation
-  carrierReportTime String?   // Time when carrier should report (45 min before route departure)
-  type          BookingType   @default(POWER_ONLY) // Power Only or Power and Trailer
-  trailerLength Int?          // Trailer length in feet (for Power and Trailer bookings)
-  
-  // Rate calculation fields
-  rateType      RateType      @default(FLAT_RATE) // How the rate was calculated
-  baseRate      Decimal?      @db.Decimal(8, 2) // Base rate before FSC (for Mile and Mile+FSC)
-  fscRate       Decimal?      @db.Decimal(5, 2) // FSC percentage used (snapshot at booking time)
-  
-  // Multi-leg booking support
-  parentBookingId Int?        // For multi-leg bookings, points to parent booking
-  legNumber       Int         @default(1) // Sequence number for legs (1, 2, 3, etc.)
-  isParent        Boolean     @default(true) // True if this is the main booking record
-  bookingGroupId  String?     // UUID to group related bookings together
-  
-  createdAt     DateTime      @default(now())
-  updatedAt     DateTime      @updatedAt
-
-  // Relations
-  carrier       Carrier?      @relation(fields: [carrierId], references: [id])
-  route         Route         @relation(fields: [routeId], references: [id])
-  
-  // Self-referencing for multi-leg bookings
-  parentBooking Booking?      @relation("BookingLegs", fields: [parentBookingId], references: [id])
-  childBookings Booking[]     @relation("BookingLegs")
-  invoice     Invoice?
-
-  @@map("bookings")
 }
 
 enum BookingStatus {
@@ -195,72 +229,10 @@ enum BookingType {
   POWER_AND_TRAILER
 }
 
-// Carrier Preferred Routes (many-to-many)
-model CarrierPreferredRoute {
-  carrierId Int
-  routeId   Int
-  carrier   Carrier @relation(fields: [carrierId], references: [id], onDelete: Cascade)
-  route     Route   @relation(fields: [routeId], references: [id], onDelete: Cascade)
-
-  @@id([carrierId, routeId])
-  @@map("carrier_preferred_routes")
-}
-
-// Carrier Documents
-model CarrierDocument {
-  id           Int      @id @default(autoincrement())
-  carrierId    Int
-  documentType String
-  filename     String
-  filePath     String
-  uploadedAt   DateTime @default(now())
-
-  // Relations
-  carrier      Carrier  @relation(fields: [carrierId], references: [id], onDelete: Cascade)
-
-  @@map("carrier_documents")
-}
-
-// Invoice model
-model Invoice {
-  id            Int           @id @default(autoincrement())
-  bookingId     Int           @unique
-  invoiceNumber String        @unique
-  amount        Decimal       @db.Decimal(8, 2)
-  status        InvoiceStatus @default(PENDING)
-  createdAt     DateTime      @default(now())
-  paidAt        DateTime?
-
-  // Relations
-  booking       Booking       @relation(fields: [bookingId], references: [id])
-
-  @@map("invoices")
-}
-
 enum InvoiceStatus {
   PENDING
   SENT
   PAID
   OVERDUE
   CANCELLED
-}
-
-// Location model for managing origin and destination locations
-model Location {
-  id          Int      @id @default(autoincrement())
-  code        String   @unique                      // Location code (e.g., "LAX", "PHX")
-  name        String?                               // Optional full name
-  address     String?                               // Street address
-  city        String?                               // City
-  state       String?                               // State
-  zipCode     String?                               // ZIP code
-  contact     String?                               // Contact information
-  timeZone    String?                               // Time zone (PST, MST, CST, AZST)
-  latitude    Decimal?                @db.Decimal(10, 7) // GPS coordinates
-  longitude   Decimal?                @db.Decimal(10, 7)
-  active      Boolean                 @default(true)     // Whether location is active
-  createdAt   DateTime                @default(now())
-  updatedAt   DateTime                @updatedAt
-
-  @@map("locations")
 }

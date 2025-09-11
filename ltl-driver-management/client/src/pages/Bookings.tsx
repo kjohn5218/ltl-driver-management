@@ -3,7 +3,7 @@ import { useNavigate } from 'react-router-dom';
 import { useQuery, useQueryClient, useMutation } from '@tanstack/react-query';
 import { api, sendRateConfirmationEmail } from '../services/api';
 import { Booking } from '../types';
-import { Plus, Search, Edit, Eye, Calendar, MapPin, User, DollarSign, X, ChevronUp, ChevronDown, Trash2, FileText } from 'lucide-react';
+import { Plus, Search, Edit, Eye, Calendar, MapPin, User, DollarSign, X, ChevronUp, ChevronDown, Trash2, FileText, CheckCircle, Clock, Send } from 'lucide-react';
 import { format, isAfter, isBefore, isSameDay, parseISO } from 'date-fns';
 import { RouteDetails } from '../components/LocationDisplay';
 import { RateConfirmationModal } from '../components/RateConfirmation';
@@ -184,6 +184,29 @@ export const Bookings: React.FC = () => {
     return statusColors[status as keyof typeof statusColors] || 'bg-gray-100 text-gray-800';
   };
 
+  const getConfirmationStatusIcon = (booking: Booking) => {
+    if (booking.confirmationSignedAt) {
+      return (
+        <div className="flex items-center" title={`Signed by ${booking.confirmationSignedBy} on ${format(new Date(booking.confirmationSignedAt), 'MMM dd, yyyy HH:mm')}`}>
+          <CheckCircle className="w-4 h-4 text-green-600" />
+        </div>
+      );
+    } else if (booking.confirmationSentAt) {
+      return (
+        <div className="flex items-center" title={`Sent via ${booking.confirmationSentVia} on ${format(new Date(booking.confirmationSentAt), 'MMM dd, yyyy HH:mm')}`}>
+          <Clock className="w-4 h-4 text-yellow-600" />
+        </div>
+      );
+    } else if (booking.carrierEmail || booking.carrier?.email) {
+      return (
+        <div className="flex items-center" title="Rate confirmation not sent">
+          <Send className="w-4 h-4 text-gray-400" />
+        </div>
+      );
+    }
+    return null;
+  };
+
   const handleViewBooking = (booking: Booking) => {
     setViewingBooking(booking);
   };
@@ -198,9 +221,14 @@ export const Bookings: React.FC = () => {
 
   const handleRateConfirmation = async (booking: Booking) => {
     try {
-      // Fetch complete booking data with child bookings
+      // Always fetch the latest booking data to ensure we have updated carrier email
       const response = await api.get(`/bookings/${booking.id}`);
       const fullBookingData = response.data;
+      console.log('Rate confirmation - fetched booking data:', {
+        id: fullBookingData.id,
+        carrierEmail: fullBookingData.carrierEmail,
+        carrierOriginalEmail: fullBookingData.carrier?.email
+      });
       setRateConfirmationBooking(fullBookingData);
     } catch (error) {
       console.error('Failed to fetch full booking data:', error);
@@ -232,22 +260,40 @@ export const Bookings: React.FC = () => {
   };
 
   const handleEmailRateConfirmation = async (pdfBlob: Blob) => {
-    if (!rateConfirmationBooking || !rateConfirmationBooking.carrier?.email) {
+    if (!rateConfirmationBooking) {
+      alert('No booking selected');
+      return;
+    }
+
+    const emailAddress = rateConfirmationBooking.carrierEmail || rateConfirmationBooking.carrier?.email;
+    if (!emailAddress) {
       alert('Cannot send email: No carrier email available');
       return;
     }
 
     try {
-      await sendRateConfirmationEmail(
+      const response = await sendRateConfirmationEmail(
         rateConfirmationBooking.id,
-        rateConfirmationBooking.carrier.email,
+        emailAddress,
         pdfBlob
       );
-      alert(`Rate confirmation sent successfully to ${rateConfirmationBooking.carrier.email}`);
+      
+      // Handle different response types
+      const responseData = response.data;
+      if (responseData.warning) {
+        alert(`${responseData.message}\n\nWarning: ${responseData.warning}\n\nConfirmation URL: ${responseData.confirmationUrl}`);
+      } else {
+        alert(`Rate confirmation sent successfully to ${emailAddress}`);
+      }
+      
       setRateConfirmationBooking(null);
-    } catch (error) {
+      
+      // Refresh bookings to show updated confirmation status
+      queryClient.invalidateQueries({ queryKey: ['bookings'] });
+    } catch (error: any) {
       console.error('Error sending rate confirmation:', error);
-      alert('Failed to send rate confirmation email. Please try again.');
+      const errorMessage = error.response?.data?.message || 'Failed to send rate confirmation email';
+      alert(`Error: ${errorMessage}`);
     }
   };
 
@@ -476,14 +522,17 @@ export const Bookings: React.FC = () => {
                     >
                       <Edit className="w-4 h-4" />
                     </button>
-                    <button 
-                      onClick={() => handleRateConfirmation(booking)}
-                      className="text-gray-500 hover:text-green-600 transition-colors"
-                      title="Rate confirmation"
-                      disabled={!booking.carrier}
-                    >
-                      <FileText className="w-4 h-4" />
-                    </button>
+                    <div className="flex items-center gap-1">
+                      {getConfirmationStatusIcon(booking)}
+                      <button 
+                        onClick={() => handleRateConfirmation(booking)}
+                        className="text-gray-500 hover:text-green-600 transition-colors"
+                        title="Rate confirmation"
+                        disabled={!booking.carrier}
+                      >
+                        <FileText className="w-4 h-4" />
+                      </button>
+                    </div>
                     <button 
                       onClick={() => handleDeleteBooking(booking)}
                       className="text-gray-500 hover:text-red-600 transition-colors"
@@ -1030,7 +1079,48 @@ const BookingViewModal: React.FC<BookingViewModalProps> = ({ booking, onClose, g
             </div>
           )}
           
-          <div className="grid grid-cols-2 gap-4 text-xs text-gray-500">
+          {/* Rate Confirmation Status */}
+          {(bookingToDisplay.confirmationSentAt || bookingToDisplay.confirmationSignedAt || bookingToDisplay.signedPdfPath) && (
+            <div className="border-t pt-4">
+              <h3 className="text-sm font-medium text-gray-700 mb-3">Rate Confirmation Status</h3>
+              
+              <div className="space-y-3">
+                {bookingToDisplay.confirmationSentAt && (
+                  <div className="flex items-center gap-2 text-sm">
+                    <Send className="w-4 h-4 text-blue-500" />
+                    <span>
+                      Sent via {bookingToDisplay.confirmationSentVia} on {format(new Date(bookingToDisplay.confirmationSentAt), 'PPp')}
+                    </span>
+                  </div>
+                )}
+                
+                {bookingToDisplay.confirmationSignedAt && (
+                  <div className="flex items-center gap-2 text-sm">
+                    <CheckCircle className="w-4 h-4 text-green-500" />
+                    <span>
+                      Signed by {bookingToDisplay.confirmationSignedBy} on {format(new Date(bookingToDisplay.confirmationSignedAt), 'PPp')}
+                    </span>
+                  </div>
+                )}
+                
+                {bookingToDisplay.signedPdfPath && (
+                  <div className="mt-3">
+                    <a 
+                      href={`/api/bookings/${bookingToDisplay.id}/signed-pdf`}
+                      target="_blank"
+                      rel="noopener noreferrer"
+                      className="inline-flex items-center gap-2 px-3 py-2 bg-green-600 text-white text-sm rounded hover:bg-green-700 transition-colors"
+                    >
+                      <FileText className="w-4 h-4" />
+                      View Signed Rate Confirmation
+                    </a>
+                  </div>
+                )}
+              </div>
+            </div>
+          )}
+          
+          <div className="grid grid-cols-2 gap-4 text-xs text-gray-500 mt-4 pt-4 border-t">
             <div>
               <label className="block font-medium mb-1">Created</label>
               <p>{format(new Date(bookingToDisplay.createdAt), 'MMM dd, yyyy HH:mm')}</p>
