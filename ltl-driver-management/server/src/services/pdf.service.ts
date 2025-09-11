@@ -5,7 +5,7 @@ import { format } from 'date-fns';
 
 interface BookingData {
   id: number;
-  bookingDate: string;
+  bookingDate: string | Date;
   rate: number;
   carrier: {
     name: string;

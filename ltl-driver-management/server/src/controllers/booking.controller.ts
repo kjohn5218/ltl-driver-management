@@ -641,7 +641,7 @@ export const getSignedPDF = async (req: Request, res: Response) => {
 
     res.setHeader('Content-Type', 'application/pdf');
     res.setHeader('Content-Disposition', 'inline');
-    res.sendFile(fullPath);
+    return res.sendFile(fullPath);
   } catch (error) {
     console.error('Get signed PDF error:', error);
     return res.status(500).json({ message: 'Failed to retrieve signed PDF' });
