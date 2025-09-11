@@ -118,6 +118,14 @@ export const sendRateConfirmationEmail = async (
   
   try {
     console.log(`Attempting to send rate confirmation email to: ${recipientEmail}`);
+    console.log('Booking data:', {
+      id: booking.id,
+      mainRoute: `${booking.route.origin} to ${booking.route.destination}`,
+      childBookings: booking.childBookings?.map(cb => ({
+        route: `${cb.route.origin} to ${cb.route.destination}`,
+        rate: cb.rate
+      }))
+    });
     const shipmentNumber = `CCFS${booking.id.toString().padStart(5, '0')}`;
     
     const fromEmail = process.env.EMAIL_USER || 'ratecon@ccfs.com';
@@ -143,49 +151,100 @@ export const sendRateConfirmationEmail = async (
         <ul>
           <li><strong>Shipment #:</strong> ${shipmentNumber}</li>
           <li><strong>Route:</strong> ${(() => {
-            // Build route string with all legs
-            const routes = [booking.route.origin + ' to ' + booking.route.destination];
+            // Parse multi-leg booking from notes if present
+            const notes = booking.notes || '';
+            const hasMultiLeg = notes.includes('--- Multi-Leg Booking ---');
+            
+            if (hasMultiLeg) {
+              const legs = [];
+              const lines = notes.split('\n');
+              for (const line of lines) {
+                const legMatch = line.match(/^Leg (\d+): (.+) → (.+) \(\$(.+)\)$/);
+                if (legMatch) {
+                  legs.push(`${legMatch[2]} to ${legMatch[3]}`);
+                }
+              }
+              return legs.length > 0 ? legs.join(' / ') : `${booking.route.origin} to ${booking.route.destination}`;
+            }
+            
+            // Check for child bookings (future implementation)
             if (booking.childBookings && booking.childBookings.length > 0) {
+              const routes = [booking.route.origin + ' to ' + booking.route.destination];
               booking.childBookings.forEach((child: { route: Route }) => {
                 routes.push(child.route.origin + ' to ' + child.route.destination);
               });
+              return routes.join(' / ');
             }
-            return routes.join(' / ');
+            
+            return booking.route.origin + ' to ' + booking.route.destination;
           })()}</li>
           <li><strong>Date:</strong> ${booking.bookingDate.toLocaleDateString()}</li>
-          <li><strong>Total Rate:</strong> $${(() => {
-            // Calculate total rate including child bookings
-            let totalRate = Number(booking.rate);
-            if (booking.childBookings && booking.childBookings.length > 0) {
-              booking.childBookings.forEach((child: any) => {
-                totalRate += Number(child.rate);
-              });
-            }
-            return totalRate.toFixed(2);
-          })()}</li>
+          <li><strong>Total Rate:</strong> $${Number(booking.rate).toFixed(2)}</li>
         </ul>
         
-        ${booking.childBookings && booking.childBookings.length > 0 ? `
-        <div style="margin-top: 15px;">
-          <strong>Route Details:</strong>
-          <table style="width: 100%; border-collapse: collapse; margin-top: 10px;">
-            <tr style="background-color: #f5f5f5;">
-              <td style="padding: 8px; border: 1px solid #ddd;"><strong>Leg 1:</strong></td>
-              <td style="padding: 8px; border: 1px solid #ddd;">${booking.route.origin} to ${booking.route.destination}</td>
-              <td style="padding: 8px; border: 1px solid #ddd;">${booking.route.distance} miles</td>
-              <td style="padding: 8px; border: 1px solid #ddd; text-align: right;">$${Number(booking.rate).toFixed(2)}</td>
-            </tr>
-            ${booking.childBookings.map((child: any, index: number) => `
-            <tr>
-              <td style="padding: 8px; border: 1px solid #ddd;"><strong>Leg ${index + 2}:</strong></td>
-              <td style="padding: 8px; border: 1px solid #ddd;">${child.route.origin} to ${child.route.destination}</td>
-              <td style="padding: 8px; border: 1px solid #ddd;">${child.route.distance} miles</td>
-              <td style="padding: 8px; border: 1px solid #ddd; text-align: right;">$${Number(child.rate).toFixed(2)}</td>
-            </tr>
-            `).join('')}
-          </table>
-        </div>
-        ` : ''}
+        ${(() => {
+          // Parse multi-leg details from notes
+          const notes = booking.notes || '';
+          const hasMultiLeg = notes.includes('--- Multi-Leg Booking ---');
+          
+          if (hasMultiLeg) {
+            const legs = [];
+            const lines = notes.split('\n');
+            for (const line of lines) {
+              const legMatch = line.match(/^Leg (\d+): (.+) → (.+) \(\$(.+)\)$/);
+              if (legMatch) {
+                legs.push({
+                  legNumber: parseInt(legMatch[1]),
+                  origin: legMatch[2],
+                  destination: legMatch[3],
+                  rate: legMatch[4]
+                });
+              }
+            }
+            
+            if (legs.length > 0) {
+              return `
+              <div style="margin-top: 15px;">
+                <strong>Route Details:</strong>
+                <table style="width: 100%; border-collapse: collapse; margin-top: 10px;">
+                  ${legs.map((leg) => `
+                  <tr ${leg.legNumber === 1 ? 'style="background-color: #f5f5f5;"' : ''}>
+                    <td style="padding: 8px; border: 1px solid #ddd;"><strong>Leg ${leg.legNumber}:</strong></td>
+                    <td style="padding: 8px; border: 1px solid #ddd;">${leg.origin} to ${leg.destination}</td>
+                    <td style="padding: 8px; border: 1px solid #ddd; text-align: right;">$${leg.rate}</td>
+                  </tr>
+                  `).join('')}
+                </table>
+              </div>`;
+            }
+          }
+          
+          // Check for child bookings (future implementation)
+          if (booking.childBookings && booking.childBookings.length > 0) {
+            return `
+            <div style="margin-top: 15px;">
+              <strong>Route Details:</strong>
+              <table style="width: 100%; border-collapse: collapse; margin-top: 10px;">
+                <tr style="background-color: #f5f5f5;">
+                  <td style="padding: 8px; border: 1px solid #ddd;"><strong>Leg 1:</strong></td>
+                  <td style="padding: 8px; border: 1px solid #ddd;">${booking.route.origin} to ${booking.route.destination}</td>
+                  <td style="padding: 8px; border: 1px solid #ddd;">${booking.route.distance} miles</td>
+                  <td style="padding: 8px; border: 1px solid #ddd; text-align: right;">$${Number(booking.rate).toFixed(2)}</td>
+                </tr>
+                ${booking.childBookings.map((child: any, index: number) => `
+                <tr>
+                  <td style="padding: 8px; border: 1px solid #ddd;"><strong>Leg ${index + 2}:</strong></td>
+                  <td style="padding: 8px; border: 1px solid #ddd;">${child.route.origin} to ${child.route.destination}</td>
+                  <td style="padding: 8px; border: 1px solid #ddd;">${child.route.distance} miles</td>
+                  <td style="padding: 8px; border: 1px solid #ddd; text-align: right;">$${Number(child.rate).toFixed(2)}</td>
+                </tr>
+                `).join('')}
+              </table>
+            </div>`;
+          }
+          
+          return '';
+        })()}
         
         <div style="background-color: #f0f8ff; padding: 20px; margin: 20px 0; border-radius: 5px;">
           <h3 style="color: #0066cc; margin-top: 0;">Action Required: Electronic Signature</h3>

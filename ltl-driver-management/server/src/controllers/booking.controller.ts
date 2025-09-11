@@ -529,7 +529,8 @@ export const getConfirmationByToken = async (req: Request, res: Response) => {
         type: booking.type,
         trailerLength: booking.trailerLength,
         driverName: booking.driverName,
-        phoneNumber: booking.phoneNumber
+        phoneNumber: booking.phoneNumber,
+        notes: booking.notes
       }
     });
   } catch (error) {

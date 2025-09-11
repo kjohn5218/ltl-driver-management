@@ -28,7 +28,32 @@ interface BookingData {
   trailerLength?: number;
   driverName?: string;
   phoneNumber?: string;
+  notes?: string;
 }
+
+// Parse multi-leg booking information from notes
+const parseMultiLegBooking = (notes: string | null) => {
+  if (!notes || !notes.includes('--- Multi-Leg Booking ---')) {
+    return null;
+  }
+  
+  const lines = notes.split('\n');
+  const legs = [];
+  
+  for (const line of lines) {
+    const legMatch = line.match(/^Leg (\d+): (.+) → (.+) \(\$(.+)\)$/);
+    if (legMatch) {
+      legs.push({
+        legNumber: parseInt(legMatch[1]),
+        origin: legMatch[2],
+        destination: legMatch[3],
+        rate: legMatch[4]
+      });
+    }
+  }
+  
+  return legs.length > 0 ? legs : null;
+};
 
 export const ConfirmationPage: React.FC = () => {
   const { token } = useParams<{ token: string }>();
@@ -180,71 +205,133 @@ export const ConfirmationPage: React.FC = () => {
           <div className="border-t pt-4">
             <h3 className="font-medium mb-3">Route Information</h3>
             
-            {/* Main route */}
-            <div className="bg-gray-50 rounded p-4 mb-3">
-              <div className="flex justify-between items-start mb-2">
-                <div className="flex-1">
-                  <p className="text-sm text-gray-600">Origin</p>
-                  <p className="font-medium">{booking.route.origin}</p>
-                </div>
-                <div className="mx-4 text-gray-400">→</div>
-                <div className="flex-1">
-                  <p className="text-sm text-gray-600">Destination</p>
-                  <p className="font-medium">{booking.route.destination}</p>
-                </div>
-              </div>
-              <div className="flex justify-between mt-2">
-                <span className="text-sm text-gray-600">
-                  {booking.childBookings && booking.childBookings.length > 0 ? 'Leg 1 • ' : ''}Distance: {booking.route.distance} miles
-                </span>
-                <span className="font-semibold text-green-600">
-                  ${booking.rate}
-                </span>
-              </div>
-            </div>
+            {(() => {
+              // Parse multi-leg booking from notes
+              const multiLegInfo = parseMultiLegBooking(booking.notes || null);
+              
+              if (multiLegInfo) {
+                // Display multi-leg booking from notes
+                return (
+                  <>
+                    {multiLegInfo.map((leg, index) => (
+                      <div key={index} className="bg-gray-50 rounded p-4 mb-3">
+                        <div className="flex justify-between items-start mb-2">
+                          <div className="flex-1">
+                            <p className="text-sm text-gray-600">Leg {leg.legNumber}</p>
+                            <p className="font-medium">{leg.origin} → {leg.destination}</p>
+                          </div>
+                        </div>
+                        <div className="flex justify-end mt-2">
+                          <span className="font-semibold text-green-600">
+                            ${leg.rate}
+                          </span>
+                        </div>
+                      </div>
+                    ))}
+                    
+                    {/* Total for multi-leg */}
+                    <div className="border-t pt-3 mt-3">
+                      <div className="flex justify-between items-center">
+                        <span className="font-semibold">Total Rate</span>
+                        <span className="text-lg font-bold text-green-600">
+                          ${booking.rate}
+                        </span>
+                      </div>
+                    </div>
+                  </>
+                );
+              } else if (booking.childBookings && booking.childBookings.length > 0) {
+                // Display actual child bookings (future implementation)
+                return (
+                  <>
+                    {/* Main route */}
+                    <div className="bg-gray-50 rounded p-4 mb-3">
+                      <div className="flex justify-between items-start mb-2">
+                        <div className="flex-1">
+                          <p className="text-sm text-gray-600">Origin</p>
+                          <p className="font-medium">{booking.route.origin}</p>
+                        </div>
+                        <div className="mx-4 text-gray-400">→</div>
+                        <div className="flex-1">
+                          <p className="text-sm text-gray-600">Destination</p>
+                          <p className="font-medium">{booking.route.destination}</p>
+                        </div>
+                      </div>
+                      <div className="flex justify-between mt-2">
+                        <span className="text-sm text-gray-600">
+                          Leg 1 • Distance: {booking.route.distance} miles
+                        </span>
+                        <span className="font-semibold text-green-600">
+                          ${booking.rate}
+                        </span>
+                      </div>
+                    </div>
 
-            {/* Child bookings if any */}
-            {booking.childBookings && booking.childBookings.length > 0 && (
-              <>
-                {booking.childBookings.map((child, index) => (
-                  <div key={index} className="bg-gray-50 rounded p-4 mb-3">
+                    {/* Child bookings */}
+                    {booking.childBookings.map((child, index) => (
+                      <div key={index} className="bg-gray-50 rounded p-4 mb-3">
+                        <div className="flex justify-between items-start mb-2">
+                          <div className="flex-1">
+                            <p className="text-sm text-gray-600">Origin</p>
+                            <p className="font-medium">{child.route.origin}</p>
+                          </div>
+                          <div className="mx-4 text-gray-400">→</div>
+                          <div className="flex-1">
+                            <p className="text-sm text-gray-600">Destination</p>
+                            <p className="font-medium">{child.route.destination}</p>
+                          </div>
+                        </div>
+                        <div className="flex justify-between mt-2">
+                          <span className="text-sm text-gray-600">
+                            Leg {index + 2} • Distance: {child.route.distance} miles
+                          </span>
+                          <span className="font-semibold text-green-600">
+                            ${child.rate}
+                          </span>
+                        </div>
+                      </div>
+                    ))}
+
+                    {/* Total for multi-leg */}
+                    <div className="border-t pt-3 mt-3">
+                      <div className="flex justify-between items-center">
+                        <span className="font-semibold">Total Rate</span>
+                        <span className="text-lg font-bold text-green-600">
+                          ${(parseFloat(booking.rate) + 
+                             booking.childBookings.reduce((sum, child) => 
+                               sum + parseFloat(child.rate), 0)).toFixed(2)}
+                        </span>
+                      </div>
+                    </div>
+                  </>
+                );
+              } else {
+                // Single route booking
+                return (
+                  <div className="bg-gray-50 rounded p-4 mb-3">
                     <div className="flex justify-between items-start mb-2">
                       <div className="flex-1">
                         <p className="text-sm text-gray-600">Origin</p>
-                        <p className="font-medium">{child.route.origin}</p>
+                        <p className="font-medium">{booking.route.origin}</p>
                       </div>
                       <div className="mx-4 text-gray-400">→</div>
                       <div className="flex-1">
                         <p className="text-sm text-gray-600">Destination</p>
-                        <p className="font-medium">{child.route.destination}</p>
+                        <p className="font-medium">{booking.route.destination}</p>
                       </div>
                     </div>
                     <div className="flex justify-between mt-2">
                       <span className="text-sm text-gray-600">
-                        Leg {index + 2} • Distance: {child.route.distance} miles
+                        Distance: {booking.route.distance} miles
                       </span>
                       <span className="font-semibold text-green-600">
-                        ${child.rate}
+                        ${booking.rate}
                       </span>
                     </div>
                   </div>
-                ))}
-              </>
-            )}
-
-            {/* Total for multi-leg */}
-            {booking.childBookings && booking.childBookings.length > 0 && (
-              <div className="border-t pt-3 mt-3">
-                <div className="flex justify-between items-center">
-                  <span className="font-semibold">Total Rate</span>
-                  <span className="text-lg font-bold text-green-600">
-                    ${(parseFloat(booking.rate) + 
-                       booking.childBookings.reduce((sum, child) => 
-                         sum + parseFloat(child.rate), 0)).toFixed(2)}
-                  </span>
-                </div>
-              </div>
-            )}
+                );
+              }
+            })()}
           </div>
 
           {booking.type === 'POWER_AND_TRAILER' && (
