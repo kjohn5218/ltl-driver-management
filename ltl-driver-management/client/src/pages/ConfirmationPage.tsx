@@ -20,6 +20,7 @@ interface BookingData {
     route: {
       origin: string;
       destination: string;
+      distance: string;
     };
     rate: string;
   }>;
@@ -194,7 +195,7 @@ export const ConfirmationPage: React.FC = () => {
               </div>
               <div className="flex justify-between mt-2">
                 <span className="text-sm text-gray-600">
-                  Distance: {booking.route.distance} miles
+                  {booking.childBookings && booking.childBookings.length > 0 ? 'Leg 1 • ' : ''}Distance: {booking.route.distance} miles
                 </span>
                 <span className="font-semibold text-green-600">
                   ${booking.rate}
@@ -219,7 +220,9 @@ export const ConfirmationPage: React.FC = () => {
                       </div>
                     </div>
                     <div className="flex justify-between mt-2">
-                      <span className="text-sm text-gray-600">Leg {index + 2}</span>
+                      <span className="text-sm text-gray-600">
+                        Leg {index + 2} • Distance: {child.route.distance} miles
+                      </span>
                       <span className="font-semibold text-green-600">
                         ${child.rate}
                       </span>
