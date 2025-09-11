@@ -662,7 +662,7 @@ const BookingViewModal: React.FC<BookingViewModalProps> = ({ booking, onClose, g
   const { data: routesData } = useQuery({
     queryKey: ['routes'],
     queryFn: async () => {
-      const response = await api.get('/routes?limit=5000'); // Fetch all routes
+      const response = await api.get('/routes?limit=2000'); // Fetch all routes (max allowed)
       return response.data;
     }
   });
@@ -1255,7 +1255,7 @@ const BookingEditModal: React.FC<BookingEditModalProps> = ({ booking, onClose, o
   const { data: routesData } = useQuery({
     queryKey: ['routes'],
     queryFn: async () => {
-      const response = await api.get('/routes?limit=5000'); // Fetch all routes
+      const response = await api.get('/routes?limit=2000'); // Fetch all routes (max allowed)
       return response.data;
     }
   });
