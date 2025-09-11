@@ -421,25 +421,20 @@ export const NewBooking: React.FC = () => {
         const depTimeMinutes = parseTime24(departureTime);
         const arrTimeMinutes = parseTime24(arrivalTime);
         
-        // Route crosses midnight if:
-        // - Departure is late in the day (after 12:00 PM / 12:00)
-        // - Arrival is early in the day (before 12:00 PM / 12:00) 
-        // - AND arrival time is numerically less than departure time
-        const crossesMidnight = depTimeMinutes > arrTimeMinutes && depTimeMinutes >= 12 * 60; // Departure after noon
+        // Route crosses midnight if departure time > arrival time
+        // Example: Depart 23:30 (1410 min), Arrive 02:00 (120 min) = crosses midnight
+        const crossesMidnight = depTimeMinutes > arrTimeMinutes;
         
         console.log(`Route timing analysis:
-          - Departure: ${departureTime} = ${depTimeMinutes} minutes (${Math.floor(depTimeMinutes/60)}:${String(depTimeMinutes%60).padStart(2,'0')})
-          - Arrival: ${arrivalTime} = ${arrTimeMinutes} minutes (${Math.floor(arrTimeMinutes/60)}:${String(arrTimeMinutes%60).padStart(2,'0')})
-          - Departure after noon: ${depTimeMinutes >= 12 * 60}
-          - Arrival before departure: ${depTimeMinutes > arrTimeMinutes}
+          - Departure: ${departureTime} = ${depTimeMinutes} minutes
+          - Arrival: ${arrivalTime} = ${arrTimeMinutes} minutes  
           - Crosses midnight: ${crossesMidnight}`);
         
         return crossesMidnight;
       };
       
       // Calculate leg dates based on route timing
-      // Use local timezone to avoid date shifting issues
-      let currentLegDate = new Date(bookingDate + 'T12:00:00');
+      let currentLegDate = parseISO(bookingDate);
       
       bookingLegs.forEach((leg, index) => {
         const legRate = parseFloat(leg.rate);
