@@ -1105,15 +1105,31 @@ const BookingViewModal: React.FC<BookingViewModalProps> = ({ booking, onClose, g
                 
                 {bookingToDisplay.signedPdfPath && (
                   <div className="mt-3">
-                    <a 
-                      href={`/api/bookings/${bookingToDisplay.id}/signed-pdf`}
-                      target="_blank"
-                      rel="noopener noreferrer"
+                    <button
+                      onClick={async () => {
+                        try {
+                          const response = await api.get(`/bookings/${bookingToDisplay.id}/signed-pdf`, {
+                            responseType: 'blob'
+                          });
+                          const url = window.URL.createObjectURL(new Blob([response.data]));
+                          const link = document.createElement('a');
+                          link.href = url;
+                          link.setAttribute('download', `signed-rate-confirmation-${bookingToDisplay.id}.pdf`);
+                          link.setAttribute('target', '_blank');
+                          document.body.appendChild(link);
+                          link.click();
+                          link.remove();
+                          window.URL.revokeObjectURL(url);
+                        } catch (error) {
+                          console.error('Failed to download signed PDF:', error);
+                          alert('Failed to download signed PDF. Please try again.');
+                        }
+                      }}
                       className="inline-flex items-center gap-2 px-3 py-2 bg-green-600 text-white text-sm rounded hover:bg-green-700 transition-colors"
                     >
                       <FileText className="w-4 h-4" />
                       View Signed Rate Confirmation
-                    </a>
+                    </button>
                   </div>
                 )}
               </div>
