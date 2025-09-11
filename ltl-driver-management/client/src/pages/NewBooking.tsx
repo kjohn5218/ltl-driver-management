@@ -131,18 +131,28 @@ export const NewBooking: React.FC = () => {
     if (!departureTime) return '';
     
     try {
-      // Parse the departure time (format: "HH:mm:ss" or "HH:mm")
+      console.log('Calculating report time for departure:', departureTime);
+      
+      // Parse the departure time (format: "HH:MM" in 24-hour format)
       const [hours, minutes] = departureTime.split(':').map(Number);
+      
+      if (isNaN(hours) || isNaN(minutes)) {
+        console.error('Invalid time format:', departureTime);
+        return '';
+      }
       
       // Create a date object for today with the departure time
       const departureDate = new Date();
-      departureDate.setHours(hours, minutes, 0, 0);
+      departureDate.setHours(hours, minutes || 0, 0, 0);
       
       // Subtract 45 minutes
       const reportDate = new Date(departureDate.getTime() - 45 * 60 * 1000);
       
-      // Format as HH:mm
-      return reportDate.toTimeString().slice(0, 5);
+      // Format as HH:MM in 24-hour format
+      const reportTime = reportDate.toTimeString().slice(0, 5);
+      console.log('Calculated report time:', reportTime);
+      
+      return reportTime;
     } catch (error) {
       console.error('Error calculating carrier report time:', error);
       return '';
@@ -428,7 +438,8 @@ export const NewBooking: React.FC = () => {
       };
       
       // Calculate leg dates based on route timing
-      let currentLegDate = parseISO(bookingDate);
+      // Use local timezone to avoid date shifting issues
+      let currentLegDate = new Date(bookingDate + 'T12:00:00');
       
       bookingLegs.forEach((leg, index) => {
         const legRate = parseFloat(leg.rate);
