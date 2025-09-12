@@ -52,14 +52,16 @@ export class PDFService {
       const legs = [];
       const lines = notes.split('\n');
       for (const line of lines) {
-        // Updated regex to handle optional date information: "Leg 1: A → B (May 15) ($100.00)"
-        const legMatch = line.match(/^Leg (\d+): (.+) → (.+?)(?:\s*\([^$)]+\))?\s*\(\$(.+)\)$/);
+        // Updated regex to handle optional date and departure time: "Leg 1: A → B (May 15) Depart: 06:00 ($100.00)"
+        const legMatch = line.match(/^Leg (\d+): (.+) → (.+?)(?:\s*\(([^)]+)\))?(?:\s+Depart:\s*(\d{2}:\d{2}))?\s*\(\$(.+)\)$/);
         if (legMatch) {
           legs.push({
             legNumber: parseInt(legMatch[1]),
             origin: legMatch[2],
             destination: legMatch[3],
-            rate: legMatch[4]
+            dateInfo: legMatch[4], // Extracted date info like "Sep 11"
+            departureTime: legMatch[5], // Extracted departure time like "06:00"
+            rate: legMatch[6] // Rate moved to position 6
           });
         }
       }
@@ -69,7 +71,32 @@ export class PDFService {
         let currentLegDate = new Date(booking.bookingDate);
         
         return legs.map((leg, index) => {
-          const legDateStr = format(currentLegDate, 'MMM dd, yyyy');
+          // If leg has date info, parse it to determine the actual date
+          let legDateStr;
+          if (leg.dateInfo && leg.dateInfo.trim()) {
+            // If date info is present (like "Sep 11"), use it to calculate the actual date
+            const bookingYear = currentLegDate.getFullYear();
+            try {
+              const parsedDate = new Date(`${leg.dateInfo} ${bookingYear}`);
+              if (!isNaN(parsedDate.getTime())) {
+                legDateStr = format(parsedDate, 'MMM dd, yyyy');
+              } else {
+                legDateStr = format(currentLegDate, 'MMM dd, yyyy');
+              }
+            } catch {
+              legDateStr = format(currentLegDate, 'MMM dd, yyyy');
+            }
+          } else {
+            legDateStr = format(currentLegDate, 'MMM dd, yyyy');
+            // Advance date for next leg if no explicit date info
+            if (index < legs.length - 1) {
+              currentLegDate = new Date(currentLegDate.getTime() + 24 * 60 * 60 * 1000);
+            }
+          }
+          
+          // Use departure time from parsed leg data, fall back to main route time
+          const legDepartureTime = leg.departureTime || booking.route?.departureTime || 'TBD';
+
           const routeHTML = `
           <div class="route-item">
             <div class="route-header">
@@ -79,19 +106,11 @@ export class PDFService {
             <div style="margin-top: 10px;">
               <div style="display: flex; justify-content: space-between;">
                 <span><strong>Departure Date:</strong> ${legDateStr}</span>
-                <span><strong>Departure Time:</strong> ${booking.route?.departureTime || 'TBD'}</span>
+                <span><strong>Departure Time:</strong> ${legDepartureTime}</span>
               </div>
             </div>
           </div>
           `;
-          
-          // Advance date if this was a midnight crossing route (check for date in notes)
-          if (index < legs.length - 1) {
-            const nextLegLine = lines.find(line => line.startsWith(`Leg ${index + 2}:`));
-            if (nextLegLine && nextLegLine.includes('(') && !nextLegLine.includes('$')) {
-              currentLegDate = new Date(currentLegDate.getTime() + 24 * 60 * 60 * 1000);
-            }
-          }
           
           return routeHTML;
         }).join('');

@@ -141,15 +141,23 @@ export const NewBooking: React.FC = () => {
         return '';
       }
       
-      // Create a date object for today with the departure time
-      const departureDate = new Date();
-      departureDate.setHours(hours, minutes || 0, 0, 0);
+      // Calculate total minutes from midnight
+      const totalMinutes = hours * 60 + (minutes || 0);
       
       // Subtract 45 minutes
-      const reportDate = new Date(departureDate.getTime() - 45 * 60 * 1000);
+      let reportMinutes = totalMinutes - 45;
+      
+      // Handle day boundary crossing
+      if (reportMinutes < 0) {
+        reportMinutes += 24 * 60; // Add 24 hours worth of minutes
+      }
+      
+      // Convert back to hours and minutes
+      const reportHours = Math.floor(reportMinutes / 60);
+      const reportMins = reportMinutes % 60;
       
       // Format as HH:MM in 24-hour format
-      const reportTime = reportDate.toTimeString().slice(0, 5);
+      const reportTime = `${String(reportHours).padStart(2, '0')}:${String(reportMins).padStart(2, '0')}`;
       console.log('Calculated report time:', reportTime);
       
       return reportTime;
@@ -406,37 +414,52 @@ export const NewBooking: React.FC = () => {
       let totalMiles = 0;
       let calculatedBaseRate = 0;
       
-      // Helper function to check if a route crosses midnight
-      const routeCrossesMidnight = (departureTime: string | undefined, arrivalTime: string | undefined): boolean => {
-        if (!departureTime || !arrivalTime) return false;
-        
-        console.log(`Checking route times: Departure "${departureTime}", Arrival "${arrivalTime}"`);
-        
-        // Parse 24-hour format times (HH:MM)
-        const parseTime24 = (timeStr: string): number => {
-          const [hours, minutes] = timeStr.split(':').map(Number);
-          return hours * 60 + (minutes || 0);
-        };
-        
-        const depTimeMinutes = parseTime24(departureTime);
-        const arrTimeMinutes = parseTime24(arrivalTime);
-        
-        // Route crosses midnight if departure time > arrival time
-        // Example: Depart 23:30 (1410 min), Arrive 02:00 (120 min) = crosses midnight
-        const crossesMidnight = depTimeMinutes > arrTimeMinutes;
-        
-        console.log(`Route timing analysis:
-          - Departure: ${departureTime} = ${depTimeMinutes} minutes
-          - Arrival: ${arrivalTime} = ${arrTimeMinutes} minutes  
-          - Crosses midnight: ${crossesMidnight}`);
-        
-        return crossesMidnight;
-      };
       
       // Calculate leg dates based on route timing
       let currentLegDate = parseISO(bookingDate);
       
       bookingLegs.forEach((leg, index) => {
+        // For legs after the first, check if current leg departs before previous leg's arrival
+        if (index > 0) {
+          const prevLeg = bookingLegs[index - 1];
+          const prevRoute = prevLeg.route;
+          const currentRoute = leg.route;
+          
+          if (prevRoute && currentRoute && prevRoute.arrivalTime && currentRoute.departureTime) {
+            // Parse times to compare
+            const parseTime24 = (timeStr: string): number => {
+              const [hours, minutes] = timeStr.split(':').map(Number);
+              return hours * 60 + (minutes || 0);
+            };
+            
+            const prevArrivalMinutes = parseTime24(prevRoute.arrivalTime);
+            const currentDepartureMinutes = parseTime24(currentRoute.departureTime);
+            
+            // If current leg departs before previous leg arrives (in clock time), it must be next day
+            if (currentDepartureMinutes < prevArrivalMinutes) {
+              const oldDate = currentLegDate;
+              currentLegDate = addDays(currentLegDate, 1);
+              console.log(`Date advanced from ${format(oldDate, 'MMM dd')} to ${format(currentLegDate, 'MMM dd')} for Leg ${index + 1} because it departs (${currentRoute.departureTime}) before previous leg arrives (${prevRoute.arrivalTime})`);
+            }
+          } else if (prevRoute && currentRoute && currentRoute.departureTime && prevRoute.departureTime) {
+            // Fallback: If no arrival time, compare departure times
+            const parseTime24 = (timeStr: string): number => {
+              const [hours, minutes] = timeStr.split(':').map(Number);
+              return hours * 60 + (minutes || 0);
+            };
+            
+            const prevDepartureMinutes = parseTime24(prevRoute.departureTime);
+            const currentDepartureMinutes = parseTime24(currentRoute.departureTime);
+            
+            // If current leg departs before previous leg (in clock time), it's likely next day
+            if (currentDepartureMinutes < prevDepartureMinutes) {
+              const oldDate = currentLegDate;
+              currentLegDate = addDays(currentLegDate, 1);
+              console.log(`Date advanced from ${format(oldDate, 'MMM dd')} to ${format(currentLegDate, 'MMM dd')} for Leg ${index + 1} because it departs (${currentRoute.departureTime}) before previous leg departs (${prevRoute.departureTime})`);
+            }
+          }
+        }
+        
         const legRate = parseFloat(leg.rate);
         totalRate += legRate;
         
@@ -452,19 +475,13 @@ export const NewBooking: React.FC = () => {
           }
         }
         
-        // Build leg description with date adjustment for subsequent legs
+        // Build leg description with correct date for current leg
         const route = leg.route;
         if (route) {
           const legDateStr = index === 0 ? '' : ` (${format(currentLegDate, 'MMM dd')})`;
-          console.log(`Leg ${index + 1}: Date ${format(currentLegDate, 'MMM dd')}, Route: ${route.origin} → ${route.destination}`);
-          legDetails.push(`Leg ${index + 1}: ${route.origin} → ${route.destination}${legDateStr} ($${legRate.toFixed(2)})`);
-          
-          // Update date for next leg if current route crosses midnight
-          if (index < bookingLegs.length - 1 && routeCrossesMidnight(route.departureTime, route.arrivalTime)) {
-            const oldDate = currentLegDate;
-            currentLegDate = addDays(currentLegDate, 1);
-            console.log(`Date advanced from ${format(oldDate, 'MMM dd')} to ${format(currentLegDate, 'MMM dd')} due to midnight crossing`);
-          }
+          const departureTimeStr = route.departureTime ? ` Depart: ${route.departureTime}` : '';
+          console.log(`Leg ${index + 1}: Date ${format(currentLegDate, 'MMM dd')}, Route: ${route.origin} → ${route.destination}${departureTimeStr}`);
+          legDetails.push(`Leg ${index + 1}: ${route.origin} → ${route.destination}${legDateStr}${departureTimeStr} ($${legRate.toFixed(2)})`);
         }
       });
       
@@ -648,7 +665,14 @@ export const NewBooking: React.FC = () => {
           rateType: defaultRateType,
           route: route
         };
-        setBookingLegs([...bookingLegs, newLeg]);
+        const updatedLegs = [...bookingLegs, newLeg];
+        setBookingLegs(updatedLegs);
+        
+        // Set carrier report time when first leg is added
+        if (updatedLegs.length === 1 && route.departureTime) {
+          const reportTime = calculateCarrierReportTime(route.departureTime);
+          setCarrierReportTime(reportTime);
+        }
       }
     } else {
       // For single route, use existing logic
@@ -660,7 +684,13 @@ export const NewBooking: React.FC = () => {
   };
 
   const removeBookingLeg = (legId: string) => {
-    setBookingLegs(bookingLegs.filter(leg => leg.id !== legId));
+    const updatedLegs = bookingLegs.filter(leg => leg.id !== legId);
+    setBookingLegs(updatedLegs);
+    
+    // Clear carrier report time when all legs are removed
+    if (updatedLegs.length === 0) {
+      setCarrierReportTime('');
+    }
   };
 
   const updateLegRate = (legId: string, newRate: string) => {

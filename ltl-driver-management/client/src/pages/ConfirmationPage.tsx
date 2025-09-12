@@ -41,14 +41,14 @@ const parseMultiLegBooking = (notes: string | null) => {
   const legs = [];
   
   for (const line of lines) {
-    // Updated regex to handle optional date information: "Leg 1: A → B (May 15) ($100.00)"
-    const legMatch = line.match(/^Leg (\d+): (.+) → (.+?)(?:\s*\([^$)]+\))?\s*\(\$(.+)\)$/);
+    // Updated regex to handle optional date and departure time: "Leg 1: A → B (May 15) Depart: 06:00 ($100.00)"
+    const legMatch = line.match(/^Leg (\d+): (.+) → (.+?)(?:\s*\(([^)]+)\))?(?:\s+Depart:\s*(\d{2}:\d{2}))?\s*\(\$(.+)\)$/);
     if (legMatch) {
       legs.push({
         legNumber: parseInt(legMatch[1]),
         origin: legMatch[2],
         destination: legMatch[3],
-        rate: legMatch[4]
+        rate: legMatch[6] // Rate moved to position 6
       });
     }
   }

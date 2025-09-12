@@ -162,7 +162,7 @@ export const createBooking = async (req: Request, res: Response) => {
       data: {
         carrierId: carrierId ? parseInt(carrierId) : undefined,
         routeId: parseInt(routeId),
-        bookingDate: new Date(bookingDate),
+        bookingDate: new Date(bookingDate + 'T12:00:00'),
         rate: parseFloat(rate),
         notes,
         status: status as any,
@@ -204,7 +204,7 @@ export const updateBooking = async (req: Request, res: Response) => {
     const booking = await prisma.booking.update({
       where: { id: parseInt(id) },
       data: {
-        bookingDate: updateData.bookingDate ? new Date(updateData.bookingDate) : undefined,
+        bookingDate: updateData.bookingDate ? new Date(updateData.bookingDate + 'T12:00:00') : undefined,
         rate: updateData.rate ? parseFloat(updateData.rate) : undefined,
         billable: updateData.billable,
         notes: updateData.notes,
