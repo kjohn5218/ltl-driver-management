@@ -54,7 +54,7 @@ router.get(
     query('endDate').optional().isISO8601(),
     query('billable').optional().isBoolean(),
     query('page').optional().isInt({ min: 1 }),
-    query('limit').optional().isInt({ min: 1, max: 100 })
+    query('limit').optional().isInt({ min: 1, max: 1000 })
   ],
   validateRequest,
   getBookings
