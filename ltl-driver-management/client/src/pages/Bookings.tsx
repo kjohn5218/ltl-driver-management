@@ -1,5 +1,5 @@
 import React, { useState, useMemo, useEffect, useCallback } from 'react';
-import { useNavigate } from 'react-router-dom';
+import { useNavigate, useSearchParams } from 'react-router-dom';
 import { useQuery, useQueryClient, useMutation } from '@tanstack/react-query';
 import { api, sendRateConfirmationEmail } from '../services/api';
 import { Booking } from '../types';
@@ -39,6 +39,7 @@ const parseMultiLegBooking = (notes: string | null) => {
 export const Bookings: React.FC = () => {
   const navigate = useNavigate();
   const queryClient = useQueryClient();
+  const [searchParams] = useSearchParams();
   const [searchTerm, setSearchTerm] = useState('');
   const [statusFilter, setStatusFilter] = useState('');
   const [dateFromFilter, setDateFromFilter] = useState('');
@@ -49,6 +50,21 @@ export const Bookings: React.FC = () => {
   const [editingBooking, setEditingBooking] = useState<Booking | null>(null);
   const [deletingBooking, setDeletingBooking] = useState<Booking | null>(null);
   const [rateConfirmationBooking, setRateConfirmationBooking] = useState<Booking | null>(null);
+  const [rateConfirmationFilter, setRateConfirmationFilter] = useState('');
+
+  // Handle URL query parameters
+  useEffect(() => {
+    const status = searchParams.get('status');
+    const rateConfirmation = searchParams.get('rateConfirmation');
+    
+    if (status) {
+      setStatusFilter(status);
+    }
+    
+    if (rateConfirmation) {
+      setRateConfirmationFilter(rateConfirmation);
+    }
+  }, [searchParams]);
 
   const { data: bookings, isLoading } = useQuery({
     queryKey: ['bookings'],
@@ -104,7 +120,17 @@ export const Bookings: React.FC = () => {
         }
       }
       
-      return matchesSearch && matchesStatus && matchesDate;
+      // Rate confirmation filter
+      let matchesRateConfirmation = true;
+      if (rateConfirmationFilter === 'pending') {
+        // Show bookings not in CANCELLED or COMPLETED status where rate confirmation not sent or not signed
+        matchesRateConfirmation = 
+          booking.status !== 'CANCELLED' && 
+          booking.status !== 'COMPLETED' &&
+          (!booking.confirmationSentAt || !booking.confirmationSignedAt);
+      }
+      
+      return matchesSearch && matchesStatus && matchesDate && matchesRateConfirmation;
     });
 
     // Then, sort the filtered results
@@ -339,7 +365,11 @@ export const Bookings: React.FC = () => {
           <select
             className="px-3 py-2 border border-gray-300 rounded-md focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
             value={statusFilter}
-            onChange={(e) => setStatusFilter(e.target.value)}
+            onChange={(e) => {
+              setStatusFilter(e.target.value);
+              // Clear rate confirmation filter when status filter changes
+              setRateConfirmationFilter('');
+            }}
           >
             <option value="">All Status</option>
             <option value="PENDING">Pending (Unbooked)</option>
@@ -384,6 +414,21 @@ export const Bookings: React.FC = () => {
             </button>
           )}
         </div>
+        
+        {/* Rate Confirmation Filter Indicator */}
+        {rateConfirmationFilter === 'pending' && (
+          <div className="flex items-center gap-2 text-sm text-orange-600 bg-orange-50 px-3 py-1 rounded-md">
+            <Clock className="w-4 h-4" />
+            <span className="font-medium">Showing: Pending Rate Confirmations</span>
+            <button
+              onClick={() => setRateConfirmationFilter('')}
+              className="ml-2 text-orange-600 hover:text-orange-800"
+              title="Clear filter"
+            >
+              <X className="w-4 h-4" />
+            </button>
+          </div>
+        )}
       </div>
 
       {/* Bookings Table */}

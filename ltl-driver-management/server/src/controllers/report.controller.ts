@@ -33,7 +33,10 @@ export const getDashboardMetrics = async (req: Request, res: Response) => {
       completedBookings,
       pendingInvoices,
       totalExpenses,
-      monthlyExpenses
+      monthlyExpenses,
+      unbookedRoutes,
+      bookedRoutes,
+      pendingRateConfirmations
     ] = await Promise.all([
       prisma.carrier.count(),
       prisma.carrier.count({ where: { status: 'ACTIVE' } }),
@@ -50,6 +53,20 @@ export const getDashboardMetrics = async (req: Request, res: Response) => {
       prisma.booking.aggregate({
         where: { ...monthFilter, status: 'COMPLETED' },
         _sum: { rate: true }
+      }),
+      // Count unbooked routes (PENDING status bookings)
+      prisma.booking.count({ where: { status: 'PENDING' } }),
+      // Count booked routes (CONFIRMED status bookings)
+      prisma.booking.count({ where: { status: 'CONFIRMED' } }),
+      // Count pending rate confirmations (not CANCELLED/COMPLETED and either not sent or not signed)
+      prisma.booking.count({ 
+        where: { 
+          status: { notIn: ['CANCELLED', 'COMPLETED'] },
+          OR: [
+            { confirmationSentAt: null },
+            { confirmationSignedAt: null }
+          ]
+        } 
       })
     ]);
 
@@ -72,7 +89,10 @@ export const getDashboardMetrics = async (req: Request, res: Response) => {
         completedBookings,
         pendingInvoices,
         totalExpenses: totalExpenses._sum.rate || 0,
-        monthlyExpenses: monthlyExpenses._sum.rate || 0
+        monthlyExpenses: monthlyExpenses._sum.rate || 0,
+        unbookedRoutes,
+        bookedRoutes,
+        pendingRateConfirmations
       },
       recentActivities: recentBookings
     });

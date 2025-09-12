@@ -1,5 +1,6 @@
 import React from 'react';
 import { useQuery } from '@tanstack/react-query';
+import { useNavigate } from 'react-router-dom';
 import { api } from '../services/api';
 import { 
   Truck, 
@@ -9,7 +10,11 @@ import {
   TrendingDown,
   AlertCircle,
   CreditCard,
-  TrendingUp
+  TrendingUp,
+  FileText,
+  Clock,
+  CheckCircle,
+  XCircle
 } from 'lucide-react';
 import { format } from 'date-fns';
 import { Booking } from '../types';
@@ -23,6 +28,9 @@ interface DashboardMetrics {
   pendingInvoices: number;
   totalExpenses: number;
   monthlyExpenses: number;
+  unbookedRoutes: number;
+  bookedRoutes: number;
+  pendingRateConfirmations: number;
 }
 
 interface DashboardData {
@@ -31,6 +39,7 @@ interface DashboardData {
 }
 
 export const Dashboard: React.FC = () => {
+  const navigate = useNavigate();
   const { data, isLoading, error } = useQuery<DashboardData>({
     queryKey: ['dashboard'],
     queryFn: async () => {
@@ -62,30 +71,32 @@ export const Dashboard: React.FC = () => {
 
   const metrics = [
     {
-      name: 'Active Carriers',
-      value: data.metrics.activeCarriers,
-      total: data.metrics.totalCarriers,
-      icon: Truck,
-      color: 'bg-blue-500'
+      name: 'Unbooked Routes',
+      value: data.metrics.unbookedRoutes || 0,
+      icon: XCircle,
+      color: 'bg-yellow-500',
+      onClick: () => navigate('/bookings?status=PENDING')
     },
     {
-      name: 'Covered Routes',
-      value: data.metrics.totalRoutes,
-      icon: Route,
-      color: 'bg-green-500'
+      name: 'Booked Routes',
+      value: data.metrics.bookedRoutes || 0,
+      icon: CheckCircle,
+      color: 'bg-green-500',
+      onClick: () => navigate('/bookings?status=CONFIRMED')
     },
     {
-      name: 'Completed Trips',
-      value: data.metrics.completedBookings,
-      total: data.metrics.totalBookings,
-      icon: Calendar,
-      color: 'bg-purple-500'
+      name: 'Pending Invoices',
+      value: data.metrics.pendingInvoices || 0,
+      icon: FileText,
+      color: 'bg-blue-500',
+      onClick: () => navigate('/invoices?status=PENDING')
     },
     {
-      name: 'Total Expenses',
-      value: `$${(data.metrics.totalExpenses || 0).toLocaleString()}`,
-      icon: CreditCard,
-      color: 'bg-red-500'
+      name: 'Pending Rate Cons',
+      value: data.metrics.pendingRateConfirmations || 0,
+      icon: Clock,
+      color: 'bg-red-500',
+      onClick: () => navigate('/bookings?rateConfirmation=pending')
     }
   ];
 
@@ -101,7 +112,11 @@ export const Dashboard: React.FC = () => {
       {/* Metrics Grid */}
       <div className="grid grid-cols-1 sm:grid-cols-2 xl:grid-cols-4 gap-4 lg:gap-6 mb-8">
         {metrics.map((metric) => (
-          <div key={metric.name} className="bg-white overflow-hidden shadow rounded-lg">
+          <div 
+            key={metric.name} 
+            className="bg-white overflow-hidden shadow rounded-lg cursor-pointer hover:shadow-lg transition-shadow"
+            onClick={metric.onClick}
+          >
             <div className="p-5">
               <div className="flex items-center">
                 <div className={`flex-shrink-0 rounded-md p-3 ${metric.color}`}>
@@ -116,11 +131,6 @@ export const Dashboard: React.FC = () => {
                       <div className="text-2xl font-semibold text-gray-900">
                         {metric.value}
                       </div>
-                      {metric.total && (
-                        <div className="ml-2 text-sm text-gray-500">
-                          of {metric.total}
-                        </div>
-                      )}
                     </dd>
                   </dl>
                 </div>
