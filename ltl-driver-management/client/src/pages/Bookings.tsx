@@ -69,7 +69,7 @@ export const Bookings: React.FC = () => {
   const { data: bookings, isLoading } = useQuery({
     queryKey: ['bookings'],
     queryFn: async () => {
-      const response = await api.get('/bookings');
+      const response = await api.get('/bookings?limit=1000'); // Fetch all bookings
       return response.data.bookings as Booking[];
     }
   });
