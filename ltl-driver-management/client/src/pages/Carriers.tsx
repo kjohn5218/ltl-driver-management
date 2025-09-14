@@ -434,12 +434,22 @@ const AddCarrierModal: React.FC<AddCarrierModalProps> = ({ onClose, onSave }) =>
       <div className="bg-white rounded-lg p-6 w-full max-w-4xl max-h-[90vh] overflow-y-auto">
         <div className="flex justify-between items-center mb-6">
           <h2 className="text-xl font-bold text-gray-900">Add New Carrier</h2>
-          <button 
-            onClick={onClose}
-            className="text-gray-400 hover:text-gray-600"
-          >
-            <X className="w-5 h-5" />
-          </button>
+          <div className="flex items-center gap-2">
+            <button 
+              type="button"
+              onClick={() => setShowInviteModal(true)}
+              className="inline-flex items-center px-3 py-1.5 bg-green-600 text-white text-sm rounded hover:bg-green-700 transition-colors"
+            >
+              <Send className="w-3.5 h-3.5 mr-1.5" />
+              Invite Carrier
+            </button>
+            <button 
+              onClick={onClose}
+              className="text-gray-400 hover:text-gray-600 p-1"
+            >
+              <X className="w-5 h-5" />
+            </button>
+          </div>
         </div>
         
         {/* Error Display */}
@@ -718,33 +728,22 @@ const AddCarrierModal: React.FC<AddCarrierModalProps> = ({ onClose, onSave }) =>
             </div>
           </div>
           
-          <div className="flex justify-between items-center mt-6 pt-4 border-t">
+          <div className="flex justify-end gap-3 mt-6 pt-4 border-t">
             <button 
               type="button"
-              onClick={() => setShowInviteModal(true)}
-              className="inline-flex items-center px-4 py-2 bg-green-600 text-white rounded hover:bg-green-700 disabled:bg-gray-300"
+              onClick={onClose}
+              className="px-4 py-2 bg-gray-500 text-white rounded hover:bg-gray-600"
               disabled={isSubmitting}
             >
-              <Send className="w-4 h-4 mr-2" />
-              Invite Carrier
+              Cancel
             </button>
-            <div className="flex gap-3">
-              <button 
-                type="button"
-                onClick={onClose}
-                className="px-4 py-2 bg-gray-500 text-white rounded hover:bg-gray-600"
-                disabled={isSubmitting}
-              >
-                Cancel
-              </button>
-              <button 
-                type="submit"
-                className="px-4 py-2 bg-blue-600 text-white rounded hover:bg-blue-700 disabled:bg-gray-300"
-                disabled={isSubmitting}
-              >
-                {isSubmitting ? 'Creating...' : 'Create Carrier'}
-              </button>
-            </div>
+            <button 
+              type="submit"
+              className="px-4 py-2 bg-blue-600 text-white rounded hover:bg-blue-700 disabled:bg-gray-300"
+              disabled={isSubmitting}
+            >
+              {isSubmitting ? 'Creating...' : 'Create Carrier'}
+            </button>
           </div>
         </form>
       </div>
