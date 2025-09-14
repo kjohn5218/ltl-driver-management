@@ -2,7 +2,7 @@ import React, { useState } from 'react';
 import { useQuery, useQueryClient, useMutation } from '@tanstack/react-query';
 import { api } from '../services/api';
 import { Carrier } from '../types';
-import { Plus, Search, Edit, Eye, Trash2, MapPin, Phone, Mail, ExternalLink, X, Send, FileText, Download } from 'lucide-react';
+import { Plus, Search, Edit, Eye, Trash2, MapPin, Phone, Mail, ExternalLink, X, Send, FileText, Download, Bell } from 'lucide-react';
 
 export const Carriers: React.FC = () => {
   const queryClient = useQueryClient();
@@ -23,6 +23,11 @@ export const Carriers: React.FC = () => {
   });
 
   const carriers = carriersData?.carriers || [];
+
+  // Count pending registrations
+  const pendingRegistrations = carriers.filter(carrier => 
+    carrier.status === 'PENDING' && !carrier.onboardingComplete
+  ).length;
 
   const filteredCarriers = carriers?.filter(carrier => {
     const matchesSearch = carrier.name.toLowerCase().includes(searchTerm.toLowerCase()) ||
@@ -86,6 +91,30 @@ export const Carriers: React.FC = () => {
           </button>
         </div>
       </div>
+
+      {/* Pending Registrations Notification */}
+      {pendingRegistrations > 0 && (
+        <div className="bg-amber-50 border border-amber-200 rounded-lg p-4">
+          <div className="flex items-center">
+            <Bell className="w-5 h-5 text-amber-600 mr-3" />
+            <div className="flex-1">
+              <h3 className="text-sm font-medium text-amber-800">
+                {pendingRegistrations} Carrier Registration{pendingRegistrations > 1 ? 's' : ''} Pending Review
+              </h3>
+              <p className="text-sm text-amber-700 mt-1">
+                New carriers have completed their registration and are awaiting approval. 
+                Please review their information and complete the onboarding process.
+              </p>
+            </div>
+            <button 
+              className="ml-4 px-3 py-1 bg-amber-600 text-white text-sm rounded hover:bg-amber-700 transition-colors"
+              onClick={() => setStatusFilter('PENDING')}
+            >
+              Review Now
+            </button>
+          </div>
+        </div>
+      )}
 
       {/* Filters */}
       <div className="flex gap-4 mb-6">
@@ -350,8 +379,42 @@ const AddCarrierModal: React.FC<AddCarrierModalProps> = ({ onClose, onSave }) =>
       validationErrors.push('Carrier name is required');
     }
     
-    if (formData.email && !/\S+@\S+\.\S+/.test(formData.email)) {
+    if (!formData.contactPerson.trim()) {
+      validationErrors.push('Contact Person is required');
+    }
+    
+    if (!formData.phone.trim()) {
+      validationErrors.push('Phone is required');
+    }
+    
+    if (!formData.email.trim()) {
+      validationErrors.push('Email is required');
+    } else if (!/\S+@\S+\.\S+/.test(formData.email)) {
       validationErrors.push('Please enter a valid email address');
+    }
+    
+    if (!formData.streetAddress1.trim()) {
+      validationErrors.push('Street Address 1 is required');
+    }
+    
+    if (!formData.city.trim()) {
+      validationErrors.push('City is required');
+    }
+    
+    if (!formData.state.trim()) {
+      validationErrors.push('State is required');
+    }
+    
+    if (!formData.zipCode.trim()) {
+      validationErrors.push('Zip Code is required');
+    }
+    
+    if (!formData.mcNumber.trim()) {
+      validationErrors.push('MC Number is required');
+    }
+    
+    if (!formData.dotNumber.trim()) {
+      validationErrors.push('DOT Number is required');
     }
     
     if (formData.ratePerMile && (isNaN(parseFloat(formData.ratePerMile)) || parseFloat(formData.ratePerMile) < 0)) {
@@ -478,7 +541,7 @@ const AddCarrierModal: React.FC<AddCarrierModalProps> = ({ onClose, onSave }) =>
             <h3 className="text-lg font-medium text-gray-900 mb-4">Basic Information</h3>
             <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
               <div>
-                <label className="block text-sm font-medium text-gray-700 mb-1">Carrier Name *</label>
+                <label className="block text-sm font-medium text-gray-700 mb-1">Carrier Name <span className="text-red-500">*</span></label>
                 <input
                   type="text"
                   required
@@ -488,27 +551,30 @@ const AddCarrierModal: React.FC<AddCarrierModalProps> = ({ onClose, onSave }) =>
                 />
               </div>
               <div>
-                <label className="block text-sm font-medium text-gray-700 mb-1">Contact Person</label>
+                <label className="block text-sm font-medium text-gray-700 mb-1">Contact Person <span className="text-red-500">*</span></label>
                 <input
                   type="text"
+                  required
                   value={formData.contactPerson}
                   onChange={(e) => setFormData({ ...formData, contactPerson: e.target.value })}
                   className="w-full px-3 py-2 border border-gray-300 rounded-md focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
                 />
               </div>
               <div>
-                <label className="block text-sm font-medium text-gray-700 mb-1">Phone</label>
+                <label className="block text-sm font-medium text-gray-700 mb-1">Phone <span className="text-red-500">*</span></label>
                 <input
                   type="tel"
+                  required
                   value={formData.phone}
                   onChange={(e) => setFormData({ ...formData, phone: e.target.value })}
                   className="w-full px-3 py-2 border border-gray-300 rounded-md focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
                 />
               </div>
               <div>
-                <label className="block text-sm font-medium text-gray-700 mb-1">Email</label>
+                <label className="block text-sm font-medium text-gray-700 mb-1">Email <span className="text-red-500">*</span></label>
                 <input
                   type="email"
+                  required
                   value={formData.email}
                   onChange={(e) => setFormData({ ...formData, email: e.target.value })}
                   className="w-full px-3 py-2 border border-gray-300 rounded-md focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
@@ -522,9 +588,10 @@ const AddCarrierModal: React.FC<AddCarrierModalProps> = ({ onClose, onSave }) =>
             <h3 className="text-lg font-medium text-gray-900 mb-4">Address Information</h3>
             <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
               <div className="md:col-span-2">
-                <label className="block text-sm font-medium text-gray-700 mb-1">Street Address 1</label>
+                <label className="block text-sm font-medium text-gray-700 mb-1">Street Address 1 <span className="text-red-500">*</span></label>
                 <input
                   type="text"
+                  required
                   value={formData.streetAddress1}
                   onChange={(e) => setFormData({ ...formData, streetAddress1: e.target.value })}
                   className="w-full px-3 py-2 border border-gray-300 rounded-md focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
@@ -540,27 +607,30 @@ const AddCarrierModal: React.FC<AddCarrierModalProps> = ({ onClose, onSave }) =>
                 />
               </div>
               <div>
-                <label className="block text-sm font-medium text-gray-700 mb-1">City</label>
+                <label className="block text-sm font-medium text-gray-700 mb-1">City <span className="text-red-500">*</span></label>
                 <input
                   type="text"
+                  required
                   value={formData.city}
                   onChange={(e) => setFormData({ ...formData, city: e.target.value })}
                   className="w-full px-3 py-2 border border-gray-300 rounded-md focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
                 />
               </div>
               <div>
-                <label className="block text-sm font-medium text-gray-700 mb-1">State</label>
+                <label className="block text-sm font-medium text-gray-700 mb-1">State <span className="text-red-500">*</span></label>
                 <input
                   type="text"
+                  required
                   value={formData.state}
                   onChange={(e) => setFormData({ ...formData, state: e.target.value })}
                   className="w-full px-3 py-2 border border-gray-300 rounded-md focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
                 />
               </div>
               <div>
-                <label className="block text-sm font-medium text-gray-700 mb-1">Zip Code</label>
+                <label className="block text-sm font-medium text-gray-700 mb-1">Zip Code <span className="text-red-500">*</span></label>
                 <input
                   type="text"
+                  required
                   value={formData.zipCode}
                   onChange={(e) => setFormData({ ...formData, zipCode: e.target.value })}
                   className="w-full px-3 py-2 border border-gray-300 rounded-md focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
@@ -574,18 +644,20 @@ const AddCarrierModal: React.FC<AddCarrierModalProps> = ({ onClose, onSave }) =>
             <h3 className="text-lg font-medium text-gray-900 mb-4">Regulatory Information</h3>
             <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
               <div>
-                <label className="block text-sm font-medium text-gray-700 mb-1">MC Number</label>
+                <label className="block text-sm font-medium text-gray-700 mb-1">MC Number <span className="text-red-500">*</span></label>
                 <input
                   type="text"
+                  required
                   value={formData.mcNumber}
                   onChange={(e) => setFormData({ ...formData, mcNumber: e.target.value })}
                   className="w-full px-3 py-2 border border-gray-300 rounded-md focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
                 />
               </div>
               <div>
-                <label className="block text-sm font-medium text-gray-700 mb-1">DOT Number</label>
+                <label className="block text-sm font-medium text-gray-700 mb-1">DOT Number <span className="text-red-500">*</span></label>
                 <input
                   type="text"
+                  required
                   value={formData.dotNumber}
                   onChange={(e) => setFormData({ ...formData, dotNumber: e.target.value })}
                   className="w-full px-3 py-2 border border-gray-300 rounded-md focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
@@ -612,48 +684,6 @@ const AddCarrierModal: React.FC<AddCarrierModalProps> = ({ onClose, onSave }) =>
                   onChange={(e) => setFormData({ ...formData, insuranceExpiration: e.target.value })}
                   className="w-full px-3 py-2 border border-gray-300 rounded-md focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
                 />
-              </div>
-            </div>
-          </div>
-
-          {/* Status and Type */}
-          <div>
-            <h3 className="text-lg font-medium text-gray-900 mb-4">Status and Type</h3>
-            <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-              <div>
-                <label className="block text-sm font-medium text-gray-700 mb-1">Status</label>
-                <select
-                  value={formData.status}
-                  onChange={(e) => setFormData({ ...formData, status: e.target.value as any })}
-                  className="w-full px-3 py-2 border border-gray-300 rounded-md focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
-                >
-                  <option value="PENDING">Pending</option>
-                  <option value="ACTIVE">Active</option>
-                  <option value="INACTIVE">Inactive</option>
-                  <option value="SUSPENDED">Suspended</option>
-                  <option value="ONBOARDED">Onboarded</option>
-                  <option value="NOT_ONBOARDED">Not Onboarded</option>
-                </select>
-              </div>
-              <div>
-                <label className="block text-sm font-medium text-gray-700 mb-1">Carrier Type</label>
-                <input
-                  type="text"
-                  value={formData.carrierType}
-                  onChange={(e) => setFormData({ ...formData, carrierType: e.target.value })}
-                  className="w-full px-3 py-2 border border-gray-300 rounded-md focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
-                />
-              </div>
-              <div>
-                <label className="flex items-center">
-                  <input
-                    type="checkbox"
-                    checked={formData.onboardingComplete}
-                    onChange={(e) => setFormData({ ...formData, onboardingComplete: e.target.checked })}
-                    className="mr-2"
-                  />
-                  <span className="text-sm font-medium text-gray-700">Onboarding Complete</span>
-                </label>
               </div>
             </div>
           </div>
@@ -724,6 +754,48 @@ const AddCarrierModal: React.FC<AddCarrierModalProps> = ({ onClose, onSave }) =>
                   onChange={(e) => setFormData({ ...formData, remittanceEmail: e.target.value })}
                   className="w-full px-3 py-2 border border-gray-300 rounded-md focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
                 />
+              </div>
+            </div>
+          </div>
+
+          {/* Status and Type */}
+          <div>
+            <h3 className="text-lg font-medium text-gray-900 mb-4">Status and Type</h3>
+            <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+              <div>
+                <label className="block text-sm font-medium text-gray-700 mb-1">Status</label>
+                <select
+                  value={formData.status}
+                  onChange={(e) => setFormData({ ...formData, status: e.target.value as any })}
+                  className="w-full px-3 py-2 border border-gray-300 rounded-md focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
+                >
+                  <option value="PENDING">Pending</option>
+                  <option value="ACTIVE">Active</option>
+                  <option value="INACTIVE">Inactive</option>
+                  <option value="SUSPENDED">Suspended</option>
+                  <option value="ONBOARDED">Onboarded</option>
+                  <option value="NOT_ONBOARDED">Not Onboarded</option>
+                </select>
+              </div>
+              <div>
+                <label className="block text-sm font-medium text-gray-700 mb-1">Carrier Type</label>
+                <input
+                  type="text"
+                  value={formData.carrierType}
+                  onChange={(e) => setFormData({ ...formData, carrierType: e.target.value })}
+                  className="w-full px-3 py-2 border border-gray-300 rounded-md focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
+                />
+              </div>
+              <div>
+                <label className="flex items-center">
+                  <input
+                    type="checkbox"
+                    checked={formData.onboardingComplete}
+                    onChange={(e) => setFormData({ ...formData, onboardingComplete: e.target.checked })}
+                    className="mr-2"
+                  />
+                  <span className="text-sm font-medium text-gray-700">Onboarding Complete</span>
+                </label>
               </div>
             </div>
           </div>
@@ -1240,9 +1312,10 @@ const CarrierEditModal: React.FC<CarrierEditModalProps> = ({ carrier, onClose, o
             <h3 className="text-lg font-medium text-gray-900 mb-4">Address Information</h3>
             <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
               <div className="md:col-span-2">
-                <label className="block text-sm font-medium text-gray-700 mb-1">Street Address 1</label>
+                <label className="block text-sm font-medium text-gray-700 mb-1">Street Address 1 <span className="text-red-500">*</span></label>
                 <input
                   type="text"
+                  required
                   value={formData.streetAddress1}
                   onChange={(e) => setFormData({ ...formData, streetAddress1: e.target.value })}
                   className="w-full px-3 py-2 border border-gray-300 rounded-md focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
@@ -1258,27 +1331,30 @@ const CarrierEditModal: React.FC<CarrierEditModalProps> = ({ carrier, onClose, o
                 />
               </div>
               <div>
-                <label className="block text-sm font-medium text-gray-700 mb-1">City</label>
+                <label className="block text-sm font-medium text-gray-700 mb-1">City <span className="text-red-500">*</span></label>
                 <input
                   type="text"
+                  required
                   value={formData.city}
                   onChange={(e) => setFormData({ ...formData, city: e.target.value })}
                   className="w-full px-3 py-2 border border-gray-300 rounded-md focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
                 />
               </div>
               <div>
-                <label className="block text-sm font-medium text-gray-700 mb-1">State</label>
+                <label className="block text-sm font-medium text-gray-700 mb-1">State <span className="text-red-500">*</span></label>
                 <input
                   type="text"
+                  required
                   value={formData.state}
                   onChange={(e) => setFormData({ ...formData, state: e.target.value })}
                   className="w-full px-3 py-2 border border-gray-300 rounded-md focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
                 />
               </div>
               <div>
-                <label className="block text-sm font-medium text-gray-700 mb-1">Zip Code</label>
+                <label className="block text-sm font-medium text-gray-700 mb-1">Zip Code <span className="text-red-500">*</span></label>
                 <input
                   type="text"
+                  required
                   value={formData.zipCode}
                   onChange={(e) => setFormData({ ...formData, zipCode: e.target.value })}
                   className="w-full px-3 py-2 border border-gray-300 rounded-md focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
@@ -1292,18 +1368,20 @@ const CarrierEditModal: React.FC<CarrierEditModalProps> = ({ carrier, onClose, o
             <h3 className="text-lg font-medium text-gray-900 mb-4">Regulatory Information</h3>
             <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
               <div>
-                <label className="block text-sm font-medium text-gray-700 mb-1">MC Number</label>
+                <label className="block text-sm font-medium text-gray-700 mb-1">MC Number <span className="text-red-500">*</span></label>
                 <input
                   type="text"
+                  required
                   value={formData.mcNumber}
                   onChange={(e) => setFormData({ ...formData, mcNumber: e.target.value })}
                   className="w-full px-3 py-2 border border-gray-300 rounded-md focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
                 />
               </div>
               <div>
-                <label className="block text-sm font-medium text-gray-700 mb-1">DOT Number</label>
+                <label className="block text-sm font-medium text-gray-700 mb-1">DOT Number <span className="text-red-500">*</span></label>
                 <input
                   type="text"
+                  required
                   value={formData.dotNumber}
                   onChange={(e) => setFormData({ ...formData, dotNumber: e.target.value })}
                   className="w-full px-3 py-2 border border-gray-300 rounded-md focus:ring-2 focus:ring-blue-500 focus:border-blue-500"

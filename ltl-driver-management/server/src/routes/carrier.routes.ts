@@ -8,7 +8,9 @@ import {
   deleteCarrier,
   searchCarriers,
   uploadDocument,
-  inviteCarrier
+  inviteCarrier,
+  validateInvitation,
+  registerCarrier
 } from '../controllers/carrier.controller';
 import { authenticate, authorize } from '../middleware/auth.middleware';
 import { validateRequest } from '../middleware/validation.middleware';
@@ -17,7 +19,11 @@ import { UserRole } from '@prisma/client';
 
 const router = Router();
 
-// All routes require authentication
+// Public routes (no authentication required)
+router.get('/validate-invitation/:token', validateInvitation);
+router.post('/register', upload.single('insuranceDocument'), registerCarrier);
+
+// All other routes require authentication
 router.use(authenticate);
 
 // Get all carriers with filtering

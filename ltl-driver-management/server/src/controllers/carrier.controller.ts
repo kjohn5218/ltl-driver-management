@@ -337,3 +337,267 @@ export const inviteCarrier = async (req: Request, res: Response) => {
     return res.status(500).json({ message: 'Failed to send invitation' });
   }
 };
+
+export const validateInvitation = async (req: Request, res: Response) => {
+  try {
+    const { token } = req.params;
+    
+    if (!token) {
+      return res.status(400).json({ message: 'Token is required' });
+    }
+    
+    try {
+      // Decode the token
+      const decoded = Buffer.from(decodeURIComponent(token), 'base64').toString();
+      const [email, timestampStr] = decoded.split(':');
+      const timestamp = parseInt(timestampStr);
+      
+      if (!email || !timestamp) {
+        return res.status(400).json({ message: 'Invalid token format' });
+      }
+      
+      // Check if token is expired (7 days)
+      const expirationTime = 7 * 24 * 60 * 60 * 1000; // 7 days in milliseconds
+      if (Date.now() - timestamp > expirationTime) {
+        return res.status(400).json({ message: 'Token has expired' });
+      }
+      
+      // Check if carrier with this email already exists
+      const existingCarrier = await prisma.carrier.findFirst({
+        where: { email }
+      });
+      
+      if (existingCarrier) {
+        return res.status(400).json({ message: 'Carrier with this email already registered' });
+      }
+      
+      return res.status(200).json({ 
+        message: 'Token is valid',
+        email 
+      });
+    } catch (decodeError) {
+      return res.status(400).json({ message: 'Invalid token format' });
+    }
+  } catch (error) {
+    console.error('Validate invitation error:', error);
+    return res.status(500).json({ message: 'Failed to validate invitation' });
+  }
+};
+
+export const registerCarrier = async (req: Request, res: Response) => {
+  try {
+    const {
+      token,
+      name,
+      contactPerson,
+      phone,
+      email,
+      mcNumber,
+      dotNumber,
+      streetAddress1,
+      streetAddress2,
+      city,
+      state,
+      zipCode,
+      safetyRating,
+      taxId,
+      ratePerMile,
+      rating,
+      remittanceContact,
+      remittanceEmail,
+      factoringCompany,
+      insuranceExpiration
+    } = req.body;
+    
+    const insuranceFile = req.file;
+    
+    // Validate token first
+    if (!token) {
+      return res.status(400).json({ message: 'Registration token is required' });
+    }
+    
+    try {
+      // Decode the token
+      const decoded = Buffer.from(decodeURIComponent(token), 'base64').toString();
+      const [tokenEmail, timestampStr] = decoded.split(':');
+      const timestamp = parseInt(timestampStr);
+      
+      if (!tokenEmail || !timestamp) {
+        return res.status(400).json({ message: 'Invalid registration token' });
+      }
+      
+      // Check if token is expired (7 days)
+      const expirationTime = 7 * 24 * 60 * 60 * 1000; // 7 days in milliseconds
+      if (Date.now() - timestamp > expirationTime) {
+        return res.status(400).json({ message: 'Registration token has expired' });
+      }
+      
+      // Validate that the email matches the token
+      if (email !== tokenEmail) {
+        return res.status(400).json({ message: 'Email does not match invitation' });
+      }
+    } catch (decodeError) {
+      return res.status(400).json({ message: 'Invalid registration token' });
+    }
+    
+    // Validate required fields
+    const requiredFields = {
+      name: 'Carrier name',
+      contactPerson: 'Contact person',
+      phone: 'Phone',
+      email: 'Email',
+      streetAddress1: 'Street address',
+      city: 'City',
+      state: 'State',
+      zipCode: 'Zip code',
+      mcNumber: 'MC Number',
+      dotNumber: 'DOT Number'
+    };
+    
+    const missingFields = [];
+    for (const [field, label] of Object.entries(requiredFields)) {
+      if (!req.body[field] || !req.body[field].trim()) {
+        missingFields.push(label);
+      }
+    }
+    
+    if (!insuranceFile) {
+      missingFields.push('Insurance document');
+    }
+    
+    if (missingFields.length > 0) {
+      return res.status(400).json({ 
+        message: `Missing required fields: ${missingFields.join(', ')}` 
+      });
+    }
+    
+    // Check for duplicate MC/DOT numbers
+    if (mcNumber) {
+      const existingMC = await prisma.carrier.findUnique({
+        where: { mcNumber }
+      });
+      if (existingMC) {
+        return res.status(409).json({ message: 'MC number already exists' });
+      }
+    }
+
+    if (dotNumber) {
+      const existingDOT = await prisma.carrier.findUnique({
+        where: { dotNumber }
+      });
+      if (existingDOT) {
+        return res.status(409).json({ message: 'DOT number already exists' });
+      }
+    }
+    
+    // Check if carrier with this email already exists
+    const existingCarrier = await prisma.carrier.findFirst({
+      where: { email }
+    });
+    
+    if (existingCarrier) {
+      return res.status(409).json({ message: 'Carrier with this email already exists' });
+    }
+    
+    // Create the carrier with status PENDING and onboardingComplete false
+    const carrierData = {
+      name: name.trim(),
+      contactPerson: contactPerson.trim(),
+      phone: phone.trim(),
+      email: email.trim(),
+      mcNumber: mcNumber.trim(),
+      dotNumber: dotNumber.trim(),
+      streetAddress1: streetAddress1.trim(),
+      streetAddress2: streetAddress2 ? streetAddress2.trim() : undefined,
+      city: city.trim(),
+      state: state.trim(),
+      zipCode: zipCode.trim(),
+      status: 'PENDING' as const,
+      carrierType: undefined, // Will be set by admin during review
+      safetyRating: safetyRating || undefined,
+      taxId: taxId ? taxId.trim() : undefined,
+      ratePerMile: ratePerMile ? parseFloat(ratePerMile) : undefined,
+      rating: rating ? parseFloat(rating) : undefined,
+      remittanceContact: remittanceContact ? remittanceContact.trim() : undefined,
+      remittanceEmail: remittanceEmail ? remittanceEmail.trim() : undefined,
+      factoringCompany: factoringCompany ? factoringCompany.trim() : undefined,
+      onboardingComplete: false,
+      insuranceExpiration: insuranceExpiration ? new Date(insuranceExpiration) : undefined
+    };
+    
+    const carrier = await prisma.carrier.create({
+      data: carrierData
+    });
+    
+    // Save the insurance document
+    if (insuranceFile) {
+      await prisma.carrierDocument.create({
+        data: {
+          carrierId: carrier.id,
+          documentType: 'INSURANCE',
+          filename: insuranceFile.originalname,
+          filePath: insuranceFile.path
+        }
+      });
+    }
+    
+    // Send notification to admin about new registration
+    const { sendEmail } = await import('../services/notification.service');
+    
+    const adminEmailContent = `
+      <div style="font-family: Arial, sans-serif; max-width: 600px; margin: 0 auto;">
+        <h2 style="color: #333;">New Carrier Registration</h2>
+        
+        <p>A new carrier has completed their registration and is awaiting review.</p>
+        
+        <div style="background-color: #f8f9fa; padding: 20px; border-radius: 5px; margin: 20px 0;">
+          <h3 style="margin-top: 0; color: #495057;">Carrier Details:</h3>
+          <ul style="list-style: none; padding: 0;">
+            <li><strong>Name:</strong> ${carrier.name}</li>
+            <li><strong>Contact:</strong> ${carrier.contactPerson}</li>
+            <li><strong>Email:</strong> ${carrier.email}</li>
+            <li><strong>Phone:</strong> ${carrier.phone}</li>
+            <li><strong>MC#:</strong> ${carrier.mcNumber}</li>
+            <li><strong>DOT#:</strong> ${carrier.dotNumber}</li>
+            <li><strong>Location:</strong> ${carrier.city}, ${carrier.state}</li>
+          </ul>
+        </div>
+        
+        <p>Please log in to the system to review and complete the onboarding process.</p>
+        
+        <div style="text-align: center; margin: 30px 0;">
+          <a href="${process.env.FRONTEND_URL}/carriers" 
+             style="background-color: #007bff; color: white; padding: 12px 30px; text-decoration: none; border-radius: 5px; display: inline-block;">
+            Review Carrier
+          </a>
+        </div>
+      </div>
+    `;
+    
+    // Send to admin email (you may want to make this configurable)
+    const adminEmail = process.env.ADMIN_EMAIL || 'admin@ccfs.com';
+    await sendEmail({
+      to: adminEmail,
+      subject: `New Carrier Registration - ${carrier.name}`,
+      html: adminEmailContent
+    });
+    
+    return res.status(201).json({ 
+      message: 'Registration submitted successfully',
+      carrierId: carrier.id 
+    });
+  } catch (error) {
+    console.error('Register carrier error:', error);
+    
+    // Clean up uploaded file if database operation fails
+    if (req.file) {
+      try {
+        await fs.unlink(req.file.path);
+      } catch (e) {
+        console.error('Failed to delete uploaded file:', e);
+      }
+    }
+    
+    return res.status(500).json({ message: 'Failed to submit registration' });
+  }
+};

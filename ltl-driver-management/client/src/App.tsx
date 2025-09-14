@@ -14,6 +14,7 @@ import { NewBooking } from './pages/NewBooking';
 import { Invoices } from './pages/Invoices';
 import { Reports } from './pages/Reports';
 import { ConfirmationPage } from './pages/ConfirmationPage';
+import { CarrierRegistration } from './pages/CarrierRegistration';
 
 // Create a client
 const queryClient = new QueryClient({
@@ -34,6 +35,7 @@ function App() {
             {/* Public routes */}
             <Route path="/login" element={<LoginForm />} />
             <Route path="/register" element={<RegisterForm />} />
+            <Route path="/register/carrier" element={<CarrierRegistration />} />
             <Route path="/confirm/:token" element={<ConfirmationPage />} />
             
             {/* Protected routes */}
