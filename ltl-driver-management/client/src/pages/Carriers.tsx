@@ -2,7 +2,7 @@ import React, { useState } from 'react';
 import { useQuery, useQueryClient, useMutation } from '@tanstack/react-query';
 import { api } from '../services/api';
 import { Carrier } from '../types';
-import { Plus, Search, Edit, Eye, Trash2, MapPin, Phone, Mail, ExternalLink, X } from 'lucide-react';
+import { Plus, Search, Edit, Eye, Trash2, MapPin, Phone, Mail, ExternalLink, X, Send, FileText, Download } from 'lucide-react';
 
 export const Carriers: React.FC = () => {
   const queryClient = useQueryClient();
@@ -67,13 +67,24 @@ export const Carriers: React.FC = () => {
           <h1 className="text-2xl font-bold text-gray-900">Carriers</h1>
           <p className="text-gray-600">Manage your carrier network</p>
         </div>
-        <button 
-          className="btn-primary flex items-center gap-2"
-          onClick={() => setShowAddCarrierModal(true)}
-        >
-          <Plus className="w-4 h-4" />
-          Add Carrier
-        </button>
+        <div className="flex items-center gap-3">
+          <a 
+            href="/CCFS_CarrierBroker_Agreement.docx"
+            download="CCFS_CarrierBroker_Agreement.docx"
+            className="inline-flex items-center px-4 py-2 bg-gray-100 text-gray-700 rounded-md hover:bg-gray-200 transition-colors border border-gray-300"
+          >
+            <FileText className="w-4 h-4 mr-2" />
+            Carrier Agreement
+            <Download className="w-3 h-3 ml-1" />
+          </a>
+          <button 
+            className="btn-primary flex items-center gap-2"
+            onClick={() => setShowAddCarrierModal(true)}
+          >
+            <Plus className="w-4 h-4" />
+            Add Carrier
+          </button>
+        </div>
       </div>
 
       {/* Filters */}
@@ -266,6 +277,12 @@ interface AddCarrierModalProps {
 }
 
 const AddCarrierModal: React.FC<AddCarrierModalProps> = ({ onClose, onSave }) => {
+  const [showInviteModal, setShowInviteModal] = useState(false);
+  const [inviteEmail, setInviteEmail] = useState('');
+  const [isInviting, setIsInviting] = useState(false);
+  const [inviteError, setInviteError] = useState('');
+  const [inviteSuccess, setInviteSuccess] = useState(false);
+  
   const [formData, setFormData] = useState({
     name: '',
     contactPerson: '',
@@ -381,6 +398,34 @@ const AddCarrierModal: React.FC<AddCarrierModalProps> = ({ onClose, onSave }) =>
       await createCarrierMutation.mutateAsync(payload);
     } finally {
       setIsSubmitting(false);
+    }
+  };
+
+  const handleInviteCarrier = async () => {
+    setInviteError('');
+    setInviteSuccess(false);
+    
+    // Validate email
+    if (!inviteEmail || !/\S+@\S+\.\S+/.test(inviteEmail)) {
+      setInviteError('Please enter a valid email address');
+      return;
+    }
+    
+    setIsInviting(true);
+    
+    try {
+      await api.post('/carriers/invite', { email: inviteEmail });
+      setInviteSuccess(true);
+      setTimeout(() => {
+        setShowInviteModal(false);
+        setInviteEmail('');
+        setInviteSuccess(false);
+      }, 2000);
+    } catch (error: any) {
+      console.error('Error inviting carrier:', error);
+      setInviteError(error.response?.data?.message || 'Failed to send invitation. Please try again.');
+    } finally {
+      setIsInviting(false);
     }
   };
 
@@ -673,25 +718,138 @@ const AddCarrierModal: React.FC<AddCarrierModalProps> = ({ onClose, onSave }) =>
             </div>
           </div>
           
-          <div className="flex justify-end gap-3 mt-6 pt-4 border-t">
+          <div className="flex justify-between items-center mt-6 pt-4 border-t">
             <button 
               type="button"
-              onClick={onClose}
-              className="px-4 py-2 bg-gray-500 text-white rounded hover:bg-gray-600"
+              onClick={() => setShowInviteModal(true)}
+              className="inline-flex items-center px-4 py-2 bg-green-600 text-white rounded hover:bg-green-700 disabled:bg-gray-300"
               disabled={isSubmitting}
             >
-              Cancel
+              <Send className="w-4 h-4 mr-2" />
+              Invite Carrier
             </button>
-            <button 
-              type="submit"
-              className="px-4 py-2 bg-blue-600 text-white rounded hover:bg-blue-700 disabled:bg-gray-300"
-              disabled={isSubmitting}
-            >
-              {isSubmitting ? 'Creating...' : 'Create Carrier'}
-            </button>
+            <div className="flex gap-3">
+              <button 
+                type="button"
+                onClick={onClose}
+                className="px-4 py-2 bg-gray-500 text-white rounded hover:bg-gray-600"
+                disabled={isSubmitting}
+              >
+                Cancel
+              </button>
+              <button 
+                type="submit"
+                className="px-4 py-2 bg-blue-600 text-white rounded hover:bg-blue-700 disabled:bg-gray-300"
+                disabled={isSubmitting}
+              >
+                {isSubmitting ? 'Creating...' : 'Create Carrier'}
+              </button>
+            </div>
           </div>
         </form>
       </div>
+      
+      {/* Invite Carrier Modal */}
+      {showInviteModal && (
+        <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-[60]">
+          <div className="bg-white rounded-lg p-6 w-full max-w-md">
+            <div className="flex justify-between items-center mb-4">
+              <h3 className="text-lg font-semibold text-gray-900">Invite Carrier</h3>
+              <button
+                onClick={() => {
+                  setShowInviteModal(false);
+                  setInviteEmail('');
+                  setInviteError('');
+                  setInviteSuccess(false);
+                }}
+                className="text-gray-400 hover:text-gray-500"
+              >
+                <X className="w-5 h-5" />
+              </button>
+            </div>
+            
+            {inviteSuccess ? (
+              <div className="text-center py-8">
+                <div className="mx-auto flex items-center justify-center h-12 w-12 rounded-full bg-green-100 mb-4">
+                  <svg className="h-6 w-6 text-green-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M5 13l4 4L19 7" />
+                  </svg>
+                </div>
+                <p className="text-green-600 font-medium">Invitation sent successfully!</p>
+              </div>
+            ) : (
+              <>
+                <p className="text-gray-600 mb-4">
+                  Enter the carrier's email address to send them a registration invitation.
+                </p>
+                
+                <div className="mb-4">
+                  <label className="block text-sm font-medium text-gray-700 mb-1">
+                    Carrier Email <span className="text-red-500">*</span>
+                  </label>
+                  <input
+                    type="email"
+                    value={inviteEmail}
+                    onChange={(e) => setInviteEmail(e.target.value)}
+                    placeholder="carrier@example.com"
+                    className="w-full px-3 py-2 border border-gray-300 rounded-md focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
+                    disabled={isInviting}
+                  />
+                  {inviteError && (
+                    <p className="mt-1 text-sm text-red-600">{inviteError}</p>
+                  )}
+                </div>
+                
+                <div className="bg-gray-50 p-4 rounded-md mb-4">
+                  <p className="text-sm text-gray-700 font-medium mb-2">The carrier will receive an email with:</p>
+                  <div className="text-sm text-gray-600 space-y-1">
+                    <p>• Registration link to set up their account</p>
+                    <p>• Instructions from CrossCountry Freight Solutions, Inc.</p>
+                    <p>• Request to complete their carrier profile</p>
+                    <p>• Link to review the Carrier/Broker Agreement</p>
+                  </div>
+                </div>
+                
+                <div className="bg-blue-50 p-3 rounded-md mb-4 flex items-start gap-2">
+                  <FileText className="w-4 h-4 text-blue-600 mt-0.5 flex-shrink-0" />
+                  <div className="text-xs text-blue-800">
+                    <p className="font-medium">Note: Carriers must agree to the CCFS Carrier/Broker Agreement.</p>
+                    <a 
+                      href="/CCFS_CarrierBroker_Agreement.docx"
+                      download="CCFS_CarrierBroker_Agreement.docx"
+                      className="underline hover:text-blue-900"
+                    >
+                      Download agreement for review
+                    </a>
+                  </div>
+                </div>
+                
+                <div className="flex justify-end gap-3">
+                  <button
+                    type="button"
+                    onClick={() => {
+                      setShowInviteModal(false);
+                      setInviteEmail('');
+                      setInviteError('');
+                    }}
+                    className="px-4 py-2 bg-gray-500 text-white rounded hover:bg-gray-600"
+                    disabled={isInviting}
+                  >
+                    Cancel
+                  </button>
+                  <button
+                    onClick={handleInviteCarrier}
+                    className="px-4 py-2 bg-green-600 text-white rounded hover:bg-green-700 disabled:bg-gray-300"
+                    disabled={isInviting || !inviteEmail}
+                  >
+                    {isInviting ? 'Sending...' : 'Send Invite'}
+                  </button>
+                </div>
+              </>
+            )}
+          </div>
+        </div>
+      )}
     </div>
   );
 };

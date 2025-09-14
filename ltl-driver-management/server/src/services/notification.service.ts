@@ -1,6 +1,13 @@
 import nodemailer from 'nodemailer';
 import { Booking, Carrier, Route } from '@prisma/client';
 
+interface EmailOptions {
+  to: string;
+  subject: string;
+  html: string;
+  from?: string;
+}
+
 // Create transporter
 const transporter = nodemailer.createTransport({
   host: process.env.EMAIL_HOST || 'smtp.gmail.com',
@@ -20,6 +27,24 @@ interface BookingWithRelations extends Booking {
     [key: string]: any;
   }>;
 }
+
+export const sendEmail = async (options: EmailOptions) => {
+  try {
+    const mailOptions = {
+      from: options.from || process.env.EMAIL_USER || 'noreply@crosscountryfreight.com',
+      to: options.to,
+      subject: options.subject,
+      html: options.html
+    };
+    
+    await transporter.sendMail(mailOptions);
+    console.log('Email sent successfully to:', options.to);
+    return true;
+  } catch (error) {
+    console.error('Error sending email:', error);
+    throw error;
+  }
+};
 
 export const sendBookingConfirmation = async (booking: BookingWithRelations) => {
   try {

@@ -1,7 +1,8 @@
-import React from 'react';
+import React, { useState } from 'react';
 import { useAuth } from '../../contexts/AuthContext';
-import { Menu, User, LogOut } from 'lucide-react';
+import { Menu, User, LogOut, Building2 } from 'lucide-react';
 import { useNavigate } from 'react-router-dom';
+import { CompanyProfileModal } from '../CompanyProfileModal';
 
 interface HeaderProps {
   onMenuClick: () => void;
@@ -10,6 +11,7 @@ interface HeaderProps {
 export const Header: React.FC<HeaderProps> = ({ onMenuClick }) => {
   const { user, logout } = useAuth();
   const navigate = useNavigate();
+  const [isCompanyProfileOpen, setIsCompanyProfileOpen] = useState(false);
 
   const handleLogout = () => {
     logout();
@@ -17,9 +19,10 @@ export const Header: React.FC<HeaderProps> = ({ onMenuClick }) => {
   };
 
   return (
-    <header className="bg-white shadow-sm border-b border-gray-200">
-      <div className="px-4 sm:px-6 lg:px-8">
-        <div className="flex justify-between items-center h-16">
+    <>
+      <header className="bg-white shadow-sm border-b border-gray-200">
+        <div className="px-4 sm:px-6 lg:px-8">
+          <div className="flex justify-between items-center h-16">
           <div className="flex items-center">
             <button
               onClick={onMenuClick}
@@ -37,6 +40,15 @@ export const Header: React.FC<HeaderProps> = ({ onMenuClick }) => {
           </div>
           
           <div className="flex items-center space-x-4">
+            <button
+              onClick={() => setIsCompanyProfileOpen(true)}
+              className="inline-flex items-center px-3 py-2 text-sm font-medium text-gray-700 hover:text-gray-900 hover:bg-gray-100 rounded-md transition-colors"
+              title="Company Profile"
+            >
+              <Building2 className="h-4 w-4 mr-2" />
+              Company Profile
+            </button>
+            
             <div className="flex items-center text-sm text-gray-700">
               <User className="h-5 w-5 mr-2 text-gray-400" />
               <span className="font-medium">{user?.name}</span>
@@ -51,8 +63,14 @@ export const Header: React.FC<HeaderProps> = ({ onMenuClick }) => {
               Logout
             </button>
           </div>
+          </div>
         </div>
-      </div>
-    </header>
+      </header>
+      
+      <CompanyProfileModal
+        isOpen={isCompanyProfileOpen}
+        onClose={() => setIsCompanyProfileOpen(false)}
+      />
+    </>
   );
 };

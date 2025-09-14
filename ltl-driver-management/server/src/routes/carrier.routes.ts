@@ -7,7 +7,8 @@ import {
   updateCarrier, 
   deleteCarrier,
   searchCarriers,
-  uploadDocument
+  uploadDocument,
+  inviteCarrier
 } from '../controllers/carrier.controller';
 import { authenticate, authorize } from '../middleware/auth.middleware';
 import { validateRequest } from '../middleware/validation.middleware';
@@ -102,6 +103,17 @@ router.post(
   ],
   validateRequest,
   uploadDocument
+);
+
+// Invite carrier (Admin/Dispatcher only)
+router.post(
+  '/invite',
+  authorize(UserRole.ADMIN, UserRole.DISPATCHER),
+  [
+    body('email').notEmpty().isEmail().normalizeEmail(),
+  ],
+  validateRequest,
+  inviteCarrier
 );
 
 export default router;

@@ -267,3 +267,73 @@ export const uploadDocument = async (req: Request, res: Response) => {
     return res.status(500).json({ message: 'Failed to upload document' });
   }
 };
+
+export const inviteCarrier = async (req: Request, res: Response) => {
+  try {
+    const { email } = req.body;
+    
+    // Check if carrier with this email already exists
+    const existingCarrier = await prisma.carrier.findFirst({
+      where: { email }
+    });
+    
+    if (existingCarrier) {
+      return res.status(400).json({ message: 'A carrier with this email already exists' });
+    }
+    
+    // Import email service
+    const { sendEmail } = await import('../services/notification.service');
+    
+    // Generate a unique registration token
+    const registrationToken = Buffer.from(`${email}:${Date.now()}`).toString('base64');
+    const registrationLink = `${process.env.FRONTEND_URL}/register/carrier?token=${encodeURIComponent(registrationToken)}`;
+    
+    // Send invitation email
+    const emailContent = `
+      <div style="font-family: Arial, sans-serif; max-width: 600px; margin: 0 auto;">
+        <h2 style="color: #333;">PLEASE CLICK THE LINK BELOW TO REGISTER</h2>
+        
+        <p>TO WHOM IT MAY CONCERN:</p>
+        
+        <p>Thank you for your interest in registering with CrossCountry Freight Solutions, Inc.</p>
+        
+        <p>In order to set you up as a carrier in our system, you must register via the link below.</p>
+        
+        <div style="margin: 30px 0; text-align: center;">
+          <a href="${registrationLink}" 
+             style="background-color: #007bff; color: white; padding: 12px 30px; text-decoration: none; border-radius: 5px; display: inline-block;">
+            Complete Your Registration
+          </a>
+        </div>
+        
+        <p style="color: #666; font-size: 14px;">
+          Or copy and paste this link into your browser:<br>
+          ${registrationLink}
+        </p>
+        
+        <hr style="border: none; border-top: 1px solid #eee; margin: 30px 0;">
+        
+        <p style="color: #999; font-size: 12px;">
+          This invitation link will expire in 7 days. If you have any questions, please contact us at (800) 521-0287.
+        </p>
+      </div>
+    `;
+    
+    await sendEmail({
+      to: email,
+      subject: 'Carrier Registration Invitation - CrossCountry Freight Solutions',
+      html: emailContent
+    });
+    
+    // Store the invitation in the database (optional - for tracking)
+    // You might want to create a CarrierInvitation model to track these
+    
+    return res.status(200).json({ 
+      message: 'Invitation sent successfully',
+      email 
+    });
+  } catch (error) {
+    console.error('Invite carrier error:', error);
+    return res.status(500).json({ message: 'Failed to send invitation' });
+  }
+};
