@@ -15,6 +15,7 @@ import { Invoices } from './pages/Invoices';
 import { Reports } from './pages/Reports';
 import { ConfirmationPage } from './pages/ConfirmationPage';
 import { CarrierRegistration } from './pages/CarrierRegistration';
+import { Administration } from './pages/Administration';
 
 // Create a client
 const queryClient = new QueryClient({
@@ -119,9 +120,39 @@ function App() {
                 </ProtectedRoute>
               }
             />
+            <Route
+              path="/admin"
+              element={
+                <ProtectedRoute roles={['ADMIN']}>
+                  <Layout>
+                    <Administration />
+                  </Layout>
+                </ProtectedRoute>
+              }
+            />
             
             {/* Redirect root to dashboard */}
             <Route path="/" element={<Navigate to="/dashboard" replace />} />
+            
+            {/* Unauthorized page */}
+            <Route
+              path="/unauthorized"
+              element={
+                <div className="min-h-screen flex items-center justify-center bg-gray-50">
+                  <div className="text-center">
+                    <h1 className="text-4xl font-bold text-gray-900 mb-4">403</h1>
+                    <h2 className="text-xl font-semibold text-gray-700 mb-4">Access Denied</h2>
+                    <p className="text-gray-600 mb-8">You don't have permission to access this page.</p>
+                    <a
+                      href="/dashboard"
+                      className="inline-flex items-center px-4 py-2 border border-transparent text-sm font-medium rounded-md text-white bg-primary-600 hover:bg-primary-700"
+                    >
+                      Go to Dashboard
+                    </a>
+                  </div>
+                </div>
+              }
+            />
             
             {/* 404 fallback */}
             <Route

@@ -14,6 +14,7 @@ import invoiceRoutes from './routes/invoice.routes';
 import reportRoutes from './routes/report.routes';
 import settingsRoutes from './routes/settings.routes';
 import locationRoutes from './routes/location.routes';
+import userRoutes from './routes/user.routes';
 
 // Load environment variables
 dotenv.config();
@@ -50,6 +51,7 @@ app.use('/api/invoices', invoiceRoutes);
 app.use('/api/reports', reportRoutes);
 app.use('/api/settings', settingsRoutes);
 app.use('/api/locations', locationRoutes);
+app.use('/api/users', userRoutes);
 
 // Health check endpoint
 app.get('/api/health', (_req, res) => {

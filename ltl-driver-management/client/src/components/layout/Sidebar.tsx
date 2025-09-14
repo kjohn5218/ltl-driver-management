@@ -14,7 +14,8 @@ import {
   Settings,
   Edit2,
   Check,
-  AlertCircle
+  AlertCircle,
+  Users
 } from 'lucide-react';
 import { clsx } from 'clsx';
 import { api } from '../../services/api';
@@ -40,9 +41,11 @@ export const Sidebar: React.FC<SidebarProps> = ({ isOpen, onClose }) => {
     { name: 'Bookings', href: '/bookings', icon: Calendar },
     { name: 'Invoices', href: '/invoices', icon: FileText },
     { name: 'Reports', href: '/reports', icon: BarChart3 },
+    { name: 'Administration', href: '/admin', icon: Users, adminOnly: true },
   ];
 
   const isAdminOrDispatcher = user?.role === 'ADMIN' || user?.role === 'DISPATCHER';
+  const isAdmin = user?.role === 'ADMIN';
 
   // Load fuel surcharge rate on component mount
   useEffect(() => {
@@ -137,6 +140,11 @@ export const Sidebar: React.FC<SidebarProps> = ({ isOpen, onClose }) => {
           {navigation.map((item) => {
             // Hide certain items for non-admin/dispatcher users
             if ((item.name === 'Carriers' || item.name === 'Routes' || item.name === 'Reports') && !isAdminOrDispatcher) {
+              return null;
+            }
+
+            // Hide admin-only items for non-admin users
+            if (item.adminOnly && !isAdmin) {
               return null;
             }
 
