@@ -10,7 +10,11 @@ import {
   uploadDocument,
   inviteCarrier,
   validateInvitation,
-  registerCarrier
+  registerCarrier,
+  addCarrierDriver,
+  updateCarrierDriver,
+  deleteCarrierDriver,
+  getCarrierDrivers
 } from '../controllers/carrier.controller';
 import { authenticate, authorize } from '../middleware/auth.middleware';
 import { validateRequest } from '../middleware/validation.middleware';
@@ -120,6 +124,46 @@ router.post(
   ],
   validateRequest,
   inviteCarrier
+);
+
+// Driver management routes
+// Get carrier drivers
+router.get('/:id/drivers', getCarrierDrivers);
+
+// Add driver to carrier (Admin/Dispatcher only)
+router.post(
+  '/:id/drivers',
+  authorize(UserRole.ADMIN, UserRole.DISPATCHER),
+  [
+    body('name').notEmpty().trim(),
+    body('phoneNumber').optional().trim(),
+    body('email').optional().isEmail().normalizeEmail(),
+    body('licenseNumber').optional().trim()
+  ],
+  validateRequest,
+  addCarrierDriver
+);
+
+// Update carrier driver (Admin/Dispatcher only)
+router.put(
+  '/:id/drivers/:driverId',
+  authorize(UserRole.ADMIN, UserRole.DISPATCHER),
+  [
+    body('name').optional().notEmpty().trim(),
+    body('phoneNumber').optional().trim(),
+    body('email').optional().isEmail().normalizeEmail(),
+    body('licenseNumber').optional().trim(),
+    body('active').optional().isBoolean()
+  ],
+  validateRequest,
+  updateCarrierDriver
+);
+
+// Delete carrier driver (Admin/Dispatcher only)
+router.delete(
+  '/:id/drivers/:driverId',
+  authorize(UserRole.ADMIN, UserRole.DISPATCHER),
+  deleteCarrierDriver
 );
 
 export default router;

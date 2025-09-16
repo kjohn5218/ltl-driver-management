@@ -14,6 +14,18 @@ export interface User {
   updatedAt: string;
 }
 
+export interface CarrierDriver {
+  id: number;
+  carrierId: number;
+  name: string;
+  phoneNumber?: string;
+  email?: string;
+  licenseNumber?: string;
+  active: boolean;
+  createdAt: string;
+  updatedAt: string;
+}
+
 export interface Carrier {
   id: number;
   name: string;
@@ -40,6 +52,9 @@ export interface Carrier {
   remittanceContact?: string;
   remittanceEmail?: string;
   factoringCompany?: string;
+  
+  // Relations
+  drivers?: CarrierDriver[];
   
   createdAt: string;
   updatedAt: string;
@@ -83,7 +98,7 @@ export interface Route {
 export interface Booking {
   id: number;
   carrierId: number | null;
-  routeId: number;
+  routeId: number | null;
   bookingDate: string;
   rate: number;
   status: BookingStatus;
@@ -106,6 +121,12 @@ export interface Booking {
   rateType: RateType;
   baseRate?: number;
   fscRate?: number;
+  
+  // Origin-destination booking fields
+  origin?: string;
+  destination?: string;
+  estimatedMiles?: number;
+  manifestNumber?: string;
   
   // Rate confirmation tracking
   confirmationToken?: string;

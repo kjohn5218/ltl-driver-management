@@ -18,7 +18,11 @@ interface BookingLeg {
   route?: Route;
 }
 
-export const NewBooking: React.FC = () => {
+interface NewBookingProps {
+  copyFromBooking?: Booking;
+}
+
+export const NewBooking: React.FC<NewBookingProps> = ({ copyFromBooking }) => {
   const navigate = useNavigate();
   const queryClient = useQueryClient();
   const [carrierId, setCarrierId] = useState('');
@@ -52,6 +56,12 @@ export const NewBooking: React.FC = () => {
   const [showDestinationDropdown, setShowDestinationDropdown] = useState(false);
   const [isRoundTrip, setIsRoundTrip] = useState(false);
   const [fuelSurchargeRate, setFuelSurchargeRate] = useState<number>(0);
+  
+  // Origin-destination booking state
+  const [selectedOrigin, setSelectedOrigin] = useState('');
+  const [selectedDestination, setSelectedDestination] = useState('');
+  const [estimatedMiles, setEstimatedMiles] = useState<number>(0);
+  const [customReportTime, setCustomReportTime] = useState('');
 
   // Fetch carriers
   const { data: carriersData, isLoading: loadingCarriers } = useQuery({
@@ -99,6 +109,45 @@ export const NewBooking: React.FC = () => {
     setFuelSurchargeRate(isNaN(numericRate) ? 0 : numericRate);
   }, [settingsData]);
 
+  // Populate form when copying from existing booking
+  React.useEffect(() => {
+    if (copyFromBooking && carriers.length > 0) {
+      // Copy carrier information
+      if (copyFromBooking.carrierId && copyFromBooking.carrier) {
+        setCarrierId(copyFromBooking.carrierId.toString());
+        setSelectedCarrierName(copyFromBooking.carrier.name);
+        setCarrierEmail(copyFromBooking.carrierEmail || copyFromBooking.carrier.email || '');
+      }
+
+      // Copy route information
+      if (copyFromBooking.route) {
+        setSelectedRoutes([copyFromBooking.routeId.toString()]);
+        setSelectedRouteName(`${copyFromBooking.route.name} (${copyFromBooking.route.origin} → ${copyFromBooking.route.destination})`);
+        
+        // Calculate and set carrier report time
+        const reportTime = calculateCarrierReportTime(copyFromBooking.route.departureTime);
+        setCarrierReportTime(copyFromBooking.carrierReportTime || reportTime);
+      }
+
+      // Copy booking details (but not the date - always use today for new bookings)
+      setRate(copyFromBooking.rate.toString());
+      setSingleRouteRateType(copyFromBooking.rateType);
+      setSingleRouteBaseRate(copyFromBooking.baseRate?.toString() || '');
+      setBillable(copyFromBooking.billable);
+      setBookingType(copyFromBooking.type);
+      setTrailerLength(copyFromBooking.trailerLength?.toString() || '');
+      
+      // Copy contact information
+      setDriverName(copyFromBooking.driverName || '');
+      setPhoneNumber(copyFromBooking.phoneNumber || '');
+      
+      // Copy notes but add a prefix to indicate it's copied
+      if (copyFromBooking.notes) {
+        setNotes(`[Copied from booking #${copyFromBooking.id}]\n\n${copyFromBooking.notes}`);
+      }
+    }
+  }, [copyFromBooking, carriers]);
+
   // Get unique origins and destinations for filter dropdowns
   const uniqueOrigins = [...new Set(routes.map((r: Route) => r.origin))].sort();
   const uniqueDestinations = [...new Set(routes.map((r: Route) => r.destination))].sort();
@@ -116,8 +165,38 @@ export const NewBooking: React.FC = () => {
     ).slice(0, 10); // Limit to first 10 results
   }, [carriers, carrierSearch]);
 
+  // Check if carrier insurance is expired or expiring soon
+  const getInsuranceStatus = (carrier: Carrier) => {
+    if (!carrier.insuranceExpiration) return null;
+    
+    const today = new Date();
+    const expirationDate = new Date(carrier.insuranceExpiration);
+    const daysUntilExpiration = Math.ceil((expirationDate.getTime() - today.getTime()) / (1000 * 60 * 60 * 24));
+    
+    if (daysUntilExpiration < 0) {
+      return { status: 'expired', days: Math.abs(daysUntilExpiration) };
+    } else if (daysUntilExpiration <= 30) {
+      return { status: 'expiring', days: daysUntilExpiration };
+    }
+    
+    return { status: 'valid', days: daysUntilExpiration };
+  };
+
   // Handle carrier selection
   const handleCarrierSelect = (carrier: Carrier) => {
+    const insuranceStatus = getInsuranceStatus(carrier);
+    
+    // Warn about expired insurance
+    if (insuranceStatus?.status === 'expired') {
+      if (!confirm(`Warning: ${carrier.name}'s insurance expired ${insuranceStatus.days} days ago. Do you want to continue?`)) {
+        return;
+      }
+    } else if (insuranceStatus?.status === 'expiring') {
+      if (!confirm(`Warning: ${carrier.name}'s insurance expires in ${insuranceStatus.days} days. Do you want to continue?`)) {
+        return;
+      }
+    }
+    
     setCarrierId(carrier.id.toString());
     setSelectedCarrierName(carrier.name);
     setCarrierEmail(carrier.email || ''); // Populate carrier email if available
@@ -386,10 +465,25 @@ export const NewBooking: React.FC = () => {
       return;
     }
 
-    // Validate selected routes
-    if (!isRoundTrip && selectedRoutes.length === 0) {
-      alert('Please select a route');
-      return;
+    // Validate booking configuration
+    if (!isRoundTrip) {
+      if (selectedRoutes.length === 0) {
+        // Origin-destination booking validation
+        if (!selectedOrigin || !selectedDestination) {
+          alert('Please select both origin and destination');
+          return;
+        }
+        if (estimatedMiles <= 0) {
+          alert('Please enter estimated miles');
+          return;
+        }
+      } else {
+        // Specific route booking validation
+        if (selectedRoutes.length === 0) {
+          alert('Please select a route');
+          return;
+        }
+      }
     }
 
     if (isRoundTrip) {
@@ -542,6 +636,73 @@ export const NewBooking: React.FC = () => {
       
       console.log(`Creating ${bookingsToCreate.length} multi-leg booking(s)`);
       createBookingMutation.mutate(bookingsToCreate);
+    } else if (selectedRoutes.length === 0) {
+      // Origin-destination booking (no specific route selected)
+      if (!singleRouteBaseRate || parseFloat(singleRouteBaseRate) <= 0) {
+        alert('Please enter a valid rate');
+        return;
+      }
+      
+      if (!rate || parseFloat(rate) <= 0) {
+        alert('Invalid calculated rate. Please check your inputs.');
+        return;
+      }
+
+      // Get all booking dates
+      const dates = getBookingDates();
+      
+      // Create booking data for each date with null routeId for origin-destination bookings
+      const bookingsToCreate = dates.map((date) => {
+        // Create notes with origin-destination information
+        const originDestNotes = [
+          `Origin-Destination Booking: ${selectedOrigin} → ${selectedDestination}`,
+          estimatedMiles > 0 ? `Estimated Miles: ${estimatedMiles}` : null,
+          customReportTime ? `Custom Report Time: ${customReportTime}` : null,
+          notes || null
+        ].filter(Boolean).join('\n');
+        
+        const dateNotes = useMultipleDates && originDestNotes ? 
+          `${originDestNotes}\n\n[Booking Date: ${format(parseISO(date), 'MMM dd, yyyy')}]` : 
+          (originDestNotes || null);
+        
+        const bookingData: any = {
+          carrierId: carrierId ? parseInt(carrierId) : null,
+          routeId: null, // Special handling for origin-destination bookings
+          origin: selectedOrigin,
+          destination: selectedDestination,
+          estimatedMiles: estimatedMiles,
+          bookingDate: date,
+          rate: parseFloat(rate).toFixed(2),
+          rateType: singleRouteRateType,
+          baseRate: singleRouteRateType === 'FLAT_RATE' 
+            ? parseFloat(rate).toFixed(2) 
+            : parseFloat(singleRouteBaseRate).toFixed(2),
+          fscRate: singleRouteRateType === 'MILE_FSC' ? fuelSurchargeRate.toFixed(2) : undefined,
+          billable,
+          notes: dateNotes,
+          driverName: driverName || undefined,
+          phoneNumber: phoneNumber || undefined,
+          carrierEmail: carrierEmail || undefined,
+          carrierReportTime: customReportTime || carrierReportTime || undefined,
+          type: bookingType,
+          trailerLength: bookingType === 'POWER_AND_TRAILER' && trailerLength ? parseInt(trailerLength) : null,
+          status: carrierId ? 'CONFIRMED' : 'PENDING',
+          legNumber: 1,
+          isParent: true
+        };
+        
+        // Remove null values that should be omitted
+        Object.keys(bookingData).forEach(key => {
+          if (bookingData[key] === null && key !== 'carrierId' && key !== 'notes' && key !== 'trailerLength' && key !== 'routeId') {
+            delete bookingData[key];
+          }
+        });
+        
+        return bookingData;
+      });
+      
+      console.log(`Creating ${bookingsToCreate.length} origin-destination booking(s)`);
+      createBookingMutation.mutate(bookingsToCreate);
     } else {
       // Single route booking validation
       if (selectedRoutes.length === 0) {
@@ -629,26 +790,45 @@ export const NewBooking: React.FC = () => {
 
   // Calculate single route rate based on rate type
   const calculateSingleRouteRate = (): string => {
-    if (!selectedRouteObjects.length) return '0.00';
-    
-    const route = selectedRouteObjects[0];
     const baseRateNum = parseFloat(singleRouteBaseRate) || 0;
     
     if (singleRouteRateType === 'FLAT_RATE') {
       return singleRouteBaseRate || '0.00';
     }
     
-    const calculatedRate = calculateLegRate(route, singleRouteRateType, baseRateNum);
-    return calculatedRate.toFixed(2);
+    // For origin-destination bookings
+    if (selectedRouteObjects.length === 0 && estimatedMiles > 0) {
+      const miles = estimatedMiles;
+      
+      switch (singleRouteRateType) {
+        case 'MILE':
+          return (baseRateNum * miles).toFixed(2);
+        case 'MILE_FSC':
+          const fscAmount = (baseRateNum * fuelSurchargeRate) / 100;
+          const totalRatePerMile = baseRateNum + fscAmount;
+          return (totalRatePerMile * miles).toFixed(2);
+        default:
+          return '0.00';
+      }
+    }
+    
+    // For specific route bookings
+    if (selectedRouteObjects.length > 0) {
+      const route = selectedRouteObjects[0];
+      const calculatedRate = calculateLegRate(route, singleRouteRateType, baseRateNum);
+      return calculatedRate.toFixed(2);
+    }
+    
+    return '0.00';
   };
 
-  // Update rate when base rate or type changes for single route
+  // Update rate when base rate or type changes for single route or origin-destination
   React.useEffect(() => {
-    if (!isRoundTrip && selectedRouteObjects.length > 0) {
+    if (!isRoundTrip && (selectedRouteObjects.length > 0 || (selectedOrigin && selectedDestination && estimatedMiles > 0))) {
       const newRate = calculateSingleRouteRate();
       setRate(newRate);
     }
-  }, [singleRouteRateType, singleRouteBaseRate, selectedRouteObjects, isRoundTrip]);
+  }, [singleRouteRateType, singleRouteBaseRate, selectedRouteObjects, isRoundTrip, selectedOrigin, selectedDestination, estimatedMiles, fuelSurchargeRate]);
 
   // Booking leg management functions
   const addBookingLeg = (routeId: string) => {
@@ -828,8 +1008,25 @@ export const NewBooking: React.FC = () => {
   return (
     <div className="max-w-4xl mx-auto">
       <div className="mb-8">
-        <h1 className="text-2xl font-bold text-gray-900">New Booking</h1>
-        <p className="text-gray-600">Create a new carrier booking for a route</p>
+        <h1 className="text-2xl font-bold text-gray-900">
+          {copyFromBooking ? 'Copy Booking' : 'New Booking'}
+        </h1>
+        <p className="text-gray-600">
+          {copyFromBooking 
+            ? `Creating a copy of booking #${copyFromBooking.id} with today's date`
+            : 'Create a new carrier booking for a route'
+          }
+        </p>
+        {copyFromBooking && (
+          <div className="mt-2 p-3 bg-blue-50 rounded-md border border-blue-200">
+            <p className="text-sm text-blue-800">
+              <strong>Original booking details:</strong> {copyFromBooking.route?.name} • 
+              {copyFromBooking.carrier?.name || 'No carrier'} • 
+              ${copyFromBooking.rate} • 
+              {format(new Date(copyFromBooking.bookingDate), 'MMM dd, yyyy')}
+            </p>
+          </div>
+        )}
       </div>
 
       <form onSubmit={handleSubmit} className="space-y-6 bg-white shadow-lg rounded-lg p-6">
@@ -889,19 +1086,45 @@ export const NewBooking: React.FC = () => {
                           >
                             No carrier (Unbooked)
                           </button>
-                          {filteredCarriers.map((carrier: Carrier) => (
-                            <button
-                              key={carrier.id}
-                              type="button"
-                              onClick={() => handleCarrierSelect(carrier)}
-                              className="w-full px-3 py-2 text-left hover:bg-blue-50 border-b border-gray-100 last:border-b-0"
-                            >
-                              <div className="font-medium text-gray-900">{carrier.name}</div>
-                              <div className="text-xs text-gray-500">
-                                MC: {carrier.mcNumber || 'N/A'} | DOT: {carrier.dotNumber || 'N/A'}
-                              </div>
-                            </button>
-                          ))}
+                          {filteredCarriers.map((carrier: Carrier) => {
+                            const insuranceStatus = getInsuranceStatus(carrier);
+                            return (
+                              <button
+                                key={carrier.id}
+                                type="button"
+                                onClick={() => handleCarrierSelect(carrier)}
+                                className={`w-full px-3 py-2 text-left border-b border-gray-100 last:border-b-0 ${
+                                  insuranceStatus?.status === 'expired' 
+                                    ? 'bg-red-50 hover:bg-red-100' 
+                                    : insuranceStatus?.status === 'expiring'
+                                    ? 'bg-yellow-50 hover:bg-yellow-100'
+                                    : 'hover:bg-blue-50'
+                                }`}
+                              >
+                                <div className="flex items-center justify-between">
+                                  <div className="font-medium text-gray-900">{carrier.name}</div>
+                                  {insuranceStatus?.status === 'expired' && (
+                                    <span className="text-xs bg-red-100 text-red-800 px-2 py-1 rounded">
+                                      Insurance Expired
+                                    </span>
+                                  )}
+                                  {insuranceStatus?.status === 'expiring' && (
+                                    <span className="text-xs bg-yellow-100 text-yellow-800 px-2 py-1 rounded">
+                                      Expires in {insuranceStatus.days}d
+                                    </span>
+                                  )}
+                                </div>
+                                <div className="text-xs text-gray-500">
+                                  MC: {carrier.mcNumber || 'N/A'} | DOT: {carrier.dotNumber || 'N/A'}
+                                  {carrier.insuranceExpiration && (
+                                    <span className="ml-2">
+                                      Insurance: {format(new Date(carrier.insuranceExpiration), 'MMM dd, yyyy')}
+                                    </span>
+                                  )}
+                                </div>
+                              </button>
+                            );
+                          })}
                         </>
                       ) : (
                         <div className="px-3 py-2 text-gray-500 text-sm">
@@ -929,42 +1152,169 @@ export const NewBooking: React.FC = () => {
                   <strong>Rate per Mile:</strong> ${selectedCarrier.ratePerMile}
                 </p>
               )}
+              {selectedCarrier.insuranceExpiration && (
+                <p className="text-sm text-gray-600">
+                  <strong>Insurance Expires:</strong> {format(new Date(selectedCarrier.insuranceExpiration), 'MMM dd, yyyy')}
+                  {(() => {
+                    const insuranceStatus = getInsuranceStatus(selectedCarrier);
+                    if (insuranceStatus?.status === 'expired') {
+                      return <span className="ml-2 text-red-600 font-medium">(Expired {insuranceStatus.days} days ago)</span>;
+                    } else if (insuranceStatus?.status === 'expiring') {
+                      return <span className="ml-2 text-yellow-600 font-medium">(Expires in {insuranceStatus.days} days)</span>;
+                    }
+                    return null;
+                  })()}
+                </p>
+              )}
             </div>
           )}
         </div>
 
-        {/* Trip Type Selection */}
-        <div className="flex items-center gap-4">
-          <label className="flex items-center gap-2">
-            <input
-              type="radio"
-              name="tripType"
-              checked={!isRoundTrip}
-              onChange={() => setIsRoundTrip(false)}
-              className="w-4 h-4 text-blue-600 border-gray-300 focus:ring-blue-500"
-            />
-            <span className="text-sm font-medium text-gray-700">Single Route</span>
+        {/* Booking Mode Selection */}
+        <div>
+          <label className="block text-sm font-medium text-gray-700 mb-3">
+            Booking Type
           </label>
-          <label className="flex items-center gap-2">
-            <input
-              type="radio"
-              name="tripType"
-              checked={isRoundTrip}
-              onChange={() => setIsRoundTrip(true)}
-              className="w-4 h-4 text-blue-600 border-gray-300 focus:ring-blue-500"
-            />
-            <span className="text-sm font-medium text-gray-700">Multi-Leg Booking (Consolidated)</span>
-          </label>
+          <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+            <label className="flex items-center gap-2 p-3 border border-gray-300 rounded-md hover:bg-gray-50 cursor-pointer">
+              <input
+                type="radio"
+                name="bookingMode"
+                checked={!isRoundTrip && selectedRoutes.length === 0}
+                onChange={() => {
+                  setIsRoundTrip(false);
+                  setSelectedRoutes([]);
+                  setSelectedRouteName('');
+                  setBookingLegs([]);
+                }}
+                className="w-4 h-4 text-blue-600 border-gray-300 focus:ring-blue-500"
+              />
+              <div>
+                <span className="text-sm font-medium text-gray-700">Origin → Destination</span>
+                <p className="text-xs text-gray-500">Simple point-to-point booking</p>
+              </div>
+            </label>
+            <label className="flex items-center gap-2 p-3 border border-gray-300 rounded-md hover:bg-gray-50 cursor-pointer">
+              <input
+                type="radio"
+                name="bookingMode"
+                checked={!isRoundTrip && selectedRoutes.length > 0}
+                onChange={() => {
+                  setIsRoundTrip(false);
+                  setBookingLegs([]);
+                }}
+                className="w-4 h-4 text-blue-600 border-gray-300 focus:ring-blue-500"
+              />
+              <div>
+                <span className="text-sm font-medium text-gray-700">Specific Route</span>
+                <p className="text-xs text-gray-500">Choose from defined routes</p>
+              </div>
+            </label>
+            <label className="flex items-center gap-2 p-3 border border-gray-300 rounded-md hover:bg-gray-50 cursor-pointer">
+              <input
+                type="radio"
+                name="bookingMode"
+                checked={isRoundTrip}
+                onChange={() => {
+                  setIsRoundTrip(true);
+                  setSelectedRoutes([]);
+                  setSelectedRouteName('');
+                }}
+                className="w-4 h-4 text-blue-600 border-gray-300 focus:ring-blue-500"
+              />
+              <div>
+                <span className="text-sm font-medium text-gray-700">Multi-Leg</span>
+                <p className="text-xs text-gray-500">Multiple routes consolidated</p>
+              </div>
+            </label>
+          </div>
         </div>
 
         {/* Route Selection */}
         <div>
           <label className="block text-sm font-medium text-gray-700 mb-2">
             <MapPin className="inline w-4 h-4 mr-1" />
-            {isRoundTrip ? 'Select Routes *' : 'Select Route *'}
+            {(!isRoundTrip && selectedRoutes.length === 0) ? 'Origin and Destination *' : 
+             isRoundTrip ? 'Select Routes *' : 'Select Route *'}
           </label>
+          
+          {/* Origin-Destination Simple Booking */}
+          {!isRoundTrip && selectedRoutes.length === 0 && (
+            <div className="space-y-4 p-4 bg-gray-50 rounded-md border border-gray-200">
+              <h3 className="text-sm font-medium text-gray-700">Simple Origin → Destination Booking</h3>
+              
+              <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                <div>
+                  <label className="block text-xs font-medium text-gray-700 mb-1">Origin *</label>
+                  <select
+                    value={selectedOrigin}
+                    onChange={(e) => setSelectedOrigin(e.target.value)}
+                    className="w-full px-3 py-2 border border-gray-300 rounded-md focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
+                    required
+                  >
+                    <option value="">Select origin...</option>
+                    {uniqueOrigins.map((origin) => (
+                      <option key={origin} value={origin}>{origin}</option>
+                    ))}
+                  </select>
+                </div>
+                
+                <div>
+                  <label className="block text-xs font-medium text-gray-700 mb-1">Destination *</label>
+                  <select
+                    value={selectedDestination}
+                    onChange={(e) => setSelectedDestination(e.target.value)}
+                    className="w-full px-3 py-2 border border-gray-300 rounded-md focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
+                    required
+                  >
+                    <option value="">Select destination...</option>
+                    {uniqueDestinations.map((destination) => (
+                      <option key={destination} value={destination}>{destination}</option>
+                    ))}
+                  </select>
+                </div>
+              </div>
+              
+              <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                <div>
+                  <label className="block text-xs font-medium text-gray-700 mb-1">Estimated Miles</label>
+                  <input
+                    type="number"
+                    value={estimatedMiles}
+                    onChange={(e) => setEstimatedMiles(parseFloat(e.target.value) || 0)}
+                    className="w-full px-3 py-2 border border-gray-300 rounded-md focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
+                    placeholder="Enter estimated miles..."
+                    min="1"
+                    step="0.1"
+                  />
+                </div>
+                
+                <div>
+                  <label className="block text-xs font-medium text-gray-700 mb-1">Report Time</label>
+                  <input
+                    type="time"
+                    value={customReportTime}
+                    onChange={(e) => setCustomReportTime(e.target.value)}
+                    className="w-full px-3 py-2 border border-gray-300 rounded-md focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
+                    placeholder="HH:MM"
+                  />
+                </div>
+              </div>
+              
+              {selectedOrigin && selectedDestination && (
+                <div className="p-3 bg-blue-50 rounded-md border border-blue-200">
+                  <p className="text-sm text-blue-800">
+                    <strong>Route:</strong> {selectedOrigin} → {selectedDestination}
+                    {estimatedMiles > 0 && <span> • {estimatedMiles} miles</span>}
+                  </p>
+                </div>
+              )}
+            </div>
+          )}
+
           <div className="space-y-3">
-            {/* Filters Row */}
+            {/* Filters Row - Only show for route-based booking */}
+            {(isRoundTrip || selectedRoutes.length > 0) && (
             <div className="grid grid-cols-1 md:grid-cols-3 gap-3">
               <div className="relative">
                 {/* Display selected origin or search input */}
@@ -1409,6 +1759,7 @@ export const NewBooking: React.FC = () => {
               </div>
             )}
           </div>
+          )}
           
           {/* Single Route Details */}
           {!isRoundTrip && selectedRouteObjects.length === 1 && (
@@ -1517,8 +1868,8 @@ export const NewBooking: React.FC = () => {
           </div>
         )}
 
-        {/* Single Route Rate Configuration - Only show for single route */}
-        {!isRoundTrip && selectedRouteObjects.length > 0 && (
+        {/* Rate Configuration - Show for single route and origin-destination bookings */}
+        {!isRoundTrip && (selectedRouteObjects.length > 0 || (selectedOrigin && selectedDestination)) && (
           <div className="space-y-4 p-4 bg-gray-50 rounded-md border border-gray-200">
             <h3 className="text-sm font-medium text-gray-700">Rate Configuration</h3>
             
@@ -1602,7 +1953,12 @@ export const NewBooking: React.FC = () => {
                   </label>
                   {singleRouteRateType !== 'FLAT_RATE' && (
                     <p className="text-xs text-blue-700 mt-0.5">
-                      {selectedRouteObjects[0].distance} miles × ${parseFloat(singleRouteBaseRate || '0').toFixed(2)}/mile
+                      {selectedRouteObjects.length > 0 
+                        ? `${selectedRouteObjects[0].distance} miles × $${parseFloat(singleRouteBaseRate || '0').toFixed(2)}/mile`
+                        : estimatedMiles > 0 
+                          ? `${estimatedMiles} miles × $${parseFloat(singleRouteBaseRate || '0').toFixed(2)}/mile`
+                          : 'Enter estimated miles'
+                      }
                       {singleRouteRateType === 'MILE_FSC' && ` + ${fuelSurchargeRate}% FSC`}
                     </p>
                   )}
@@ -1696,13 +2052,47 @@ export const NewBooking: React.FC = () => {
             <label className="block text-sm font-medium text-gray-700 mb-2">
               Driver Name
             </label>
-            <input
-              type="text"
-              value={driverName}
-              onChange={(e) => setDriverName(e.target.value)}
-              className="w-full px-3 py-2 border border-gray-300 rounded-md focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
-              placeholder="Driver name"
-            />
+            {selectedCarrier && selectedCarrier.drivers && selectedCarrier.drivers.length > 0 ? (
+              <div className="space-y-2">
+                <select
+                  value={driverName}
+                  onChange={(e) => {
+                    const selectedDriver = selectedCarrier.drivers?.find(d => d.name === e.target.value);
+                    setDriverName(e.target.value);
+                    if (selectedDriver) {
+                      setPhoneNumber(selectedDriver.phoneNumber || '');
+                    }
+                  }}
+                  className="w-full px-3 py-2 border border-gray-300 rounded-md focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
+                >
+                  <option value="">Select a driver...</option>
+                  {selectedCarrier.drivers.map((driver) => (
+                    <option key={driver.id} value={driver.name}>
+                      {driver.name}
+                    </option>
+                  ))}
+                  <option value="__custom__">Enter custom name...</option>
+                </select>
+                {driverName === '__custom__' && (
+                  <input
+                    type="text"
+                    value=""
+                    onChange={(e) => setDriverName(e.target.value)}
+                    className="w-full px-3 py-2 border border-gray-300 rounded-md focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
+                    placeholder="Enter driver name..."
+                    autoFocus
+                  />
+                )}
+              </div>
+            ) : (
+              <input
+                type="text"
+                value={driverName}
+                onChange={(e) => setDriverName(e.target.value)}
+                className="w-full px-3 py-2 border border-gray-300 rounded-md focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
+                placeholder="Driver name"
+              />
+            )}
           </div>
           <div>
             <label className="block text-sm font-medium text-gray-700 mb-2">

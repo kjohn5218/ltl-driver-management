@@ -49,6 +49,7 @@ model Carrier {
   bookings            Booking[]
   documents           CarrierDocument[]
   preferredRoutes     CarrierPreferredRoute[]
+  drivers             CarrierDriver[]
 
   @@map("carriers")
 }
@@ -102,7 +103,7 @@ model SystemSettings {
 model Booking {
   id                    Int           @id @default(autoincrement())
   carrierId             Int?
-  routeId               Int
+  routeId               Int?
   bookingDate           DateTime
   rate                  Decimal       @db.Decimal(8, 2)
   status                BookingStatus @default(PENDING)
@@ -131,10 +132,17 @@ model Booking {
   confirmationSignedBy  String?
   confirmationToken     String?       @unique
   signedPdfPath         String?       // Path to signed PDF file
+  
+  // Origin-destination booking fields
+  origin                String?
+  destination           String?
+  estimatedMiles        Decimal?      @db.Decimal(6, 1)
+  manifestNumber        String?       // For load completion workflow
+  
   carrier               Carrier?      @relation(fields: [carrierId], references: [id])
   parentBooking         Booking?      @relation("BookingLegs", fields: [parentBookingId], references: [id])
   childBookings         Booking[]     @relation("BookingLegs")
-  route                 Route         @relation(fields: [routeId], references: [id])
+  route                 Route?        @relation(fields: [routeId], references: [id])
   invoice               Invoice?
 
   @@map("bookings")
@@ -160,6 +168,21 @@ model CarrierDocument {
   carrier      Carrier  @relation(fields: [carrierId], references: [id], onDelete: Cascade)
 
   @@map("carrier_documents")
+}
+
+model CarrierDriver {
+  id          Int      @id @default(autoincrement())
+  carrierId   Int
+  name        String
+  phoneNumber String?
+  email       String?
+  licenseNumber String?
+  active      Boolean  @default(true)
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+  carrier     Carrier  @relation(fields: [carrierId], references: [id], onDelete: Cascade)
+
+  @@map("carrier_drivers")
 }
 
 model Invoice {

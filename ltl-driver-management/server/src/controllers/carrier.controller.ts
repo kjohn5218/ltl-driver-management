@@ -38,6 +38,10 @@ export const getCarriers = async (req: Request, res: Response) => {
       take: limitNum,
       orderBy: { createdAt: 'desc' },
       include: {
+        drivers: {
+          where: { active: true },
+          orderBy: { name: 'asc' }
+        },
         _count: {
           select: {
             bookings: true,
@@ -94,6 +98,10 @@ export const getCarrierById = async (req: Request, res: Response) => {
     const carrier = await prisma.carrier.findUnique({
       where: { id: parseInt(id) },
       include: {
+        drivers: {
+          where: { active: true },
+          orderBy: { name: 'asc' }
+        },
         bookings: {
           include: {
             route: true
@@ -599,5 +607,105 @@ export const registerCarrier = async (req: Request, res: Response) => {
     }
     
     return res.status(500).json({ message: 'Failed to submit registration' });
+  }
+};
+
+// Driver management functions
+export const addCarrierDriver = async (req: Request, res: Response) => {
+  try {
+    const { carrierId } = req.params;
+    const { name, phoneNumber, email, licenseNumber } = req.body;
+
+    // Validate required fields
+    if (!name) {
+      return res.status(400).json({ message: 'Driver name is required' });
+    }
+
+    // Check if carrier exists
+    const carrier = await prisma.carrier.findUnique({
+      where: { id: parseInt(carrierId) }
+    });
+
+    if (!carrier) {
+      return res.status(404).json({ message: 'Carrier not found' });
+    }
+
+    const driver = await prisma.carrierDriver.create({
+      data: {
+        carrierId: parseInt(carrierId),
+        name,
+        phoneNumber,
+        email,
+        licenseNumber
+      }
+    });
+
+    return res.status(201).json(driver);
+  } catch (error) {
+    console.error('Add carrier driver error:', error);
+    return res.status(500).json({ message: 'Failed to add driver' });
+  }
+};
+
+export const updateCarrierDriver = async (req: Request, res: Response) => {
+  try {
+    const { carrierId, driverId } = req.params;
+    const { name, phoneNumber, email, licenseNumber, active } = req.body;
+
+    const driver = await prisma.carrierDriver.update({
+      where: { 
+        id: parseInt(driverId),
+        carrierId: parseInt(carrierId)
+      },
+      data: {
+        name,
+        phoneNumber,
+        email,
+        licenseNumber,
+        active
+      }
+    });
+
+    return res.json(driver);
+  } catch (error) {
+    console.error('Update carrier driver error:', error);
+    return res.status(500).json({ message: 'Failed to update driver' });
+  }
+};
+
+export const deleteCarrierDriver = async (req: Request, res: Response) => {
+  try {
+    const { carrierId, driverId } = req.params;
+
+    await prisma.carrierDriver.delete({
+      where: { 
+        id: parseInt(driverId),
+        carrierId: parseInt(carrierId)
+      }
+    });
+
+    return res.status(204).send();
+  } catch (error) {
+    console.error('Delete carrier driver error:', error);
+    return res.status(500).json({ message: 'Failed to delete driver' });
+  }
+};
+
+export const getCarrierDrivers = async (req: Request, res: Response) => {
+  try {
+    const { carrierId } = req.params;
+
+    const drivers = await prisma.carrierDriver.findMany({
+      where: { 
+        carrierId: parseInt(carrierId),
+        active: true
+      },
+      orderBy: { name: 'asc' }
+    });
+
+    return res.json(drivers);
+  } catch (error) {
+    console.error('Get carrier drivers error:', error);
+    return res.status(500).json({ message: 'Failed to get drivers' });
   }
 };
