@@ -1459,6 +1459,7 @@ export const NewBooking: React.FC<NewBookingProps> = ({ copyFromBooking }) => {
                 Clear Filters
               </button>
             </div>
+            )}
 
             {/* Active Filters Display */}
             {(originFilter || destinationFilter) && (
@@ -1763,7 +1764,6 @@ export const NewBooking: React.FC<NewBookingProps> = ({ copyFromBooking }) => {
               </div>
             )}
           </div>
-          )}
           
           {/* Single Route Details */}
           {!isRoundTrip && selectedRouteObjects.length === 1 && (
