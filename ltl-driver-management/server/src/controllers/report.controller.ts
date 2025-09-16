@@ -197,7 +197,7 @@ export const getRouteAnalytics = async (req: Request, res: Response) => {
     });
 
     // Get route details
-    const routeIds = routeStats.map(stat => stat.routeId);
+    const routeIds = routeStats.map(stat => stat.routeId).filter((id): id is number => id !== null);
     const routes = await prisma.route.findMany({
       where: { id: { in: routeIds } },
       include: {
@@ -211,7 +211,8 @@ export const getRouteAnalytics = async (req: Request, res: Response) => {
     // Calculate analytics
     const analytics = routes.map(route => {
       const stats = routeStats.find(s => s.routeId === route.id);
-      const uniqueCarriers = new Set(route.bookings.map(b => b.carrierId)).size;
+      const routeWithBookings = route as any;
+      const uniqueCarriers = new Set(routeWithBookings.bookings.map((b: any) => b.carrierId)).size;
       
       return {
         route: {

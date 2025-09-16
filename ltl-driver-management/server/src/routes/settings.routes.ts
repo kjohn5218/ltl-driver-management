@@ -7,11 +7,11 @@ import { UserRole } from '@prisma/client';
 
 const router = Router();
 
-// All routes require authentication
-router.use(authenticate);
-
-// Get system settings
+// Get system settings (public endpoint for fuel surcharge rate)
 router.get('/', getSystemSettings);
+
+// All other routes require authentication
+router.use(authenticate);
 
 // Update fuel surcharge rate (Admin/Dispatcher only)
 router.put(

@@ -6,6 +6,7 @@ import { Carrier, Route } from '../types';
 import { Calendar, Truck, MapPin, DollarSign, AlertCircle, Search, X } from 'lucide-react';
 import { format, eachDayOfInterval, parseISO, addDays } from 'date-fns';
 import { LocationWithTooltip } from '../components/LocationDisplay';
+import { useAuth } from '../contexts/AuthContext';
 
 type RateType = 'MILE' | 'MILE_FSC' | 'FLAT_RATE';
 
@@ -25,6 +26,7 @@ interface NewBookingProps {
 export const NewBooking: React.FC<NewBookingProps> = ({ copyFromBooking }) => {
   const navigate = useNavigate();
   const queryClient = useQueryClient();
+  const { isAuthenticated, loading: authLoading } = useAuth();
   const [carrierId, setCarrierId] = useState('');
   const [selectedRoutes, setSelectedRoutes] = useState<string[]>([]);
   const [bookingLegs, setBookingLegs] = useState<BookingLeg[]>([]);
@@ -73,7 +75,8 @@ export const NewBooking: React.FC<NewBookingProps> = ({ copyFromBooking }) => {
       
       const response = await api.get(`/carriers?${params.toString()}`);
       return response.data;
-    }
+    },
+    enabled: isAuthenticated && !authLoading
   });
 
   // Fetch routes
@@ -87,7 +90,8 @@ export const NewBooking: React.FC<NewBookingProps> = ({ copyFromBooking }) => {
       
       const response = await api.get(`/routes?${params.toString()}`);
       return response.data;
-    }
+    },
+    enabled: isAuthenticated && !authLoading
   });
 
   const carriers = carriersData?.carriers || [];

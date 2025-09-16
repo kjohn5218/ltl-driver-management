@@ -15,14 +15,21 @@ interface BookingData {
     destination: string;
     distance: number | any; // Handle Prisma Decimal type
     departureTime?: string | null;
-  };
+  } | null;
+  // Origin-destination booking fields
+  origin?: string | null;
+  destination?: string | null;
+  estimatedMiles?: number | any | null;
   childBookings?: Array<{
     route: {
       origin: string;
       destination: string;
       distance: number | any; // Handle Prisma Decimal type
-    };
+    } | null;
     rate: number | any; // Handle Prisma Decimal type
+    origin?: string | null;
+    destination?: string | null;
+    estimatedMiles?: number | any | null;
   }>;
   type: string;
   trailerLength?: number | null;
@@ -117,14 +124,17 @@ export class PDFService {
       }
     }
     
-    // Fall back to single route or child bookings
+    // Fall back to single route, origin-destination, or child bookings
+    const routeOrigin = booking.route?.origin || booking.origin || 'N/A';
+    const routeDestination = booking.route?.destination || booking.destination || 'N/A';
+    
     let singleRouteHTML = `
     <div class="route-item">
       <div class="route-header">
-        <div class="route-path">${booking.route.origin} → ${booking.route.destination}</div>
+        <div class="route-path">${routeOrigin} → ${routeDestination}</div>
         <div class="route-rate">$${Number(booking.rate).toFixed(2)}</div>
       </div>
-      <div>Distance: ${Number(booking.route.distance)} miles</div>
+      <div>Distance: ${Number(booking.route?.distance || booking.estimatedMiles || 0)} miles</div>
       <div style="margin-top: 10px;">
         <div style="display: flex; justify-content: space-between;">
           <span><strong>Departure Date:</strong> ${format(new Date(booking.bookingDate), 'MMM dd, yyyy')}</span>
@@ -138,10 +148,10 @@ export class PDFService {
       singleRouteHTML += booking.childBookings.map((child) => `
         <div class="route-item">
           <div class="route-header">
-            <div class="route-path">${child.route.origin} → ${child.route.destination}</div>
+            <div class="route-path">${child.route ? `${child.route.origin} → ${child.route.destination}` : `${child.origin} → ${child.destination}`}</div>
             <div class="route-rate">$${Number(child.rate).toFixed(2)}</div>
           </div>
-          <div>Distance: ${Number(child.route.distance)} miles</div>
+          <div>Distance: ${child.route ? Number(child.route.distance) : Number(child.estimatedMiles || 0)} miles</div>
         </div>
       `).join('');
     }

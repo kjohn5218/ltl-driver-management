@@ -21,9 +21,9 @@ const transporter = nodemailer.createTransport({
 
 interface BookingWithRelations extends Booking {
   carrier: Carrier | null;
-  route: Route;
+  route: Route | null;
   childBookings?: Array<{
-    route: Route;
+    route: Route | null;
     [key: string]: any;
   }>;
 }
@@ -50,21 +50,41 @@ export const sendBookingConfirmation = async (booking: BookingWithRelations) => 
   try {
     if (!booking.carrier || !booking.carrier.email) return;
 
+    // Determine route information based on booking type
+    const routeInfo = booking.route 
+      ? {
+          name: booking.route.name,
+          origin: booking.route.origin,
+          destination: booking.route.destination,
+          distance: booking.route.distance?.toString() || 'N/A',
+          departureTime: booking.route.departureTime,
+          arrivalTime: booking.route.arrivalTime
+        }
+      : {
+          name: `${booking.origin} → ${booking.destination}`,
+          origin: booking.origin || 'N/A',
+          destination: booking.destination || 'N/A',
+          distance: booking.estimatedMiles?.toString() || 'N/A',
+          departureTime: null,
+          arrivalTime: null
+        };
+
     const mailOptions = {
       from: process.env.EMAIL_USER,
       to: booking.carrier.email,
-      subject: `Booking Confirmed - ${booking.route.name}`,
+      subject: `Booking Confirmed - ${routeInfo.name}`,
       html: `
         <h2>Booking Confirmation</h2>
         <p>Dear ${booking.carrier.name},</p>
         <p>Your booking has been confirmed with the following details:</p>
         <ul>
-          <li><strong>Route:</strong> ${booking.route.name} (${booking.route.origin} to ${booking.route.destination})</li>
+          <li><strong>Route:</strong> ${routeInfo.name} (${routeInfo.origin} to ${routeInfo.destination})</li>
           <li><strong>Date:</strong> ${booking.bookingDate.toLocaleDateString()}</li>
-          <li><strong>Distance:</strong> ${booking.route.distance} miles</li>
+          <li><strong>Distance:</strong> ${routeInfo.distance} miles</li>
           <li><strong>Rate:</strong> $${booking.rate}</li>
-          ${booking.route.departureTime ? `<li><strong>Departure Time:</strong> ${booking.route.departureTime}</li>` : ''}
-          ${booking.route.arrivalTime ? `<li><strong>Arrival Time:</strong> ${booking.route.arrivalTime}</li>` : ''}
+          ${routeInfo.departureTime ? `<li><strong>Departure Time:</strong> ${routeInfo.departureTime}</li>` : ''}
+          ${routeInfo.arrivalTime ? `<li><strong>Arrival Time:</strong> ${routeInfo.arrivalTime}</li>` : ''}
+          ${booking.carrierReportTime ? `<li><strong>Report Time:</strong> ${booking.carrierReportTime}</li>` : ''}
         </ul>
         ${booking.notes ? `<p><strong>Notes:</strong> ${booking.notes}</p>` : ''}
         <p>Please ensure all required documentation is up to date.</p>
@@ -83,16 +103,29 @@ export const sendBookingCancellation = async (booking: BookingWithRelations, rea
   try {
     if (!booking.carrier || !booking.carrier.email) return;
 
+    // Determine route information based on booking type
+    const routeInfo = booking.route 
+      ? {
+          name: booking.route.name,
+          origin: booking.route.origin,
+          destination: booking.route.destination
+        }
+      : {
+          name: `${booking.origin} → ${booking.destination}`,
+          origin: booking.origin || 'N/A',
+          destination: booking.destination || 'N/A'
+        };
+
     const mailOptions = {
       from: process.env.EMAIL_USER,
       to: booking.carrier.email,
-      subject: `Booking Cancelled - ${booking.route.name}`,
+      subject: `Booking Cancelled - ${routeInfo.name}`,
       html: `
         <h2>Booking Cancellation</h2>
         <p>Dear ${booking.carrier.name},</p>
         <p>Your booking has been cancelled:</p>
         <ul>
-          <li><strong>Route:</strong> ${booking.route.name} (${booking.route.origin} to ${booking.route.destination})</li>
+          <li><strong>Route:</strong> ${routeInfo.name} (${routeInfo.origin} to ${routeInfo.destination})</li>
           <li><strong>Date:</strong> ${booking.bookingDate.toLocaleDateString()}</li>
         </ul>
         ${reason ? `<p><strong>Reason:</strong> ${reason}</p>` : ''}
@@ -145,9 +178,11 @@ export const sendRateConfirmationEmail = async (
     console.log(`Attempting to send rate confirmation email to: ${recipientEmail}`);
     console.log('Booking data:', {
       id: booking.id,
-      mainRoute: `${booking.route.origin} to ${booking.route.destination}`,
+      mainRoute: booking.route 
+        ? `${booking.route.origin} to ${booking.route.destination}`
+        : `${booking.origin} to ${booking.destination}`,
       childBookings: booking.childBookings?.map(cb => ({
-        route: `${cb.route.origin} to ${cb.route.destination}`,
+        route: cb.route ? `${cb.route.origin} to ${cb.route.destination}` : 'Origin-Destination',
         rate: cb.rate
       }))
     });
@@ -190,19 +225,27 @@ export const sendRateConfirmationEmail = async (
                   legs.push(`${legMatch[2]} to ${legMatch[3]}`);
                 }
               }
-              return legs.length > 0 ? legs.join(' / ') : `${booking.route.origin} to ${booking.route.destination}`;
+              return legs.length > 0 ? legs.join(' / ') : 
+                (booking.route ? `${booking.route.origin} to ${booking.route.destination}` : 
+                 `${booking.origin} to ${booking.destination}`);
             }
             
             // Check for child bookings (future implementation)
             if (booking.childBookings && booking.childBookings.length > 0) {
-              const routes = [booking.route.origin + ' to ' + booking.route.destination];
-              booking.childBookings.forEach((child: { route: Route }) => {
-                routes.push(child.route.origin + ' to ' + child.route.destination);
+              const routes = booking.route 
+                ? [booking.route.origin + ' to ' + booking.route.destination]
+                : [`${booking.origin} to ${booking.destination}`];
+              booking.childBookings.forEach((child) => {
+                if (child.route) {
+                  routes.push(child.route.origin + ' to ' + child.route.destination);
+                }
               });
               return routes.join(' / ');
             }
             
-            return booking.route.origin + ' to ' + booking.route.destination;
+            return booking.route 
+              ? booking.route.origin + ' to ' + booking.route.destination
+              : `${booking.origin} to ${booking.destination}`;
           })()}</li>
           <li><strong>Date:</strong> ${booking.bookingDate.toLocaleDateString()}</li>
           <li><strong>Total Rate:</strong> $${Number(booking.rate).toFixed(2)}</li>
@@ -254,15 +297,15 @@ export const sendRateConfirmationEmail = async (
               <table style="width: 100%; border-collapse: collapse; margin-top: 10px;">
                 <tr style="background-color: #f5f5f5;">
                   <td style="padding: 8px; border: 1px solid #ddd;"><strong>Leg 1:</strong></td>
-                  <td style="padding: 8px; border: 1px solid #ddd;">${booking.route.origin} to ${booking.route.destination}</td>
-                  <td style="padding: 8px; border: 1px solid #ddd;">${booking.route.distance} miles</td>
+                  <td style="padding: 8px; border: 1px solid #ddd;">${booking.route ? `${booking.route.origin} to ${booking.route.destination}` : `${booking.origin} to ${booking.destination}`}</td>
+                  <td style="padding: 8px; border: 1px solid #ddd;">${booking.route ? `${booking.route.distance} miles` : `${booking.estimatedMiles || 0} miles`}</td>
                   <td style="padding: 8px; border: 1px solid #ddd; text-align: right;">$${Number(booking.rate).toFixed(2)}</td>
                 </tr>
                 ${booking.childBookings.map((child: any, index: number) => `
                 <tr>
                   <td style="padding: 8px; border: 1px solid #ddd;"><strong>Leg ${index + 2}:</strong></td>
-                  <td style="padding: 8px; border: 1px solid #ddd;">${child.route.origin} to ${child.route.destination}</td>
-                  <td style="padding: 8px; border: 1px solid #ddd;">${child.route.distance} miles</td>
+                  <td style="padding: 8px; border: 1px solid #ddd;">${child.route ? `${child.route.origin} to ${child.route.destination}` : `${child.origin} to ${child.destination}`}</td>
+                  <td style="padding: 8px; border: 1px solid #ddd;">${child.route ? `${child.route.distance} miles` : `${child.estimatedMiles || 0} miles`}</td>
                   <td style="padding: 8px; border: 1px solid #ddd; text-align: right;">$${Number(child.rate).toFixed(2)}</td>
                 </tr>
                 `).join('')}
