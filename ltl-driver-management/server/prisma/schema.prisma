@@ -16,6 +16,7 @@ model User {
   createdAt             DateTime         @default(now())
   updatedAt             DateTime         @updatedAt
   systemSettingsUpdates SystemSettings[]
+  createdLineItems       BookingLineItem[]
 
   @@map("users")
 }
@@ -144,8 +145,28 @@ model Booking {
   childBookings         Booking[]     @relation("BookingLegs")
   route                 Route?        @relation(fields: [routeId], references: [id])
   invoice               Invoice?
+  lineItems             BookingLineItem[]
 
   @@map("bookings")
+}
+
+model BookingLineItem {
+  id          Int      @id @default(autoincrement())
+  bookingId   Int
+  category    String   // e.g., "fuel_surcharge", "detention", "additional_stops", "lumper_fee", "custom"
+  description String
+  amount      Decimal  @db.Decimal(8, 2)
+  quantity    Int      @default(1)
+  unitPrice   Decimal? @db.Decimal(8, 2) // For quantity-based charges
+  receiptPath String?  // Path to uploaded receipt
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+  createdBy   Int?     // User who added this line item
+  
+  booking     Booking  @relation(fields: [bookingId], references: [id], onDelete: Cascade)
+  creator     User?    @relation(fields: [createdBy], references: [id])
+  
+  @@map("booking_line_items")
 }
 
 model CarrierPreferredRoute {

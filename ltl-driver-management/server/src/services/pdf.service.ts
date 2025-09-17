@@ -38,6 +38,14 @@ interface BookingData {
   confirmationSignedBy?: string | null;
   confirmationSignedAt?: string | Date | null;
   notes?: string | null;
+  lineItems?: Array<{
+    id: number;
+    category: string;
+    description: string;
+    amount: number | any;
+    quantity: number;
+    unitPrice?: number | any | null;
+  }>;
 }
 
 export class PDFService {
@@ -48,6 +56,46 @@ export class PDFService {
     if (!fs.existsSync(this.uploadsDir)) {
       fs.mkdirSync(this.uploadsDir, { recursive: true });
     }
+  }
+
+  private static generateLineItemsHTML(booking: BookingData): string {
+    if (!booking.lineItems || booking.lineItems.length === 0) {
+      return '';
+    }
+
+    const lineItemsHTML = booking.lineItems.map(item => `
+      <tr>
+        <td style="padding: 8px; border-bottom: 1px solid #ddd;">${item.description}</td>
+        <td style="padding: 8px; border-bottom: 1px solid #ddd; text-align: center;">${item.quantity}</td>
+        <td style="padding: 8px; border-bottom: 1px solid #ddd; text-align: right;">$${Number(item.amount).toFixed(2)}</td>
+      </tr>
+    `).join('');
+
+    const lineItemsTotal = booking.lineItems.reduce((sum, item) => sum + Number(item.amount), 0);
+
+    return `
+    <div class="line-items-section" style="margin-top: 30px;">
+      <div class="section-title">Additional Charges</div>
+      <table style="width: 100%; border-collapse: collapse; margin-top: 15px;">
+        <thead>
+          <tr style="background-color: #f8f9fa;">
+            <th style="padding: 12px 8px; border-bottom: 2px solid #dee2e6; text-align: left; font-weight: 600;">Description</th>
+            <th style="padding: 12px 8px; border-bottom: 2px solid #dee2e6; text-align: center; font-weight: 600;">Qty</th>
+            <th style="padding: 12px 8px; border-bottom: 2px solid #dee2e6; text-align: right; font-weight: 600;">Amount</th>
+          </tr>
+        </thead>
+        <tbody>
+          ${lineItemsHTML}
+        </tbody>
+        <tfoot>
+          <tr style="background-color: #f8f9fa; font-weight: 600;">
+            <td style="padding: 12px 8px; border-top: 2px solid #dee2e6;" colspan="2">Additional Charges Total:</td>
+            <td style="padding: 12px 8px; border-top: 2px solid #dee2e6; text-align: right;">$${lineItemsTotal.toFixed(2)}</td>
+          </tr>
+        </tfoot>
+      </table>
+    </div>
+    `;
   }
 
   private static generateRouteItemsHTML(booking: BookingData): string {
@@ -178,10 +226,16 @@ export class PDFService {
       const filePath = path.join(this.uploadsDir, filename);
 
 
-      // Calculate total rate (convert Decimal to number)
-      const totalRate = booking.childBookings 
+      // Calculate total rate including line items (convert Decimal to number)
+      const baseRate = booking.childBookings 
         ? Number(booking.rate) + booking.childBookings.reduce((sum, child) => sum + Number(child.rate), 0)
         : Number(booking.rate);
+      
+      const lineItemsTotal = booking.lineItems 
+        ? booking.lineItems.reduce((sum, item) => sum + Number(item.amount), 0)
+        : 0;
+      
+      const totalRate = baseRate + lineItemsTotal;
 
       // HTML template for the signed rate confirmation
       const html = `
@@ -376,11 +430,19 @@ export class PDFService {
               <div class="route-section">
                 ${this.generateRouteItemsHTML(booking)}
                 
+                ${lineItemsTotal > 0 ? `
+                <div style="margin-top: 20px;">
+                  <div style="font-weight: 600; margin-bottom: 10px; color: #0066cc;">Base Rate: $${baseRate.toFixed(2)}</div>
+                </div>
+                ` : ''}
+                
                 <div class="total-section">
                   <div class="total-rate">Total Rate: $${totalRate.toFixed(2)}</div>
                 </div>
               </div>
             </div>
+
+            ${this.generateLineItemsHTML(booking)}
 
             ${booking.type === 'POWER_AND_TRAILER' ? `
             <div class="section">

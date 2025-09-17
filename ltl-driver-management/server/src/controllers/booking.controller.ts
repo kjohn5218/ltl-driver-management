@@ -86,6 +86,14 @@ export const getBookingById = async (req: Request, res: Response) => {
         },
         route: true,
         invoice: true,
+        lineItems: {
+          include: {
+            creator: {
+              select: { id: true, name: true, email: true }
+            }
+          },
+          orderBy: { createdAt: 'asc' }
+        },
         childBookings: {
           include: {
             route: true
@@ -453,6 +461,7 @@ export const sendRateConfirmation = async (req: Request, res: Response) => {
         include: {
           carrier: true,
           route: true,
+          lineItems: true,
           childBookings: {
             include: {
               route: true
@@ -537,6 +546,7 @@ export const getConfirmationByToken = async (req: Request, res: Response) => {
       include: {
         carrier: true,
         route: true,
+        lineItems: true,
         childBookings: {
           include: {
             route: true
@@ -594,6 +604,7 @@ export const submitSignedConfirmation = async (req: Request, res: Response) => {
       include: {
         carrier: true,
         route: true,
+        lineItems: true,
         childBookings: {
           include: {
             route: true

@@ -15,6 +15,7 @@ import reportRoutes from './routes/report.routes';
 import settingsRoutes from './routes/settings.routes';
 import locationRoutes from './routes/location.routes';
 import userRoutes from './routes/user.routes';
+import lineItemRoutes from './routes/lineItem.routes';
 
 // Load environment variables
 dotenv.config();
@@ -52,6 +53,7 @@ app.use('/api/reports', reportRoutes);
 app.use('/api/settings', settingsRoutes);
 app.use('/api/locations', locationRoutes);
 app.use('/api/users', userRoutes);
+app.use('/api', lineItemRoutes);
 
 // Health check endpoint
 app.get('/api/health', (_req, res) => {

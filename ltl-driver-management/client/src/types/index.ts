@@ -95,6 +95,25 @@ export interface Route {
   };
 }
 
+export interface BookingLineItem {
+  id: number;
+  bookingId: number;
+  category: string;
+  description: string;
+  amount: number;
+  quantity: number;
+  unitPrice?: number;
+  receiptPath?: string;
+  createdAt: string;
+  updatedAt: string;
+  createdBy?: number;
+  creator?: {
+    id: number;
+    name: string;
+    email: string;
+  };
+}
+
 export interface Booking {
   id: number;
   carrierId: number | null;
@@ -143,6 +162,7 @@ export interface Booking {
   carrier?: Carrier;
   route?: Route;
   invoice?: Invoice;
+  lineItems?: BookingLineItem[];
   childBookings?: Booking[];
   parentBooking?: Booking;
 }

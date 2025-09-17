@@ -7,6 +7,7 @@ import { Plus, Search, Edit, Eye, Calendar, MapPin, User, DollarSign, X, Chevron
 import { format, isAfter, isBefore, isSameDay, parseISO } from 'date-fns';
 import { RouteDetails } from '../components/LocationDisplay';
 import { RateConfirmationModal } from '../components/RateConfirmation';
+import { BookingLineItems } from '../components/BookingLineItems';
 
 type SortField = 'id' | 'carrier' | 'route' | 'bookingDate' | 'rate' | 'status';
 type SortDirection = 'asc' | 'desc';
@@ -1112,6 +1113,12 @@ const BookingViewModal: React.FC<BookingViewModalProps> = ({ booking, onClose, g
               <p className="text-sm text-gray-900 font-medium text-green-600">${bookingToDisplay.rate}</p>
             </div>
           </div>
+
+          {/* Line Items Section */}
+          <BookingLineItems 
+            bookingId={bookingToDisplay.id} 
+            isReadOnly={!!bookingToDisplay.confirmationSignedAt}
+          />
           
           <div>
             <label className="block text-sm font-medium text-gray-700 mb-1">Billable</label>
