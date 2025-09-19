@@ -3,7 +3,7 @@ import { useNavigate, useSearchParams } from 'react-router-dom';
 import { useQuery, useQueryClient, useMutation } from '@tanstack/react-query';
 import { api, sendRateConfirmationEmail } from '../services/api';
 import { Booking } from '../types';
-import { Plus, Search, Edit, Eye, Calendar, MapPin, User, DollarSign, X, ChevronUp, ChevronDown, Trash2, FileText, CheckCircle, Clock, Send } from 'lucide-react';
+import { Plus, Search, Edit, Eye, Calendar, MapPin, User, DollarSign, X, ChevronUp, ChevronDown, Trash2, FileText, CheckCircle, Clock, Send, Truck } from 'lucide-react';
 import { format, isAfter, isBefore, isSameDay, parseISO } from 'date-fns';
 import { RouteDetails } from '../components/LocationDisplay';
 import { RateConfirmationModal } from '../components/RateConfirmation';
@@ -52,6 +52,7 @@ export const Bookings: React.FC = () => {
   const [deletingBooking, setDeletingBooking] = useState<Booking | null>(null);
   const [rateConfirmationBooking, setRateConfirmationBooking] = useState<Booking | null>(null);
   const [rateConfirmationFilter, setRateConfirmationFilter] = useState('');
+  const [postingLoadBooking, setPostingLoadBooking] = useState<Booking | null>(null);
 
   // Handle URL query parameters
   useEffect(() => {
@@ -243,6 +244,11 @@ export const Bookings: React.FC = () => {
     setEditingBooking(booking);
   };
 
+  const handlePostLoad = (booking: Booking) => {
+    setEditingBooking(booking);
+    setPostingLoadBooking(booking);
+  };
+
   const handleDeleteBooking = (booking: Booking) => {
     setDeletingBooking(booking);
   };
@@ -279,6 +285,11 @@ export const Bookings: React.FC = () => {
 
   const handleCloseRateConfirmation = () => {
     setRateConfirmationBooking(null);
+  };
+
+  const handleClosePostLoad = () => {
+    setPostingLoadBooking(null);
+    setEditingBooking(null);
   };
 
   const handleConfirmDelete = () => {
@@ -581,6 +592,13 @@ export const Bookings: React.FC = () => {
                       </button>
                     </div>
                     <button 
+                      onClick={() => handlePostLoad(booking)}
+                      className="text-gray-500 hover:text-purple-600 transition-colors"
+                      title="Post a Load"
+                    >
+                      <Truck className="w-4 h-4" />
+                    </button>
+                    <button 
                       onClick={() => handleDeleteBooking(booking)}
                       className="text-gray-500 hover:text-red-600 transition-colors"
                       title="Delete booking"
@@ -678,6 +696,14 @@ export const Bookings: React.FC = () => {
           booking={rateConfirmationBooking}
           onClose={handleCloseRateConfirmation}
           onEmail={handleEmailRateConfirmation}
+        />
+      )}
+
+      {/* Post a Load DAT Modal */}
+      {postingLoadBooking && (
+        <DATPostingModal
+          booking={postingLoadBooking}
+          onClose={handleClosePostLoad}
         />
       )}
     </div>
@@ -2242,6 +2268,44 @@ const BookingEditModal: React.FC<BookingEditModalProps> = ({ booking, onClose, o
             </button>
           </div>
         </form>
+      </div>
+    </div>
+  );
+};
+
+// DAT Posting Modal Component
+interface DATPostingModalProps {
+  booking: Booking;
+  onClose: () => void;
+}
+
+const DATPostingModal: React.FC<DATPostingModalProps> = ({ booking, onClose }) => {
+  return (
+    <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50">
+      <div className="bg-white rounded-lg w-full max-w-7xl h-[90vh] mx-4 overflow-hidden">
+        <div className="flex items-center justify-between p-4 border-b">
+          <div>
+            <h2 className="text-xl font-semibold text-gray-900">Post Load to DAT</h2>
+            <p className="text-sm text-gray-600">
+              Booking #{booking.id} - {booking.route?.name} - ${booking.rate}
+            </p>
+          </div>
+          <button
+            onClick={onClose}
+            className="text-gray-400 hover:text-gray-600 transition-colors"
+          >
+            <X className="w-6 h-6" />
+          </button>
+        </div>
+        
+        <div className="h-full pb-16">
+          <iframe
+            src="https://one.dat.com/my-shipments/forms/new-shipment"
+            className="w-full h-full border-0"
+            title="DAT Load Posting"
+            sandbox="allow-scripts allow-same-origin allow-forms allow-popups allow-modals"
+          />
+        </div>
       </div>
     </div>
   );
