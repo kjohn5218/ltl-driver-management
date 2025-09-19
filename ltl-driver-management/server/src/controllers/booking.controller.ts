@@ -270,7 +270,8 @@ export const updateBooking = async (req: Request, res: Response) => {
       },
       include: {
         carrier: true,
-        route: true
+        route: true,
+        lineItems: true
       }
     });
 

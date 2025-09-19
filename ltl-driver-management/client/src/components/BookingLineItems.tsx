@@ -15,17 +15,17 @@ interface NewLineItem {
   amount: string;
   quantity: string;
   unitPrice?: string;
+  ccfsUnitNumber?: string;
 }
 
 const LINE_ITEM_CATEGORIES = [
   { value: 'fuel_surcharge', label: 'Fuel Surcharge' },
   { value: 'detention', label: 'Detention Fee' },
   { value: 'additional_stops', label: 'Additional Stops' },
-  { value: 'lumper_fee', label: 'Lumper Fee' },
   { value: 'loading_fee', label: 'Loading Fee' },
   { value: 'unloading_fee', label: 'Unloading Fee' },
   { value: 'layover', label: 'Layover Fee' },
-  { value: 'repower', label: 'Repower Fee' },
+  { value: 'repairs', label: 'Repairs' },
   { value: 'custom', label: 'Custom Charge' }
 ];
 
@@ -41,14 +41,16 @@ export const BookingLineItems: React.FC<BookingLineItemsProps> = ({
     description: '',
     amount: '',
     quantity: '1',
-    unitPrice: ''
+    unitPrice: '',
+    ccfsUnitNumber: ''
   });
   const [editItem, setEditItem] = useState<NewLineItem>({
     category: '',
     description: '',
     amount: '',
     quantity: '1',
-    unitPrice: ''
+    unitPrice: '',
+    ccfsUnitNumber: ''
   });
 
   // Fetch line items
@@ -76,7 +78,8 @@ export const BookingLineItems: React.FC<BookingLineItemsProps> = ({
         ...data,
         amount: parseFloat(data.amount),
         quantity: parseInt(data.quantity),
-        unitPrice: data.unitPrice ? parseFloat(data.unitPrice) : undefined
+        unitPrice: data.unitPrice ? parseFloat(data.unitPrice) : undefined,
+        ccfsUnitNumber: data.ccfsUnitNumber || undefined
       });
       return response.data;
     },
@@ -84,7 +87,7 @@ export const BookingLineItems: React.FC<BookingLineItemsProps> = ({
       queryClient.invalidateQueries({ queryKey: ['bookingLineItems', bookingId] });
       queryClient.invalidateQueries({ queryKey: ['bookingTotal', bookingId] });
       setShowAddForm(false);
-      setNewItem({ category: '', description: '', amount: '', quantity: '1', unitPrice: '' });
+      setNewItem({ category: '', description: '', amount: '', quantity: '1', unitPrice: '', ccfsUnitNumber: '' });
     }
   });
 
@@ -95,7 +98,8 @@ export const BookingLineItems: React.FC<BookingLineItemsProps> = ({
         ...data,
         amount: data.amount ? parseFloat(data.amount) : undefined,
         quantity: data.quantity ? parseInt(data.quantity) : undefined,
-        unitPrice: data.unitPrice ? parseFloat(data.unitPrice) : undefined
+        unitPrice: data.unitPrice ? parseFloat(data.unitPrice) : undefined,
+        ccfsUnitNumber: data.ccfsUnitNumber || undefined
       });
       return response.data;
     },
@@ -143,7 +147,8 @@ export const BookingLineItems: React.FC<BookingLineItemsProps> = ({
       description: item.description,
       amount: item.amount.toString(),
       quantity: item.quantity.toString(),
-      unitPrice: item.unitPrice?.toString() || ''
+      unitPrice: item.unitPrice?.toString() || '',
+      ccfsUnitNumber: (item as any).ccfsUnitNumber || ''
     });
   };
 
@@ -247,6 +252,20 @@ export const BookingLineItems: React.FC<BookingLineItemsProps> = ({
                 className="w-full px-3 py-2 border border-gray-300 rounded-md focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
               />
             </div>
+            {newItem.category === 'repairs' && (
+              <div>
+                <label className="block text-sm font-medium text-gray-700 mb-1">
+                  CCFS Unit #
+                </label>
+                <input
+                  type="text"
+                  value={newItem.ccfsUnitNumber || ''}
+                  onChange={(e) => setNewItem({ ...newItem, ccfsUnitNumber: e.target.value })}
+                  className="w-full px-3 py-2 border border-gray-300 rounded-md focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
+                  placeholder="Enter CCFS Unit #"
+                />
+              </div>
+            )}
           </div>
           <div className="flex gap-2 mt-4">
             <button
@@ -259,7 +278,7 @@ export const BookingLineItems: React.FC<BookingLineItemsProps> = ({
             <button
               onClick={() => {
                 setShowAddForm(false);
-                setNewItem({ category: '', description: '', amount: '', quantity: '1', unitPrice: '' });
+                setNewItem({ category: '', description: '', amount: '', quantity: '1', unitPrice: '', ccfsUnitNumber: '' });
               }}
               className="px-4 py-2 bg-gray-500 text-white rounded-md hover:bg-gray-600"
             >
@@ -325,6 +344,20 @@ export const BookingLineItems: React.FC<BookingLineItemsProps> = ({
                     className="w-full px-3 py-2 border border-gray-300 rounded-md focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
                   />
                 </div>
+                {editItem.category === 'repairs' && (
+                  <div>
+                    <label className="block text-sm font-medium text-gray-700 mb-1">
+                      CCFS Unit #
+                    </label>
+                    <input
+                      type="text"
+                      value={editItem.ccfsUnitNumber || ''}
+                      onChange={(e) => setEditItem({ ...editItem, ccfsUnitNumber: e.target.value })}
+                      className="w-full px-3 py-2 border border-gray-300 rounded-md focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
+                      placeholder="Enter CCFS Unit #"
+                    />
+                  </div>
+                )}
                 <div className="md:col-span-2 flex gap-2">
                   <button
                     onClick={handleUpdateItem}

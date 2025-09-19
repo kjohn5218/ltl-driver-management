@@ -103,6 +103,7 @@ export interface BookingLineItem {
   amount: number;
   quantity: number;
   unitPrice?: number;
+  ccfsUnitNumber?: string;
   receiptPath?: string;
   createdAt: string;
   updatedAt: string;
