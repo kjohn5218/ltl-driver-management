@@ -52,7 +52,6 @@ export const Bookings: React.FC = () => {
   const [deletingBooking, setDeletingBooking] = useState<Booking | null>(null);
   const [rateConfirmationBooking, setRateConfirmationBooking] = useState<Booking | null>(null);
   const [rateConfirmationFilter, setRateConfirmationFilter] = useState('');
-  const [postingLoadBooking, setPostingLoadBooking] = useState<Booking | null>(null);
 
   // Handle URL query parameters
   useEffect(() => {
@@ -246,7 +245,7 @@ export const Bookings: React.FC = () => {
 
   const handlePostLoad = (booking: Booking) => {
     setEditingBooking(booking);
-    setPostingLoadBooking(booking);
+    window.open('https://login.dat.com/u/login/identifier?state=hKFo2SBDSFJ0QlU5bGxpbEJaaEZGZFJfenh4cGpJcFRaOFdnOaFur3VuaXZlcnNhbC1sb2dpbqN0aWTZIGw1TnA3UnVtR2UwVGNucnZfU3N0V2xtRTdmUURhc3Zno2NpZNkgZTlsek1YYm5XTkowRDUwQzJoYWFkbzdEaVcxYWt3YUM', '_blank');
   };
 
   const handleDeleteBooking = (booking: Booking) => {
@@ -285,11 +284,6 @@ export const Bookings: React.FC = () => {
 
   const handleCloseRateConfirmation = () => {
     setRateConfirmationBooking(null);
-  };
-
-  const handleClosePostLoad = () => {
-    setPostingLoadBooking(null);
-    setEditingBooking(null);
   };
 
   const handleConfirmDelete = () => {
@@ -696,14 +690,6 @@ export const Bookings: React.FC = () => {
           booking={rateConfirmationBooking}
           onClose={handleCloseRateConfirmation}
           onEmail={handleEmailRateConfirmation}
-        />
-      )}
-
-      {/* Post a Load DAT Modal */}
-      {postingLoadBooking && (
-        <DATPostingModal
-          booking={postingLoadBooking}
-          onClose={handleClosePostLoad}
         />
       )}
     </div>
@@ -2268,44 +2254,6 @@ const BookingEditModal: React.FC<BookingEditModalProps> = ({ booking, onClose, o
             </button>
           </div>
         </form>
-      </div>
-    </div>
-  );
-};
-
-// DAT Posting Modal Component
-interface DATPostingModalProps {
-  booking: Booking;
-  onClose: () => void;
-}
-
-const DATPostingModal: React.FC<DATPostingModalProps> = ({ booking, onClose }) => {
-  return (
-    <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50">
-      <div className="bg-white rounded-lg w-full max-w-7xl h-[90vh] mx-4 overflow-hidden">
-        <div className="flex items-center justify-between p-4 border-b">
-          <div>
-            <h2 className="text-xl font-semibold text-gray-900">Post Load to DAT</h2>
-            <p className="text-sm text-gray-600">
-              Booking #{booking.id} - {booking.route?.name} - ${booking.rate}
-            </p>
-          </div>
-          <button
-            onClick={onClose}
-            className="text-gray-400 hover:text-gray-600 transition-colors"
-          >
-            <X className="w-6 h-6" />
-          </button>
-        </div>
-        
-        <div className="h-full pb-16">
-          <iframe
-            src="https://login.dat.com/u/login/identifier?state=hKFo2SBDSFJ0QlU5bGxpbEJaaEZGZFJfenh4cGpJcFRaOFdnOaFur3VuaXZlcnNhbC1sb2dpbqN0aWTZIGw1TnA3UnVtR2UwVGNucnZfU3N0V2xtRTdmUURhc3Zno2NpZNkgZTlsek1YYm5XTkowRDUwQzJoYWFkbzdEaVcxYWt3YUM"
-            className="w-full h-full border-0"
-            title="DAT Load Posting"
-            sandbox="allow-scripts allow-same-origin allow-forms allow-popups allow-modals"
-          />
-        </div>
       </div>
     </div>
   );
