@@ -1226,11 +1226,6 @@ const BookingViewModal: React.FC<BookingViewModalProps> = ({ booking, onClose, g
             isReadOnly={!!bookingToDisplay.confirmationSignedAt}
           />
           
-          <div>
-            <label className="block text-sm font-medium text-gray-700 mb-1">Billable</label>
-            <p className="text-sm text-gray-900">{bookingToDisplay.billable ? 'Yes' : 'No'}</p>
-          </div>
-          
           {bookingToDisplay.notes && (
             <div>
               <label className="block text-sm font-medium text-gray-700 mb-1">Notes</label>
