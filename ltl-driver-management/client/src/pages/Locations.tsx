@@ -231,7 +231,7 @@ export const Locations: React.FC = () => {
       
       {(editingLocation || showAddModal) && (
         <LocationEditModal 
-          location={editingLocation} 
+          location={editingLocation || undefined} 
           onClose={editingLocation ? handleCloseEdit : () => setShowAddModal(false)}
           onSave={handleLocationSaved}
         />

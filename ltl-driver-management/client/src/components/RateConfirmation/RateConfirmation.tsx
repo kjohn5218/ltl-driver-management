@@ -1,6 +1,7 @@
-import React from 'react';
-import { Booking } from '../../types';
+import React, { useState, useEffect } from 'react';
+import { Booking, Location } from '../../types';
 import { format } from 'date-fns';
+import { api } from '../../services/api';
 
 // Parse multi-leg booking information from notes
 const parseMultiLegBooking = (notes: string | null) => {
@@ -34,6 +35,59 @@ interface RateConfirmationProps {
 export const RateConfirmation: React.FC<RateConfirmationProps> = ({ booking, shipmentNumber }) => {
   const currentDate = format(new Date(), 'MM/dd/yyyy h:mm a');
   const multiLegBooking = parseMultiLegBooking(booking.notes || null);
+  const [locationData, setLocationData] = useState<{ [key: string]: Location }>({});
+
+  // Fetch location data for origin and destination codes
+  useEffect(() => {
+    const fetchLocationData = async () => {
+      const locationCodes = new Set<string>();
+      
+      // Collect all location codes from booking
+      if (booking.origin) locationCodes.add(booking.origin);
+      if (booking.destination) locationCodes.add(booking.destination);
+      
+      // Collect location codes from child bookings (for multi-leg)
+      if (booking.childBookings) {
+        booking.childBookings.forEach(child => {
+          if (child.route?.origin) locationCodes.add(child.route.origin);
+          if (child.route?.destination) locationCodes.add(child.route.destination);
+          if (child.origin) locationCodes.add(child.origin);
+          if (child.destination) locationCodes.add(child.destination);
+        });
+      }
+      
+      // Collect from route if available
+      if (booking.route?.origin) locationCodes.add(booking.route.origin);
+      if (booking.route?.destination) locationCodes.add(booking.route.destination);
+      
+      // Fetch location data for all codes
+      const locations: { [key: string]: Location } = {};
+      
+      for (const code of locationCodes) {
+        try {
+          const response = await api.get(`/locations/search?q=${encodeURIComponent(code)}`);
+          const matchingLocation = response.data.find((loc: Location) => 
+            loc.code.toLowerCase() === code.toLowerCase()
+          );
+          if (matchingLocation) {
+            locations[code] = matchingLocation;
+          }
+        } catch (error) {
+          console.error(`Failed to fetch location data for ${code}:`, error);
+        }
+      }
+      
+      setLocationData(locations);
+    };
+
+    fetchLocationData();
+  }, [booking]);
+
+  // Helper function to get location data for a location code
+  const getLocationData = (locationCode: string | undefined): Location | null => {
+    if (!locationCode) return null;
+    return locationData[locationCode] || null;
+  };
   
   // Calculate appointment date considering midnight crossover
   const getAppointmentDate = (legNumber: number, baseTime: string = '21:00') => {
@@ -222,10 +276,10 @@ export const RateConfirmation: React.FC<RateConfirmationProps> = ({ booking, shi
                     </div>
                   </div>
                   <div className="text-xs"><span className="font-bold">Location:</span> {childBooking.route?.origin}</div>
-                  <div className="text-xs"><span className="font-bold">Address:</span> {childBooking.route?.originAddress || childBooking.originAddress || '985 Glendale Avenue'}</div>
-                  <div className="text-xs"><span className="font-bold">City, State Zip:</span> {childBooking.route?.originCity || childBooking.originCity || 'SPARKS'}, {childBooking.route?.originState || childBooking.originState || 'NV'} {childBooking.route?.originZipCode || childBooking.originZipCode || '89431'}</div>
-                  <div className="text-xs"><span className="font-bold">Phone:</span> (775) 331-2311 <span className="font-bold">Contact:</span> {childBooking.route?.originContact || childBooking.originContact || 'Brian Smith'}</div>
-                  <div className="text-xs"><span className="font-bold">Hours:</span> 04:00 -to-10:00</div>
+                  <div className="text-xs"><span className="font-bold">Address:</span> {childBooking.route?.originAddress || childBooking.originAddress || getLocationData(childBooking.route?.origin)?.address || '985 Glendale Avenue'}</div>
+                  <div className="text-xs"><span className="font-bold">City, State Zip:</span> {childBooking.route?.originCity || childBooking.originCity || getLocationData(childBooking.route?.origin)?.city || 'SPARKS'}, {childBooking.route?.originState || childBooking.originState || getLocationData(childBooking.route?.origin)?.state || 'NV'} {childBooking.route?.originZipCode || childBooking.originZipCode || getLocationData(childBooking.route?.origin)?.zipCode || '89431'}</div>
+                  <div className="text-xs"><span className="font-bold">Phone:</span> {getLocationData(childBooking.route?.origin)?.phone || '(775) 331-2311'} <span className="font-bold">Contact:</span> {childBooking.route?.originContact || childBooking.originContact || getLocationData(childBooking.route?.origin)?.contact || 'Brian Smith'}</div>
+                  <div className="text-xs"><span className="font-bold">Hours:</span> {getLocationData(childBooking.route?.origin)?.hours || '04:00 -to-10:00'}</div>
                   {index === 0 && booking.carrierReportTime && (
                     <div className="text-xs"><span className="font-bold">Carrier Report Time:</span> {booking.carrierReportTime}</div>
                   )}
@@ -239,9 +293,9 @@ export const RateConfirmation: React.FC<RateConfirmationProps> = ({ booking, shi
                     </div>
                   </div>
                   <div className="text-xs"><span className="font-bold">Location:</span> {childBooking.route?.destination}</div>
-                  <div className="text-xs"><span className="font-bold">Address:</span> {childBooking.route?.destinationAddress || childBooking.destinationAddress || '2800 S El Dorado ST'}</div>
-                  <div className="text-xs"><span className="font-bold">City, State Zip:</span> {childBooking.route?.destinationCity || childBooking.destinationCity || 'STOCKTON'}, {childBooking.route?.destinationState || childBooking.destinationState || 'CA'} {childBooking.route?.destinationZipCode || childBooking.destinationZipCode || '95206'}</div>
-                  <div className="text-xs"><span className="font-bold">Phone:</span> <span className="font-bold">Contact:</span> {childBooking.route?.destinationContact || childBooking.destinationContact || ''}</div>
+                  <div className="text-xs"><span className="font-bold">Address:</span> {childBooking.route?.destinationAddress || childBooking.destinationAddress || getLocationData(childBooking.route?.destination)?.address || '2800 S El Dorado ST'}</div>
+                  <div className="text-xs"><span className="font-bold">City, State Zip:</span> {childBooking.route?.destinationCity || childBooking.destinationCity || getLocationData(childBooking.route?.destination)?.city || 'STOCKTON'}, {childBooking.route?.destinationState || childBooking.destinationState || getLocationData(childBooking.route?.destination)?.state || 'CA'} {childBooking.route?.destinationZipCode || childBooking.destinationZipCode || getLocationData(childBooking.route?.destination)?.zipCode || '95206'}</div>
+                  <div className="text-xs"><span className="font-bold">Phone:</span> {getLocationData(childBooking.route?.destination)?.phone || ''} <span className="font-bold">Contact:</span> {childBooking.route?.destinationContact || childBooking.destinationContact || getLocationData(childBooking.route?.destination)?.contact || ''}</div>
                 </div>
               </div>
             </div>
@@ -262,10 +316,10 @@ export const RateConfirmation: React.FC<RateConfirmationProps> = ({ booking, shi
                     </div>
                   </div>
                   <div className="text-xs"><span className="font-bold">Location:</span> {leg.origin}</div>
-                  <div className="text-xs"><span className="font-bold">Address:</span> {booking.originAddress || booking.route?.originAddress || '985 Glendale Avenue'}</div>
-                  <div className="text-xs"><span className="font-bold">City, State Zip:</span> {booking.originCity || booking.route?.originCity || 'SPARKS'}, {booking.originState || booking.route?.originState || 'NV'} {booking.originZipCode || booking.route?.originZipCode || '89431'}</div>
-                  <div className="text-xs"><span className="font-bold">Phone:</span> (775) 331-2311 <span className="font-bold">Contact:</span> {booking.originContact || booking.route?.originContact || 'Brian Smith'}</div>
-                  <div className="text-xs"><span className="font-bold">Hours:</span> 04:00 -to-10:00</div>
+                  <div className="text-xs"><span className="font-bold">Address:</span> {booking.originAddress || booking.route?.originAddress || getLocationData(leg.origin)?.address || '985 Glendale Avenue'}</div>
+                  <div className="text-xs"><span className="font-bold">City, State Zip:</span> {booking.originCity || booking.route?.originCity || getLocationData(leg.origin)?.city || 'SPARKS'}, {booking.originState || booking.route?.originState || getLocationData(leg.origin)?.state || 'NV'} {booking.originZipCode || booking.route?.originZipCode || getLocationData(leg.origin)?.zipCode || '89431'}</div>
+                  <div className="text-xs"><span className="font-bold">Phone:</span> {getLocationData(leg.origin)?.phone || '(775) 331-2311'} <span className="font-bold">Contact:</span> {booking.originContact || booking.route?.originContact || getLocationData(leg.origin)?.contact || 'Brian Smith'}</div>
+                  <div className="text-xs"><span className="font-bold">Hours:</span> {getLocationData(leg.origin)?.hours || '04:00 -to-10:00'}</div>
                   {index === 0 && booking.carrierReportTime && (
                     <div className="text-xs"><span className="font-bold">Carrier Report Time:</span> {booking.carrierReportTime}</div>
                   )}
@@ -279,9 +333,9 @@ export const RateConfirmation: React.FC<RateConfirmationProps> = ({ booking, shi
                     </div>
                   </div>
                   <div className="text-xs"><span className="font-bold">Location:</span> {leg.destination}</div>
-                  <div className="text-xs"><span className="font-bold">Address:</span> {booking.destinationAddress || booking.route?.destinationAddress || '2800 S El Dorado ST'}</div>
-                  <div className="text-xs"><span className="font-bold">City, State Zip:</span> {booking.destinationCity || booking.route?.destinationCity || 'STOCKTON'}, {booking.destinationState || booking.route?.destinationState || 'CA'} {booking.destinationZipCode || booking.route?.destinationZipCode || '95206'}</div>
-                  <div className="text-xs"><span className="font-bold">Phone:</span> <span className="font-bold">Contact:</span> {booking.destinationContact || booking.route?.destinationContact || ''}</div>
+                  <div className="text-xs"><span className="font-bold">Address:</span> {booking.destinationAddress || booking.route?.destinationAddress || getLocationData(leg.destination)?.address || '2800 S El Dorado ST'}</div>
+                  <div className="text-xs"><span className="font-bold">City, State Zip:</span> {booking.destinationCity || booking.route?.destinationCity || getLocationData(leg.destination)?.city || 'STOCKTON'}, {booking.destinationState || booking.route?.destinationState || getLocationData(leg.destination)?.state || 'CA'} {booking.destinationZipCode || booking.route?.destinationZipCode || getLocationData(leg.destination)?.zipCode || '95206'}</div>
+                  <div className="text-xs"><span className="font-bold">Phone:</span> {getLocationData(leg.destination)?.phone || ''} <span className="font-bold">Contact:</span> {booking.destinationContact || booking.route?.destinationContact || getLocationData(leg.destination)?.contact || ''}</div>
                 </div>
               </div>
             </div>
@@ -301,10 +355,10 @@ export const RateConfirmation: React.FC<RateConfirmationProps> = ({ booking, shi
                   </div>
                 </div>
                 <div className="text-xs"><span className="font-bold">Name:</span> CrossCounty Freight Solutions - RNO</div>
-                <div className="text-xs"><span className="font-bold">Address:</span> {booking.originAddress || booking.route?.originAddress || '985 Glendale Avenue'}</div>
-                <div className="text-xs"><span className="font-bold">City, State Zip:</span> {booking.originCity || booking.route?.originCity || 'SPARKS'}, {booking.originState || booking.route?.originState || 'NV'} {booking.originZipCode || booking.route?.originZipCode || '89431'}</div>
-                <div className="text-xs"><span className="font-bold">Phone:</span> (775) 331-2311 <span className="font-bold">Contact:</span> {booking.originContact || booking.route?.originContact || 'Brian Smith'}</div>
-                <div className="text-xs"><span className="font-bold">Hours:</span> 04:00 -to-10:00</div>
+                <div className="text-xs"><span className="font-bold">Address:</span> {booking.originAddress || booking.route?.originAddress || getLocationData(booking.origin || booking.route?.origin)?.address || '985 Glendale Avenue'}</div>
+                <div className="text-xs"><span className="font-bold">City, State Zip:</span> {booking.originCity || booking.route?.originCity || getLocationData(booking.origin || booking.route?.origin)?.city || 'SPARKS'}, {booking.originState || booking.route?.originState || getLocationData(booking.origin || booking.route?.origin)?.state || 'NV'} {booking.originZipCode || booking.route?.originZipCode || getLocationData(booking.origin || booking.route?.origin)?.zipCode || '89431'}</div>
+                <div className="text-xs"><span className="font-bold">Phone:</span> {getLocationData(booking.origin || booking.route?.origin)?.phone || '(775) 331-2311'} <span className="font-bold">Contact:</span> {booking.originContact || booking.route?.originContact || getLocationData(booking.origin || booking.route?.origin)?.contact || 'Brian Smith'}</div>
+                <div className="text-xs"><span className="font-bold">Hours:</span> {getLocationData(booking.origin || booking.route?.origin)?.hours || '04:00 -to-10:00'}</div>
                 {booking.carrierReportTime && (
                   <div className="text-xs"><span className="font-bold">Carrier Report Time:</span> {booking.carrierReportTime}</div>
                 )}
@@ -318,9 +372,9 @@ export const RateConfirmation: React.FC<RateConfirmationProps> = ({ booking, shi
                   </div>
                 </div>
                 <div className="text-xs"><span className="font-bold">Name:</span> DDP</div>
-                <div className="text-xs"><span className="font-bold">Address:</span> {booking.destinationAddress || booking.route?.destinationAddress || '2800 S El Dorado ST'}</div>
-                <div className="text-xs"><span className="font-bold">City, State Zip:</span> {booking.destinationCity || booking.route?.destinationCity || 'STOCKTON'}, {booking.destinationState || booking.route?.destinationState || 'CA'} {booking.destinationZipCode || booking.route?.destinationZipCode || '95206'}</div>
-                <div className="text-xs"><span className="font-bold">Phone:</span> <span className="font-bold">Contact:</span> {booking.destinationContact || booking.route?.destinationContact || ''}</div>
+                <div className="text-xs"><span className="font-bold">Address:</span> {booking.destinationAddress || booking.route?.destinationAddress || getLocationData(booking.destination || booking.route?.destination)?.address || '2800 S El Dorado ST'}</div>
+                <div className="text-xs"><span className="font-bold">City, State Zip:</span> {booking.destinationCity || booking.route?.destinationCity || getLocationData(booking.destination || booking.route?.destination)?.city || 'STOCKTON'}, {booking.destinationState || booking.route?.destinationState || getLocationData(booking.destination || booking.route?.destination)?.state || 'CA'} {booking.destinationZipCode || booking.route?.destinationZipCode || getLocationData(booking.destination || booking.route?.destination)?.zipCode || '95206'}</div>
+                <div className="text-xs"><span className="font-bold">Phone:</span> {getLocationData(booking.destination || booking.route?.destination)?.phone || ''} <span className="font-bold">Contact:</span> {booking.destinationContact || booking.route?.destinationContact || getLocationData(booking.destination || booking.route?.destination)?.contact || ''}</div>
               </div>
             </div>
           </div>
