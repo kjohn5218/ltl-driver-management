@@ -1192,10 +1192,15 @@ const BookingViewModal: React.FC<BookingViewModalProps> = ({ booking, onClose, g
                 <p className="text-sm text-gray-900">${bookingToDisplay.baseRate}</p>
               </div>
             )}
-            {bookingToDisplay.rateType === 'MILE_FSC' && bookingToDisplay.fscRate && (
+            {bookingToDisplay.rateType === 'MILE_FSC' && (
               <div>
                 <label className="block text-sm font-medium text-gray-700 mb-1">FSC Rate</label>
-                <p className="text-sm text-gray-900">{bookingToDisplay.fscRate}%</p>
+                <p className="text-sm text-gray-900">
+                  {bookingToDisplay.fscRate || settingsData?.fuelSurchargeRate || 0}%
+                  {(!bookingToDisplay.fscRate && settingsData?.fuelSurchargeRate) && (
+                    <span className="text-xs text-gray-500 ml-1">(current system rate)</span>
+                  )}
+                </p>
               </div>
             )}
             <div>
@@ -1445,7 +1450,7 @@ const BookingEditModal: React.FC<BookingEditModalProps> = ({ booking, onClose, o
   // Calculate total rate based on rate type and values
   const calculateTotalRate = (rateType: string, baseRate: number, fscRate: number) => {
     const validBaseRate = Number(baseRate) || 0;
-    const validFscRate = Number(fscRate) || 0;
+    const validFscRate = Number(fscRate) || Number(settingsData?.fuelSurchargeRate) || 0;
     const distance = Number(booking.route?.distance) || 1;
     
     switch (rateType) {
@@ -1480,7 +1485,7 @@ const BookingEditModal: React.FC<BookingEditModalProps> = ({ booking, onClose, o
   // Helper function to calculate leg rate based on rate type
   const calculateLegRate = (rateType: string, baseRate: number, fscRate: number, distance: number = 100): number => {
     const validBaseRate = Number(baseRate) || 0;
-    const validFscRate = Number(fscRate) || 0;
+    const validFscRate = Number(fscRate) || Number(settingsData?.fuelSurchargeRate) || 0;
     const validDistance = Number(distance) || 100; // Default distance if not available
     
     switch (rateType) {

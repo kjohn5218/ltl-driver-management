@@ -246,10 +246,14 @@ export const NewBookingSimplified: React.FC<NewBookingSimplifiedProps> = () => {
   };
 
   // Clear leg builder
-  const clearLegBuilder = () => {
-    // Keep rate type and base rate from previous leg if there are existing legs
-    const keepRateType = legs.length > 0 ? legRateType : 'FLAT_RATE';
-    const keepBaseRate = legs.length > 0 ? legBaseRate : '';
+  const clearLegBuilder = (keepRateSettings = false) => {
+    // Keep rate type and base rate from previous leg if requested
+    const keepRateType = keepRateSettings ? legRateType : 'FLAT_RATE';
+    const keepBaseRate = keepRateSettings ? legBaseRate : '';
+    
+    if (keepRateSettings) {
+      console.log('Keeping rate settings for next leg:', { rateType: keepRateType, baseRate: keepBaseRate });
+    }
     
     setLegType('route');
     setSelectedRouteId('');
@@ -334,7 +338,7 @@ export const NewBookingSimplified: React.FC<NewBookingSimplifiedProps> = () => {
     }
     
     console.log('Added leg, total legs now:', legs.length + 1);
-    clearLegBuilder();
+    clearLegBuilder(true); // Keep rate settings for next leg
     
     // Keep the leg builder visible so user can continue to booking form
   };

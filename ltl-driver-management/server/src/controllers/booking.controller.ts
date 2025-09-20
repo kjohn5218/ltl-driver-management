@@ -326,7 +326,13 @@ export const updateBooking = async (req: Request, res: Response) => {
     const booking = await prisma.booking.update({
       where: { id: parseInt(id) },
       data: {
-        bookingDate: updateData.bookingDate ? new Date(updateData.bookingDate + 'T12:00:00') : undefined,
+        bookingDate: updateData.bookingDate ? (() => {
+          const date = new Date(updateData.bookingDate);
+          if (isNaN(date.getTime())) {
+            throw new Error(`Invalid booking date: ${updateData.bookingDate}`);
+          }
+          return date;
+        })() : undefined,
         rate: updateData.rate ? parseFloat(updateData.rate) : undefined,
         billable: updateData.billable,
         notes: updateData.notes,
