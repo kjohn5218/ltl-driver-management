@@ -694,6 +694,10 @@ export const NewBooking: React.FC<NewBookingProps> = ({ copyFromBooking }) => {
           rateType: singleRouteRateType,
           baseRate: singleRouteBaseRate
         }];
+      } else if (originDestinationLegs.length > 0 && hasSingleLeg) {
+        // User has already added legs but still has data in the form
+        alert('You have an unsaved leg in progress. Please click "Add Leg" to save it or clear the form fields.');
+        return;
       }
 
       // Get all booking dates
@@ -1310,7 +1314,7 @@ export const NewBooking: React.FC<NewBookingProps> = ({ copyFromBooking }) => {
                 <button
                   type="button"
                   onClick={() => {
-                    if (selectedOrigin && selectedDestination && estimatedMiles > 0) {
+                    if (selectedOrigin && selectedDestination && estimatedMiles > 0 && singleRouteBaseRate) {
                       const newLeg: OriginDestinationLeg = {
                         id: Date.now().toString(),
                         origin: selectedOrigin,
@@ -1324,13 +1328,15 @@ export const NewBooking: React.FC<NewBookingProps> = ({ copyFromBooking }) => {
                         baseRate: singleRouteBaseRate
                       };
                       setOriginDestinationLegs([...originDestinationLegs, newLeg]);
-                      // Clear form
+                      // Clear form completely
                       setSelectedOrigin('');
                       setSelectedDestination('');
                       setEstimatedMiles(0);
                       setCustomReportTime('');
+                      setSingleRouteBaseRate('');
+                      setRate('');
                     } else {
-                      alert('Please fill in all required fields for the leg');
+                      alert('Please fill in all required fields for the leg including rate configuration');
                     }
                   }}
                   className="px-3 py-1 bg-blue-600 text-white text-sm rounded-md hover:bg-blue-700"
@@ -1399,7 +1405,7 @@ export const NewBooking: React.FC<NewBookingProps> = ({ copyFromBooking }) => {
               {/* Display added legs */}
               {originDestinationLegs.length > 0 && (
                 <div className="mt-4">
-                  <h4 className="text-sm font-medium text-gray-700 mb-2">Booking Legs ({originDestinationLegs.length})</h4>
+                  <h4 className="text-sm font-medium text-gray-700 mb-2">Added Booking Legs ({originDestinationLegs.length})</h4>
                   <div className="space-y-2">
                     {originDestinationLegs.map((leg, index) => (
                       <div key={leg.id} className="p-3 bg-white border border-gray-200 rounded-md">
@@ -1430,6 +1436,11 @@ export const NewBooking: React.FC<NewBookingProps> = ({ copyFromBooking }) => {
                       <p className="text-sm font-medium text-gray-700">
                         Total: ${originDestinationLegs.reduce((sum, leg) => sum + parseFloat(leg.rate), 0).toFixed(2)} • 
                         {originDestinationLegs.reduce((sum, leg) => sum + leg.estimatedMiles, 0)} miles
+                      </p>
+                    </div>
+                    <div className="mt-2 p-2 bg-blue-50 rounded">
+                      <p className="text-xs text-blue-700">
+                        <strong>Note:</strong> Rate configuration is set per leg. Add all legs before creating the booking.
                       </p>
                     </div>
                   </div>
@@ -1995,7 +2006,7 @@ export const NewBooking: React.FC<NewBookingProps> = ({ copyFromBooking }) => {
         )}
 
         {/* Rate Configuration - Show for single route and origin-destination bookings */}
-        {!isRoundTrip && (selectedRouteObjects.length > 0 || (selectedOrigin && selectedDestination)) && (
+        {!isRoundTrip && (selectedRouteObjects.length > 0 || (selectedOrigin && selectedDestination) || (bookingMode === 'origin-destination')) && originDestinationLegs.length === 0 && (
           <div className="space-y-4 p-4 bg-gray-50 rounded-md border border-gray-200">
             <h3 className="text-sm font-medium text-gray-700">Rate Configuration</h3>
             
