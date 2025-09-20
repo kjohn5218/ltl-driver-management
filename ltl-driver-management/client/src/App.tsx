@@ -10,7 +10,7 @@ import { Carriers } from './pages/Carriers';
 import { Routes as RoutesPage } from './pages/Routes';
 import { Locations } from './pages/Locations';
 import { Bookings } from './pages/Bookings';
-import { NewBooking } from './pages/NewBooking';
+import { NewBookingSimplified as NewBooking } from './pages/NewBookingSimplified';
 import { Invoices } from './pages/Invoices';
 import { Reports } from './pages/Reports';
 import { ConfirmationPage } from './pages/ConfirmationPage';
