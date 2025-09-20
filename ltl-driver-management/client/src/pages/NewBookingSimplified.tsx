@@ -57,7 +57,6 @@ export const NewBookingSimplified: React.FC<NewBookingSimplifiedProps> = () => {
   
   // Leg management
   const [legs, setLegs] = useState<UnifiedLeg[]>([]);
-  const [isMultiLeg, setIsMultiLeg] = useState(false);
   const [showLegBuilder, setShowLegBuilder] = useState(true);
   
   // Current leg builder state
@@ -304,19 +303,15 @@ export const NewBookingSimplified: React.FC<NewBookingSimplifiedProps> = () => {
     console.log('Added leg, total legs now:', legs.length + 1);
     clearLegBuilder();
     
-    // If single leg mode, hide the builder after adding
-    if (!isMultiLeg) {
-      setShowLegBuilder(false);
-    }
+    // Hide the builder after adding a leg so user can see summary and choose next action
+    setShowLegBuilder(false);
   };
 
   // Remove leg
   const removeLeg = (legId: string) => {
     setLegs(legs.filter(leg => leg.id !== legId));
-    // If removing the last leg in single mode, show builder again
-    if (!isMultiLeg && legs.length === 1) {
-      setShowLegBuilder(true);
-    }
+    // Always show the builder when removing legs
+    setShowLegBuilder(true);
   };
 
   // Total calculations
@@ -360,9 +355,7 @@ export const NewBookingSimplified: React.FC<NewBookingSimplifiedProps> = () => {
   const handleCreateBooking = () => {
     // Check for unsaved leg data
     if (hasUnsavedLegData()) {
-      const confirmMessage = isMultiLeg 
-        ? 'You have unsaved leg data. Click "Add Leg" to save it first, or proceed without this leg?'
-        : 'You have unsaved booking data. Click "Confirm Details" to save it first, or proceed without this data?';
+      const confirmMessage = 'You have unsaved leg data. Click "Add Leg" to save it first, or proceed without this leg?';
       
       if (!confirm(confirmMessage)) {
         return;
@@ -472,40 +465,6 @@ export const NewBookingSimplified: React.FC<NewBookingSimplifiedProps> = () => {
       <div className="bg-white rounded-lg shadow p-6 space-y-4">
         <h2 className="text-lg font-semibold text-gray-800">Basic Information</h2>
         
-        {/* Booking Type - Single vs Multi-leg */}
-        <div>
-          <label className="block text-sm font-medium text-gray-700 mb-2">Booking Mode</label>
-          <div className="flex gap-4">
-            <label className="flex items-center">
-              <input
-                type="radio"
-                checked={!isMultiLeg}
-                onChange={() => {
-                  setIsMultiLeg(false);
-                  // If we have legs and switching to single, hide builder
-                  if (legs.length > 0) {
-                    setShowLegBuilder(false);
-                  }
-                }}
-                className="mr-2"
-              />
-              <span>Single Leg</span>
-            </label>
-            <label className="flex items-center">
-              <input
-                type="radio"
-                checked={isMultiLeg}
-                onChange={() => {
-                  setIsMultiLeg(true);
-                  // Always show builder in multi-leg mode
-                  setShowLegBuilder(true);
-                }}
-                className="mr-2"
-              />
-              <span>Multi-Leg Journey</span>
-            </label>
-          </div>
-        </div>
 
         {/* Carrier Selection */}
         <div>
@@ -634,7 +593,7 @@ export const NewBookingSimplified: React.FC<NewBookingSimplifiedProps> = () => {
         <div className="bg-white rounded-lg shadow p-6 space-y-4">
           <div className="flex items-center justify-between">
             <h2 className="text-lg font-semibold text-gray-800">
-              {isMultiLeg ? `Add Leg ${legs.length + 1}` : 'Booking Details'}
+              {legs.length === 0 ? 'Booking Details' : `Add Leg ${legs.length + 1}`}
             </h2>
             {hasUnsavedLegData() && (
               <div className="flex items-center gap-2 text-orange-600 bg-orange-50 px-3 py-1 rounded-md">
@@ -904,7 +863,7 @@ export const NewBookingSimplified: React.FC<NewBookingSimplifiedProps> = () => {
               className="px-4 py-2 bg-blue-600 text-white rounded-md hover:bg-blue-700 disabled:bg-gray-400 disabled:cursor-not-allowed flex items-center gap-2"
             >
               <Plus className="w-4 h-4" />
-              {isMultiLeg ? 'Add Leg' : 'Confirm Details'}
+              Add Leg
             </button>
           </div>
         </div>
@@ -915,7 +874,7 @@ export const NewBookingSimplified: React.FC<NewBookingSimplifiedProps> = () => {
         <div className="bg-white rounded-lg shadow p-6">
           <div className="flex items-center justify-between mb-4">
             <h2 className="text-lg font-semibold text-gray-800">Booking Summary</h2>
-            {isMultiLeg && !showLegBuilder && (
+            {!showLegBuilder && (
               <button
                 type="button"
                 onClick={() => setShowLegBuilder(true)}
