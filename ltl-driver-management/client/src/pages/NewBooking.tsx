@@ -6,6 +6,7 @@ import { Carrier, Route } from '../types';
 import { Calendar, Truck, MapPin, DollarSign, AlertCircle, Search, X } from 'lucide-react';
 import { format, eachDayOfInterval, parseISO, addDays } from 'date-fns';
 import { LocationWithTooltip } from '../components/LocationDisplay';
+import { LocationAutocomplete } from '../components/LocationAutocomplete';
 import { useAuth } from '../contexts/AuthContext';
 
 type RateType = 'MILE' | 'MILE_FSC' | 'FLAT_RATE';
@@ -19,8 +20,19 @@ interface BookingLeg {
   route?: Route;
 }
 
+interface OriginDestinationLeg {
+  id: string;
+  origin: string;
+  destination: string;
+  estimatedMiles: number;
+  reportTime: string;
+  rate: string;
+  rateType: RateType;
+  baseRate?: string;
+}
+
 interface NewBookingProps {
-  copyFromBooking?: Booking;
+  copyFromBooking?: any; // TODO: Import Booking type
 }
 
 export const NewBooking: React.FC<NewBookingProps> = ({ copyFromBooking }) => {
@@ -57,6 +69,7 @@ export const NewBooking: React.FC<NewBookingProps> = ({ copyFromBooking }) => {
   const [showOriginDropdown, setShowOriginDropdown] = useState(false);
   const [showDestinationDropdown, setShowDestinationDropdown] = useState(false);
   const [isRoundTrip, setIsRoundTrip] = useState(false);
+  const [bookingMode, setBookingMode] = useState<'origin-destination' | 'specific-route' | 'multi-leg'>('origin-destination');
   const [fuelSurchargeRate, setFuelSurchargeRate] = useState<number>(0);
   
   // Origin-destination booking state
@@ -64,9 +77,10 @@ export const NewBooking: React.FC<NewBookingProps> = ({ copyFromBooking }) => {
   const [selectedDestination, setSelectedDestination] = useState('');
   const [estimatedMiles, setEstimatedMiles] = useState<number>(0);
   const [customReportTime, setCustomReportTime] = useState('');
+  const [originDestinationLegs, setOriginDestinationLegs] = useState<OriginDestinationLeg[]>([]);
 
   // Fetch carriers
-  const { data: carriersData, isLoading: loadingCarriers } = useQuery({
+  const { data: carriersData } = useQuery({
     queryKey: ['carriers'],
     queryFn: async () => {
       const params = new URLSearchParams();
@@ -80,7 +94,7 @@ export const NewBooking: React.FC<NewBookingProps> = ({ copyFromBooking }) => {
   });
 
   // Fetch routes
-  const { data: routesData, isLoading: loadingRoutes } = useQuery({
+  const { data: routesData } = useQuery({
     queryKey: ['routes', originFilter, destinationFilter],
     queryFn: async () => {
       const params = new URLSearchParams();
@@ -274,7 +288,7 @@ export const NewBooking: React.FC<NewBookingProps> = ({ copyFromBooking }) => {
   const filteredRoutes = useMemo(() => {
     if (!routes.length) return [];
     
-    return routes.filter((route: Route) =>
+    return routes.filter((route: any) =>
       route.name.toLowerCase().includes(routeSearchInput.toLowerCase()) ||
       route.origin.toLowerCase().includes(routeSearchInput.toLowerCase()) ||
       route.destination.toLowerCase().includes(routeSearchInput.toLowerCase())
@@ -287,7 +301,7 @@ export const NewBooking: React.FC<NewBookingProps> = ({ copyFromBooking }) => {
     
     const availableRoutes = routes.filter(route => !bookingLegs.find(leg => leg.routeId === route.id.toString()));
     
-    return availableRoutes.filter((route: Route) =>
+    return availableRoutes.filter((route: any) =>
       route.name.toLowerCase().includes(routeSearchInput.toLowerCase()) ||
       route.origin.toLowerCase().includes(routeSearchInput.toLowerCase()) ||
       route.destination.toLowerCase().includes(routeSearchInput.toLowerCase())
@@ -337,14 +351,14 @@ export const NewBooking: React.FC<NewBookingProps> = ({ copyFromBooking }) => {
 
   // Filter origins based on search term
   const filteredOrigins = useMemo(() => {
-    return uniqueOrigins.filter(origin =>
+    return uniqueOrigins.filter((origin: string) =>
       origin.toLowerCase().includes(originSearchInput.toLowerCase())
     ).slice(0, 10); // Limit to first 10 results
   }, [uniqueOrigins, originSearchInput]);
 
   // Filter destinations based on search term
   const filteredDestinations = useMemo(() => {
-    return uniqueDestinations.filter(destination =>
+    return uniqueDestinations.filter((destination: string) =>
       destination.toLowerCase().includes(destinationSearchInput.toLowerCase())
     ).slice(0, 10); // Limit to first 10 results
   }, [uniqueDestinations, destinationSearchInput]);
@@ -391,7 +405,7 @@ export const NewBooking: React.FC<NewBookingProps> = ({ copyFromBooking }) => {
     setShowDestinationDropdown(false);
   };
 
-  const selectedRouteObjects = routes.filter((r: Route) => selectedRoutes.includes(r.id.toString()));
+  const selectedRouteObjects = routes.filter((r: any) => selectedRoutes.includes(r.id.toString()));
 
   // Generate array of dates for multiple date booking
   const getBookingDates = (): string[] => {
@@ -473,13 +487,20 @@ export const NewBooking: React.FC<NewBookingProps> = ({ copyFromBooking }) => {
     if (!isRoundTrip) {
       if (selectedRoutes.length === 0) {
         // Origin-destination booking validation
-        if (!selectedOrigin || !selectedDestination) {
-          alert('Please select both origin and destination');
+        const hasLegsAdded = originDestinationLegs.length > 0;
+        const hasCurrentLeg = selectedOrigin && selectedDestination && estimatedMiles > 0;
+        
+        if (!hasLegsAdded && !hasCurrentLeg) {
+          alert('Please add at least one leg or fill in the origin and destination');
           return;
         }
-        if (estimatedMiles <= 0) {
-          alert('Please enter estimated miles');
-          return;
+        
+        if (hasCurrentLeg && !hasLegsAdded) {
+          // Single leg validation
+          if (estimatedMiles <= 0) {
+            alert('Please enter estimated miles');
+            return;
+          }
         }
       } else {
         // Specific route booking validation
@@ -642,67 +663,97 @@ export const NewBooking: React.FC<NewBookingProps> = ({ copyFromBooking }) => {
       createBookingMutation.mutate(bookingsToCreate);
     } else if (selectedRoutes.length === 0) {
       // Origin-destination booking (no specific route selected)
-      if (!singleRouteBaseRate || parseFloat(singleRouteBaseRate) <= 0) {
-        alert('Please enter a valid rate');
+      
+      // Check if we have legs to create or a single leg in progress
+      const hasLegsToCreate = originDestinationLegs.length > 0;
+      const hasSingleLeg = selectedOrigin && selectedDestination && estimatedMiles > 0;
+      
+      if (!hasLegsToCreate && !hasSingleLeg) {
+        alert('Please add at least one leg or fill in the origin-destination fields');
         return;
       }
       
-      if (!rate || parseFloat(rate) <= 0) {
-        alert('Invalid calculated rate. Please check your inputs.');
-        return;
+      // If single leg in progress, add it to the legs array
+      let legsToCreate = [...originDestinationLegs];
+      if (hasSingleLeg && originDestinationLegs.length === 0) {
+        // Single leg booking
+        if (!singleRouteBaseRate || parseFloat(singleRouteBaseRate) <= 0) {
+          alert('Please enter a valid rate');
+          return;
+        }
+        
+        legsToCreate = [{
+          id: Date.now().toString(),
+          origin: selectedOrigin,
+          destination: selectedDestination,
+          estimatedMiles: estimatedMiles,
+          reportTime: customReportTime,
+          rate: singleRouteRateType === 'FLAT_RATE' 
+            ? singleRouteBaseRate 
+            : (parseFloat(singleRouteBaseRate) * estimatedMiles).toFixed(2),
+          rateType: singleRouteRateType,
+          baseRate: singleRouteBaseRate
+        }];
       }
 
       // Get all booking dates
       const dates = getBookingDates();
       
-      // Create booking data for each date with null routeId for origin-destination bookings
-      const bookingsToCreate = dates.map((date) => {
-        // Create notes with origin-destination information
-        const originDestNotes = [
-          `Origin-Destination Booking: ${selectedOrigin} → ${selectedDestination}`,
-          estimatedMiles > 0 ? `Estimated Miles: ${estimatedMiles}` : null,
-          customReportTime ? `Custom Report Time: ${customReportTime}` : null,
-          notes || null
-        ].filter(Boolean).join('\n');
-        
-        const dateNotes = useMultipleDates && originDestNotes ? 
-          `${originDestNotes}\n\n[Booking Date: ${format(parseISO(date), 'MMM dd, yyyy')}]` : 
-          (originDestNotes || null);
-        
-        const bookingData: any = {
-          carrierId: carrierId ? parseInt(carrierId) : null,
-          routeId: null, // Special handling for origin-destination bookings
-          origin: selectedOrigin,
-          destination: selectedDestination,
-          estimatedMiles: estimatedMiles,
-          bookingDate: date,
-          rate: parseFloat(rate).toFixed(2),
-          rateType: singleRouteRateType,
-          baseRate: singleRouteRateType === 'FLAT_RATE' 
-            ? parseFloat(rate).toFixed(2) 
-            : parseFloat(singleRouteBaseRate).toFixed(2),
-          fscRate: singleRouteRateType === 'MILE_FSC' ? fuelSurchargeRate.toFixed(2) : undefined,
-          billable,
-          notes: dateNotes,
-          driverName: driverName || undefined,
-          phoneNumber: phoneNumber || undefined,
-          carrierEmail: carrierEmail || undefined,
-          carrierReportTime: customReportTime || carrierReportTime || undefined,
-          type: bookingType,
-          trailerLength: bookingType === 'POWER_AND_TRAILER' && trailerLength ? parseInt(trailerLength) : null,
-          status: carrierId ? 'CONFIRMED' : 'PENDING',
-          legNumber: 1,
-          isParent: true
-        };
-        
-        // Remove null values that should be omitted
-        Object.keys(bookingData).forEach(key => {
-          if (bookingData[key] === null && key !== 'carrierId' && key !== 'notes' && key !== 'trailerLength' && key !== 'routeId') {
-            delete bookingData[key];
-          }
+      // Create bookings for each date and each leg
+      const bookingsToCreate: any[] = [];
+      
+      dates.forEach((date) => {
+        legsToCreate.forEach((leg, index) => {
+          const isParent = index === 0;
+          
+          // Create notes with origin-destination information
+          const originDestNotes = [
+            `Origin-Destination Booking: ${leg.origin} → ${leg.destination}`,
+            `Estimated Miles: ${leg.estimatedMiles}`,
+            leg.reportTime ? `Report Time: ${leg.reportTime}` : null,
+            legsToCreate.length > 1 ? `Leg ${index + 1} of ${legsToCreate.length}` : null,
+            notes || null
+          ].filter(Boolean).join('\n');
+          
+          const dateNotes = useMultipleDates && originDestNotes ? 
+            `${originDestNotes}\n\n[Booking Date: ${format(parseISO(date), 'MMM dd, yyyy')}]` : 
+            (originDestNotes || null);
+          
+          const bookingData: any = {
+            carrierId: carrierId ? parseInt(carrierId) : null,
+            routeId: null, // Special handling for origin-destination bookings
+            origin: leg.origin,
+            destination: leg.destination,
+            estimatedMiles: leg.estimatedMiles,
+            bookingDate: date,
+            rate: parseFloat(leg.rate).toFixed(2),
+            rateType: leg.rateType,
+            baseRate: leg.rateType === 'FLAT_RATE' 
+              ? parseFloat(leg.rate).toFixed(2) 
+              : parseFloat(leg.baseRate || '0').toFixed(2),
+            fscRate: leg.rateType === 'MILE_FSC' ? fuelSurchargeRate.toFixed(2) : undefined,
+            billable,
+            notes: dateNotes,
+            driverName: driverName || undefined,
+            phoneNumber: phoneNumber || undefined,
+            carrierEmail: carrierEmail || undefined,
+            carrierReportTime: leg.reportTime || carrierReportTime || undefined,
+            type: bookingType,
+            trailerLength: bookingType === 'POWER_AND_TRAILER' && trailerLength ? parseInt(trailerLength) : null,
+            status: carrierId ? 'CONFIRMED' : 'PENDING',
+            legNumber: index + 1,
+            isParent: isParent
+          };
+          
+          // Remove null values that should be omitted
+          Object.keys(bookingData).forEach(key => {
+            if (bookingData[key] === null && key !== 'carrierId' && key !== 'notes' && key !== 'trailerLength' && key !== 'routeId') {
+              delete bookingData[key];
+            }
+          });
+          
+          bookingsToCreate.push(bookingData);
         });
-        
-        return bookingData;
       });
       
       console.log(`Creating ${bookingsToCreate.length} origin-destination booking(s)`);
@@ -975,14 +1026,14 @@ export const NewBooking: React.FC<NewBookingProps> = ({ copyFromBooking }) => {
     addBookingLeg(routeId);
   };
 
-  const removeRoute = (routeId: string) => {
-    if (isRoundTrip) {
-      const leg = bookingLegs.find(leg => leg.routeId === routeId);
-      if (leg) removeBookingLeg(leg.id);
-    } else {
-      setSelectedRoutes(selectedRoutes.filter(id => id !== routeId));
-    }
-  };
+  // const removeRoute = (routeId: string) => {
+  //   if (isRoundTrip) {
+  //     const leg = bookingLegs.find(leg => leg.routeId === routeId);
+  //     if (leg) removeBookingLeg(leg.id);
+  //   } else {
+  //     setSelectedRoutes(selectedRoutes.filter(id => id !== routeId));
+  //   }
+  // };
 
   const getTotalMiles = () => {
     if (isRoundTrip) {
@@ -1184,8 +1235,9 @@ export const NewBooking: React.FC<NewBookingProps> = ({ copyFromBooking }) => {
               <input
                 type="radio"
                 name="bookingMode"
-                checked={!isRoundTrip && selectedRoutes.length === 0}
+                checked={bookingMode === 'origin-destination'}
                 onChange={() => {
+                  setBookingMode('origin-destination');
                   setIsRoundTrip(false);
                   setSelectedRoutes([]);
                   setSelectedRouteName('');
@@ -1202,10 +1254,14 @@ export const NewBooking: React.FC<NewBookingProps> = ({ copyFromBooking }) => {
               <input
                 type="radio"
                 name="bookingMode"
-                checked={!isRoundTrip && selectedRoutes.length > 0}
+                checked={bookingMode === 'specific-route'}
                 onChange={() => {
+                  setBookingMode('specific-route');
                   setIsRoundTrip(false);
                   setBookingLegs([]);
+                  setSelectedOrigin('');
+                  setSelectedDestination('');
+                  setEstimatedMiles(0);
                 }}
                 className="w-4 h-4 text-blue-600 border-gray-300 focus:ring-blue-500"
               />
@@ -1218,11 +1274,15 @@ export const NewBooking: React.FC<NewBookingProps> = ({ copyFromBooking }) => {
               <input
                 type="radio"
                 name="bookingMode"
-                checked={isRoundTrip}
+                checked={bookingMode === 'multi-leg'}
                 onChange={() => {
+                  setBookingMode('multi-leg');
                   setIsRoundTrip(true);
                   setSelectedRoutes([]);
                   setSelectedRouteName('');
+                  setSelectedOrigin('');
+                  setSelectedDestination('');
+                  setEstimatedMiles(0);
                 }}
                 className="w-4 h-4 text-blue-600 border-gray-300 focus:ring-blue-500"
               />
@@ -1238,44 +1298,66 @@ export const NewBooking: React.FC<NewBookingProps> = ({ copyFromBooking }) => {
         <div>
           <label className="block text-sm font-medium text-gray-700 mb-2">
             <MapPin className="inline w-4 h-4 mr-1" />
-            {(!isRoundTrip && selectedRoutes.length === 0) ? 'Origin and Destination *' : 
-             isRoundTrip ? 'Select Routes *' : 'Select Route *'}
+            {bookingMode === 'origin-destination' ? 'Origin and Destination *' : 
+             bookingMode === 'multi-leg' ? 'Select Routes *' : 'Select Route *'}
           </label>
           
           {/* Origin-Destination Simple Booking */}
-          {!isRoundTrip && selectedRoutes.length === 0 && (
+          {bookingMode === 'origin-destination' && (
             <div className="space-y-4 p-4 bg-gray-50 rounded-md border border-gray-200">
-              <h3 className="text-sm font-medium text-gray-700">Simple Origin → Destination Booking</h3>
+              <div className="flex items-center justify-between mb-4">
+                <h3 className="text-sm font-medium text-gray-700">Origin → Destination Booking</h3>
+                <button
+                  type="button"
+                  onClick={() => {
+                    if (selectedOrigin && selectedDestination && estimatedMiles > 0) {
+                      const newLeg: OriginDestinationLeg = {
+                        id: Date.now().toString(),
+                        origin: selectedOrigin,
+                        destination: selectedDestination,
+                        estimatedMiles: estimatedMiles,
+                        reportTime: customReportTime,
+                        rate: singleRouteRateType === 'FLAT_RATE' 
+                          ? singleRouteBaseRate 
+                          : (parseFloat(singleRouteBaseRate) * estimatedMiles).toFixed(2),
+                        rateType: singleRouteRateType,
+                        baseRate: singleRouteBaseRate
+                      };
+                      setOriginDestinationLegs([...originDestinationLegs, newLeg]);
+                      // Clear form
+                      setSelectedOrigin('');
+                      setSelectedDestination('');
+                      setEstimatedMiles(0);
+                      setCustomReportTime('');
+                    } else {
+                      alert('Please fill in all required fields for the leg');
+                    }
+                  }}
+                  className="px-3 py-1 bg-blue-600 text-white text-sm rounded-md hover:bg-blue-700"
+                >
+                  Add Leg
+                </button>
+              </div>
               
               <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
                 <div>
                   <label className="block text-xs font-medium text-gray-700 mb-1">Origin *</label>
-                  <select
+                  <LocationAutocomplete
                     value={selectedOrigin}
-                    onChange={(e) => setSelectedOrigin(e.target.value)}
-                    className="w-full px-3 py-2 border border-gray-300 rounded-md focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
+                    onChange={(value) => setSelectedOrigin(value)}
+                    placeholder="Type to search origin..."
                     required
-                  >
-                    <option value="">Select origin...</option>
-                    {uniqueOrigins.map((origin) => (
-                      <option key={origin} value={origin}>{origin}</option>
-                    ))}
-                  </select>
+                  />
                 </div>
                 
                 <div>
                   <label className="block text-xs font-medium text-gray-700 mb-1">Destination *</label>
-                  <select
+                  <LocationAutocomplete
                     value={selectedDestination}
-                    onChange={(e) => setSelectedDestination(e.target.value)}
-                    className="w-full px-3 py-2 border border-gray-300 rounded-md focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
+                    onChange={(value) => setSelectedDestination(value)}
+                    placeholder="Type to search destination..."
                     required
-                  >
-                    <option value="">Select destination...</option>
-                    {uniqueDestinations.map((destination) => (
-                      <option key={destination} value={destination}>{destination}</option>
-                    ))}
-                  </select>
+                  />
                 </div>
               </div>
               
@@ -1311,6 +1393,46 @@ export const NewBooking: React.FC<NewBookingProps> = ({ copyFromBooking }) => {
                     <strong>Route:</strong> {selectedOrigin} → {selectedDestination}
                     {estimatedMiles > 0 && <span> • {estimatedMiles} miles</span>}
                   </p>
+                </div>
+              )}
+
+              {/* Display added legs */}
+              {originDestinationLegs.length > 0 && (
+                <div className="mt-4">
+                  <h4 className="text-sm font-medium text-gray-700 mb-2">Booking Legs ({originDestinationLegs.length})</h4>
+                  <div className="space-y-2">
+                    {originDestinationLegs.map((leg, index) => (
+                      <div key={leg.id} className="p-3 bg-white border border-gray-200 rounded-md">
+                        <div className="flex items-center justify-between">
+                          <div className="flex-1">
+                            <p className="text-sm font-medium text-gray-900">
+                              Leg {index + 1}: {leg.origin} → {leg.destination}
+                            </p>
+                            <p className="text-xs text-gray-500 mt-1">
+                              {leg.estimatedMiles} miles • ${leg.rate} ({leg.rateType})
+                              {leg.reportTime && ` • Report: ${leg.reportTime}`}
+                            </p>
+                          </div>
+                          <button
+                            type="button"
+                            onClick={() => {
+                              setOriginDestinationLegs(originDestinationLegs.filter(l => l.id !== leg.id));
+                            }}
+                            className="ml-2 text-red-600 hover:text-red-800"
+                            title="Remove leg"
+                          >
+                            <X className="w-4 h-4" />
+                          </button>
+                        </div>
+                      </div>
+                    ))}
+                    <div className="mt-2 p-2 bg-gray-100 rounded">
+                      <p className="text-sm font-medium text-gray-700">
+                        Total: ${originDestinationLegs.reduce((sum, leg) => sum + parseFloat(leg.rate), 0).toFixed(2)} • 
+                        {originDestinationLegs.reduce((sum, leg) => sum + leg.estimatedMiles, 0)} miles
+                      </p>
+                    </div>
+                  </div>
                 </div>
               )}
             </div>
@@ -1471,7 +1593,7 @@ export const NewBooking: React.FC<NewBookingProps> = ({ copyFromBooking }) => {
               </div>
             )}
             
-            {isRoundTrip ? (
+            {bookingMode === 'multi-leg' ? (
               // Multiple route selection interface
               <div className="border border-gray-300 rounded-md p-4 bg-gray-50">
                 <div className="mb-3 relative">
@@ -1490,7 +1612,7 @@ export const NewBooking: React.FC<NewBookingProps> = ({ copyFromBooking }) => {
                     {showRouteDropdown && (
                       <div className="absolute z-50 w-full mt-1 bg-white border border-gray-300 rounded-md shadow-lg max-h-60 overflow-y-auto">
                         {filteredMultiRoutes.length > 0 ? (
-                          filteredMultiRoutes.map((route: Route) => (
+                          filteredMultiRoutes.map((route: any) => (
                             <button
                               key={route.id}
                               type="button"
@@ -1688,7 +1810,7 @@ export const NewBooking: React.FC<NewBookingProps> = ({ copyFromBooking }) => {
                   </div>
                 )}
               </div>
-            ) : (
+            ) : bookingMode === 'specific-route' ? (
               // Single route selection with search
               <div className="relative">
                 {/* Display selected route or search input */}
@@ -1725,7 +1847,7 @@ export const NewBooking: React.FC<NewBookingProps> = ({ copyFromBooking }) => {
                     {showRouteDropdown && (
                       <div className="absolute z-50 w-full mt-1 bg-white border border-gray-300 rounded-md shadow-lg max-h-60 overflow-y-auto">
                         {filteredRoutes.length > 0 ? (
-                          filteredRoutes.map((route: Route) => (
+                          filteredRoutes.map((route: any) => (
                             <button
                               key={route.id}
                               type="button"
@@ -1762,7 +1884,7 @@ export const NewBooking: React.FC<NewBookingProps> = ({ copyFromBooking }) => {
                   </div>
                 )}
               </div>
-            )}
+            ) : null}
           </div>
           
           {/* Single Route Details */}
