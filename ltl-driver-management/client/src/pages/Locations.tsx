@@ -316,6 +316,20 @@ const LocationViewModal: React.FC<LocationViewModalProps> = ({ location, onClose
             </div>
           )}
           
+          {location.phone && (
+            <div>
+              <label className="block text-sm font-medium text-gray-700">Phone</label>
+              <p className="mt-1 text-sm text-gray-900">{location.phone}</p>
+            </div>
+          )}
+          
+          {location.hours && (
+            <div>
+              <label className="block text-sm font-medium text-gray-700">Hours</label>
+              <p className="mt-1 text-sm text-gray-900">{location.hours}</p>
+            </div>
+          )}
+          
           {location.timeZone && (
             <div>
               <label className="block text-sm font-medium text-gray-700">Time Zone</label>
@@ -373,6 +387,8 @@ const LocationEditModal: React.FC<LocationEditModalProps> = ({ location, onClose
     state: location?.state || '',
     zipCode: location?.zipCode || '',
     contact: location?.contact || '',
+    phone: location?.phone || '',
+    hours: location?.hours || '',
     timeZone: location?.timeZone || '',
     latitude: location?.latitude?.toString() || '',
     longitude: location?.longitude?.toString() || '',
@@ -395,6 +411,8 @@ const LocationEditModal: React.FC<LocationEditModalProps> = ({ location, onClose
         state: cleanValue(formData.state),
         zipCode: cleanValue(formData.zipCode),
         contact: cleanValue(formData.contact),
+        phone: cleanValue(formData.phone),
+        hours: cleanValue(formData.hours),
         timeZone: cleanValue(formData.timeZone),
         latitude: formData.latitude ? parseFloat(formData.latitude) : undefined,
         longitude: formData.longitude ? parseFloat(formData.longitude) : undefined,
@@ -522,7 +540,35 @@ const LocationEditModal: React.FC<LocationEditModalProps> = ({ location, onClose
                 value={formData.contact}
                 onChange={(e) => setFormData({ ...formData, contact: e.target.value })}
                 className="w-full px-3 py-2 border border-gray-300 rounded-md focus:ring-2 focus:ring-primary-500 focus:border-primary-500"
-                placeholder="Contact information"
+                placeholder="Contact person name"
+              />
+            </div>
+            
+            <div>
+              <label className="block text-sm font-medium text-gray-700 mb-1">
+                Phone Number
+              </label>
+              <input
+                type="tel"
+                value={formData.phone}
+                onChange={(e) => setFormData({ ...formData, phone: e.target.value })}
+                className="w-full px-3 py-2 border border-gray-300 rounded-md focus:ring-2 focus:ring-primary-500 focus:border-primary-500"
+                placeholder="(555) 123-4567"
+              />
+            </div>
+          </div>
+
+          <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+            <div>
+              <label className="block text-sm font-medium text-gray-700 mb-1">
+                Operating Hours
+              </label>
+              <input
+                type="text"
+                value={formData.hours}
+                onChange={(e) => setFormData({ ...formData, hours: e.target.value })}
+                className="w-full px-3 py-2 border border-gray-300 rounded-md focus:ring-2 focus:ring-primary-500 focus:border-primary-500"
+                placeholder="e.g., 06:00 - 18:00"
               />
             </div>
             

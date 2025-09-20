@@ -258,6 +258,8 @@ model Location {
   state     String?
   zipCode   String?
   contact   String?
+  phone     String?
+  hours     String?
   timeZone  String?
   latitude  Decimal? @db.Decimal(10, 7)
   longitude Decimal? @db.Decimal(10, 7)

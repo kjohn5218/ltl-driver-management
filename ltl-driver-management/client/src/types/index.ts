@@ -245,6 +245,8 @@ export interface Location {
   state?: string;
   zipCode?: string;
   contact?: string;
+  phone?: string;
+  hours?: string;
   timeZone?: string;
   latitude?: number;
   longitude?: number;
