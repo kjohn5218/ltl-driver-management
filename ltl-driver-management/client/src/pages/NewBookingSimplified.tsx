@@ -2,9 +2,8 @@ import React, { useState, useMemo, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { api } from '../services/api';
-import { Carrier, Route } from '../types';
-import { Calendar, Truck, MapPin, DollarSign, AlertCircle, Search, X, Plus } from 'lucide-react';
-import { format, eachDayOfInterval, parseISO, addDays } from 'date-fns';
+import { Calendar, Truck, MapPin, AlertCircle, X, Plus } from 'lucide-react';
+import { format, eachDayOfInterval, parseISO } from 'date-fns';
 import { LocationAutocomplete } from '../components/LocationAutocomplete';
 import { useAuth } from '../contexts/AuthContext';
 
@@ -34,7 +33,7 @@ interface NewBookingSimplifiedProps {
   copyFromBooking?: any;
 }
 
-export const NewBookingSimplified: React.FC<NewBookingSimplifiedProps> = ({ copyFromBooking }) => {
+export const NewBookingSimplified: React.FC<NewBookingSimplifiedProps> = () => {
   const navigate = useNavigate();
   const queryClient = useQueryClient();
   const { isAuthenticated } = useAuth();
@@ -48,7 +47,7 @@ export const NewBookingSimplified: React.FC<NewBookingSimplifiedProps> = ({ copy
   const [billable, setBillable] = useState(true);
   const [bookingType, setBookingType] = useState<'POWER_ONLY' | 'POWER_AND_TRAILER'>('POWER_ONLY');
   const [trailerLength, setTrailerLength] = useState('');
-  const [fuelSurchargeRate, setFuelSurchargeRate] = useState<number>(0);
+  const [fuelSurchargeRate] = useState<number>(0);
   
   // Contact info
   const [driverName, setDriverName] = useState('');
@@ -64,7 +63,6 @@ export const NewBookingSimplified: React.FC<NewBookingSimplifiedProps> = ({ copy
   // Current leg builder state
   const [legType, setLegType] = useState<'route' | 'custom'>('route');
   const [selectedRouteId, setSelectedRouteId] = useState('');
-  const [selectedRouteName, setSelectedRouteName] = useState('');
   const [customOrigin, setCustomOrigin] = useState('');
   const [customDestination, setCustomDestination] = useState('');
   const [customMiles, setCustomMiles] = useState('');
@@ -147,6 +145,47 @@ export const NewBookingSimplified: React.FC<NewBookingSimplifiedProps> = ({ copy
       console.error('Error calculating report time:', error);
       return '';
     }
+  };
+
+  // Calculate arrival time based on mileage and departure time (assuming 60 mph average speed)
+  const calculateArrivalTime = (departureTime: string, miles: number): string => {
+    if (!departureTime || !miles || miles <= 0) return '';
+    
+    try {
+      // Parse the time string (HH:MM format)
+      const [hours, minutes] = departureTime.split(':').map(Number);
+      const date = new Date();
+      date.setHours(hours, minutes, 0, 0);
+      
+      // Calculate travel time in hours (assuming 60 mph average speed)
+      const travelTimeHours = miles / 60;
+      
+      // Add travel time
+      date.setMinutes(date.getMinutes() + (travelTimeHours * 60));
+      
+      // Format back to HH:MM
+      return date.toTimeString().slice(0, 5);
+    } catch (error) {
+      console.error('Error calculating arrival time:', error);
+      return '';
+    }
+  };
+
+  // Search for mileage between origin and destination in routes
+  const findMileageInRoutes = (origin: string, destination: string): number | null => {
+    if (!origin || !destination || !routes.length) return null;
+    
+    // Look for exact match in routes
+    const matchingRoute = routes.find((route: any) => 
+      route.origin.toLowerCase() === origin.toLowerCase() && 
+      route.destination.toLowerCase() === destination.toLowerCase()
+    );
+    
+    if (matchingRoute && matchingRoute.distance) {
+      return parseFloat(matchingRoute.distance.toString());
+    }
+    
+    return null;
   };
 
   // Calculate leg rate
@@ -649,7 +688,20 @@ export const NewBookingSimplified: React.FC<NewBookingSimplifiedProps> = ({ copy
                   <label className="block text-sm font-medium text-gray-700 mb-2">Origin</label>
                   <LocationAutocomplete
                     value={customOrigin}
-                    onChange={setCustomOrigin}
+                    onChange={(value) => {
+                      setCustomOrigin(value);
+                      // Auto-populate mileage when both origin and destination are set
+                      if (value && customDestination) {
+                        const foundMileage = findMileageInRoutes(value, customDestination);
+                        if (foundMileage) {
+                          setCustomMiles(foundMileage.toString());
+                          // Auto-calculate arrival time if departure time is set
+                          if (legDepartureTime) {
+                            setLegArrivalTime(calculateArrivalTime(legDepartureTime, foundMileage));
+                          }
+                        }
+                      }
+                    }}
                     placeholder="Search origin..."
                     required
                   />
@@ -658,20 +710,45 @@ export const NewBookingSimplified: React.FC<NewBookingSimplifiedProps> = ({ copy
                   <label className="block text-sm font-medium text-gray-700 mb-2">Destination</label>
                   <LocationAutocomplete
                     value={customDestination}
-                    onChange={setCustomDestination}
+                    onChange={(value) => {
+                      setCustomDestination(value);
+                      // Auto-populate mileage when both origin and destination are set
+                      if (customOrigin && value) {
+                        const foundMileage = findMileageInRoutes(customOrigin, value);
+                        if (foundMileage) {
+                          setCustomMiles(foundMileage.toString());
+                          // Auto-calculate arrival time if departure time is set
+                          if (legDepartureTime) {
+                            setLegArrivalTime(calculateArrivalTime(legDepartureTime, foundMileage));
+                          }
+                        }
+                      }
+                    }}
                     placeholder="Search destination..."
                     required
                   />
                 </div>
               </div>
               <div>
-                <label className="block text-sm font-medium text-gray-700 mb-2">Estimated Miles</label>
+                <label className="block text-sm font-medium text-gray-700 mb-2">
+                  Estimated Miles
+                  <span className="text-xs text-gray-500 ml-1">(auto-populated from routes if available)</span>
+                </label>
                 <input
                   type="number"
                   value={customMiles}
-                  onChange={(e) => setCustomMiles(e.target.value)}
-                  placeholder="Enter miles"
-                  className="px-3 py-2 border border-gray-300 rounded-md"
+                  onChange={(e) => {
+                    setCustomMiles(e.target.value);
+                    // Auto-calculate arrival time when miles change
+                    if (legDepartureTime && e.target.value) {
+                      const miles = parseFloat(e.target.value);
+                      if (miles > 0) {
+                        setLegArrivalTime(calculateArrivalTime(legDepartureTime, miles));
+                      }
+                    }
+                  }}
+                  placeholder="Enter miles or auto-populated from routes"
+                  className="w-full px-3 py-2 border border-gray-300 rounded-md"
                   min="1"
                   step="0.1"
                 />
@@ -736,12 +813,22 @@ export const NewBookingSimplified: React.FC<NewBookingSimplifiedProps> = ({ copy
                     if (e.target.value) {
                       setLegReportTime(calculateReportTime(e.target.value));
                     }
+                    // Auto-calculate arrival time based on mileage
+                    if (e.target.value && customMiles) {
+                      const miles = parseFloat(customMiles);
+                      if (miles > 0) {
+                        setLegArrivalTime(calculateArrivalTime(e.target.value, miles));
+                      }
+                    }
                   }}
                   className="w-full px-3 py-2 border border-gray-300 rounded-md"
                 />
               </div>
               <div>
-                <label className="block text-sm font-medium text-gray-700 mb-2">Arrival Time</label>
+                <label className="block text-sm font-medium text-gray-700 mb-2">
+                  Arrival Time
+                  <span className="text-xs text-gray-500 ml-1">(auto-calculated from departure time and mileage)</span>
+                </label>
                 <input
                   type="time"
                   value={legArrivalTime}
@@ -896,18 +983,6 @@ export const NewBookingSimplified: React.FC<NewBookingSimplifiedProps> = ({ copy
               type="email"
               value={carrierEmail}
               onChange={(e) => setCarrierEmail(e.target.value)}
-              className="w-full px-3 py-2 border border-gray-300 rounded-md"
-            />
-          </div>
-          <div>
-            <label className="block text-sm font-medium text-gray-700 mb-2">
-              Default Report Time 
-              <span className="text-xs text-gray-500 ml-1">(auto-calculated from first leg departure)</span>
-            </label>
-            <input
-              type="time"
-              value={carrierReportTime}
-              onChange={(e) => setCarrierReportTime(e.target.value)}
               className="w-full px-3 py-2 border border-gray-300 rounded-md"
             />
           </div>
