@@ -303,7 +303,6 @@ export const NewBookingSimplified: React.FC<NewBookingSimplifiedProps> = () => {
     clearLegBuilder();
     
     // Keep the leg builder visible so user can continue to booking form
-    // The "Add Another Leg" button will clear the form if they want to add more legs
   };
 
   // Remove leg
@@ -863,19 +862,6 @@ export const NewBookingSimplified: React.FC<NewBookingSimplifiedProps> = () => {
               >
                 Save
               </button>
-              {legs.length > 0 && (
-                <button
-                  type="button"
-                  onClick={() => {
-                    // Clear the current form and allow adding another leg
-                    clearLegBuilder();
-                  }}
-                  className="px-4 py-2 bg-green-600 text-white rounded-md hover:bg-green-700 flex items-center gap-2"
-                >
-                  <Plus className="w-4 h-4" />
-                  Add Another Leg
-                </button>
-              )}
             </div>
           </div>
         </div>
