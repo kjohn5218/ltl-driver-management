@@ -188,6 +188,19 @@ export const NewBookingSimplified: React.FC<NewBookingSimplifiedProps> = () => {
     return null;
   };
 
+  // Find route information for origin/destination pair
+  const findRouteInfo = (origin: string, destination: string): any | null => {
+    if (!origin || !destination || !routes.length) return null;
+    
+    // Look for exact match in routes
+    const matchingRoute = routes.find((route: any) => 
+      route.origin.toLowerCase() === origin.toLowerCase() && 
+      route.destination.toLowerCase() === destination.toLowerCase()
+    );
+    
+    return matchingRoute || null;
+  };
+
   // Calculate leg rate
   const calculateLegRate = () => {
     const miles = legType === 'route' 
@@ -401,10 +414,37 @@ export const NewBookingSimplified: React.FC<NewBookingSimplifiedProps> = () => {
         if (leg.type === 'route') {
           bookingData.routeId = parseInt(leg.routeId!);
         } else {
+          // Custom origin/destination booking
           bookingData.routeId = null;
           bookingData.origin = leg.origin;
           bookingData.destination = leg.destination;
           bookingData.estimatedMiles = leg.miles;
+          
+          // Try to find matching route information to populate additional fields
+          const routeInfo = findRouteInfo(leg.origin, leg.destination);
+          if (routeInfo) {
+            // Add route information in notes for reference since Booking model doesn't have these fields
+            const routeDetails = [
+              `Route Information Found:`,
+              `- Route Name: ${routeInfo.name}`,
+              routeInfo.frequency ? `- Frequency: ${routeInfo.frequency}` : null,
+              routeInfo.standardRate ? `- Standard Rate: $${routeInfo.standardRate}` : null,
+              routeInfo.runTime ? `- Run Time: ${routeInfo.runTime} minutes` : null,
+              routeInfo.originAddress ? `- Origin Address: ${routeInfo.originAddress}` : null,
+              routeInfo.originCity ? `- Origin City: ${routeInfo.originCity}, ${routeInfo.originState || ''} ${routeInfo.originZipCode || ''}`.trim() : null,
+              routeInfo.originContact ? `- Origin Contact: ${routeInfo.originContact}` : null,
+              routeInfo.destinationAddress ? `- Destination Address: ${routeInfo.destinationAddress}` : null,
+              routeInfo.destinationCity ? `- Destination City: ${routeInfo.destinationCity}, ${routeInfo.destinationState || ''} ${routeInfo.destinationZipCode || ''}`.trim() : null,
+              routeInfo.destinationContact ? `- Destination Contact: ${routeInfo.destinationContact}` : null
+            ].filter(Boolean).join('\n');
+            
+            // Append route information to existing notes
+            if (bookingData.notes) {
+              bookingData.notes = `${bookingData.notes}\n\n${routeDetails}`;
+            } else {
+              bookingData.notes = routeDetails;
+            }
+          }
         }
         
         // Clean up undefined values
