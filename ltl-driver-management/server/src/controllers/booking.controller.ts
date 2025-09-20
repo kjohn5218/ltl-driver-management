@@ -116,128 +116,137 @@ export const getBookingById = async (req: Request, res: Response) => {
 
 export const createBooking = async (req: Request, res: Response) => {
   try {
-    const { 
-      carrierId, 
-      routeId, 
-      bookingDate, 
-      rate, 
-      notes, 
-      billable = false, 
-      status = 'PENDING',
-      driverName,
-      phoneNumber,
-      carrierEmail,
-      carrierReportTime,
-      type = 'POWER_ONLY',
-      trailerLength,
-      bookingGroupId,
-      legNumber = 1,
-      isParent = true,
-      parentBookingId,
-      rateType = 'FLAT_RATE',
-      baseRate,
-      fscRate,
-      // Origin-destination booking fields
-      origin,
-      destination,
-      estimatedMiles,
-      manifestNumber
-    } = req.body;
+    // Handle both single booking and array of bookings
+    const isArray = Array.isArray(req.body);
+    const bookingsData = isArray ? req.body : [req.body];
+    const createdBookings = [];
 
-    // Check if carrier exists and is active (only if carrierId is provided)
-    if (carrierId) {
-      const carrier = await prisma.carrier.findUnique({
-        where: { id: parseInt(carrierId) }
-      });
-
-      if (!carrier) {
-        return res.status(404).json({ message: 'Carrier not found' });
-      }
-
-      if (carrier.status !== 'ACTIVE') {
-        return res.status(400).json({ message: 'Carrier is not active' });
-      }
-
-      // Check insurance expiration
-      if (carrier.insuranceExpiration) {
-        const today = new Date();
-        const expirationDate = new Date(carrier.insuranceExpiration);
-        
-        if (expirationDate < today) {
-          return res.status(400).json({ 
-            message: 'Carrier insurance has expired. Please update insurance information before booking.',
-            carrierName: carrier.name,
-            expirationDate: carrier.insuranceExpiration
-          });
-        }
-        
-        // Warn if insurance expires within 30 days
-        const thirtyDaysFromNow = new Date();
-        thirtyDaysFromNow.setDate(today.getDate() + 30);
-        
-        if (expirationDate < thirtyDaysFromNow) {
-          console.warn(`Warning: Carrier ${carrier.name} insurance expires on ${carrier.insuranceExpiration}`);
-        }
-      }
-    }
-
-    // Check if route exists (only if routeId is provided)
-    let route = null;
-    if (routeId) {
-      route = await prisma.route.findUnique({
-        where: { id: parseInt(routeId) }
-      });
-
-      if (!route) {
-        return res.status(404).json({ message: 'Route not found' });
-      }
-    } else {
-      // For origin-destination bookings, validate that we have origin and destination
-      if (!origin || !destination) {
-        return res.status(400).json({ message: 'Origin and destination are required for non-route bookings' });
-      }
-    }
-
-    // Allow multiple bookings for the same carrier, route, and date
-    // This supports scenarios where a carrier might make multiple trips on the same route in a day
-
-    const booking = await prisma.booking.create({
-      data: {
-        carrierId: carrierId ? parseInt(carrierId) : undefined,
-        routeId: routeId ? parseInt(routeId) : undefined,
-        bookingDate: new Date(bookingDate + 'T12:00:00'),
-        rate: parseFloat(rate),
-        notes,
-        status: status as any,
-        billable,
+    for (const bookingData of bookingsData) {
+      const { 
+        carrierId, 
+        routeId, 
+        bookingDate, 
+        rate, 
+        notes, 
+        billable = false, 
+        status = 'PENDING',
+        driverName,
+        phoneNumber,
+        carrierEmail,
+        carrierReportTime,
+        type = 'POWER_ONLY',
+        trailerLength,
         bookingGroupId,
-        legNumber,
-        isParent,
-        parentBookingId: parentBookingId ? parseInt(parentBookingId) : undefined,
-        rateType: rateType as any,
-        baseRate: baseRate ? parseFloat(baseRate) : undefined,
-        fscRate: fscRate ? parseFloat(fscRate) : undefined,
-        driverName: driverName || undefined,
-        phoneNumber: phoneNumber || undefined,
-        carrierEmail: carrierEmail || undefined,
-        carrierReportTime: carrierReportTime || undefined,
-        type: type as any,
-        trailerLength: trailerLength ? parseInt(trailerLength) : undefined,
+        legNumber = 1,
+        isParent = true,
+        parentBookingId,
+        rateType = 'FLAT_RATE',
+        baseRate,
+        fscRate,
         // Origin-destination booking fields
-        origin: origin || undefined,
-        destination: destination || undefined,
-        estimatedMiles: estimatedMiles ? parseFloat(estimatedMiles) : undefined,
-        manifestNumber: manifestNumber || undefined
-      },
-      include: {
-        carrier: true,
-        route: true,
-        childBookings: true,
-        parentBooking: true
-      }
-    });
+        origin,
+        destination,
+        estimatedMiles,
+        manifestNumber
+      } = bookingData;
 
-    return res.status(201).json(booking);
+      // Check if carrier exists and is active (only if carrierId is provided)
+      if (carrierId) {
+        const carrier = await prisma.carrier.findUnique({
+          where: { id: parseInt(carrierId) }
+        });
+
+        if (!carrier) {
+          return res.status(404).json({ message: 'Carrier not found' });
+        }
+
+        if (carrier.status !== 'ACTIVE') {
+          return res.status(400).json({ message: 'Carrier is not active' });
+        }
+
+        // Check insurance expiration
+        if (carrier.insuranceExpiration) {
+          const today = new Date();
+          const expirationDate = new Date(carrier.insuranceExpiration);
+          
+          if (expirationDate < today) {
+            return res.status(400).json({ 
+              message: 'Carrier insurance has expired. Please update insurance information before booking.',
+              carrierName: carrier.name,
+              expirationDate: carrier.insuranceExpiration
+            });
+          }
+          
+          // Warn if insurance expires within 30 days
+          const thirtyDaysFromNow = new Date();
+          thirtyDaysFromNow.setDate(today.getDate() + 30);
+          
+          if (expirationDate < thirtyDaysFromNow) {
+            console.warn(`Warning: Carrier ${carrier.name} insurance expires on ${carrier.insuranceExpiration}`);
+          }
+        }
+      }
+
+      // Check if route exists (only if routeId is provided)
+      let route = null;
+      if (routeId) {
+        route = await prisma.route.findUnique({
+          where: { id: parseInt(routeId) }
+        });
+
+        if (!route) {
+          return res.status(404).json({ message: 'Route not found' });
+        }
+      } else {
+        // For origin-destination bookings, validate that we have origin and destination
+        if (!origin || !destination) {
+          return res.status(400).json({ message: 'Origin and destination are required for non-route bookings' });
+        }
+      }
+
+      // Create the booking
+      const booking = await prisma.booking.create({
+        data: {
+          carrierId: carrierId ? parseInt(carrierId) : undefined,
+          routeId: routeId ? parseInt(routeId) : undefined,
+          bookingDate: new Date(bookingDate + 'T12:00:00'),
+          rate: parseFloat(rate),
+          notes,
+          status: status as any,
+          billable,
+          bookingGroupId,
+          legNumber,
+          isParent,
+          parentBookingId: parentBookingId ? parseInt(parentBookingId) : undefined,
+          rateType: rateType as any,
+          baseRate: baseRate ? parseFloat(baseRate) : undefined,
+          fscRate: fscRate ? parseFloat(fscRate) : undefined,
+          driverName: driverName || undefined,
+          phoneNumber: phoneNumber || undefined,
+          carrierEmail: carrierEmail || undefined,
+          carrierReportTime: carrierReportTime || undefined,
+          type: type as any,
+          trailerLength: trailerLength ? parseInt(trailerLength) : undefined,
+          // Origin-destination booking fields
+          origin: origin || undefined,
+          destination: destination || undefined,
+          estimatedMiles: estimatedMiles ? parseFloat(estimatedMiles) : undefined,
+          manifestNumber: manifestNumber || undefined
+        },
+        include: {
+          carrier: true,
+          route: true,
+          childBookings: true,
+          parentBooking: true
+        }
+      });
+
+      createdBookings.push(booking);
+    }
+
+    // Return single booking or array based on input
+    const result = isArray ? createdBookings : createdBookings[0];
+    return res.status(201).json(result);
   } catch (error) {
     console.error('Create booking error:', error);
     return res.status(500).json({ message: 'Failed to create booking' });

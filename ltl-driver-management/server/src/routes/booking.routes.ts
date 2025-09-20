@@ -67,30 +67,47 @@ router.get('/:id', getBookingById);
 router.post(
   '/',
   authorize(UserRole.ADMIN, UserRole.DISPATCHER),
-  [
-    body('carrierId').optional().custom((value) => {
-      if (value === undefined || value === null) {
-        return true; // Allow null/undefined
-      }
-      if (!Number.isInteger(Number(value))) {
-        throw new Error('carrierId must be an integer when provided');
-      }
-      return true;
-    }),
-    body('routeId').isInt(),
-    body('bookingDate').isISO8601(),
-    body('rate').isDecimal({ decimal_digits: '0,2' }),
-    body('notes').optional().trim(),
-    body('billable').optional().isBoolean(),
-    body('status').optional().isIn(['PENDING', 'CONFIRMED', 'IN_PROGRESS', 'COMPLETED', 'CANCELLED']),
-    body('bookingGroupId').optional().trim(),
-    body('legNumber').optional().isInt({ min: 1 }),
-    body('isParent').optional().isBoolean(),
-    body('parentBookingId').optional().isInt(),
-    body('rateType').optional().isIn(['MILE', 'MILE_FSC', 'FLAT_RATE']),
-    body('baseRate').optional().isDecimal({ decimal_digits: '0,2' }),
-    body('fscRate').optional().isDecimal({ decimal_digits: '0,2' })
-  ],
+  // Handle array validation manually in controller for bulk creation
+  (req, _res, next) => {
+    // Skip validation for arrays as we handle validation in the controller
+    if (Array.isArray(req.body)) {
+      return next();
+    }
+    
+    // Apply validation for single booking objects
+    return Promise.all([
+      body('carrierId').optional().custom((value) => {
+        if (value === undefined || value === null) {
+          return true; // Allow null/undefined
+        }
+        if (!Number.isInteger(Number(value))) {
+          throw new Error('carrierId must be an integer when provided');
+        }
+        return true;
+      }).run(req),
+      body('routeId').optional().custom((value) => {
+        if (value === undefined || value === null) {
+          return true; // Allow null/undefined for custom origin-destination bookings
+        }
+        if (!Number.isInteger(Number(value))) {
+          throw new Error('routeId must be an integer when provided');
+        }
+        return true;
+      }).run(req),
+      body('bookingDate').isISO8601().run(req),
+      body('rate').isDecimal({ decimal_digits: '0,2' }).run(req),
+      body('notes').optional().trim().run(req),
+      body('billable').optional().isBoolean().run(req),
+      body('status').optional().isIn(['PENDING', 'CONFIRMED', 'IN_PROGRESS', 'COMPLETED', 'CANCELLED']).run(req),
+      body('bookingGroupId').optional().trim().run(req),
+      body('legNumber').optional().isInt({ min: 1 }).run(req),
+      body('isParent').optional().isBoolean().run(req),
+      body('parentBookingId').optional().isInt().run(req),
+      body('rateType').optional().isIn(['MILE', 'MILE_FSC', 'FLAT_RATE']).run(req),
+      body('baseRate').optional().isDecimal({ decimal_digits: '0,2' }).run(req),
+      body('fscRate').optional().isDecimal({ decimal_digits: '0,2' }).run(req)
+    ]).then(() => next()).catch(next);
+  },
   validateRequest,
   createBooking
 );
