@@ -303,8 +303,8 @@ export const NewBookingSimplified: React.FC<NewBookingSimplifiedProps> = () => {
     console.log('Added leg, total legs now:', legs.length + 1);
     clearLegBuilder();
     
-    // Hide the builder after adding a leg so user can see summary and choose next action
-    setShowLegBuilder(false);
+    // Keep the leg builder visible so user can continue to booking form
+    // The "Add Another Leg" button will clear the form if they want to add more legs
   };
 
   // Remove leg
@@ -856,15 +856,29 @@ export const NewBookingSimplified: React.FC<NewBookingSimplifiedProps> = () => {
 
           {/* Add Leg Button */}
           <div className="flex justify-end">
-            <button
-              type="button"
-              onClick={addLeg}
-              disabled={!legBaseRate || (legType === 'route' ? !selectedRouteId : (!customOrigin || !customDestination || !customMiles))}
-              className="px-4 py-2 bg-blue-600 text-white rounded-md hover:bg-blue-700 disabled:bg-gray-400 disabled:cursor-not-allowed flex items-center gap-2"
-            >
-              <Plus className="w-4 h-4" />
-              Add Leg
-            </button>
+            <div className="flex gap-2">
+              <button
+                type="button"
+                onClick={addLeg}
+                disabled={!legBaseRate || (legType === 'route' ? !selectedRouteId : (!customOrigin || !customDestination || !customMiles))}
+                className="px-4 py-2 bg-blue-600 text-white rounded-md hover:bg-blue-700 disabled:bg-gray-400 disabled:cursor-not-allowed flex items-center gap-2"
+              >
+                Save
+              </button>
+              {legs.length > 0 && (
+                <button
+                  type="button"
+                  onClick={() => {
+                    // Clear the current form and allow adding another leg
+                    clearLegBuilder();
+                  }}
+                  className="px-4 py-2 bg-green-600 text-white rounded-md hover:bg-green-700 flex items-center gap-2"
+                >
+                  <Plus className="w-4 h-4" />
+                  Add Another Leg
+                </button>
+              )}
+            </div>
           </div>
         </div>
       )}
@@ -872,18 +886,8 @@ export const NewBookingSimplified: React.FC<NewBookingSimplifiedProps> = () => {
       {/* Legs Summary */}
       {legs.length > 0 && (
         <div className="bg-white rounded-lg shadow p-6">
-          <div className="flex items-center justify-between mb-4">
+          <div className="mb-4">
             <h2 className="text-lg font-semibold text-gray-800">Booking Summary</h2>
-            {!showLegBuilder && (
-              <button
-                type="button"
-                onClick={() => setShowLegBuilder(true)}
-                className="px-3 py-1 bg-green-600 text-white rounded-md hover:bg-green-700 flex items-center gap-1"
-              >
-                <Plus className="w-4 h-4" />
-                Add Another Leg
-              </button>
-            )}
           </div>
           
           <div className="overflow-x-auto">
