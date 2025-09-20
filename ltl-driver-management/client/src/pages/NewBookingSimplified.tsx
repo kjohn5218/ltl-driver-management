@@ -44,7 +44,6 @@ export const NewBookingSimplified: React.FC<NewBookingSimplifiedProps> = () => {
   const [useMultipleDates, setUseMultipleDates] = useState(false);
   const [endDate, setEndDate] = useState(format(new Date(), 'yyyy-MM-dd'));
   const [notes, setNotes] = useState('');
-  const [billable, setBillable] = useState(true);
   const [bookingType, setBookingType] = useState<'POWER_ONLY' | 'POWER_AND_TRAILER'>('POWER_ONLY');
   const [trailerLength, setTrailerLength] = useState('');
   const [fuelSurchargeRate] = useState<number>(0);
@@ -384,7 +383,7 @@ export const NewBookingSimplified: React.FC<NewBookingSimplifiedProps> = () => {
         const bookingData: any = {
           carrierId: carrierId ? parseInt(carrierId) : null,
           bookingDate: date,
-          billable,
+          billable: true,
           type: bookingType,
           trailerLength: bookingType === 'POWER_AND_TRAILER' && trailerLength ? parseInt(trailerLength) : null,
           status: carrierId ? 'CONFIRMED' : 'PENDING',
@@ -415,8 +414,7 @@ export const NewBookingSimplified: React.FC<NewBookingSimplifiedProps> = () => {
           // Try to find matching route information to populate additional fields
           const routeInfo = findRouteInfo(leg.origin, leg.destination);
           if (routeInfo) {
-            // Populate route information fields directly
-            bookingData.routeName = routeInfo.name;
+            // Populate route information fields directly (excluding route name since this is a custom booking)
             bookingData.routeFrequency = routeInfo.frequency;
             bookingData.routeStandardRate = routeInfo.standardRate;
             bookingData.routeRunTime = routeInfo.runTime;
@@ -1003,17 +1001,6 @@ export const NewBookingSimplified: React.FC<NewBookingSimplifiedProps> = () => {
           />
         </div>
         
-        <div>
-          <label className="flex items-center">
-            <input
-              type="checkbox"
-              checked={billable}
-              onChange={(e) => setBillable(e.target.checked)}
-              className="mr-2"
-            />
-            <span className="text-sm font-medium text-gray-700">Billable</span>
-          </label>
-        </div>
       </div>
 
       {/* Action Buttons */}

@@ -327,7 +327,30 @@ export const updateBooking = async (req: Request, res: Response) => {
         carrierEmail: updateData.carrierEmail || undefined,
         carrierReportTime: updateData.carrierReportTime || undefined,
         type: updateData.type || undefined,
-        trailerLength: updateData.trailerLength ? parseInt(updateData.trailerLength) : undefined
+        trailerLength: updateData.trailerLength ? parseInt(updateData.trailerLength) : undefined,
+        // Origin-destination booking fields
+        origin: updateData.origin || undefined,
+        destination: updateData.destination || undefined,
+        estimatedMiles: updateData.estimatedMiles ? parseFloat(updateData.estimatedMiles) : undefined,
+        // Route information fields
+        routeFrequency: updateData.routeFrequency || undefined,
+        routeStandardRate: updateData.routeStandardRate ? parseFloat(updateData.routeStandardRate) : undefined,
+        routeRunTime: updateData.routeRunTime ? parseInt(updateData.routeRunTime) : undefined,
+        // Origin details
+        originAddress: updateData.originAddress || undefined,
+        originCity: updateData.originCity || undefined,
+        originState: updateData.originState || undefined,
+        originZipCode: updateData.originZipCode || undefined,
+        originContact: updateData.originContact || undefined,
+        // Destination details
+        destinationAddress: updateData.destinationAddress || undefined,
+        destinationCity: updateData.destinationCity || undefined,
+        destinationState: updateData.destinationState || undefined,
+        destinationZipCode: updateData.destinationZipCode || undefined,
+        destinationContact: updateData.destinationContact || undefined,
+        // Time fields
+        departureTime: updateData.departureTime || undefined,
+        arrivalTime: updateData.arrivalTime || undefined
       },
       include: {
         carrier: true,

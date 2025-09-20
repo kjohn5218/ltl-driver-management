@@ -1360,7 +1360,30 @@ const BookingEditModal: React.FC<BookingEditModalProps> = ({ booking, onClose, o
       bookingDate: booking.bookingDate.split('T')[0], // Format for date input
       rateType: initialRateType,
       baseRate: Number(booking.baseRate) || Number(booking.rate) || 0,
-      fscRate: Number(booking.fscRate) || 0
+      fscRate: Number(booking.fscRate) || 0,
+      // Route information fields for custom bookings
+      origin: booking.origin || '',
+      destination: booking.destination || '',
+      estimatedMiles: booking.estimatedMiles ? booking.estimatedMiles.toString() : '',
+      routeName: booking.routeName || '',
+      routeFrequency: booking.routeFrequency || '',
+      routeStandardRate: booking.routeStandardRate ? booking.routeStandardRate.toString() : '',
+      routeRunTime: booking.routeRunTime ? booking.routeRunTime.toString() : '',
+      // Origin details
+      originAddress: booking.originAddress || '',
+      originCity: booking.originCity || '',
+      originState: booking.originState || '',
+      originZipCode: booking.originZipCode || '',
+      originContact: booking.originContact || '',
+      // Destination details
+      destinationAddress: booking.destinationAddress || '',
+      destinationCity: booking.destinationCity || '',
+      destinationState: booking.destinationState || '',
+      destinationZipCode: booking.destinationZipCode || '',
+      destinationContact: booking.destinationContact || '',
+      // Time fields
+      departureTime: booking.departureTime || '',
+      arrivalTime: booking.arrivalTime || ''
     };
   }, [booking]);
   
@@ -2291,17 +2314,114 @@ const BookingEditModal: React.FC<BookingEditModalProps> = ({ booking, onClose, o
             </div>
           )}
           
-          <div>
-            <label className="flex items-center">
-              <input
-                type="checkbox"
-                checked={formData.billable}
-                onChange={(e) => setFormData({ ...formData, billable: e.target.checked })}
-                className="mr-2"
-              />
-              <span className="text-sm font-medium text-gray-700">Billable</span>
-            </label>
-          </div>
+          {/* Route Information Section - only show for custom bookings */}
+          {(formData.origin || formData.destination) && (
+            <div className="border-t pt-4">
+              <h3 className="text-sm font-medium text-gray-700 mb-3">Route Information</h3>
+              <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                <div>
+                  <label className="block text-sm font-medium text-gray-700 mb-1">Origin</label>
+                  <input
+                    type="text"
+                    value={formData.origin}
+                    onChange={(e) => setFormData({ ...formData, origin: e.target.value })}
+                    className="w-full px-3 py-2 border border-gray-300 rounded-md focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
+                    placeholder="Origin location"
+                  />
+                </div>
+                <div>
+                  <label className="block text-sm font-medium text-gray-700 mb-1">Destination</label>
+                  <input
+                    type="text"
+                    value={formData.destination}
+                    onChange={(e) => setFormData({ ...formData, destination: e.target.value })}
+                    className="w-full px-3 py-2 border border-gray-300 rounded-md focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
+                    placeholder="Destination location"
+                  />
+                </div>
+                <div>
+                  <label className="block text-sm font-medium text-gray-700 mb-1">Estimated Miles</label>
+                  <input
+                    type="number"
+                    value={formData.estimatedMiles}
+                    onChange={(e) => setFormData({ ...formData, estimatedMiles: e.target.value })}
+                    className="w-full px-3 py-2 border border-gray-300 rounded-md focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
+                    placeholder="Miles"
+                    min="0"
+                    step="0.1"
+                  />
+                </div>
+                <div>
+                  <label className="block text-sm font-medium text-gray-700 mb-1">Route Frequency</label>
+                  <input
+                    type="text"
+                    value={formData.routeFrequency}
+                    onChange={(e) => setFormData({ ...formData, routeFrequency: e.target.value })}
+                    className="w-full px-3 py-2 border border-gray-300 rounded-md focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
+                    placeholder="e.g., Daily, Weekly"
+                  />
+                </div>
+                <div>
+                  <label className="block text-sm font-medium text-gray-700 mb-1">Origin Address</label>
+                  <input
+                    type="text"
+                    value={formData.originAddress}
+                    onChange={(e) => setFormData({ ...formData, originAddress: e.target.value })}
+                    className="w-full px-3 py-2 border border-gray-300 rounded-md focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
+                    placeholder="Origin address"
+                  />
+                </div>
+                <div>
+                  <label className="block text-sm font-medium text-gray-700 mb-1">Destination Address</label>
+                  <input
+                    type="text"
+                    value={formData.destinationAddress}
+                    onChange={(e) => setFormData({ ...formData, destinationAddress: e.target.value })}
+                    className="w-full px-3 py-2 border border-gray-300 rounded-md focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
+                    placeholder="Destination address"
+                  />
+                </div>
+                <div>
+                  <label className="block text-sm font-medium text-gray-700 mb-1">Origin Contact</label>
+                  <input
+                    type="text"
+                    value={formData.originContact}
+                    onChange={(e) => setFormData({ ...formData, originContact: e.target.value })}
+                    className="w-full px-3 py-2 border border-gray-300 rounded-md focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
+                    placeholder="Origin contact"
+                  />
+                </div>
+                <div>
+                  <label className="block text-sm font-medium text-gray-700 mb-1">Destination Contact</label>
+                  <input
+                    type="text"
+                    value={formData.destinationContact}
+                    onChange={(e) => setFormData({ ...formData, destinationContact: e.target.value })}
+                    className="w-full px-3 py-2 border border-gray-300 rounded-md focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
+                    placeholder="Destination contact"
+                  />
+                </div>
+                <div>
+                  <label className="block text-sm font-medium text-gray-700 mb-1">Departure Time</label>
+                  <input
+                    type="time"
+                    value={formData.departureTime}
+                    onChange={(e) => setFormData({ ...formData, departureTime: e.target.value })}
+                    className="w-full px-3 py-2 border border-gray-300 rounded-md focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
+                  />
+                </div>
+                <div>
+                  <label className="block text-sm font-medium text-gray-700 mb-1">Arrival Time</label>
+                  <input
+                    type="time"
+                    value={formData.arrivalTime}
+                    onChange={(e) => setFormData({ ...formData, arrivalTime: e.target.value })}
+                    className="w-full px-3 py-2 border border-gray-300 rounded-md focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
+                  />
+                </div>
+              </div>
+            </div>
+          )}
           
           <div>
             <label className="block text-sm font-medium text-gray-700 mb-1">Notes</label>
