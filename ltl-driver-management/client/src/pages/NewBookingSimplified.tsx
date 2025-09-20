@@ -1,4 +1,4 @@
-import React, { useState, useMemo } from 'react';
+import React, { useState, useMemo, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { api } from '../services/api';
@@ -24,7 +24,9 @@ interface UnifiedLeg {
   rateType: RateType;
   baseRate: string;
   totalRate: string;
-  // Optional
+  // Time fields
+  departureTime?: string;
+  arrivalTime?: string;
   reportTime?: string;
 }
 
@@ -66,6 +68,8 @@ export const NewBookingSimplified: React.FC<NewBookingSimplifiedProps> = ({ copy
   const [customOrigin, setCustomOrigin] = useState('');
   const [customDestination, setCustomDestination] = useState('');
   const [customMiles, setCustomMiles] = useState('');
+  const [legDepartureTime, setLegDepartureTime] = useState('');
+  const [legArrivalTime, setLegArrivalTime] = useState('');
   const [legReportTime, setLegReportTime] = useState('');
   const [legRateType, setLegRateType] = useState<RateType>('FLAT_RATE');
   const [legBaseRate, setLegBaseRate] = useState('');
@@ -124,6 +128,27 @@ export const NewBookingSimplified: React.FC<NewBookingSimplifiedProps> = ({ copy
     ).slice(0, 10);
   }, [routes, routeSearch]);
 
+  // Calculate report time (45 minutes before first leg departure)
+  const calculateReportTime = (departureTime: string): string => {
+    if (!departureTime) return '';
+    
+    try {
+      // Parse the time string (HH:MM format)
+      const [hours, minutes] = departureTime.split(':').map(Number);
+      const date = new Date();
+      date.setHours(hours, minutes, 0, 0);
+      
+      // Subtract 45 minutes
+      date.setMinutes(date.getMinutes() - 45);
+      
+      // Format back to HH:MM
+      return date.toTimeString().slice(0, 5);
+    } catch (error) {
+      console.error('Error calculating report time:', error);
+      return '';
+    }
+  };
+
   // Calculate leg rate
   const calculateLegRate = () => {
     const miles = legType === 'route' 
@@ -152,6 +177,8 @@ export const NewBookingSimplified: React.FC<NewBookingSimplifiedProps> = ({ copy
     setCustomOrigin('');
     setCustomDestination('');
     setCustomMiles('');
+    setLegDepartureTime('');
+    setLegArrivalTime('');
     setLegReportTime('');
     setLegRateType('FLAT_RATE');
     setLegBaseRate('');
@@ -160,13 +187,22 @@ export const NewBookingSimplified: React.FC<NewBookingSimplifiedProps> = ({ copy
 
   // Add leg
   const addLeg = () => {
+    // Validate base rate for both types
+    if (!legBaseRate || parseFloat(legBaseRate) <= 0) {
+      alert('Please enter a valid rate');
+      return;
+    }
+    
     if (legType === 'route') {
       if (!selectedRouteId) {
         alert('Please select a route');
         return;
       }
       const route = routes.find((r: any) => r.id.toString() === selectedRouteId);
-      if (!route) return;
+      if (!route) {
+        alert('Selected route not found');
+        return;
+      }
       
       const newLeg: UnifiedLeg = {
         id: Date.now().toString(),
@@ -179,7 +215,9 @@ export const NewBookingSimplified: React.FC<NewBookingSimplifiedProps> = ({ copy
         rateType: legRateType,
         baseRate: legBaseRate,
         totalRate: calculateLegRate(),
-        reportTime: legReportTime || route.departureTime
+        departureTime: legDepartureTime || route.departureTime,
+        arrivalTime: legArrivalTime || route.arrivalTime,
+        reportTime: legReportTime
       };
       
       setLegs([...legs, newLeg]);
@@ -187,6 +225,11 @@ export const NewBookingSimplified: React.FC<NewBookingSimplifiedProps> = ({ copy
       // Custom origin-destination
       if (!customOrigin || !customDestination || !customMiles) {
         alert('Please fill in origin, destination, and miles');
+        return;
+      }
+      
+      if (parseFloat(customMiles) <= 0) {
+        alert('Please enter a valid number of miles');
         return;
       }
       
@@ -199,12 +242,15 @@ export const NewBookingSimplified: React.FC<NewBookingSimplifiedProps> = ({ copy
         rateType: legRateType,
         baseRate: legBaseRate,
         totalRate: calculateLegRate(),
+        departureTime: legDepartureTime,
+        arrivalTime: legArrivalTime,
         reportTime: legReportTime
       };
       
       setLegs([...legs, newLeg]);
     }
     
+    console.log('Added leg, total legs now:', legs.length + 1);
     clearLegBuilder();
     
     // If single leg mode, hide the builder after adding
@@ -226,6 +272,15 @@ export const NewBookingSimplified: React.FC<NewBookingSimplifiedProps> = ({ copy
   const totalMiles = legs.reduce((sum, leg) => sum + leg.miles, 0);
   const totalRate = legs.reduce((sum, leg) => sum + parseFloat(leg.totalRate), 0);
 
+  // Auto-calculate carrier report time based on first leg departure time
+  useEffect(() => {
+    if (legs.length > 0 && legs[0].departureTime) {
+      const firstLegDeparture = legs[0].departureTime;
+      const calculatedReportTime = calculateReportTime(firstLegDeparture);
+      setCarrierReportTime(calculatedReportTime);
+    }
+  }, [legs]);
+
   // Create booking mutation
   const createBookingMutation = useMutation({
     mutationFn: async (bookings: any[]) => {
@@ -241,8 +296,28 @@ export const NewBookingSimplified: React.FC<NewBookingSimplifiedProps> = ({ copy
     }
   });
 
+  // Check if there are unsaved changes in the leg builder
+  const hasUnsavedLegData = () => {
+    if (legType === 'route') {
+      return selectedRouteId && legBaseRate;
+    } else {
+      return customOrigin && customDestination && customMiles && legBaseRate;
+    }
+  };
+
   // Handle create booking
   const handleCreateBooking = () => {
+    // Check for unsaved leg data
+    if (hasUnsavedLegData()) {
+      const confirmMessage = isMultiLeg 
+        ? 'You have unsaved leg data. Click "Add Leg" to save it first, or proceed without this leg?'
+        : 'You have unsaved booking data. Click "Confirm Details" to save it first, or proceed without this data?';
+      
+      if (!confirm(confirmMessage)) {
+        return;
+      }
+    }
+    
     // Validation
     if (legs.length === 0) {
       alert('Please add at least one leg to the booking');
@@ -279,6 +354,8 @@ export const NewBookingSimplified: React.FC<NewBookingSimplifiedProps> = ({ copy
           phoneNumber: phoneNumber || undefined,
           carrierEmail: carrierEmail || undefined,
           carrierReportTime: leg.reportTime || carrierReportTime || undefined,
+          departureTime: leg.departureTime || undefined,
+          arrivalTime: leg.arrivalTime || undefined,
           notes: notes || undefined
         };
         
@@ -321,7 +398,13 @@ export const NewBookingSimplified: React.FC<NewBookingSimplifiedProps> = ({ copy
               <input
                 type="radio"
                 checked={!isMultiLeg}
-                onChange={() => setIsMultiLeg(false)}
+                onChange={() => {
+                  setIsMultiLeg(false);
+                  // If we have legs and switching to single, hide builder
+                  if (legs.length > 0) {
+                    setShowLegBuilder(false);
+                  }
+                }}
                 className="mr-2"
               />
               <span>Single Leg</span>
@@ -330,7 +413,11 @@ export const NewBookingSimplified: React.FC<NewBookingSimplifiedProps> = ({ copy
               <input
                 type="radio"
                 checked={isMultiLeg}
-                onChange={() => setIsMultiLeg(true)}
+                onChange={() => {
+                  setIsMultiLeg(true);
+                  // Always show builder in multi-leg mode
+                  setShowLegBuilder(true);
+                }}
                 className="mr-2"
               />
               <span>Multi-Leg Journey</span>
@@ -367,6 +454,10 @@ export const NewBookingSimplified: React.FC<NewBookingSimplifiedProps> = ({ copy
                       setCarrierId(carrier.id.toString());
                       setCarrierSearch(carrier.name);
                       setShowCarrierDropdown(false);
+                      // Auto-populate carrier email if available
+                      if (carrier.email) {
+                        setCarrierEmail(carrier.email);
+                      }
                     }}
                     className="w-full px-3 py-2 text-left hover:bg-blue-50 border-b border-gray-100"
                   >
@@ -459,9 +550,17 @@ export const NewBookingSimplified: React.FC<NewBookingSimplifiedProps> = ({ copy
       {/* Leg Builder Section */}
       {showLegBuilder && (
         <div className="bg-white rounded-lg shadow p-6 space-y-4">
-          <h2 className="text-lg font-semibold text-gray-800">
-            {isMultiLeg ? `Add Leg ${legs.length + 1}` : 'Booking Details'}
-          </h2>
+          <div className="flex items-center justify-between">
+            <h2 className="text-lg font-semibold text-gray-800">
+              {isMultiLeg ? `Add Leg ${legs.length + 1}` : 'Booking Details'}
+            </h2>
+            {hasUnsavedLegData() && (
+              <div className="flex items-center gap-2 text-orange-600 bg-orange-50 px-3 py-1 rounded-md">
+                <AlertCircle className="w-4 h-4" />
+                <span className="text-sm font-medium">Unsaved changes</span>
+              </div>
+            )}
+          </div>
           
           {/* Leg Type Selection */}
           <div>
@@ -519,9 +618,16 @@ export const NewBookingSimplified: React.FC<NewBookingSimplifiedProps> = ({ copy
                           setSelectedRouteName(route.name);
                           setRouteSearch(`${route.name} (${route.origin} → ${route.destination})`);
                           setShowRouteDropdown(false);
-                          // Auto-set report time if available
+                          // Auto-populate departure and arrival times from route
                           if (route.departureTime) {
-                            setLegReportTime(route.departureTime);
+                            setLegDepartureTime(route.departureTime);
+                          }
+                          if (route.arrivalTime) {
+                            setLegArrivalTime(route.arrivalTime);
+                          }
+                          // Auto-calculate report time (45 minutes before departure)
+                          if (route.departureTime) {
+                            setLegReportTime(calculateReportTime(route.departureTime));
                           }
                         }}
                         className="w-full px-3 py-2 text-left hover:bg-blue-50 border-b border-gray-100"
@@ -615,9 +721,43 @@ export const NewBookingSimplified: React.FC<NewBookingSimplifiedProps> = ({ copy
             </div>
           </div>
 
+          {/* Departure and Arrival Times */}
+          <div className="border-t pt-4">
+            <h3 className="text-sm font-medium text-gray-700 mb-3">Schedule</h3>
+            <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+              <div>
+                <label className="block text-sm font-medium text-gray-700 mb-2">Departure Time</label>
+                <input
+                  type="time"
+                  value={legDepartureTime}
+                  onChange={(e) => {
+                    setLegDepartureTime(e.target.value);
+                    // Auto-calculate report time when departure time changes
+                    if (e.target.value) {
+                      setLegReportTime(calculateReportTime(e.target.value));
+                    }
+                  }}
+                  className="w-full px-3 py-2 border border-gray-300 rounded-md"
+                />
+              </div>
+              <div>
+                <label className="block text-sm font-medium text-gray-700 mb-2">Arrival Time</label>
+                <input
+                  type="time"
+                  value={legArrivalTime}
+                  onChange={(e) => setLegArrivalTime(e.target.value)}
+                  className="w-full px-3 py-2 border border-gray-300 rounded-md"
+                />
+              </div>
+            </div>
+          </div>
+
           {/* Report Time */}
           <div>
-            <label className="block text-sm font-medium text-gray-700 mb-2">Report Time (optional)</label>
+            <label className="block text-sm font-medium text-gray-700 mb-2">
+              Report Time 
+              <span className="text-xs text-gray-500 ml-1">(auto-calculated as 45 min before departure)</span>
+            </label>
             <input
               type="time"
               value={legReportTime}
@@ -666,6 +806,8 @@ export const NewBookingSimplified: React.FC<NewBookingSimplifiedProps> = ({ copy
                   <th className="px-4 py-2 text-left text-xs font-medium text-gray-500 uppercase">Type</th>
                   <th className="px-4 py-2 text-left text-xs font-medium text-gray-500 uppercase">Route</th>
                   <th className="px-4 py-2 text-left text-xs font-medium text-gray-500 uppercase">Miles</th>
+                  <th className="px-4 py-2 text-left text-xs font-medium text-gray-500 uppercase">Depart</th>
+                  <th className="px-4 py-2 text-left text-xs font-medium text-gray-500 uppercase">Arrive</th>
                   <th className="px-4 py-2 text-left text-xs font-medium text-gray-500 uppercase">Rate Type</th>
                   <th className="px-4 py-2 text-left text-xs font-medium text-gray-500 uppercase">Rate</th>
                   <th className="px-4 py-2 text-left text-xs font-medium text-gray-500 uppercase">Actions</th>
@@ -693,6 +835,8 @@ export const NewBookingSimplified: React.FC<NewBookingSimplifiedProps> = ({ copy
                       </div>
                     </td>
                     <td className="px-4 py-3">{leg.miles}</td>
+                    <td className="px-4 py-3">{leg.departureTime || '-'}</td>
+                    <td className="px-4 py-3">{leg.arrivalTime || '-'}</td>
                     <td className="px-4 py-3">{leg.rateType}</td>
                     <td className="px-4 py-3">${leg.totalRate}</td>
                     <td className="px-4 py-3">
@@ -711,6 +855,8 @@ export const NewBookingSimplified: React.FC<NewBookingSimplifiedProps> = ({ copy
                 <tr>
                   <td colSpan={3} className="px-4 py-3 font-medium">Total</td>
                   <td className="px-4 py-3 font-medium">{totalMiles}</td>
+                  <td className="px-4 py-3"></td>
+                  <td className="px-4 py-3"></td>
                   <td className="px-4 py-3"></td>
                   <td className="px-4 py-3 font-medium">${totalRate.toFixed(2)}</td>
                   <td className="px-4 py-3"></td>
@@ -754,7 +900,10 @@ export const NewBookingSimplified: React.FC<NewBookingSimplifiedProps> = ({ copy
             />
           </div>
           <div>
-            <label className="block text-sm font-medium text-gray-700 mb-2">Default Report Time</label>
+            <label className="block text-sm font-medium text-gray-700 mb-2">
+              Default Report Time 
+              <span className="text-xs text-gray-500 ml-1">(auto-calculated from first leg departure)</span>
+            </label>
             <input
               type="time"
               value={carrierReportTime}
