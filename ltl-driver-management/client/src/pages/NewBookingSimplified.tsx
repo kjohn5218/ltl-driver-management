@@ -225,7 +225,6 @@ export const NewBookingSimplified: React.FC<NewBookingSimplifiedProps> = () => {
   const clearLegBuilder = () => {
     setLegType('route');
     setSelectedRouteId('');
-    setSelectedRouteName('');
     setCustomOrigin('');
     setCustomDestination('');
     setCustomMiles('');
@@ -423,27 +422,31 @@ export const NewBookingSimplified: React.FC<NewBookingSimplifiedProps> = () => {
           // Try to find matching route information to populate additional fields
           const routeInfo = findRouteInfo(leg.origin, leg.destination);
           if (routeInfo) {
-            // Add route information in notes for reference since Booking model doesn't have these fields
-            const routeDetails = [
-              `Route Information Found:`,
-              `- Route Name: ${routeInfo.name}`,
-              routeInfo.frequency ? `- Frequency: ${routeInfo.frequency}` : null,
-              routeInfo.standardRate ? `- Standard Rate: $${routeInfo.standardRate}` : null,
-              routeInfo.runTime ? `- Run Time: ${routeInfo.runTime} minutes` : null,
-              routeInfo.originAddress ? `- Origin Address: ${routeInfo.originAddress}` : null,
-              routeInfo.originCity ? `- Origin City: ${routeInfo.originCity}, ${routeInfo.originState || ''} ${routeInfo.originZipCode || ''}`.trim() : null,
-              routeInfo.originContact ? `- Origin Contact: ${routeInfo.originContact}` : null,
-              routeInfo.destinationAddress ? `- Destination Address: ${routeInfo.destinationAddress}` : null,
-              routeInfo.destinationCity ? `- Destination City: ${routeInfo.destinationCity}, ${routeInfo.destinationState || ''} ${routeInfo.destinationZipCode || ''}`.trim() : null,
-              routeInfo.destinationContact ? `- Destination Contact: ${routeInfo.destinationContact}` : null
-            ].filter(Boolean).join('\n');
+            // Populate route information fields directly
+            bookingData.routeName = routeInfo.name;
+            bookingData.routeFrequency = routeInfo.frequency;
+            bookingData.routeStandardRate = routeInfo.standardRate;
+            bookingData.routeRunTime = routeInfo.runTime;
             
-            // Append route information to existing notes
-            if (bookingData.notes) {
-              bookingData.notes = `${bookingData.notes}\n\n${routeDetails}`;
-            } else {
-              bookingData.notes = routeDetails;
-            }
+            // Origin details
+            bookingData.originAddress = routeInfo.originAddress;
+            bookingData.originCity = routeInfo.originCity;
+            bookingData.originState = routeInfo.originState;
+            bookingData.originZipCode = routeInfo.originZipCode;
+            bookingData.originContact = routeInfo.originContact;
+            bookingData.originTimeZone = routeInfo.originTimeZone;
+            bookingData.originLatitude = routeInfo.originLatitude;
+            bookingData.originLongitude = routeInfo.originLongitude;
+            
+            // Destination details
+            bookingData.destinationAddress = routeInfo.destinationAddress;
+            bookingData.destinationCity = routeInfo.destinationCity;
+            bookingData.destinationState = routeInfo.destinationState;
+            bookingData.destinationZipCode = routeInfo.destinationZipCode;
+            bookingData.destinationContact = routeInfo.destinationContact;
+            bookingData.destinationTimeZone = routeInfo.destinationTimeZone;
+            bookingData.destinationLatitude = routeInfo.destinationLatitude;
+            bookingData.destinationLongitude = routeInfo.destinationLongitude;
           }
         }
         
@@ -694,7 +697,6 @@ export const NewBookingSimplified: React.FC<NewBookingSimplifiedProps> = () => {
                         type="button"
                         onClick={() => {
                           setSelectedRouteId(route.id.toString());
-                          setSelectedRouteName(route.name);
                           setRouteSearch(`${route.name} (${route.origin} → ${route.destination})`);
                           setShowRouteDropdown(false);
                           // Auto-populate departure and arrival times from route

@@ -531,10 +531,18 @@ export const Bookings: React.FC = () => {
                             </>
                           );
                         }
+                        // Handle both predefined routes and custom origin/destination bookings
+                        const routeName = booking.route?.name || booking.routeName || 'Custom Route';
+                        const origin = booking.route?.origin || booking.origin;
+                        const destination = booking.route?.destination || booking.destination;
+                        
                         return (
                           <>
-                            <div className="text-sm font-medium text-gray-900">{booking.route?.name}</div>
-                            <div className="text-sm text-gray-500">{booking.route?.origin} → {booking.route?.destination}</div>
+                            <div className="text-sm font-medium text-gray-900">{routeName}</div>
+                            <div className="text-sm text-gray-500">{origin} → {destination}</div>
+                            {booking.routeFrequency && (
+                              <div className="text-xs text-gray-400">{booking.routeFrequency}</div>
+                            )}
                           </>
                         );
                       })()}
@@ -1084,6 +1092,76 @@ const BookingViewModal: React.FC<BookingViewModalProps> = ({ booking, onClose, g
                     {bookingToDisplay.route.distance && (
                       <div className="text-xs text-gray-500 pt-2 border-t border-gray-200">
                         Distance: {bookingToDisplay.route.distance} miles
+                      </div>
+                    )}
+                  </div>
+                ) : (bookingToDisplay.origin || bookingToDisplay.destination) ? (
+                  // Custom origin/destination booking display
+                  <div>
+                    <div className="flex items-center gap-2 text-sm font-medium text-gray-900">
+                      <MapPin className="w-4 h-4 text-blue-500" />
+                      {bookingToDisplay.routeName || 'Custom Route'}
+                    </div>
+                    {bookingToDisplay.routeFrequency && (
+                      <div className="text-xs text-gray-500 mb-2">Frequency: {bookingToDisplay.routeFrequency}</div>
+                    )}
+                    
+                    <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                      {/* Origin Information */}
+                      <div className="space-y-2">
+                        <h4 className="font-medium text-gray-800 text-sm">Origin</h4>
+                        <div className="text-sm text-gray-600 space-y-1">
+                          <div className="font-medium">{bookingToDisplay.origin}</div>
+                          {bookingToDisplay.originAddress && (
+                            <div>{bookingToDisplay.originAddress}</div>
+                          )}
+                          {(bookingToDisplay.originCity || bookingToDisplay.originState || bookingToDisplay.originZipCode) && (
+                            <div>
+                              {bookingToDisplay.originCity && `${bookingToDisplay.originCity}, `}
+                              {bookingToDisplay.originState && `${bookingToDisplay.originState} `}
+                              {bookingToDisplay.originZipCode}
+                            </div>
+                          )}
+                          {bookingToDisplay.originContact && (
+                            <div className="text-xs text-gray-500">Contact: {bookingToDisplay.originContact}</div>
+                          )}
+                        </div>
+                      </div>
+                      
+                      {/* Destination Information */}
+                      <div className="space-y-2">
+                        <h4 className="font-medium text-gray-800 text-sm">Destination</h4>
+                        <div className="text-sm text-gray-600 space-y-1">
+                          <div className="font-medium">{bookingToDisplay.destination}</div>
+                          {bookingToDisplay.destinationAddress && (
+                            <div>{bookingToDisplay.destinationAddress}</div>
+                          )}
+                          {(bookingToDisplay.destinationCity || bookingToDisplay.destinationState || bookingToDisplay.destinationZipCode) && (
+                            <div>
+                              {bookingToDisplay.destinationCity && `${bookingToDisplay.destinationCity}, `}
+                              {bookingToDisplay.destinationState && `${bookingToDisplay.destinationState} `}
+                              {bookingToDisplay.destinationZipCode}
+                            </div>
+                          )}
+                          {bookingToDisplay.destinationContact && (
+                            <div className="text-xs text-gray-500">Contact: {bookingToDisplay.destinationContact}</div>
+                          )}
+                        </div>
+                      </div>
+                    </div>
+                    
+                    {bookingToDisplay.estimatedMiles && (
+                      <div className="text-xs text-gray-500 pt-2 border-t border-gray-200">
+                        Distance: {bookingToDisplay.estimatedMiles} miles
+                      </div>
+                    )}
+                    
+                    {/* Time Information */}
+                    {(bookingToDisplay.departureTime || bookingToDisplay.arrivalTime) && (
+                      <div className="text-xs text-gray-500 pt-1">
+                        {bookingToDisplay.departureTime && `Departure: ${bookingToDisplay.departureTime}`}
+                        {bookingToDisplay.departureTime && bookingToDisplay.arrivalTime && ' • '}
+                        {bookingToDisplay.arrivalTime && `Arrival: ${bookingToDisplay.arrivalTime}`}
                       </div>
                     )}
                   </div>

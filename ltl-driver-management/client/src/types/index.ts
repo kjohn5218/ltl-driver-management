@@ -148,6 +148,36 @@ export interface Booking {
   estimatedMiles?: number;
   manifestNumber?: string;
   
+  // Route information fields for custom bookings
+  routeName?: string;
+  routeFrequency?: string;
+  routeStandardRate?: number;
+  routeRunTime?: number;
+  
+  // Origin details
+  originAddress?: string;
+  originCity?: string;
+  originState?: string;
+  originZipCode?: string;
+  originContact?: string;
+  originTimeZone?: string;
+  originLatitude?: number;
+  originLongitude?: number;
+  
+  // Destination details
+  destinationAddress?: string;
+  destinationCity?: string;
+  destinationState?: string;
+  destinationZipCode?: string;
+  destinationContact?: string;
+  destinationTimeZone?: string;
+  destinationLatitude?: number;
+  destinationLongitude?: number;
+  
+  // Time fields
+  departureTime?: string;
+  arrivalTime?: string;
+  
   // Rate confirmation tracking
   confirmationToken?: string;
   confirmationSentAt?: string;
