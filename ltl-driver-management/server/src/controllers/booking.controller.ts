@@ -301,7 +301,11 @@ export const createBooking = async (req: Request, res: Response) => {
     return res.status(201).json(result);
   } catch (error) {
     console.error('Create booking error:', error);
-    return res.status(500).json({ message: 'Failed to create booking' });
+    console.error('Request body:', req.body);
+    return res.status(500).json({ 
+      message: 'Failed to create booking', 
+      error: error instanceof Error ? error.message : 'Unknown error'
+    });
   }
 };
 
@@ -309,6 +313,15 @@ export const updateBooking = async (req: Request, res: Response) => {
   try {
     const { id } = req.params;
     const updateData = req.body;
+    
+    console.log('Updating booking ID:', id);
+    console.log('Update data received:', JSON.stringify(updateData, null, 2));
+
+    // Sanitize data - convert empty strings to undefined for optional fields
+    const sanitizeValue = (value: any) => {
+      if (value === '' || value === null) return undefined;
+      return value;
+    };
 
     const booking = await prisma.booking.update({
       where: { id: parseInt(id) },
@@ -329,28 +342,28 @@ export const updateBooking = async (req: Request, res: Response) => {
         type: updateData.type || undefined,
         trailerLength: updateData.trailerLength ? parseInt(updateData.trailerLength) : undefined,
         // Origin-destination booking fields
-        origin: updateData.origin || undefined,
-        destination: updateData.destination || undefined,
+        origin: sanitizeValue(updateData.origin),
+        destination: sanitizeValue(updateData.destination),
         estimatedMiles: updateData.estimatedMiles ? parseFloat(updateData.estimatedMiles) : undefined,
         // Route information fields
-        routeFrequency: updateData.routeFrequency || undefined,
+        routeFrequency: sanitizeValue(updateData.routeFrequency),
         routeStandardRate: updateData.routeStandardRate ? parseFloat(updateData.routeStandardRate) : undefined,
         routeRunTime: updateData.routeRunTime ? parseInt(updateData.routeRunTime) : undefined,
         // Origin details
-        originAddress: updateData.originAddress || undefined,
-        originCity: updateData.originCity || undefined,
-        originState: updateData.originState || undefined,
-        originZipCode: updateData.originZipCode || undefined,
-        originContact: updateData.originContact || undefined,
+        originAddress: sanitizeValue(updateData.originAddress),
+        originCity: sanitizeValue(updateData.originCity),
+        originState: sanitizeValue(updateData.originState),
+        originZipCode: sanitizeValue(updateData.originZipCode),
+        originContact: sanitizeValue(updateData.originContact),
         // Destination details
-        destinationAddress: updateData.destinationAddress || undefined,
-        destinationCity: updateData.destinationCity || undefined,
-        destinationState: updateData.destinationState || undefined,
-        destinationZipCode: updateData.destinationZipCode || undefined,
-        destinationContact: updateData.destinationContact || undefined,
+        destinationAddress: sanitizeValue(updateData.destinationAddress),
+        destinationCity: sanitizeValue(updateData.destinationCity),
+        destinationState: sanitizeValue(updateData.destinationState),
+        destinationZipCode: sanitizeValue(updateData.destinationZipCode),
+        destinationContact: sanitizeValue(updateData.destinationContact),
         // Time fields
-        departureTime: updateData.departureTime || undefined,
-        arrivalTime: updateData.arrivalTime || undefined
+        departureTime: sanitizeValue(updateData.departureTime),
+        arrivalTime: sanitizeValue(updateData.arrivalTime)
       },
       include: {
         carrier: true,
@@ -362,7 +375,12 @@ export const updateBooking = async (req: Request, res: Response) => {
     return res.json(booking);
   } catch (error) {
     console.error('Update booking error:', error);
-    return res.status(500).json({ message: 'Failed to update booking' });
+    console.error('Error details:', error instanceof Error ? error.message : 'Unknown error');
+    console.error('Error stack:', error instanceof Error ? error.stack : 'No stack trace');
+    return res.status(500).json({ 
+      message: 'Failed to update booking',
+      error: error instanceof Error ? error.message : 'Unknown error'
+    });
   }
 };
 

@@ -1710,14 +1710,17 @@ const BookingEditModal: React.FC<BookingEditModalProps> = ({ booking, onClose, o
     setIsSubmitting(true);
     
     try {
-      const response = await api.put(`/bookings/${booking.id}`, {
+      const updateData = {
         ...formData,
         bookingDate: new Date(formData.bookingDate).toISOString(),
         carrierId: formData.carrierId || null,
         trailerLength: formData.type === 'POWER_AND_TRAILER' && formData.trailerLength 
           ? parseInt(formData.trailerLength) 
           : null
-      });
+      };
+      
+      console.log('Sending booking update data:', JSON.stringify(updateData, null, 2));
+      const response = await api.put(`/bookings/${booking.id}`, updateData);
       
       onSave(response.data);
     } catch (error) {

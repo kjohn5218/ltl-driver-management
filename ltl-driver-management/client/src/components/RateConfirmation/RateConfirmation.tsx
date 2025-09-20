@@ -262,9 +262,9 @@ export const RateConfirmation: React.FC<RateConfirmationProps> = ({ booking, shi
                     </div>
                   </div>
                   <div className="text-xs"><span className="font-bold">Location:</span> {leg.origin}</div>
-                  <div className="text-xs"><span className="font-bold">Address:</span> {index === 0 ? (booking.route?.originAddress || '985 Glendale Avenue') : ''}</div>
-                  <div className="text-xs"><span className="font-bold">City, State Zip:</span> {index === 0 ? `${booking.route?.originCity || 'SPARKS'}, ${booking.route?.originState || 'NV'} ${booking.route?.originZipCode || '89431'}` : ''}</div>
-                  <div className="text-xs"><span className="font-bold">Phone:</span> {index === 0 ? '(775) 331-2311' : ''} <span className="font-bold">Contact:</span> {index === 0 ? (booking.route?.originContact || 'Brian Smith') : ''}</div>
+                  <div className="text-xs"><span className="font-bold">Address:</span> {index === 0 ? (booking.originAddress || booking.route?.originAddress || '985 Glendale Avenue') : ''}</div>
+                  <div className="text-xs"><span className="font-bold">City, State Zip:</span> {index === 0 ? `${booking.originCity || booking.route?.originCity || 'SPARKS'}, ${booking.originState || booking.route?.originState || 'NV'} ${booking.originZipCode || booking.route?.originZipCode || '89431'}` : ''}</div>
+                  <div className="text-xs"><span className="font-bold">Phone:</span> {index === 0 ? '(775) 331-2311' : ''} <span className="font-bold">Contact:</span> {index === 0 ? (booking.originContact || booking.route?.originContact || 'Brian Smith') : ''}</div>
                   <div className="text-xs"><span className="font-bold">Hours:</span> {index === 0 ? '04:00 -to-10:00' : ''}</div>
                   {index === 0 && booking.carrierReportTime && (
                     <div className="text-xs"><span className="font-bold">Carrier Report Time:</span> {booking.carrierReportTime}</div>
@@ -279,9 +279,9 @@ export const RateConfirmation: React.FC<RateConfirmationProps> = ({ booking, shi
                     </div>
                   </div>
                   <div className="text-xs"><span className="font-bold">Location:</span> {leg.destination}</div>
-                  <div className="text-xs"><span className="font-bold">Address:</span> {index === multiLegBooking.length - 1 ? (booking.route?.destinationAddress || '2800 S El Dorado ST') : ''}</div>
-                  <div className="text-xs"><span className="font-bold">City, State Zip:</span> {index === multiLegBooking.length - 1 ? `${booking.route?.destinationCity || 'STOCKTON'}, ${booking.route?.destinationState || 'CA'} ${booking.route?.destinationZipCode || '95206'}` : ''}</div>
-                  <div className="text-xs"><span className="font-bold">Phone:</span> <span className="font-bold">Contact:</span> {index === multiLegBooking.length - 1 ? (booking.route?.destinationContact || '') : ''}</div>
+                  <div className="text-xs"><span className="font-bold">Address:</span> {index === multiLegBooking.length - 1 ? (booking.destinationAddress || booking.route?.destinationAddress || '2800 S El Dorado ST') : ''}</div>
+                  <div className="text-xs"><span className="font-bold">City, State Zip:</span> {index === multiLegBooking.length - 1 ? `${booking.destinationCity || booking.route?.destinationCity || 'STOCKTON'}, ${booking.destinationState || booking.route?.destinationState || 'CA'} ${booking.destinationZipCode || booking.route?.destinationZipCode || '95206'}` : ''}</div>
+                  <div className="text-xs"><span className="font-bold">Phone:</span> <span className="font-bold">Contact:</span> {index === multiLegBooking.length - 1 ? (booking.destinationContact || booking.route?.destinationContact || '') : ''}</div>
                 </div>
               </div>
             </div>
@@ -301,9 +301,9 @@ export const RateConfirmation: React.FC<RateConfirmationProps> = ({ booking, shi
                   </div>
                 </div>
                 <div className="text-xs"><span className="font-bold">Name:</span> CrossCounty Freight Solutions - RNO</div>
-                <div className="text-xs"><span className="font-bold">Address:</span> {booking.route?.originAddress || '985 Glendale Avenue'}</div>
-                <div className="text-xs"><span className="font-bold">City, State Zip:</span> {booking.route?.originCity || 'SPARKS'}, {booking.route?.originState || 'NV'} {booking.route?.originZipCode || '89431'}</div>
-                <div className="text-xs"><span className="font-bold">Phone:</span> (775) 331-2311 <span className="font-bold">Contact:</span> {booking.route?.originContact || 'Brian Smith'}</div>
+                <div className="text-xs"><span className="font-bold">Address:</span> {booking.originAddress || booking.route?.originAddress || '985 Glendale Avenue'}</div>
+                <div className="text-xs"><span className="font-bold">City, State Zip:</span> {booking.originCity || booking.route?.originCity || 'SPARKS'}, {booking.originState || booking.route?.originState || 'NV'} {booking.originZipCode || booking.route?.originZipCode || '89431'}</div>
+                <div className="text-xs"><span className="font-bold">Phone:</span> (775) 331-2311 <span className="font-bold">Contact:</span> {booking.originContact || booking.route?.originContact || 'Brian Smith'}</div>
                 <div className="text-xs"><span className="font-bold">Hours:</span> 04:00 -to-10:00</div>
                 {booking.carrierReportTime && (
                   <div className="text-xs"><span className="font-bold">Carrier Report Time:</span> {booking.carrierReportTime}</div>
@@ -318,9 +318,9 @@ export const RateConfirmation: React.FC<RateConfirmationProps> = ({ booking, shi
                   </div>
                 </div>
                 <div className="text-xs"><span className="font-bold">Name:</span> DDP</div>
-                <div className="text-xs"><span className="font-bold">Address:</span> {booking.route?.destinationAddress || '2800 S El Dorado ST'}</div>
-                <div className="text-xs"><span className="font-bold">City, State Zip:</span> {booking.route?.destinationCity || 'STOCKTON'}, {booking.route?.destinationState || 'CA'} {booking.route?.destinationZipCode || '95206'}</div>
-                <div className="text-xs"><span className="font-bold">Phone:</span> <span className="font-bold">Contact:</span> {booking.route?.destinationContact || ''}</div>
+                <div className="text-xs"><span className="font-bold">Address:</span> {booking.destinationAddress || booking.route?.destinationAddress || '2800 S El Dorado ST'}</div>
+                <div className="text-xs"><span className="font-bold">City, State Zip:</span> {booking.destinationCity || booking.route?.destinationCity || 'STOCKTON'}, {booking.destinationState || booking.route?.destinationState || 'CA'} {booking.destinationZipCode || booking.route?.destinationZipCode || '95206'}</div>
+                <div className="text-xs"><span className="font-bold">Phone:</span> <span className="font-bold">Contact:</span> {booking.destinationContact || booking.route?.destinationContact || ''}</div>
               </div>
             </div>
           </div>

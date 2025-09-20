@@ -6,6 +6,7 @@ import { Calendar, Truck, MapPin, AlertCircle, X, Plus } from 'lucide-react';
 import { format, eachDayOfInterval, parseISO } from 'date-fns';
 import { LocationAutocomplete } from '../components/LocationAutocomplete';
 import { useAuth } from '../contexts/AuthContext';
+import { Location } from '../types';
 
 type RateType = 'MILE' | 'MILE_FSC' | 'FLAT_RATE';
 
@@ -27,6 +28,9 @@ interface UnifiedLeg {
   departureTime?: string;
   arrivalTime?: string;
   reportTime?: string;
+  // Location data for address details
+  originLocation?: Location | null;
+  destinationLocation?: Location | null;
 }
 
 interface NewBookingSimplifiedProps {
@@ -46,7 +50,7 @@ export const NewBookingSimplified: React.FC<NewBookingSimplifiedProps> = () => {
   const [notes, setNotes] = useState('');
   const [bookingType, setBookingType] = useState<'POWER_ONLY' | 'POWER_AND_TRAILER'>('POWER_ONLY');
   const [trailerLength, setTrailerLength] = useState('');
-  const [fuelSurchargeRate] = useState<number>(0);
+  const [fuelSurchargeRate, setFuelSurchargeRate] = useState<number>(0);
   
   // Contact info
   const [driverName, setDriverName] = useState('');
@@ -64,6 +68,9 @@ export const NewBookingSimplified: React.FC<NewBookingSimplifiedProps> = () => {
   const [customOrigin, setCustomOrigin] = useState('');
   const [customDestination, setCustomDestination] = useState('');
   const [customMiles, setCustomMiles] = useState('');
+  // Selected location objects for address details
+  const [selectedOriginLocation, setSelectedOriginLocation] = useState<Location | null>(null);
+  const [selectedDestinationLocation, setSelectedDestinationLocation] = useState<Location | null>(null);
   const [legDepartureTime, setLegDepartureTime] = useState('');
   const [legArrivalTime, setLegArrivalTime] = useState('');
   const [legReportTime, setLegReportTime] = useState('');
@@ -101,8 +108,25 @@ export const NewBookingSimplified: React.FC<NewBookingSimplifiedProps> = () => {
     enabled: isAuthenticated
   });
 
+  // Fetch system settings for fuel surcharge rate
+  const { data: settingsData } = useQuery({
+    queryKey: ['systemSettings'],
+    queryFn: async () => {
+      const response = await api.get('/settings');
+      return response.data;
+    },
+    enabled: isAuthenticated
+  });
+
   const carriers = carriersData?.carriers || [];
   const routes = routesData?.routes || [];
+
+  // Update fuel surcharge rate when settings data is loaded
+  useEffect(() => {
+    if (settingsData?.fuelSurchargeRate) {
+      setFuelSurchargeRate(Number(settingsData.fuelSurchargeRate));
+    }
+  }, [settingsData]);
 
   // Filtered carriers
   const filteredCarriers = useMemo(() => {
@@ -213,7 +237,9 @@ export const NewBookingSimplified: React.FC<NewBookingSimplifiedProps> = () => {
       case 'MILE':
         return (baseRate * miles).toFixed(2);
       case 'MILE_FSC':
-        return ((baseRate + fuelSurchargeRate) * miles).toFixed(2);
+        const mileRate = baseRate * miles;
+        const fscAmount = mileRate * (fuelSurchargeRate / 100);
+        return (mileRate + fscAmount).toFixed(2);
       default:
         return '0.00';
     }
@@ -221,16 +247,22 @@ export const NewBookingSimplified: React.FC<NewBookingSimplifiedProps> = () => {
 
   // Clear leg builder
   const clearLegBuilder = () => {
+    // Keep rate type and base rate from previous leg if there are existing legs
+    const keepRateType = legs.length > 0 ? legRateType : 'FLAT_RATE';
+    const keepBaseRate = legs.length > 0 ? legBaseRate : '';
+    
     setLegType('route');
     setSelectedRouteId('');
     setCustomOrigin('');
     setCustomDestination('');
     setCustomMiles('');
+    setSelectedOriginLocation(null);
+    setSelectedDestinationLocation(null);
     setLegDepartureTime('');
     setLegArrivalTime('');
     setLegReportTime('');
-    setLegRateType('FLAT_RATE');
-    setLegBaseRate('');
+    setLegRateType(keepRateType);
+    setLegBaseRate(keepBaseRate);
     setRouteSearch('');
   };
 
@@ -293,7 +325,9 @@ export const NewBookingSimplified: React.FC<NewBookingSimplifiedProps> = () => {
         totalRate: calculateLegRate(),
         departureTime: legDepartureTime,
         arrivalTime: legArrivalTime,
-        reportTime: legReportTime
+        reportTime: legReportTime,
+        originLocation: selectedOriginLocation,
+        destinationLocation: selectedDestinationLocation
       };
       
       setLegs([...legs, newLeg]);
@@ -336,7 +370,9 @@ export const NewBookingSimplified: React.FC<NewBookingSimplifiedProps> = () => {
       navigate('/bookings');
     },
     onError: (error: any) => {
-      alert(error.response?.data?.error || 'Failed to create booking');
+      console.error('Booking creation error:', error);
+      console.error('Error response:', error.response?.data);
+      alert(error.response?.data?.message || error.response?.data?.error || 'Failed to create booking');
     }
   });
 
@@ -406,7 +442,7 @@ export const NewBookingSimplified: React.FC<NewBookingSimplifiedProps> = () => {
         rate: totalRate.toFixed(2),
         rateType: firstLeg.rateType,
         baseRate: firstLeg.baseRate,
-        fscRate: firstLeg.rateType === 'MILE_FSC' ? fuelSurchargeRate.toFixed(2) : undefined,
+        fscRate: firstLeg.rateType === 'MILE_FSC' ? fuelSurchargeRate : undefined,
         driverName: driverName || undefined,
         phoneNumber: phoneNumber || undefined,
         carrierEmail: carrierEmail || undefined,
@@ -426,34 +462,64 @@ export const NewBookingSimplified: React.FC<NewBookingSimplifiedProps> = () => {
         bookingData.destination = legs[legs.length - 1].destination; // Final destination
         bookingData.estimatedMiles = legs.reduce((sum, leg) => sum + leg.miles, 0); // Total miles
         
-        // For single custom leg, try to populate route information
-        if (legs.length === 1 && firstLeg.type === 'custom') {
-          const routeInfo = findRouteInfo(firstLeg.origin, firstLeg.destination);
-          if (routeInfo) {
-            // Populate route information fields directly (excluding route name since this is a custom booking)
-            bookingData.routeFrequency = routeInfo.frequency;
-            bookingData.routeStandardRate = routeInfo.standardRate;
-            bookingData.routeRunTime = routeInfo.runTime;
-            
-            // Origin details
-            bookingData.originAddress = routeInfo.originAddress;
-            bookingData.originCity = routeInfo.originCity;
-            bookingData.originState = routeInfo.originState;
-            bookingData.originZipCode = routeInfo.originZipCode;
-            bookingData.originContact = routeInfo.originContact;
-            bookingData.originTimeZone = routeInfo.originTimeZone;
-            bookingData.originLatitude = routeInfo.originLatitude;
-            bookingData.originLongitude = routeInfo.originLongitude;
-            
-            // Destination details
-            bookingData.destinationAddress = routeInfo.destinationAddress;
-            bookingData.destinationCity = routeInfo.destinationCity;
-            bookingData.destinationState = routeInfo.destinationState;
-            bookingData.destinationZipCode = routeInfo.destinationZipCode;
-            bookingData.destinationContact = routeInfo.destinationContact;
-            bookingData.destinationTimeZone = routeInfo.destinationTimeZone;
-            bookingData.destinationLatitude = routeInfo.destinationLatitude;
-            bookingData.destinationLongitude = routeInfo.destinationLongitude;
+        // For custom bookings, use location data or try route information fallback
+        if (firstLeg.type === 'custom') {
+          // Use selected location data if available (new approach)
+          if (firstLeg.originLocation) {
+            bookingData.originAddress = firstLeg.originLocation.address;
+            bookingData.originCity = firstLeg.originLocation.city;
+            bookingData.originState = firstLeg.originLocation.state;
+            bookingData.originZipCode = firstLeg.originLocation.zipCode;
+            bookingData.originContact = firstLeg.originLocation.contact;
+            bookingData.originTimeZone = firstLeg.originLocation.timeZone;
+            bookingData.originLatitude = firstLeg.originLocation.latitude;
+            bookingData.originLongitude = firstLeg.originLocation.longitude;
+          }
+          
+          const lastLeg = legs[legs.length - 1];
+          if (lastLeg.destinationLocation) {
+            bookingData.destinationAddress = lastLeg.destinationLocation.address;
+            bookingData.destinationCity = lastLeg.destinationLocation.city;
+            bookingData.destinationState = lastLeg.destinationLocation.state;
+            bookingData.destinationZipCode = lastLeg.destinationLocation.zipCode;
+            bookingData.destinationContact = lastLeg.destinationLocation.contact;
+            bookingData.destinationTimeZone = lastLeg.destinationLocation.timeZone;
+            bookingData.destinationLatitude = lastLeg.destinationLocation.latitude;
+            bookingData.destinationLongitude = lastLeg.destinationLocation.longitude;
+          }
+          
+          // Fallback: try to find route information if location data is not available
+          if (legs.length === 1 && (!firstLeg.originLocation || !firstLeg.destinationLocation)) {
+            const routeInfo = findRouteInfo(firstLeg.origin, firstLeg.destination);
+            if (routeInfo) {
+              // Populate route information fields and missing location data
+              bookingData.routeFrequency = routeInfo.frequency;
+              bookingData.routeStandardRate = routeInfo.standardRate;
+              bookingData.routeRunTime = routeInfo.runTime;
+              
+              // Only use route data if location data is missing
+              if (!firstLeg.originLocation) {
+                bookingData.originAddress = routeInfo.originAddress;
+                bookingData.originCity = routeInfo.originCity;
+                bookingData.originState = routeInfo.originState;
+                bookingData.originZipCode = routeInfo.originZipCode;
+                bookingData.originContact = routeInfo.originContact;
+                bookingData.originTimeZone = routeInfo.originTimeZone;
+                bookingData.originLatitude = routeInfo.originLatitude;
+                bookingData.originLongitude = routeInfo.originLongitude;
+              }
+              
+              if (!firstLeg.destinationLocation) {
+                bookingData.destinationAddress = routeInfo.destinationAddress;
+                bookingData.destinationCity = routeInfo.destinationCity;
+                bookingData.destinationState = routeInfo.destinationState;
+                bookingData.destinationZipCode = routeInfo.destinationZipCode;
+                bookingData.destinationContact = routeInfo.destinationContact;
+                bookingData.destinationTimeZone = routeInfo.destinationTimeZone;
+                bookingData.destinationLatitude = routeInfo.destinationLatitude;
+                bookingData.destinationLongitude = routeInfo.destinationLongitude;
+              }
+            }
           }
         }
       }
@@ -468,6 +534,7 @@ export const NewBookingSimplified: React.FC<NewBookingSimplifiedProps> = () => {
       bookingsToCreate.push(bookingData);
     });
 
+    console.log('Creating bookings with data:', JSON.stringify(bookingsToCreate, null, 2));
     createBookingMutation.mutate(bookingsToCreate);
   };
 
@@ -717,6 +784,9 @@ export const NewBookingSimplified: React.FC<NewBookingSimplifiedProps> = () => {
                         }
                       }
                     }}
+                    onLocationSelect={(location) => {
+                      setSelectedOriginLocation(location);
+                    }}
                     placeholder="Search origin..."
                     required
                   />
@@ -738,6 +808,9 @@ export const NewBookingSimplified: React.FC<NewBookingSimplifiedProps> = () => {
                           }
                         }
                       }
+                    }}
+                    onLocationSelect={(location) => {
+                      setSelectedDestinationLocation(location);
                     }}
                     placeholder="Search destination..."
                     required
