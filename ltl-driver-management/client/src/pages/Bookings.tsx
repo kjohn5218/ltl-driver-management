@@ -75,6 +75,15 @@ export const Bookings: React.FC = () => {
     }
   });
 
+  // Fetch system settings for fuel surcharge
+  const { data: settingsData } = useQuery({
+    queryKey: ['settings'],
+    queryFn: async () => {
+      const response = await api.get('/settings');
+      return response.data;
+    }
+  });
+
   // Delete booking mutation
   const deleteBookingMutation = useMutation({
     mutationFn: async (bookingId: number) => {
@@ -627,6 +636,7 @@ export const Bookings: React.FC = () => {
           booking={viewingBooking} 
           onClose={handleCloseView} 
           getStatusBadge={getStatusBadge}
+          settingsData={settingsData}
           onRateConfirmation={handleRateConfirmation}
         />
       )}
@@ -710,9 +720,10 @@ interface BookingViewModalProps {
   onClose: () => void;
   getStatusBadge: (status: string) => string;
   onRateConfirmation?: (booking: Booking) => void;
+  settingsData?: any;
 }
 
-const BookingViewModal: React.FC<BookingViewModalProps> = ({ booking, onClose, getStatusBadge, onRateConfirmation }) => {
+const BookingViewModal: React.FC<BookingViewModalProps> = ({ booking, onClose, getStatusBadge, onRateConfirmation, settingsData }) => {
   // Fetch complete booking details with child bookings
   const { data: fullBookingData } = useQuery({
     queryKey: ['booking', booking.id],
@@ -1380,12 +1391,14 @@ const BookingEditModal: React.FC<BookingEditModalProps> = ({ booking, onClose, o
       originState: booking.originState || '',
       originZipCode: booking.originZipCode || '',
       originContact: booking.originContact || '',
+      originTimeZone: booking.originTimeZone || '',
       // Destination details
       destinationAddress: booking.destinationAddress || '',
       destinationCity: booking.destinationCity || '',
       destinationState: booking.destinationState || '',
       destinationZipCode: booking.destinationZipCode || '',
       destinationContact: booking.destinationContact || '',
+      destinationTimeZone: booking.destinationTimeZone || '',
       // Time fields
       departureTime: booking.departureTime || '',
       arrivalTime: booking.arrivalTime || ''
@@ -1991,6 +2004,269 @@ const BookingEditModal: React.FC<BookingEditModalProps> = ({ booking, onClose, o
                     </div>
                   )}
                 </div>
+              ) : (booking.origin || booking.destination || formData.origin || formData.destination) ? (
+                // Custom origin/destination booking - editable fields
+                <div className="space-y-4">
+                  <div className="flex items-center gap-2 text-sm font-medium text-gray-900">
+                    <MapPin className="w-4 h-4 text-blue-500" />
+                    Custom Route
+                  </div>
+                  
+                  {/* Route Name */}
+                  <div>
+                    <label className="block text-sm font-medium text-gray-700 mb-1">Route Name</label>
+                    <input
+                      type="text"
+                      value={formData.routeName || ''}
+                      onChange={(e) => setFormData({ ...formData, routeName: e.target.value })}
+                      className="w-full px-3 py-2 border border-gray-300 rounded-md focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
+                      placeholder="Enter route name..."
+                    />
+                  </div>
+
+                  {/* Route Frequency */}
+                  <div>
+                    <label className="block text-sm font-medium text-gray-700 mb-1">Route Frequency</label>
+                    <input
+                      type="text"
+                      value={formData.routeFrequency || ''}
+                      onChange={(e) => setFormData({ ...formData, routeFrequency: e.target.value })}
+                      className="w-full px-3 py-2 border border-gray-300 rounded-md focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
+                      placeholder="e.g., Daily, Weekly, As needed..."
+                    />
+                  </div>
+
+                  {/* Route Standard Rate and Run Time */}
+                  <div className="grid grid-cols-2 gap-4">
+                    <div>
+                      <label className="block text-sm font-medium text-gray-700 mb-1">Standard Rate</label>
+                      <input
+                        type="number"
+                        step="0.01"
+                        value={formData.routeStandardRate || ''}
+                        onChange={(e) => setFormData({ ...formData, routeStandardRate: e.target.value })}
+                        className="w-full px-3 py-2 border border-gray-300 rounded-md focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
+                        placeholder="Standard rate..."
+                      />
+                    </div>
+                    <div>
+                      <label className="block text-sm font-medium text-gray-700 mb-1">Run Time (hours)</label>
+                      <input
+                        type="number"
+                        value={formData.routeRunTime || ''}
+                        onChange={(e) => setFormData({ ...formData, routeRunTime: e.target.value })}
+                        className="w-full px-3 py-2 border border-gray-300 rounded-md focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
+                        placeholder="Runtime in hours..."
+                      />
+                    </div>
+                  </div>
+
+                  {/* Origin and Destination Names */}
+                  <div className="grid grid-cols-2 gap-4">
+                    <div>
+                      <label className="block text-sm font-medium text-gray-700 mb-1">Origin</label>
+                      <input
+                        type="text"
+                        value={formData.origin || ''}
+                        onChange={(e) => setFormData({ ...formData, origin: e.target.value })}
+                        className="w-full px-3 py-2 border border-gray-300 rounded-md focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
+                        placeholder="Origin location name..."
+                      />
+                    </div>
+                    <div>
+                      <label className="block text-sm font-medium text-gray-700 mb-1">Destination</label>
+                      <input
+                        type="text"
+                        value={formData.destination || ''}
+                        onChange={(e) => setFormData({ ...formData, destination: e.target.value })}
+                        className="w-full px-3 py-2 border border-gray-300 rounded-md focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
+                        placeholder="Destination location name..."
+                      />
+                    </div>
+                  </div>
+                  
+                  <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+                    {/* Origin Information */}
+                    <div className="space-y-3">
+                      <h4 className="font-medium text-gray-800 text-sm">Origin Details</h4>
+                      
+                      <div>
+                        <label className="block text-sm font-medium text-gray-700 mb-1">Address</label>
+                        <input
+                          type="text"
+                          value={formData.originAddress || ''}
+                          onChange={(e) => setFormData({ ...formData, originAddress: e.target.value })}
+                          className="w-full px-3 py-2 border border-gray-300 rounded-md focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
+                          placeholder="Street address..."
+                        />
+                      </div>
+
+                      <div className="grid grid-cols-2 gap-2">
+                        <div>
+                          <label className="block text-sm font-medium text-gray-700 mb-1">City</label>
+                          <input
+                            type="text"
+                            value={formData.originCity || ''}
+                            onChange={(e) => setFormData({ ...formData, originCity: e.target.value })}
+                            className="w-full px-3 py-2 border border-gray-300 rounded-md focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
+                            placeholder="City..."
+                          />
+                        </div>
+                        <div>
+                          <label className="block text-sm font-medium text-gray-700 mb-1">State</label>
+                          <input
+                            type="text"
+                            value={formData.originState || ''}
+                            onChange={(e) => setFormData({ ...formData, originState: e.target.value })}
+                            className="w-full px-3 py-2 border border-gray-300 rounded-md focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
+                            placeholder="State..."
+                          />
+                        </div>
+                      </div>
+
+                      <div className="grid grid-cols-2 gap-2">
+                        <div>
+                          <label className="block text-sm font-medium text-gray-700 mb-1">ZIP Code</label>
+                          <input
+                            type="text"
+                            value={formData.originZipCode || ''}
+                            onChange={(e) => setFormData({ ...formData, originZipCode: e.target.value })}
+                            className="w-full px-3 py-2 border border-gray-300 rounded-md focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
+                            placeholder="ZIP..."
+                          />
+                        </div>
+                        <div>
+                          <label className="block text-sm font-medium text-gray-700 mb-1">Time Zone</label>
+                          <input
+                            type="text"
+                            value={formData.originTimeZone || ''}
+                            onChange={(e) => setFormData({ ...formData, originTimeZone: e.target.value })}
+                            className="w-full px-3 py-2 border border-gray-300 rounded-md focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
+                            placeholder="e.g., EST, CST..."
+                          />
+                        </div>
+                      </div>
+
+                      <div>
+                        <label className="block text-sm font-medium text-gray-700 mb-1">Contact</label>
+                        <input
+                          type="text"
+                          value={formData.originContact || ''}
+                          onChange={(e) => setFormData({ ...formData, originContact: e.target.value })}
+                          className="w-full px-3 py-2 border border-gray-300 rounded-md focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
+                          placeholder="Contact person/info..."
+                        />
+                      </div>
+                    </div>
+                    
+                    {/* Destination Information */}
+                    <div className="space-y-3">
+                      <h4 className="font-medium text-gray-800 text-sm">Destination Details</h4>
+                      
+                      <div>
+                        <label className="block text-sm font-medium text-gray-700 mb-1">Address</label>
+                        <input
+                          type="text"
+                          value={formData.destinationAddress || ''}
+                          onChange={(e) => setFormData({ ...formData, destinationAddress: e.target.value })}
+                          className="w-full px-3 py-2 border border-gray-300 rounded-md focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
+                          placeholder="Street address..."
+                        />
+                      </div>
+
+                      <div className="grid grid-cols-2 gap-2">
+                        <div>
+                          <label className="block text-sm font-medium text-gray-700 mb-1">City</label>
+                          <input
+                            type="text"
+                            value={formData.destinationCity || ''}
+                            onChange={(e) => setFormData({ ...formData, destinationCity: e.target.value })}
+                            className="w-full px-3 py-2 border border-gray-300 rounded-md focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
+                            placeholder="City..."
+                          />
+                        </div>
+                        <div>
+                          <label className="block text-sm font-medium text-gray-700 mb-1">State</label>
+                          <input
+                            type="text"
+                            value={formData.destinationState || ''}
+                            onChange={(e) => setFormData({ ...formData, destinationState: e.target.value })}
+                            className="w-full px-3 py-2 border border-gray-300 rounded-md focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
+                            placeholder="State..."
+                          />
+                        </div>
+                      </div>
+
+                      <div className="grid grid-cols-2 gap-2">
+                        <div>
+                          <label className="block text-sm font-medium text-gray-700 mb-1">ZIP Code</label>
+                          <input
+                            type="text"
+                            value={formData.destinationZipCode || ''}
+                            onChange={(e) => setFormData({ ...formData, destinationZipCode: e.target.value })}
+                            className="w-full px-3 py-2 border border-gray-300 rounded-md focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
+                            placeholder="ZIP..."
+                          />
+                        </div>
+                        <div>
+                          <label className="block text-sm font-medium text-gray-700 mb-1">Time Zone</label>
+                          <input
+                            type="text"
+                            value={formData.destinationTimeZone || ''}
+                            onChange={(e) => setFormData({ ...formData, destinationTimeZone: e.target.value })}
+                            className="w-full px-3 py-2 border border-gray-300 rounded-md focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
+                            placeholder="e.g., EST, CST..."
+                          />
+                        </div>
+                      </div>
+
+                      <div>
+                        <label className="block text-sm font-medium text-gray-700 mb-1">Contact</label>
+                        <input
+                          type="text"
+                          value={formData.destinationContact || ''}
+                          onChange={(e) => setFormData({ ...formData, destinationContact: e.target.value })}
+                          className="w-full px-3 py-2 border border-gray-300 rounded-md focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
+                          placeholder="Contact person/info..."
+                        />
+                      </div>
+                    </div>
+                  </div>
+
+                  {/* Time Fields */}
+                  <div className="grid grid-cols-2 gap-4">
+                    <div>
+                      <label className="block text-sm font-medium text-gray-700 mb-1">Departure Time</label>
+                      <input
+                        type="time"
+                        value={formData.departureTime || ''}
+                        onChange={(e) => setFormData({ ...formData, departureTime: e.target.value })}
+                        className="w-full px-3 py-2 border border-gray-300 rounded-md focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
+                      />
+                    </div>
+                    <div>
+                      <label className="block text-sm font-medium text-gray-700 mb-1">Arrival Time</label>
+                      <input
+                        type="time"
+                        value={formData.arrivalTime || ''}
+                        onChange={(e) => setFormData({ ...formData, arrivalTime: e.target.value })}
+                        className="w-full px-3 py-2 border border-gray-300 rounded-md focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
+                      />
+                    </div>
+                  </div>
+
+                  {/* Estimated Miles */}
+                  <div>
+                    <label className="block text-sm font-medium text-gray-700 mb-1">Estimated Miles</label>
+                    <input
+                      type="number"
+                      value={formData.estimatedMiles || ''}
+                      onChange={(e) => setFormData({ ...formData, estimatedMiles: e.target.value })}
+                      className="w-full px-3 py-2 border border-gray-300 rounded-md focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
+                      placeholder="Estimated distance in miles..."
+                    />
+                  </div>
+                </div>
               ) : null}
             </div>
           </div>
@@ -2322,114 +2598,6 @@ const BookingEditModal: React.FC<BookingEditModalProps> = ({ booking, onClose, o
             </div>
           )}
           
-          {/* Route Information Section - only show for custom bookings */}
-          {(formData.origin || formData.destination) && (
-            <div className="border-t pt-4">
-              <h3 className="text-sm font-medium text-gray-700 mb-3">Route Information</h3>
-              <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                <div>
-                  <label className="block text-sm font-medium text-gray-700 mb-1">Origin</label>
-                  <input
-                    type="text"
-                    value={formData.origin}
-                    onChange={(e) => setFormData({ ...formData, origin: e.target.value })}
-                    className="w-full px-3 py-2 border border-gray-300 rounded-md focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
-                    placeholder="Origin location"
-                  />
-                </div>
-                <div>
-                  <label className="block text-sm font-medium text-gray-700 mb-1">Destination</label>
-                  <input
-                    type="text"
-                    value={formData.destination}
-                    onChange={(e) => setFormData({ ...formData, destination: e.target.value })}
-                    className="w-full px-3 py-2 border border-gray-300 rounded-md focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
-                    placeholder="Destination location"
-                  />
-                </div>
-                <div>
-                  <label className="block text-sm font-medium text-gray-700 mb-1">Estimated Miles</label>
-                  <input
-                    type="number"
-                    value={formData.estimatedMiles}
-                    onChange={(e) => setFormData({ ...formData, estimatedMiles: e.target.value })}
-                    className="w-full px-3 py-2 border border-gray-300 rounded-md focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
-                    placeholder="Miles"
-                    min="0"
-                    step="0.1"
-                  />
-                </div>
-                <div>
-                  <label className="block text-sm font-medium text-gray-700 mb-1">Route Frequency</label>
-                  <input
-                    type="text"
-                    value={formData.routeFrequency}
-                    onChange={(e) => setFormData({ ...formData, routeFrequency: e.target.value })}
-                    className="w-full px-3 py-2 border border-gray-300 rounded-md focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
-                    placeholder="e.g., Daily, Weekly"
-                  />
-                </div>
-                <div>
-                  <label className="block text-sm font-medium text-gray-700 mb-1">Origin Address</label>
-                  <input
-                    type="text"
-                    value={formData.originAddress}
-                    onChange={(e) => setFormData({ ...formData, originAddress: e.target.value })}
-                    className="w-full px-3 py-2 border border-gray-300 rounded-md focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
-                    placeholder="Origin address"
-                  />
-                </div>
-                <div>
-                  <label className="block text-sm font-medium text-gray-700 mb-1">Destination Address</label>
-                  <input
-                    type="text"
-                    value={formData.destinationAddress}
-                    onChange={(e) => setFormData({ ...formData, destinationAddress: e.target.value })}
-                    className="w-full px-3 py-2 border border-gray-300 rounded-md focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
-                    placeholder="Destination address"
-                  />
-                </div>
-                <div>
-                  <label className="block text-sm font-medium text-gray-700 mb-1">Origin Contact</label>
-                  <input
-                    type="text"
-                    value={formData.originContact}
-                    onChange={(e) => setFormData({ ...formData, originContact: e.target.value })}
-                    className="w-full px-3 py-2 border border-gray-300 rounded-md focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
-                    placeholder="Origin contact"
-                  />
-                </div>
-                <div>
-                  <label className="block text-sm font-medium text-gray-700 mb-1">Destination Contact</label>
-                  <input
-                    type="text"
-                    value={formData.destinationContact}
-                    onChange={(e) => setFormData({ ...formData, destinationContact: e.target.value })}
-                    className="w-full px-3 py-2 border border-gray-300 rounded-md focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
-                    placeholder="Destination contact"
-                  />
-                </div>
-                <div>
-                  <label className="block text-sm font-medium text-gray-700 mb-1">Departure Time</label>
-                  <input
-                    type="time"
-                    value={formData.departureTime}
-                    onChange={(e) => setFormData({ ...formData, departureTime: e.target.value })}
-                    className="w-full px-3 py-2 border border-gray-300 rounded-md focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
-                  />
-                </div>
-                <div>
-                  <label className="block text-sm font-medium text-gray-700 mb-1">Arrival Time</label>
-                  <input
-                    type="time"
-                    value={formData.arrivalTime}
-                    onChange={(e) => setFormData({ ...formData, arrivalTime: e.target.value })}
-                    className="w-full px-3 py-2 border border-gray-300 rounded-md focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
-                  />
-                </div>
-              </div>
-            </div>
-          )}
           
           <div>
             <label className="block text-sm font-medium text-gray-700 mb-1">Notes</label>
