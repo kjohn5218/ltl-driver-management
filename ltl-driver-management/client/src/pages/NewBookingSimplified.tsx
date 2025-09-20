@@ -378,40 +378,57 @@ export const NewBookingSimplified: React.FC<NewBookingSimplifiedProps> = () => {
     const bookingsToCreate: any[] = [];
     
     dates.forEach(date => {
-      legs.forEach((leg, index) => {
-        const bookingData: any = {
-          carrierId: carrierId ? parseInt(carrierId) : null,
-          bookingDate: date,
-          billable: true,
-          type: bookingType,
-          trailerLength: bookingType === 'POWER_AND_TRAILER' && trailerLength ? parseInt(trailerLength) : null,
-          status: carrierId ? 'CONFIRMED' : 'PENDING',
-          legNumber: index + 1,
-          isParent: index === 0,
-          rate: leg.totalRate,
-          rateType: leg.rateType,
-          baseRate: leg.baseRate,
-          fscRate: leg.rateType === 'MILE_FSC' ? fuelSurchargeRate.toFixed(2) : undefined,
-          driverName: driverName || undefined,
-          phoneNumber: phoneNumber || undefined,
-          carrierEmail: carrierEmail || undefined,
-          carrierReportTime: leg.reportTime || carrierReportTime || undefined,
-          departureTime: leg.departureTime || undefined,
-          arrivalTime: leg.arrivalTime || undefined,
-          notes: notes || undefined
-        };
+      // Calculate total rate for all legs
+      const totalRate = legs.reduce((sum, leg) => sum + parseFloat(leg.totalRate), 0);
+      
+      // For multi-leg bookings, create one booking with leg information in notes
+      let bookingNotes = '';
+      if (legs.length > 1) {
+        bookingNotes = '--- Multi-Leg Booking ---\n';
+        legs.forEach((leg, index) => {
+          bookingNotes += `Leg ${index + 1}: ${leg.origin} → ${leg.destination} ($${leg.totalRate})\n`;
+        });
+        if (notes) {
+          bookingNotes += '\n' + notes;
+        }
+      } else {
+        bookingNotes = notes || '';
+      }
+
+      const firstLeg = legs[0];
+      const bookingData: any = {
+        carrierId: carrierId ? parseInt(carrierId) : null,
+        bookingDate: date,
+        billable: true,
+        type: bookingType,
+        trailerLength: bookingType === 'POWER_AND_TRAILER' && trailerLength ? parseInt(trailerLength) : null,
+        status: carrierId ? 'CONFIRMED' : 'PENDING',
+        rate: totalRate.toFixed(2),
+        rateType: firstLeg.rateType,
+        baseRate: firstLeg.baseRate,
+        fscRate: firstLeg.rateType === 'MILE_FSC' ? fuelSurchargeRate.toFixed(2) : undefined,
+        driverName: driverName || undefined,
+        phoneNumber: phoneNumber || undefined,
+        carrierEmail: carrierEmail || undefined,
+        carrierReportTime: firstLeg.reportTime || carrierReportTime || undefined,
+        departureTime: firstLeg.departureTime || undefined,
+        arrivalTime: legs[legs.length - 1].arrivalTime || undefined, // Use last leg's arrival time
+        notes: bookingNotes
+      };
+      
+      if (firstLeg.type === 'route' && legs.length === 1) {
+        // Single route booking
+        bookingData.routeId = parseInt(firstLeg.routeId!);
+      } else {
+        // Custom origin/destination booking or multi-leg
+        bookingData.routeId = null;
+        bookingData.origin = firstLeg.origin;
+        bookingData.destination = legs[legs.length - 1].destination; // Final destination
+        bookingData.estimatedMiles = legs.reduce((sum, leg) => sum + leg.miles, 0); // Total miles
         
-        if (leg.type === 'route') {
-          bookingData.routeId = parseInt(leg.routeId!);
-        } else {
-          // Custom origin/destination booking
-          bookingData.routeId = null;
-          bookingData.origin = leg.origin;
-          bookingData.destination = leg.destination;
-          bookingData.estimatedMiles = leg.miles;
-          
-          // Try to find matching route information to populate additional fields
-          const routeInfo = findRouteInfo(leg.origin, leg.destination);
+        // For single custom leg, try to populate route information
+        if (legs.length === 1 && firstLeg.type === 'custom') {
+          const routeInfo = findRouteInfo(firstLeg.origin, firstLeg.destination);
           if (routeInfo) {
             // Populate route information fields directly (excluding route name since this is a custom booking)
             bookingData.routeFrequency = routeInfo.frequency;
@@ -439,16 +456,16 @@ export const NewBookingSimplified: React.FC<NewBookingSimplifiedProps> = () => {
             bookingData.destinationLongitude = routeInfo.destinationLongitude;
           }
         }
-        
-        // Clean up undefined values
-        Object.keys(bookingData).forEach(key => {
-          if (bookingData[key] === undefined) {
-            delete bookingData[key];
-          }
-        });
-        
-        bookingsToCreate.push(bookingData);
+      }
+      
+      // Clean up undefined values
+      Object.keys(bookingData).forEach(key => {
+        if (bookingData[key] === undefined) {
+          delete bookingData[key];
+        }
       });
+      
+      bookingsToCreate.push(bookingData);
     });
 
     createBookingMutation.mutate(bookingsToCreate);
