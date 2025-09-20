@@ -147,7 +147,33 @@ export const createBooking = async (req: Request, res: Response) => {
         origin,
         destination,
         estimatedMiles,
-        manifestNumber
+        manifestNumber,
+        // Route information fields
+        routeName,
+        routeFrequency,
+        routeStandardRate,
+        routeRunTime,
+        // Origin details
+        originAddress,
+        originCity,
+        originState,
+        originZipCode,
+        originContact,
+        originTimeZone,
+        originLatitude,
+        originLongitude,
+        // Destination details
+        destinationAddress,
+        destinationCity,
+        destinationState,
+        destinationZipCode,
+        destinationContact,
+        destinationTimeZone,
+        destinationLatitude,
+        destinationLongitude,
+        // Time fields
+        departureTime,
+        arrivalTime
       } = bookingData;
 
       // Check if carrier exists and is active (only if carrierId is provided)
@@ -231,7 +257,33 @@ export const createBooking = async (req: Request, res: Response) => {
           origin: origin || undefined,
           destination: destination || undefined,
           estimatedMiles: estimatedMiles ? parseFloat(estimatedMiles) : undefined,
-          manifestNumber: manifestNumber || undefined
+          manifestNumber: manifestNumber || undefined,
+          // Route information fields
+          routeName: routeName || undefined,
+          routeFrequency: routeFrequency || undefined,
+          routeStandardRate: routeStandardRate ? parseFloat(routeStandardRate) : undefined,
+          routeRunTime: routeRunTime ? parseInt(routeRunTime) : undefined,
+          // Origin details
+          originAddress: originAddress || undefined,
+          originCity: originCity || undefined,
+          originState: originState || undefined,
+          originZipCode: originZipCode || undefined,
+          originContact: originContact || undefined,
+          originTimeZone: originTimeZone || undefined,
+          originLatitude: originLatitude ? parseFloat(originLatitude) : undefined,
+          originLongitude: originLongitude ? parseFloat(originLongitude) : undefined,
+          // Destination details
+          destinationAddress: destinationAddress || undefined,
+          destinationCity: destinationCity || undefined,
+          destinationState: destinationState || undefined,
+          destinationZipCode: destinationZipCode || undefined,
+          destinationContact: destinationContact || undefined,
+          destinationTimeZone: destinationTimeZone || undefined,
+          destinationLatitude: destinationLatitude ? parseFloat(destinationLatitude) : undefined,
+          destinationLongitude: destinationLongitude ? parseFloat(destinationLongitude) : undefined,
+          // Time fields
+          departureTime: departureTime || undefined,
+          arrivalTime: arrivalTime || undefined
         },
         include: {
           carrier: true,

@@ -140,6 +140,36 @@ model Booking {
   estimatedMiles        Decimal?      @db.Decimal(6, 1)
   manifestNumber        String?       // For load completion workflow
   
+  // Route information fields for custom bookings
+  routeName             String?
+  routeFrequency        String?
+  routeStandardRate     Decimal?      @db.Decimal(8, 2)
+  routeRunTime          Int?
+  
+  // Origin details
+  originAddress         String?
+  originCity            String?
+  originState           String?
+  originZipCode         String?
+  originContact         String?
+  originTimeZone        String?
+  originLatitude        Decimal?      @db.Decimal(10, 7)
+  originLongitude       Decimal?      @db.Decimal(10, 7)
+  
+  // Destination details
+  destinationAddress    String?
+  destinationCity       String?
+  destinationState      String?
+  destinationZipCode    String?
+  destinationContact    String?
+  destinationTimeZone   String?
+  destinationLatitude   Decimal?      @db.Decimal(10, 7)
+  destinationLongitude  Decimal?      @db.Decimal(10, 7)
+  
+  // Time fields
+  departureTime         String?
+  arrivalTime           String?
+  
   carrier               Carrier?      @relation(fields: [carrierId], references: [id])
   parentBooking         Booking?      @relation("BookingLegs", fields: [parentBookingId], references: [id])
   childBookings         Booking[]     @relation("BookingLegs")
