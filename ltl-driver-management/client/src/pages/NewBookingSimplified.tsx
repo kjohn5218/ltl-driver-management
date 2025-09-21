@@ -68,6 +68,7 @@ export const NewBookingSimplified: React.FC<NewBookingSimplifiedProps> = () => {
   const [customOrigin, setCustomOrigin] = useState('');
   const [customDestination, setCustomDestination] = useState('');
   const [customMiles, setCustomMiles] = useState('');
+  const [isRoundTrip, setIsRoundTrip] = useState(false);
   // Selected location objects for address details
   const [selectedOriginLocation, setSelectedOriginLocation] = useState<Location | null>(null);
   const [selectedDestinationLocation, setSelectedDestinationLocation] = useState<Location | null>(null);
@@ -260,6 +261,7 @@ export const NewBookingSimplified: React.FC<NewBookingSimplifiedProps> = () => {
     setCustomOrigin('');
     setCustomDestination('');
     setCustomMiles('');
+    setIsRoundTrip(false);
     setSelectedOriginLocation(null);
     setSelectedDestinationLocation(null);
     setLegDepartureTime('');
@@ -334,10 +336,32 @@ export const NewBookingSimplified: React.FC<NewBookingSimplifiedProps> = () => {
         destinationLocation: selectedDestinationLocation
       };
       
-      setLegs([...legs, newLeg]);
+      // If round trip is checked, create both legs at once
+      if (isRoundTrip) {
+        const returnLeg: UnifiedLeg = {
+          id: (Date.now() + 1).toString(), // Ensure unique ID
+          type: 'custom',
+          origin: customDestination, // Swapped: destination becomes origin
+          destination: customOrigin, // Swapped: origin becomes destination  
+          miles: parseFloat(customMiles), // Same miles for return trip
+          rateType: legRateType,
+          baseRate: legBaseRate,
+          totalRate: calculateLegRate(),
+          departureTime: '', // Leave empty for user to set
+          arrivalTime: '', // Leave empty for user to set
+          reportTime: '',
+          originLocation: selectedDestinationLocation, // Swapped location objects
+          destinationLocation: selectedOriginLocation // Swapped location objects
+        };
+        
+        setLegs([...legs, newLeg, returnLeg]);
+        console.log('Added round trip legs, total legs now:', legs.length + 2);
+      } else {
+        setLegs([...legs, newLeg]);
+        console.log('Added single leg, total legs now:', legs.length + 1);
+      }
     }
     
-    console.log('Added leg, total legs now:', legs.length + 1);
     clearLegBuilder(true); // Keep rate settings for next leg
     
     // Keep the leg builder visible so user can continue to booking form
@@ -844,6 +868,21 @@ export const NewBookingSimplified: React.FC<NewBookingSimplifiedProps> = () => {
                   min="1"
                   step="0.1"
                 />
+              </div>
+              
+              {/* Round Trip Checkbox */}
+              <div className="flex items-center space-x-2">
+                <input
+                  type="checkbox"
+                  id="roundTrip"
+                  checked={isRoundTrip}
+                  onChange={(e) => setIsRoundTrip(e.target.checked)}
+                  className="w-4 h-4 text-blue-600 bg-gray-100 border-gray-300 rounded focus:ring-blue-500"
+                />
+                <label htmlFor="roundTrip" className="text-sm font-medium text-gray-700">
+                  Check for Round Trip
+                  <span className="text-xs text-gray-500 ml-1">(automatically creates return leg)</span>
+                </label>
               </div>
             </div>
           )}
