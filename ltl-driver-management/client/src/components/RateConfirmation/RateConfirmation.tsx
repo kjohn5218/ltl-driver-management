@@ -68,6 +68,14 @@ export const RateConfirmation: React.FC<RateConfirmationProps> = ({ booking, shi
       );
       console.log('Leg-related fields in booking:', legFields, legFields.map(field => ({ field, value: booking[field] })));
       
+      // Look for fields that might contain arrays or JSON data with individual leg times
+      const allFields = Object.keys(booking);
+      const possibleArrayFields = allFields.filter(key => {
+        const value = booking[key];
+        return Array.isArray(value) || (typeof value === 'string' && (value.includes('[') || value.includes('{')));
+      });
+      console.log('Possible array/JSON fields:', possibleArrayFields, possibleArrayFields.map(field => ({ field, value: booking[field] })));
+      
       // Collect all location codes from booking
       if (booking.origin) {
         console.log('Adding booking.origin:', booking.origin);
