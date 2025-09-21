@@ -173,7 +173,10 @@ export const createBooking = async (req: Request, res: Response) => {
         destinationLongitude,
         // Time fields
         departureTime,
-        arrivalTime
+        arrivalTime,
+        // Multi-leg time arrays
+        legDepartureTimes,
+        legArrivalTimes
       } = bookingData;
 
       // Check if carrier exists and is active (only if carrierId is provided)
@@ -283,7 +286,10 @@ export const createBooking = async (req: Request, res: Response) => {
           destinationLongitude: destinationLongitude ? parseFloat(destinationLongitude) : undefined,
           // Time fields
           departureTime: departureTime || undefined,
-          arrivalTime: arrivalTime || undefined
+          arrivalTime: arrivalTime || undefined,
+          // Multi-leg time arrays
+          legDepartureTimes: legDepartureTimes || undefined,
+          legArrivalTimes: legArrivalTimes || undefined
         },
         include: {
           carrier: true,
