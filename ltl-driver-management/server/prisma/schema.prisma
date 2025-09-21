@@ -170,6 +170,10 @@ model Booking {
   departureTime         String?
   arrivalTime           String?
   
+  // Multi-leg time arrays (JSON stored as strings)
+  legDepartureTimes     String?   // JSON array: ["18:00", "02:30"] 
+  legArrivalTimes       String?   // JSON array: ["04:45", "11:15"]
+  
   carrier               Carrier?      @relation(fields: [carrierId], references: [id])
   parentBooking         Booking?      @relation("BookingLegs", fields: [parentBookingId], references: [id])
   childBookings         Booking[]     @relation("BookingLegs")
