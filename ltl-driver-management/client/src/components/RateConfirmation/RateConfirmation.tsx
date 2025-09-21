@@ -42,23 +42,66 @@ export const RateConfirmation: React.FC<RateConfirmationProps> = ({ booking, shi
     const fetchLocationData = async () => {
       const locationCodes = new Set<string>();
       
+      // Debug: Log the booking data structure
+      console.log('Booking data:', booking);
+      console.log('Child bookings:', booking.childBookings);
+      console.log('Child bookings length:', booking.childBookings?.length);
+      
       // Collect all location codes from booking
-      if (booking.origin) locationCodes.add(booking.origin);
-      if (booking.destination) locationCodes.add(booking.destination);
+      if (booking.origin) {
+        console.log('Adding booking.origin:', booking.origin);
+        locationCodes.add(booking.origin);
+      }
+      if (booking.destination) {
+        console.log('Adding booking.destination:', booking.destination);
+        locationCodes.add(booking.destination);
+      }
       
       // Collect location codes from child bookings (for multi-leg)
-      if (booking.childBookings) {
-        booking.childBookings.forEach(child => {
-          if (child.route?.origin) locationCodes.add(child.route.origin);
-          if (child.route?.destination) locationCodes.add(child.route.destination);
-          if (child.origin) locationCodes.add(child.origin);
-          if (child.destination) locationCodes.add(child.destination);
+      if (booking.childBookings && booking.childBookings.length > 0) {
+        console.log('Processing child bookings for location codes...');
+        booking.childBookings.forEach((child, index) => {
+          console.log(`Child booking ${index}:`, child);
+          console.log(`Child booking ${index} route:`, child.route);
+          console.log(`Child booking ${index} legNumber:`, child.legNumber);
+          console.log(`Child booking ${index} has route data:`, !!child.route);
+          
+          if (child.route?.origin) {
+            console.log(`Adding child ${index} route.origin:`, child.route.origin);
+            locationCodes.add(child.route.origin);
+          } else {
+            console.log(`Child ${index} route.origin is missing:`, child.route?.origin);
+          }
+          
+          if (child.route?.destination) {
+            console.log(`Adding child ${index} route.destination:`, child.route.destination);
+            locationCodes.add(child.route.destination);
+          } else {
+            console.log(`Child ${index} route.destination is missing:`, child.route?.destination);
+          }
+          
+          if (child.origin) {
+            console.log(`Adding child ${index} origin:`, child.origin);
+            locationCodes.add(child.origin);
+          }
+          if (child.destination) {
+            console.log(`Adding child ${index} destination:`, child.destination);
+            locationCodes.add(child.destination);
+          }
         });
+      } else {
+        console.log('No child bookings found or empty array');
       }
       
       // Collect from route if available
-      if (booking.route?.origin) locationCodes.add(booking.route.origin);
-      if (booking.route?.destination) locationCodes.add(booking.route.destination);
+      if (booking.route?.origin) {
+        console.log('Adding booking.route.origin:', booking.route.origin);
+        locationCodes.add(booking.route.origin);
+      }
+      if (booking.route?.destination) {
+        console.log('Adding booking.route.destination:', booking.route.destination);
+        locationCodes.add(booking.route.destination);
+      }
       
       // Debug: Log collected location codes
       console.log('Location codes to fetch:', Array.from(locationCodes));
