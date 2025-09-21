@@ -60,6 +60,14 @@ export const RateConfirmation: React.FC<RateConfirmationProps> = ({ booking, shi
       );
       console.log('Time-related fields in booking:', timeFields, timeFields.map(field => ({ field, value: booking[field] })));
       
+      // Look for leg-specific fields
+      const legFields = Object.keys(booking).filter(key => 
+        key.toLowerCase().includes('leg') || 
+        key.toLowerCase().includes('2') ||
+        key.toLowerCase().includes('second')
+      );
+      console.log('Leg-related fields in booking:', legFields, legFields.map(field => ({ field, value: booking[field] })));
+      
       // Collect all location codes from booking
       if (booking.origin) {
         console.log('Adding booking.origin:', booking.origin);
@@ -231,10 +239,28 @@ export const RateConfirmation: React.FC<RateConfirmationProps> = ({ booking, shi
             const [arrHours, arrMinutes] = booking.arrivalTime.split(':').map(Number);
             const arrivalMinutes = arrHours * 60 + arrMinutes;
             
-            // Parse leg 2 departure time (use a reasonable default like 02:30 if not available)
-            // For multi-leg from notes, we might need separate departure times for each leg
-            // For now, use a calculated time based on arrival + some rest time
-            const leg2DepTime = '02:30'; // This should ideally come from leg 2 data
+            // Get Leg 2 departure time from booking (user-entered) or calculate as arrival + 1 hour
+            let leg2DepTime = booking.leg2DepartureTime || booking.departureTime2; // Try common field names
+            
+            if (!leg2DepTime) {
+              // If no Leg 2 departure time found, use arrival + 1 hour as default
+              const defaultRestMinutes = 1 * 60; // 1 hour rest
+              const leg2DepMinutes = arrivalMinutes + defaultRestMinutes;
+              
+              // Convert back to HH:MM format, handling day overflow
+              let leg2Hours = Math.floor(leg2DepMinutes / 60);
+              let leg2Mins = leg2DepMinutes % 60;
+              
+              // If time goes past 24:00, wrap to next day
+              if (leg2Hours >= 24) {
+                leg2Hours = leg2Hours - 24;
+              }
+              leg2DepTime = `${leg2Hours.toString().padStart(2, '0')}:${leg2Mins.toString().padStart(2, '0')}`;
+              console.log(`No Leg 2 departure time found, using arrival + 1hr: ${leg2DepTime} (from arrival: ${booking.arrivalTime})`);
+            } else {
+              console.log(`Using user-entered Leg 2 departure time: ${leg2DepTime}`);
+            }
+            
             const [leg2Hours, leg2Minutes] = leg2DepTime.split(':').map(Number);
             const leg2DepMinutes = leg2Hours * 60 + leg2Minutes;
             
