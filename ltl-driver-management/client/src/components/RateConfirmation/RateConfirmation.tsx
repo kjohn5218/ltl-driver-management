@@ -46,6 +46,8 @@ export const RateConfirmation: React.FC<RateConfirmationProps> = ({ booking, shi
       console.log('Booking data:', booking);
       console.log('Child bookings:', booking.childBookings);
       console.log('Child bookings length:', booking.childBookings?.length);
+      console.log('Booking notes:', booking.notes);
+      console.log('Multi-leg booking parsed from notes:', parseMultiLegBooking(booking.notes || null));
       
       // Collect all location codes from booking
       if (booking.origin) {
@@ -91,6 +93,18 @@ export const RateConfirmation: React.FC<RateConfirmationProps> = ({ booking, shi
         });
       } else {
         console.log('No child bookings found or empty array');
+        
+        // If no child bookings, check for multi-leg booking in notes
+        const multiLegData = parseMultiLegBooking(booking.notes || null);
+        if (multiLegData && multiLegData.length > 0) {
+          console.log('Found multi-leg data in notes, collecting location codes...');
+          multiLegData.forEach((leg, index) => {
+            console.log(`Notes leg ${index + 1} origin:`, leg.origin);
+            console.log(`Notes leg ${index + 1} destination:`, leg.destination);
+            locationCodes.add(leg.origin);
+            locationCodes.add(leg.destination);
+          });
+        }
       }
       
       // Collect from route if available
