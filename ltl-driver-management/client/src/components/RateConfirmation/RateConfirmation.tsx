@@ -204,6 +204,49 @@ export const RateConfirmation: React.FC<RateConfirmationProps> = ({ booking, shi
       }
     }
     
+    // Check if this is a multi-leg booking using notes and we have booking departure/arrival times
+    const multiLegData = parseMultiLegBooking(booking.notes || null);
+    if (multiLegData && multiLegData.length > 0) {
+      console.log(`Multi-leg booking from notes, using booking times for leg ${legNumber}`);
+      
+      if (legNumber === 1 && booking.departureTime) {
+        const departureTime = booking.departureTime;
+        console.log(`Using booking.departureTime for leg 1: ${departureTime}`);
+        return `${format(bookingDate, 'MM/dd/yyyy')} ${departureTime}`;
+      }
+      
+      if (legNumber === 2) {
+        // For leg 2, calculate date based on leg 1 arrival and leg 2 departure
+        if (booking.departureTime && booking.arrivalTime) {
+          try {
+            // Parse leg 1 arrival time
+            const [arrHours, arrMinutes] = booking.arrivalTime.split(':').map(Number);
+            const arrivalMinutes = arrHours * 60 + arrMinutes;
+            
+            // Parse leg 2 departure time (use a reasonable default like 02:30 if not available)
+            // For multi-leg from notes, we might need separate departure times for each leg
+            // For now, use a calculated time based on arrival + some rest time
+            const leg2DepTime = '02:30'; // This should ideally come from leg 2 data
+            const [leg2Hours, leg2Minutes] = leg2DepTime.split(':').map(Number);
+            const leg2DepMinutes = leg2Hours * 60 + leg2Minutes;
+            
+            // If leg 2 departure is earlier than leg 1 arrival, it's next day
+            if (leg2DepMinutes < arrivalMinutes) {
+              const nextDay = new Date(bookingDate);
+              nextDay.setDate(nextDay.getDate() + 1);
+              console.log(`Using next day for leg 2: ${format(nextDay, 'MM/dd/yyyy')} ${leg2DepTime}`);
+              return `${format(nextDay, 'MM/dd/yyyy')} ${leg2DepTime}`;
+            } else {
+              console.log(`Using same day for leg 2: ${format(bookingDate, 'MM/dd/yyyy')} ${leg2DepTime}`);
+              return `${format(bookingDate, 'MM/dd/yyyy')} ${leg2DepTime}`;
+            }
+          } catch (error) {
+            console.error('Error calculating leg 2 date from booking times:', error);
+          }
+        }
+      }
+    }
+    
     // Fallback for route-based bookings or legacy logic
     if (legNumber === 1 && booking.route?.departureTime && booking.route?.runTime) {
       try {
@@ -222,9 +265,9 @@ export const RateConfirmation: React.FC<RateConfirmationProps> = ({ booking, shi
       }
     }
     
-    // Default fallback
+    // Final default fallback
     const defaultTime = legNumber === 2 ? '02:30' : '21:00';
-    console.log(`getAppointmentDate using default fallback for leg ${legNumber}: ${defaultTime}`);
+    console.log(`getAppointmentDate using final default fallback for leg ${legNumber}: ${defaultTime}`);
     return `${format(bookingDate, 'MM/dd/yyyy')} ${defaultTime}`;
   };
   
@@ -303,7 +346,7 @@ export const RateConfirmation: React.FC<RateConfirmationProps> = ({ booking, shi
               (() => {
                 const time = (booking.childBookings && booking.childBookings.length > 0) 
                   ? (booking.childBookings[0].departureTime || '21:00')
-                  : (booking.route?.departureTime || '21:00');
+                  : (booking.route?.departureTime || booking.departureTime || '21:00');
                 console.log('Carrier TIME field using:', time, 'from childBookings:', booking.childBookings?.length > 0 ? 'yes' : 'no');
                 return time;
               })()
