@@ -51,6 +51,14 @@ export const RateConfirmation: React.FC<RateConfirmationProps> = ({ booking, shi
       console.log('Booking route:', booking.route);
       console.log('Booking departureTime field:', booking.departureTime);
       console.log('Booking arrivalTime field:', booking.arrivalTime);
+      console.log('Full booking object keys:', Object.keys(booking));
+      // Look for any departure time fields that might be specific to legs
+      const timeFields = Object.keys(booking).filter(key => 
+        key.toLowerCase().includes('departure') || 
+        key.toLowerCase().includes('arrival') || 
+        key.toLowerCase().includes('time')
+      );
+      console.log('Time-related fields in booking:', timeFields, timeFields.map(field => ({ field, value: booking[field] })));
       
       // Collect all location codes from booking
       if (booking.origin) {
