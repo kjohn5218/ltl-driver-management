@@ -476,13 +476,22 @@ export const NewBookingSimplified: React.FC<NewBookingSimplifiedProps> = () => {
         arrivalTime: legs[legs.length - 1].arrivalTime || undefined, // Use last leg's arrival time
         // Store individual leg departure and arrival times as JSON arrays
         legDepartureTimes: legs.length > 1 ? (() => {
-          const departureTimes = legs.map(leg => leg.departureTime || '');
-          console.log('Storing leg departure times:', departureTimes);
+          console.log('DEBUG: Full legs array:', legs);
+          const departureTimes = legs.map((leg, index) => {
+            console.log(`Leg ${index + 1} data:`, leg);
+            console.log(`Leg ${index + 1} departureTime:`, leg.departureTime);
+            console.log(`Leg ${index + 1} arrivalTime:`, leg.arrivalTime);
+            return leg.departureTime || '';
+          });
+          console.log('Final departure times array:', departureTimes);
           return JSON.stringify(departureTimes);
         })() : undefined,
         legArrivalTimes: legs.length > 1 ? (() => {
-          const arrivalTimes = legs.map(leg => leg.arrivalTime || '');
-          console.log('Storing leg arrival times:', arrivalTimes);
+          const arrivalTimes = legs.map((leg, index) => {
+            console.log(`Leg ${index + 1} arrival time being stored:`, leg.arrivalTime);
+            return leg.arrivalTime || '';
+          });
+          console.log('Final arrival times array:', arrivalTimes);
           return JSON.stringify(arrivalTimes);
         })() : undefined,
         notes: bookingNotes
