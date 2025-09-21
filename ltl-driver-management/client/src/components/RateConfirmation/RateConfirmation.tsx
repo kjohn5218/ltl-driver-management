@@ -153,11 +153,52 @@ export const RateConfirmation: React.FC<RateConfirmationProps> = ({ booking, shi
     return locationData[locationCode] || null;
   };
   
-  // Calculate appointment date considering midnight crossover
-  const getAppointmentDate = (legNumber: number, baseTime: string = '21:00') => {
+  // Calculate appointment date and time for legs
+  const getAppointmentDate = (legNumber: number, childBooking?: any) => {
     const bookingDate = new Date(booking.bookingDate);
     
-    // For leg 1, check if arrival crosses midnight
+    // For multi-leg bookings with child bookings
+    if (booking.childBookings && booking.childBookings.length > 0) {
+      const leg = childBooking || booking.childBookings.find(cb => cb.legNumber === legNumber);
+      if (leg) {
+        // For Leg 1: Use booking date and leg departure time
+        if (legNumber === 1) {
+          const departureTime = leg.departureTime || '21:00';
+          return `${format(bookingDate, 'MM/dd/yyyy')} ${departureTime}`;
+        }
+        
+        // For Leg 2 and beyond: Calculate date based on previous leg arrival and current leg departure
+        if (legNumber >= 2) {
+          const previousLeg = booking.childBookings.find(cb => cb.legNumber === legNumber - 1);
+          const currentDepartureTime = leg.departureTime || '02:30';
+          
+          if (previousLeg && previousLeg.arrivalTime) {
+            try {
+              // Parse previous leg arrival time
+              const [prevArrHours, prevArrMinutes] = previousLeg.arrivalTime.split(':').map(Number);
+              const prevArrivalMinutes = prevArrHours * 60 + prevArrMinutes;
+              
+              // Parse current leg departure time
+              const [currDepHours, currDepMinutes] = currentDepartureTime.split(':').map(Number);
+              const currDepartureMinutes = currDepHours * 60 + currDepMinutes;
+              
+              // If current departure is earlier in the day than previous arrival, it's next day
+              if (currDepartureMinutes < prevArrivalMinutes) {
+                const nextDay = new Date(bookingDate);
+                nextDay.setDate(nextDay.getDate() + 1);
+                return `${format(nextDay, 'MM/dd/yyyy')} ${currentDepartureTime}`;
+              }
+            } catch (error) {
+              console.error('Error calculating leg 2+ date:', error);
+            }
+          }
+          
+          return `${format(bookingDate, 'MM/dd/yyyy')} ${currentDepartureTime}`;
+        }
+      }
+    }
+    
+    // Fallback for route-based bookings or legacy logic
     if (legNumber === 1 && booking.route?.departureTime && booking.route?.runTime) {
       try {
         const [depHours, depMinutes] = booking.route.departureTime.split(':').map(Number);
@@ -175,12 +216,9 @@ export const RateConfirmation: React.FC<RateConfirmationProps> = ({ booking, shi
       }
     }
     
-    // For other legs or if no crossover, use base date
-    if (legNumber === 2) {
-      return `${format(bookingDate, 'MM/dd/yyyy')} 02:30`;
-    }
-    
-    return `${format(bookingDate, 'MM/dd/yyyy')} ${baseTime}`;
+    // Default fallback
+    const defaultTime = legNumber === 2 ? '02:30' : '21:00';
+    return `${format(bookingDate, 'MM/dd/yyyy')} ${defaultTime}`;
   };
   
   // Calculate total miles using ACTUAL distance data from child bookings
@@ -253,7 +291,12 @@ export const RateConfirmation: React.FC<RateConfirmationProps> = ({ booking, shi
           <tr className="border-b border-black">
             <td className="p-1 text-xs">{booking.carrier?.name || 'TBD'}</td>
             <td className="p-1 text-xs">{format(new Date(booking.bookingDate), 'MM/dd/yyyy')}</td>
-            <td className="p-1 text-xs">21:00</td>
+            <td className="p-1 text-xs">{
+              // Use Leg 1 departure time if available from child bookings
+              (booking.childBookings && booking.childBookings.length > 0) 
+                ? (booking.childBookings[0].departureTime || '21:00')
+                : (booking.route?.departureTime || '21:00')
+            }</td>
           </tr>
         </tbody>
       </table>
@@ -336,7 +379,7 @@ export const RateConfirmation: React.FC<RateConfirmationProps> = ({ booking, shi
                   <div className="flex justify-between items-start">
                     <div className="font-bold mb-1 text-xs">ORIGIN</div>
                     <div className="text-xs text-right">
-                      <div><span className="font-bold">Depart Date/Time:</span> {getAppointmentDate(childBooking.legNumber || 1)}</div>
+                      <div><span className="font-bold">Depart Date/Time:</span> {getAppointmentDate(childBooking.legNumber || 1, childBooking)}</div>
                     </div>
                   </div>
                   <div className="text-xs"><span className="font-bold">Location:</span> {childBooking.route?.origin || childBooking.origin}</div>
