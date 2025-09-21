@@ -336,29 +336,26 @@ export const NewBookingSimplified: React.FC<NewBookingSimplifiedProps> = () => {
         destinationLocation: selectedDestinationLocation
       };
       
-      // If round trip is checked, create both legs at once
+      setLegs([...legs, newLeg]);
+      console.log('Added leg, total legs now:', legs.length + 1);
+      
+      // If round trip is checked, populate form fields for return leg
       if (isRoundTrip) {
-        const returnLeg: UnifiedLeg = {
-          id: (Date.now() + 1).toString(), // Ensure unique ID
-          type: 'custom',
-          origin: customDestination, // Swapped: destination becomes origin
-          destination: customOrigin, // Swapped: origin becomes destination  
-          miles: parseFloat(customMiles), // Same miles for return trip
-          rateType: legRateType,
-          baseRate: legBaseRate,
-          totalRate: calculateLegRate(),
-          departureTime: '', // Leave empty for user to set
-          arrivalTime: '', // Leave empty for user to set
-          reportTime: '',
-          originLocation: selectedDestinationLocation, // Swapped location objects
-          destinationLocation: selectedOriginLocation // Swapped location objects
-        };
+        // Don't clear the builder, instead populate it with swapped values for return trip
+        setCustomOrigin(customDestination); // Swap: destination becomes new origin
+        setCustomDestination(newLeg.origin); // Swap: original origin becomes new destination
+        setSelectedOriginLocation(selectedDestinationLocation); // Swap location objects
+        setSelectedDestinationLocation(selectedOriginLocation);
+        // Keep the same miles and rate settings
+        // Clear times so user can set them for return leg
+        setLegDepartureTime('');
+        setLegArrivalTime('');
+        setLegReportTime('');
+        // Uncheck round trip since we're now setting up the return leg
+        setIsRoundTrip(false);
         
-        setLegs([...legs, newLeg, returnLeg]);
-        console.log('Added round trip legs, total legs now:', legs.length + 2);
-      } else {
-        setLegs([...legs, newLeg]);
-        console.log('Added single leg, total legs now:', legs.length + 1);
+        console.log('Populated form for return trip leg');
+        return; // Don't call clearLegBuilder, keep the populated form
       }
     }
     
