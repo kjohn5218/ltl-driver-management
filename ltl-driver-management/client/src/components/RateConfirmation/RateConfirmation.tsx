@@ -51,6 +51,8 @@ export const RateConfirmation: React.FC<RateConfirmationProps> = ({ booking, shi
       console.log('Booking route:', booking.route);
       console.log('Booking departureTime field:', booking.departureTime);
       console.log('Booking arrivalTime field:', booking.arrivalTime);
+      console.log('Booking legDepartureTimes field:', booking.legDepartureTimes);
+      console.log('Booking legArrivalTimes field:', booking.legArrivalTimes);
       console.log('Full booking object keys:', Object.keys(booking));
       // Look for any departure time fields that might be specific to legs
       const timeFields = Object.keys(booking).filter(key => 
@@ -247,8 +249,21 @@ export const RateConfirmation: React.FC<RateConfirmationProps> = ({ booking, shi
             const [arrHours, arrMinutes] = booking.arrivalTime.split(':').map(Number);
             const arrivalMinutes = arrHours * 60 + arrMinutes;
             
-            // Get Leg 2 departure time from booking (user-entered) or calculate as arrival + 1 hour
-            let leg2DepTime = booking.leg2DepartureTime || booking.departureTime2; // Try common field names
+            // Get Leg 2 departure time from stored leg times array or calculate as arrival + 1 hour
+            let leg2DepTime;
+            
+            // Try to get from legDepartureTimes array
+            if (booking.legDepartureTimes) {
+              try {
+                const legDepartureTimes = JSON.parse(booking.legDepartureTimes);
+                leg2DepTime = legDepartureTimes[1]; // Index 1 for Leg 2
+                if (leg2DepTime) {
+                  console.log(`Found Leg 2 departure time in legDepartureTimes array: ${leg2DepTime}`);
+                }
+              } catch (error) {
+                console.error('Error parsing legDepartureTimes:', error);
+              }
+            }
             
             if (!leg2DepTime) {
               // If no Leg 2 departure time found, use arrival + 1 hour as default

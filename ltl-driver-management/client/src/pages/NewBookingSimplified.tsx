@@ -474,6 +474,17 @@ export const NewBookingSimplified: React.FC<NewBookingSimplifiedProps> = () => {
         carrierReportTime: firstLeg.reportTime || carrierReportTime || undefined,
         departureTime: firstLeg.departureTime || undefined,
         arrivalTime: legs[legs.length - 1].arrivalTime || undefined, // Use last leg's arrival time
+        // Store individual leg departure and arrival times as JSON arrays
+        legDepartureTimes: legs.length > 1 ? (() => {
+          const departureTimes = legs.map(leg => leg.departureTime || '');
+          console.log('Storing leg departure times:', departureTimes);
+          return JSON.stringify(departureTimes);
+        })() : undefined,
+        legArrivalTimes: legs.length > 1 ? (() => {
+          const arrivalTimes = legs.map(leg => leg.arrivalTime || '');
+          console.log('Storing leg arrival times:', arrivalTimes);
+          return JSON.stringify(arrivalTimes);
+        })() : undefined,
         notes: bookingNotes
       };
       

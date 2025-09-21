@@ -178,6 +178,10 @@ export interface Booking {
   departureTime?: string;
   arrivalTime?: string;
   
+  // Multi-leg time arrays
+  legDepartureTimes?: string; // JSON array: ["18:00", "02:30"]
+  legArrivalTimes?: string;   // JSON array: ["04:45", "11:15"]
+  
   // Rate confirmation tracking
   confirmationToken?: string;
   confirmationSentAt?: string;
