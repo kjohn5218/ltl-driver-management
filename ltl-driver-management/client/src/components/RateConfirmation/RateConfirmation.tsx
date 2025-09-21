@@ -48,6 +48,9 @@ export const RateConfirmation: React.FC<RateConfirmationProps> = ({ booking, shi
       console.log('Child bookings length:', booking.childBookings?.length);
       console.log('Booking notes:', booking.notes);
       console.log('Multi-leg booking parsed from notes:', parseMultiLegBooking(booking.notes || null));
+      console.log('Booking route:', booking.route);
+      console.log('Booking departureTime field:', booking.departureTime);
+      console.log('Booking arrivalTime field:', booking.arrivalTime);
       
       // Collect all location codes from booking
       if (booking.origin) {
@@ -157,6 +160,9 @@ export const RateConfirmation: React.FC<RateConfirmationProps> = ({ booking, shi
   const getAppointmentDate = (legNumber: number, childBooking?: any) => {
     const bookingDate = new Date(booking.bookingDate);
     
+    console.log(`getAppointmentDate called with legNumber: ${legNumber}, childBooking:`, childBooking);
+    console.log('booking.childBookings exists:', !!booking.childBookings, 'length:', booking.childBookings?.length);
+    
     // For multi-leg bookings with child bookings
     if (booking.childBookings && booking.childBookings.length > 0) {
       const leg = childBooking || booking.childBookings.find(cb => cb.legNumber === legNumber);
@@ -218,6 +224,7 @@ export const RateConfirmation: React.FC<RateConfirmationProps> = ({ booking, shi
     
     // Default fallback
     const defaultTime = legNumber === 2 ? '02:30' : '21:00';
+    console.log(`getAppointmentDate using default fallback for leg ${legNumber}: ${defaultTime}`);
     return `${format(bookingDate, 'MM/dd/yyyy')} ${defaultTime}`;
   };
   
@@ -293,9 +300,13 @@ export const RateConfirmation: React.FC<RateConfirmationProps> = ({ booking, shi
             <td className="p-1 text-xs">{format(new Date(booking.bookingDate), 'MM/dd/yyyy')}</td>
             <td className="p-1 text-xs">{
               // Use Leg 1 departure time if available from child bookings
-              (booking.childBookings && booking.childBookings.length > 0) 
-                ? (booking.childBookings[0].departureTime || '21:00')
-                : (booking.route?.departureTime || '21:00')
+              (() => {
+                const time = (booking.childBookings && booking.childBookings.length > 0) 
+                  ? (booking.childBookings[0].departureTime || '21:00')
+                  : (booking.route?.departureTime || '21:00');
+                console.log('Carrier TIME field using:', time, 'from childBookings:', booking.childBookings?.length > 0 ? 'yes' : 'no');
+                return time;
+              })()
             }</td>
           </tr>
         </tbody>
