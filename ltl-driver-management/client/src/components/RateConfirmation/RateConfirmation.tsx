@@ -60,6 +60,9 @@ export const RateConfirmation: React.FC<RateConfirmationProps> = ({ booking, shi
       if (booking.route?.origin) locationCodes.add(booking.route.origin);
       if (booking.route?.destination) locationCodes.add(booking.route.destination);
       
+      // Debug: Log collected location codes
+      console.log('Location codes to fetch:', Array.from(locationCodes));
+      
       // Fetch location data for all codes
       const locations: { [key: string]: Location } = {};
       
@@ -71,12 +74,16 @@ export const RateConfirmation: React.FC<RateConfirmationProps> = ({ booking, shi
           );
           if (matchingLocation) {
             locations[code] = matchingLocation;
+            console.log(`Found location data for ${code}:`, matchingLocation);
+          } else {
+            console.log(`No matching location found for ${code}`);
           }
         } catch (error) {
           console.error(`Failed to fetch location data for ${code}:`, error);
         }
       }
       
+      console.log('Final locationData:', locations);
       setLocationData(locations);
     };
 
@@ -276,8 +283,9 @@ export const RateConfirmation: React.FC<RateConfirmationProps> = ({ booking, shi
                     </div>
                   </div>
                   <div className="text-xs"><span className="font-bold">Location:</span> {childBooking.route?.origin || childBooking.origin}</div>
-                  <div className="text-xs"><span className="font-bold">Address:</span> {childBooking.originAddress || childBooking.route?.originAddress || getLocationData(childBooking.route?.origin || childBooking.origin)?.address || ''}</div>
-                  <div className="text-xs"><span className="font-bold">City, State Zip:</span> {childBooking.originCity || childBooking.route?.originCity || getLocationData(childBooking.route?.origin || childBooking.origin)?.city || ''}, {childBooking.originState || childBooking.route?.originState || getLocationData(childBooking.route?.origin || childBooking.origin)?.state || ''} {childBooking.originZipCode || childBooking.route?.originZipCode || getLocationData(childBooking.route?.origin || childBooking.origin)?.zipCode || ''}</div>
+                  {console.log(`Leg ${childBooking.legNumber} origin:`, childBooking.route?.origin || childBooking.origin, 'Location data:', getLocationData(childBooking.route?.origin || childBooking.origin))}
+                  <div className="text-xs"><span className="font-bold">Address:</span> {getLocationData(childBooking.route?.origin || childBooking.origin)?.address || childBooking.originAddress || childBooking.route?.originAddress || ''}</div>
+                  <div className="text-xs"><span className="font-bold">City, State Zip:</span> {getLocationData(childBooking.route?.origin || childBooking.origin)?.city || childBooking.originCity || childBooking.route?.originCity || ''}, {getLocationData(childBooking.route?.origin || childBooking.origin)?.state || childBooking.originState || childBooking.route?.originState || ''} {getLocationData(childBooking.route?.origin || childBooking.origin)?.zipCode || childBooking.originZipCode || childBooking.route?.originZipCode || ''}</div>
                   <div className="text-xs"><span className="font-bold">Phone:</span> {childBooking.originPhone || getLocationData(childBooking.route?.origin || childBooking.origin)?.phone || ''} <span className="font-bold">Contact:</span> {childBooking.originContact || childBooking.route?.originContact || getLocationData(childBooking.route?.origin || childBooking.origin)?.contact || ''}</div>
                   <div className="text-xs"><span className="font-bold">Hours:</span> {childBooking.originHours || getLocationData(childBooking.route?.origin || childBooking.origin)?.hours || ''}</div>
                   {index === 0 && booking.carrierReportTime && (
@@ -293,8 +301,9 @@ export const RateConfirmation: React.FC<RateConfirmationProps> = ({ booking, shi
                     </div>
                   </div>
                   <div className="text-xs"><span className="font-bold">Location:</span> {childBooking.route?.destination || childBooking.destination}</div>
-                  <div className="text-xs"><span className="font-bold">Address:</span> {childBooking.destinationAddress || childBooking.route?.destinationAddress || getLocationData(childBooking.route?.destination || childBooking.destination)?.address || ''}</div>
-                  <div className="text-xs"><span className="font-bold">City, State Zip:</span> {childBooking.destinationCity || childBooking.route?.destinationCity || getLocationData(childBooking.route?.destination || childBooking.destination)?.city || ''}, {childBooking.destinationState || childBooking.route?.destinationState || getLocationData(childBooking.route?.destination || childBooking.destination)?.state || ''} {childBooking.destinationZipCode || childBooking.route?.destinationZipCode || getLocationData(childBooking.route?.destination || childBooking.destination)?.zipCode || ''}</div>
+                  {console.log(`Leg ${childBooking.legNumber} destination:`, childBooking.route?.destination || childBooking.destination, 'Location data:', getLocationData(childBooking.route?.destination || childBooking.destination))}
+                  <div className="text-xs"><span className="font-bold">Address:</span> {getLocationData(childBooking.route?.destination || childBooking.destination)?.address || childBooking.destinationAddress || childBooking.route?.destinationAddress || ''}</div>
+                  <div className="text-xs"><span className="font-bold">City, State Zip:</span> {getLocationData(childBooking.route?.destination || childBooking.destination)?.city || childBooking.destinationCity || childBooking.route?.destinationCity || ''}, {getLocationData(childBooking.route?.destination || childBooking.destination)?.state || childBooking.destinationState || childBooking.route?.destinationState || ''} {getLocationData(childBooking.route?.destination || childBooking.destination)?.zipCode || childBooking.destinationZipCode || childBooking.route?.destinationZipCode || ''}</div>
                   <div className="text-xs"><span className="font-bold">Phone:</span> {childBooking.destinationPhone || getLocationData(childBooking.route?.destination || childBooking.destination)?.phone || ''} <span className="font-bold">Contact:</span> {childBooking.destinationContact || childBooking.route?.destinationContact || getLocationData(childBooking.route?.destination || childBooking.destination)?.contact || ''}</div>
                   <div className="text-xs"><span className="font-bold">Hours:</span> {childBooking.destinationHours || getLocationData(childBooking.route?.destination || childBooking.destination)?.hours || ''}</div>
                 </div>
