@@ -229,6 +229,7 @@ model CarrierDriver {
   id          Int      @id @default(autoincrement())
   carrierId   Int
   name        String
+  number      String?  // Driver number for dispatch
   phoneNumber String?
   email       String?
   licenseNumber String?

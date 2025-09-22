@@ -15,7 +15,8 @@ import {
   Edit2,
   Check,
   AlertCircle,
-  Users
+  Users,
+  User
 } from 'lucide-react';
 import { clsx } from 'clsx';
 import { api } from '../../services/api';
@@ -35,10 +36,11 @@ export const Sidebar: React.FC<SidebarProps> = ({ isOpen, onClose }) => {
 
   const navigation = [
     { name: 'Dashboard', href: '/dashboard', icon: Home },
+    { name: 'Bookings', href: '/bookings', icon: Calendar },
+    { name: 'Drivers', href: '/drivers', icon: User },
     { name: 'Carriers', href: '/carriers', icon: Truck },
     { name: 'Routes', href: '/routes', icon: Route },
     { name: 'Locations', href: '/locations', icon: MapPin },
-    { name: 'Bookings', href: '/bookings', icon: Calendar },
     { name: 'Invoices', href: '/invoices', icon: FileText },
     { name: 'Reports', href: '/reports', icon: BarChart3 },
     { name: 'Administration', href: '/admin', icon: Users, adminOnly: true },

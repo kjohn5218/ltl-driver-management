@@ -16,6 +16,7 @@ import { Reports } from './pages/Reports';
 import { ConfirmationPage } from './pages/ConfirmationPage';
 import { CarrierRegistration } from './pages/CarrierRegistration';
 import { Administration } from './pages/Administration';
+import { Drivers } from './pages/Drivers';
 
 // Create a client
 const queryClient = new QueryClient({
@@ -96,6 +97,16 @@ function App() {
                 <ProtectedRoute>
                   <Layout>
                     <NewBooking />
+                  </Layout>
+                </ProtectedRoute>
+              }
+            />
+            <Route
+              path="/drivers"
+              element={
+                <ProtectedRoute>
+                  <Layout>
+                    <Drivers />
                   </Layout>
                 </ProtectedRoute>
               }

@@ -6,7 +6,8 @@ import { Calendar, Truck, MapPin, AlertCircle, X, Plus } from 'lucide-react';
 import { format, eachDayOfInterval, parseISO } from 'date-fns';
 import { LocationAutocomplete } from '../components/LocationAutocomplete';
 import { useAuth } from '../contexts/AuthContext';
-import { Location } from '../types';
+import { Location, CarrierDriver } from '../types';
+import { driverService } from '../services/driverService';
 
 type RateType = 'MILE' | 'MILE_FSC' | 'FLAT_RATE';
 
@@ -57,6 +58,9 @@ export const NewBookingSimplified: React.FC<NewBookingSimplifiedProps> = () => {
   const [phoneNumber, setPhoneNumber] = useState('');
   const [carrierEmail, setCarrierEmail] = useState('');
   const [carrierReportTime, setCarrierReportTime] = useState('');
+  const [selectedDriverId, setSelectedDriverId] = useState('');
+  const [availableDrivers, setAvailableDrivers] = useState<CarrierDriver[]>([]);
+  const [useManualDriverEntry, setUseManualDriverEntry] = useState(false);
   
   // Leg management
   const [legs, setLegs] = useState<UnifiedLeg[]>([]);
@@ -128,6 +132,31 @@ export const NewBookingSimplified: React.FC<NewBookingSimplifiedProps> = () => {
       setFuelSurchargeRate(Number(settingsData.fuelSurchargeRate));
     }
   }, [settingsData]);
+
+  // Fetch drivers when carrier is selected
+  useEffect(() => {
+    if (carrierId) {
+      const fetchDrivers = async () => {
+        try {
+          const drivers = await driverService.getDriversByCarrier(parseInt(carrierId));
+          setAvailableDrivers(drivers);
+          // Reset driver selection when carrier changes
+          setSelectedDriverId('');
+          setDriverName('');
+          setPhoneNumber('');
+        } catch (error) {
+          console.error('Failed to fetch drivers:', error);
+          setAvailableDrivers([]);
+        }
+      };
+      fetchDrivers();
+    } else {
+      setAvailableDrivers([]);
+      setSelectedDriverId('');
+      setDriverName('');
+      setPhoneNumber('');
+    }
+  }, [carrierId]);
 
   // Filtered carriers
   const filteredCarriers = useMemo(() => {
@@ -390,8 +419,18 @@ export const NewBookingSimplified: React.FC<NewBookingSimplifiedProps> = () => {
       const response = await api.post('/bookings', bookings);
       return response.data;
     },
-    onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: ['bookings'] });
+    onSuccess: (createdBookings) => {
+      // Update the bookings cache by adding new bookings to the top
+      queryClient.setQueryData(['bookings'], (oldBookings: any) => {
+        if (!oldBookings) return createdBookings;
+        
+        // Add new bookings to the beginning of the array (newest first)
+        const updatedBookings = [...createdBookings, ...oldBookings];
+        console.log('Added new bookings to cache:', createdBookings.length, 'bookings');
+        return updatedBookings;
+      });
+      
+      // Navigate to bookings page
       navigate('/bookings');
     },
     onError: (error: any) => {
@@ -407,6 +446,29 @@ export const NewBookingSimplified: React.FC<NewBookingSimplifiedProps> = () => {
       return selectedRouteId && legBaseRate;
     } else {
       return customOrigin && customDestination && customMiles && legBaseRate;
+    }
+  };
+
+  // Handle driver selection
+  const handleDriverSelection = (driverId: string) => {
+    if (driverId === 'manual') {
+      setUseManualDriverEntry(true);
+      setSelectedDriverId('');
+      setDriverName('');
+      setPhoneNumber('');
+    } else if (driverId) {
+      const selectedDriver = availableDrivers.find(d => d.id.toString() === driverId);
+      if (selectedDriver) {
+        setUseManualDriverEntry(false);
+        setSelectedDriverId(driverId);
+        setDriverName(selectedDriver.name);
+        setPhoneNumber(selectedDriver.phoneNumber || '');
+      }
+    } else {
+      setUseManualDriverEntry(false);
+      setSelectedDriverId('');
+      setDriverName('');
+      setPhoneNumber('');
     }
   };
 
@@ -1100,21 +1162,71 @@ export const NewBookingSimplified: React.FC<NewBookingSimplifiedProps> = () => {
         <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
           <div>
             <label className="block text-sm font-medium text-gray-700 mb-2">Driver Name</label>
-            <input
-              type="text"
-              value={driverName}
-              onChange={(e) => setDriverName(e.target.value)}
-              className="w-full px-3 py-2 border border-gray-300 rounded-md"
-            />
+            {availableDrivers.length > 0 && !useManualDriverEntry ? (
+              <div className="space-y-2">
+                <select
+                  value={selectedDriverId}
+                  onChange={(e) => handleDriverSelection(e.target.value)}
+                  className="w-full px-3 py-2 border border-gray-300 rounded-md"
+                >
+                  <option value="">Select a driver</option>
+                  {availableDrivers.map((driver) => (
+                    <option key={driver.id} value={driver.id.toString()}>
+                      {driver.name} {driver.number ? `(#${driver.number})` : ''}
+                    </option>
+                  ))}
+                  <option value="manual">Enter manually</option>
+                </select>
+                {selectedDriverId && (
+                  <button
+                    type="button"
+                    onClick={() => setUseManualDriverEntry(true)}
+                    className="text-sm text-blue-600 hover:text-blue-800"
+                  >
+                    Switch to manual entry
+                  </button>
+                )}
+              </div>
+            ) : (
+              <div className="space-y-2">
+                <input
+                  type="text"
+                  value={driverName}
+                  onChange={(e) => setDriverName(e.target.value)}
+                  className="w-full px-3 py-2 border border-gray-300 rounded-md"
+                  placeholder="Enter driver name"
+                />
+                {availableDrivers.length > 0 && (
+                  <button
+                    type="button"
+                    onClick={() => setUseManualDriverEntry(false)}
+                    className="text-sm text-blue-600 hover:text-blue-800"
+                  >
+                    Choose from carrier drivers
+                  </button>
+                )}
+              </div>
+            )}
           </div>
           <div>
             <label className="block text-sm font-medium text-gray-700 mb-2">Phone Number</label>
-            <input
-              type="tel"
-              value={phoneNumber}
-              onChange={(e) => setPhoneNumber(e.target.value)}
-              className="w-full px-3 py-2 border border-gray-300 rounded-md"
-            />
+            <div className="space-y-2">
+              <input
+                type="tel"
+                value={phoneNumber}
+                onChange={(e) => setPhoneNumber(e.target.value)}
+                className={`w-full px-3 py-2 border border-gray-300 rounded-md ${
+                  selectedDriverId && !useManualDriverEntry ? 'bg-gray-50' : ''
+                }`}
+                placeholder="Enter phone number"
+                readOnly={selectedDriverId && !useManualDriverEntry}
+              />
+              {selectedDriverId && !useManualDriverEntry && phoneNumber && (
+                <p className="text-sm text-gray-500">
+                  Auto-filled from driver profile
+                </p>
+              )}
+            </div>
           </div>
           <div>
             <label className="block text-sm font-medium text-gray-700 mb-2">Carrier Email</label>

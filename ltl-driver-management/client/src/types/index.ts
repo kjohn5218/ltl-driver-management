@@ -18,10 +18,16 @@ export interface CarrierDriver {
   id: number;
   carrierId: number;
   name: string;
+  number?: string; // Driver number for dispatch
   phoneNumber?: string;
   email?: string;
   licenseNumber?: string;
   active: boolean;
+  carrier?: {
+    id: number;
+    name: string;
+    status: CarrierStatus;
+  };
   createdAt: string;
   updatedAt: string;
 }
