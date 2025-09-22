@@ -7,12 +7,13 @@ import { StatusBadge } from '../components/common/StatusBadge';
 import { Search } from '../components/common/Search';
 import { Modal } from '../components/common/Modal';
 import { DriverForm } from '../components/drivers/DriverForm';
+import { DriverImport } from '../components/drivers/DriverImport';
 import { driverService } from '../services/driverService';
 import { carrierService } from '../services/carrierService';
 import { CarrierDriver, Carrier } from '../types';
 import { useAuth } from '../contexts/AuthContext';
 import { toast } from 'react-hot-toast';
-import { Plus, Edit, Trash2, Phone, Mail, Hash, Truck } from 'lucide-react';
+import { Plus, Edit, Trash2, Phone, Mail, Truck, Upload } from 'lucide-react';
 
 export const Drivers: React.FC = () => {
   const navigate = useNavigate();
@@ -26,6 +27,7 @@ export const Drivers: React.FC = () => {
   const [isCreateModalOpen, setIsCreateModalOpen] = useState(false);
   const [isEditModalOpen, setIsEditModalOpen] = useState(false);
   const [isDeleteModalOpen, setIsDeleteModalOpen] = useState(false);
+  const [isImportModalOpen, setIsImportModalOpen] = useState(false);
   const [selectedDriver, setSelectedDriver] = useState<CarrierDriver | null>(null);
 
   const isAdminOrDispatcher = user?.role === 'ADMIN' || user?.role === 'DISPATCHER';
@@ -115,8 +117,7 @@ export const Drivers: React.FC = () => {
       header: 'Number',
       accessor: 'number' as keyof CarrierDriver,
       cell: (driver: CarrierDriver) => (
-        <div className="flex items-center text-gray-600">
-          <Hash className="w-4 h-4 mr-1" />
+        <div className="text-gray-600">
           {driver.number || '-'}
         </div>
       )
@@ -219,13 +220,22 @@ export const Drivers: React.FC = () => {
               />
             </div>
             {isAdminOrDispatcher && (
-              <button
-                onClick={() => setIsCreateModalOpen(true)}
-                className="ml-4 inline-flex items-center px-4 py-2 border border-transparent rounded-md shadow-sm text-sm font-medium text-white bg-indigo-600 hover:bg-indigo-700"
-              >
-                <Plus className="w-4 h-4 mr-2" />
-                Add Driver
-              </button>
+              <div className="ml-4 flex space-x-2">
+                <button
+                  onClick={() => setIsImportModalOpen(true)}
+                  className="inline-flex items-center px-4 py-2 border border-gray-300 rounded-md shadow-sm text-sm font-medium text-gray-700 bg-white hover:bg-gray-50"
+                >
+                  <Upload className="w-4 h-4 mr-2" />
+                  Import
+                </button>
+                <button
+                  onClick={() => setIsCreateModalOpen(true)}
+                  className="inline-flex items-center px-4 py-2 border border-transparent rounded-md shadow-sm text-sm font-medium text-white bg-indigo-600 hover:bg-indigo-700"
+                >
+                  <Plus className="w-4 h-4 mr-2" />
+                  Add Driver
+                </button>
+              </div>
             )}
           </div>
         </div>
@@ -271,6 +281,22 @@ export const Drivers: React.FC = () => {
           carriers={carriers}
           onSubmit={handleUpdateDriver}
           onCancel={() => setIsEditModalOpen(false)}
+        />
+      </Modal>
+
+      {/* Import Drivers Modal */}
+      <Modal
+        isOpen={isImportModalOpen}
+        onClose={() => setIsImportModalOpen(false)}
+        title="Import Drivers"
+      >
+        <DriverImport
+          carriers={carriers}
+          onImportComplete={() => {
+            setIsImportModalOpen(false);
+            fetchDrivers();
+          }}
+          onCancel={() => setIsImportModalOpen(false)}
         />
       </Modal>
 

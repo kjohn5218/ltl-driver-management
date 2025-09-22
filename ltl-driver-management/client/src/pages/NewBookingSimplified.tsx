@@ -60,7 +60,12 @@ export const NewBookingSimplified: React.FC<NewBookingSimplifiedProps> = () => {
   const [carrierReportTime, setCarrierReportTime] = useState('');
   const [selectedDriverId, setSelectedDriverId] = useState('');
   const [availableDrivers, setAvailableDrivers] = useState<CarrierDriver[]>([]);
+  const [allDrivers, setAllDrivers] = useState<CarrierDriver[]>([]);
   const [useManualDriverEntry, setUseManualDriverEntry] = useState(false);
+  const [driverSearch, setDriverSearch] = useState('');
+  const [phoneSearch, setPhoneSearch] = useState('');
+  const [showDriverDropdown, setShowDriverDropdown] = useState(false);
+  const [showPhoneDropdown, setShowPhoneDropdown] = useState(false);
   
   // Leg management
   const [legs, setLegs] = useState<UnifiedLeg[]>([]);
@@ -133,30 +138,35 @@ export const NewBookingSimplified: React.FC<NewBookingSimplifiedProps> = () => {
     }
   }, [settingsData]);
 
-  // Fetch drivers when carrier is selected
+  // Fetch all drivers on component mount
+  useEffect(() => {
+    const fetchAllDrivers = async () => {
+      try {
+        const drivers = await driverService.getAllDrivers();
+        setAllDrivers(drivers);
+      } catch (error) {
+        console.error('Failed to fetch all drivers:', error);
+        setAllDrivers([]);
+      }
+    };
+    fetchAllDrivers();
+  }, []);
+
+  // Filter drivers based on selected carrier
   useEffect(() => {
     if (carrierId) {
-      const fetchDrivers = async () => {
-        try {
-          const drivers = await driverService.getDriversByCarrier(parseInt(carrierId));
-          setAvailableDrivers(drivers);
-          // Reset driver selection when carrier changes
-          setSelectedDriverId('');
-          setDriverName('');
-          setPhoneNumber('');
-        } catch (error) {
-          console.error('Failed to fetch drivers:', error);
-          setAvailableDrivers([]);
-        }
-      };
-      fetchDrivers();
+      const carrierDrivers = allDrivers.filter(driver => driver.carrierId === parseInt(carrierId));
+      setAvailableDrivers(carrierDrivers);
     } else {
-      setAvailableDrivers([]);
-      setSelectedDriverId('');
-      setDriverName('');
-      setPhoneNumber('');
+      setAvailableDrivers(allDrivers);
     }
-  }, [carrierId]);
+    // Reset driver selection when carrier changes
+    setSelectedDriverId('');
+    setDriverName('');
+    setPhoneNumber('');
+    setDriverSearch('');
+    setPhoneSearch('');
+  }, [carrierId, allDrivers]);
 
   // Filtered carriers
   const filteredCarriers = useMemo(() => {
@@ -177,6 +187,23 @@ export const NewBookingSimplified: React.FC<NewBookingSimplifiedProps> = () => {
       route.destination.toLowerCase().includes(routeSearch.toLowerCase())
     ).slice(0, 10);
   }, [routes, routeSearch]);
+
+  // Filtered drivers for name search
+  const filteredDrivers = useMemo(() => {
+    if (!driverSearch.trim()) return [];
+    return availableDrivers.filter((driver: CarrierDriver) =>
+      driver.name.toLowerCase().includes(driverSearch.toLowerCase()) ||
+      (driver.number && driver.number.toString().includes(driverSearch.toLowerCase()))
+    ).slice(0, 10);
+  }, [availableDrivers, driverSearch]);
+
+  // Filtered drivers for phone search
+  const filteredDriversByPhone = useMemo(() => {
+    if (!phoneSearch.trim()) return [];
+    return availableDrivers.filter((driver: CarrierDriver) =>
+      driver.phoneNumber && driver.phoneNumber.includes(phoneSearch)
+    ).slice(0, 10);
+  }, [availableDrivers, phoneSearch]);
 
   // Calculate report time (45 minutes before first leg departure)
   const calculateReportTime = (departureTime: string): string => {
@@ -1162,71 +1189,134 @@ export const NewBookingSimplified: React.FC<NewBookingSimplifiedProps> = () => {
         <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
           <div>
             <label className="block text-sm font-medium text-gray-700 mb-2">Driver Name</label>
-            {availableDrivers.length > 0 && !useManualDriverEntry ? (
-              <div className="space-y-2">
-                <select
-                  value={selectedDriverId}
-                  onChange={(e) => handleDriverSelection(e.target.value)}
-                  className="w-full px-3 py-2 border border-gray-300 rounded-md"
-                >
-                  <option value="">Select a driver</option>
-                  {availableDrivers.map((driver) => (
-                    <option key={driver.id} value={driver.id.toString()}>
-                      {driver.name} {driver.number ? `(#${driver.number})` : ''}
-                    </option>
-                  ))}
-                  <option value="manual">Enter manually</option>
-                </select>
-                {selectedDriverId && (
-                  <button
-                    type="button"
-                    onClick={() => setUseManualDriverEntry(true)}
-                    className="text-sm text-blue-600 hover:text-blue-800"
-                  >
-                    Switch to manual entry
-                  </button>
-                )}
-              </div>
-            ) : (
-              <div className="space-y-2">
-                <input
-                  type="text"
-                  value={driverName}
-                  onChange={(e) => setDriverName(e.target.value)}
-                  className="w-full px-3 py-2 border border-gray-300 rounded-md"
-                  placeholder="Enter driver name"
-                />
-                {availableDrivers.length > 0 && (
-                  <button
-                    type="button"
-                    onClick={() => setUseManualDriverEntry(false)}
-                    className="text-sm text-blue-600 hover:text-blue-800"
-                  >
-                    Choose from carrier drivers
-                  </button>
-                )}
-              </div>
-            )}
-          </div>
-          <div>
-            <label className="block text-sm font-medium text-gray-700 mb-2">Phone Number</label>
-            <div className="space-y-2">
+            <div className="relative">
               <input
-                type="tel"
-                value={phoneNumber}
-                onChange={(e) => setPhoneNumber(e.target.value)}
-                className={`w-full px-3 py-2 border border-gray-300 rounded-md ${
-                  selectedDriverId && !useManualDriverEntry ? 'bg-gray-50' : ''
-                }`}
-                placeholder="Enter phone number"
-                readOnly={selectedDriverId && !useManualDriverEntry}
+                type="text"
+                value={useManualDriverEntry ? driverName : driverSearch}
+                onChange={(e) => {
+                  if (useManualDriverEntry) {
+                    setDriverName(e.target.value);
+                  } else {
+                    setDriverSearch(e.target.value);
+                    setShowDriverDropdown(true);
+                  }
+                }}
+                onFocus={() => {
+                  if (!useManualDriverEntry) {
+                    setShowDriverDropdown(true);
+                  }
+                }}
+                onBlur={() => setTimeout(() => setShowDriverDropdown(false), 200)}
+                className="w-full px-3 py-2 border border-gray-300 rounded-md"
+                placeholder={useManualDriverEntry ? "Enter driver name manually" : "Search drivers..."}
               />
-              {selectedDriverId && !useManualDriverEntry && phoneNumber && (
-                <p className="text-sm text-gray-500">
-                  Auto-filled from driver profile
+              {!useManualDriverEntry && showDriverDropdown && filteredDrivers.length > 0 && (
+                <div className="absolute z-10 w-full mt-1 bg-white border border-gray-300 rounded-md shadow-lg max-h-60 overflow-y-auto">
+                  {filteredDrivers.map((driver: CarrierDriver) => (
+                    <button
+                      key={driver.id}
+                      type="button"
+                      onClick={() => {
+                        handleDriverSelection(driver.id.toString());
+                        setDriverSearch(driver.name);
+                        setShowDriverDropdown(false);
+                      }}
+                      className="w-full px-3 py-2 text-left hover:bg-blue-50 border-b border-gray-100"
+                    >
+                      <div className="font-medium">{driver.name}</div>
+                      <div className="text-xs text-gray-500">
+                        {driver.number ? `#${driver.number}` : ''} • {carriers.find(c => c.id === driver.carrierId)?.name || 'Unknown Carrier'}
+                      </div>
+                    </button>
+                  ))}
+                </div>
+              )}
+            </div>
+            <div className="mt-2 space-y-1">
+              <button
+                type="button"
+                onClick={() => {
+                  setUseManualDriverEntry(!useManualDriverEntry);
+                  if (!useManualDriverEntry) {
+                    setDriverSearch('');
+                    setSelectedDriverId('');
+                  } else {
+                    setDriverName('');
+                  }
+                  setPhoneNumber('');
+                }}
+                className="text-sm text-blue-600 hover:text-blue-800"
+              >
+                {useManualDriverEntry ? 'Search from driver list' : 'Enter manually'}
+              </button>
+              {carrierId && (
+                <p className="text-xs text-gray-500">
+                  {availableDrivers.length > 0 
+                    ? `Showing ${availableDrivers.length} drivers from selected carrier`
+                    : 'No drivers found for selected carrier'
+                  }
+                </p>
+              )}
+              {!carrierId && (
+                <p className="text-xs text-gray-500">
+                  Showing all {availableDrivers.length} drivers (select a carrier to filter)
                 </p>
               )}
             </div>
+          </div>
+          <div>
+            <label className="block text-sm font-medium text-gray-700 mb-2">Phone Number</label>
+            <div className="relative">
+              <input
+                type="tel"
+                value={phoneNumber}
+                onChange={(e) => {
+                  setPhoneNumber(e.target.value);
+                  if (!useManualDriverEntry && !selectedDriverId) {
+                    setPhoneSearch(e.target.value);
+                    setShowPhoneDropdown(true);
+                  }
+                }}
+                onFocus={() => {
+                  if (!useManualDriverEntry && !selectedDriverId) {
+                    setShowPhoneDropdown(true);
+                  }
+                }}
+                onBlur={() => setTimeout(() => setShowPhoneDropdown(false), 200)}
+                className={`w-full px-3 py-2 border border-gray-300 rounded-md ${
+                  selectedDriverId && !useManualDriverEntry ? 'bg-gray-50' : ''
+                }`}
+                placeholder={selectedDriverId && !useManualDriverEntry ? "Auto-filled from driver" : "Search by phone or enter manually"}
+                readOnly={selectedDriverId && !useManualDriverEntry}
+              />
+              {!useManualDriverEntry && !selectedDriverId && showPhoneDropdown && filteredDriversByPhone.length > 0 && (
+                <div className="absolute z-10 w-full mt-1 bg-white border border-gray-300 rounded-md shadow-lg max-h-60 overflow-y-auto">
+                  {filteredDriversByPhone.map((driver: CarrierDriver) => (
+                    <button
+                      key={driver.id}
+                      type="button"
+                      onClick={() => {
+                        handleDriverSelection(driver.id.toString());
+                        setDriverSearch(driver.name);
+                        setPhoneSearch('');
+                        setShowPhoneDropdown(false);
+                      }}
+                      className="w-full px-3 py-2 text-left hover:bg-blue-50 border-b border-gray-100"
+                    >
+                      <div className="font-medium">{driver.name}</div>
+                      <div className="text-xs text-gray-500">
+                        {driver.phoneNumber} • {carriers.find(c => c.id === driver.carrierId)?.name || 'Unknown Carrier'}
+                      </div>
+                    </button>
+                  ))}
+                </div>
+              )}
+            </div>
+            {selectedDriverId && !useManualDriverEntry && phoneNumber && (
+              <p className="text-sm text-gray-500 mt-1">
+                Auto-filled from driver profile
+              </p>
+            )}
           </div>
           <div>
             <label className="block text-sm font-medium text-gray-700 mb-2">Carrier Email</label>
