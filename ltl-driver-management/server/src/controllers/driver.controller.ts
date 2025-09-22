@@ -4,7 +4,7 @@ import { PrismaClient } from '@prisma/client';
 const prisma = new PrismaClient();
 
 // Get all drivers with filtering
-export const getDrivers = async (req: Request, res: Response) => {
+export const getDrivers = async (req: Request, res: Response): Promise<Response> => {
   try {
     const { active, carrierId, search, page = 1, limit = 20 } = req.query;
     
@@ -55,7 +55,7 @@ export const getDrivers = async (req: Request, res: Response) => {
       prisma.carrierDriver.count({ where })
     ]);
 
-    res.json({
+    return res.json({
       drivers,
       pagination: {
         page: parseInt(page as string),
@@ -66,12 +66,12 @@ export const getDrivers = async (req: Request, res: Response) => {
     });
   } catch (error) {
     console.error('Error fetching drivers:', error);
-    res.status(500).json({ error: 'Failed to fetch drivers' });
+    return res.status(500).json({ error: 'Failed to fetch drivers' });
   }
 };
 
 // Get active drivers by carrier
-export const getActiveDriversByCarrier = async (req: Request, res: Response) => {
+export const getActiveDriversByCarrier = async (req: Request, res: Response): Promise<Response> => {
   try {
     const { carrierId } = req.params;
 
@@ -83,15 +83,15 @@ export const getActiveDriversByCarrier = async (req: Request, res: Response) => 
       orderBy: { name: 'asc' }
     });
 
-    res.json(drivers);
+    return res.json(drivers);
   } catch (error) {
     console.error('Error fetching drivers by carrier:', error);
-    res.status(500).json({ error: 'Failed to fetch drivers' });
+    return res.status(500).json({ error: 'Failed to fetch drivers' });
   }
 };
 
 // Get driver by ID
-export const getDriverById = async (req: Request, res: Response) => {
+export const getDriverById = async (req: Request, res: Response): Promise<Response> => {
   try {
     const { id } = req.params;
 
@@ -112,15 +112,15 @@ export const getDriverById = async (req: Request, res: Response) => {
       return res.status(404).json({ error: 'Driver not found' });
     }
 
-    res.json(driver);
+    return res.json(driver);
   } catch (error) {
     console.error('Error fetching driver:', error);
-    res.status(500).json({ error: 'Failed to fetch driver' });
+    return res.status(500).json({ error: 'Failed to fetch driver' });
   }
 };
 
 // Create new driver
-export const createDriver = async (req: Request, res: Response) => {
+export const createDriver = async (req: Request, res: Response): Promise<Response> => {
   try {
     const { carrierId, name, phoneNumber, email, licenseNumber, number } = req.body;
 
@@ -154,15 +154,15 @@ export const createDriver = async (req: Request, res: Response) => {
       }
     });
 
-    res.status(201).json(driver);
+    return res.status(201).json(driver);
   } catch (error) {
     console.error('Error creating driver:', error);
-    res.status(500).json({ error: 'Failed to create driver' });
+    return res.status(500).json({ error: 'Failed to create driver' });
   }
 };
 
 // Update driver
-export const updateDriver = async (req: Request, res: Response) => {
+export const updateDriver = async (req: Request, res: Response): Promise<Response> => {
   try {
     const { id } = req.params;
     const { name, phoneNumber, email, licenseNumber, active, carrierId, number } = req.body;
@@ -210,15 +210,15 @@ export const updateDriver = async (req: Request, res: Response) => {
       }
     });
 
-    res.json(driver);
+    return res.json(driver);
   } catch (error) {
     console.error('Error updating driver:', error);
-    res.status(500).json({ error: 'Failed to update driver' });
+    return res.status(500).json({ error: 'Failed to update driver' });
   }
 };
 
 // Delete driver (soft delete by marking inactive)
-export const deleteDriver = async (req: Request, res: Response) => {
+export const deleteDriver = async (req: Request, res: Response): Promise<Response> => {
   try {
     const { id } = req.params;
 
@@ -237,9 +237,9 @@ export const deleteDriver = async (req: Request, res: Response) => {
       data: { active: false }
     });
 
-    res.status(204).send();
+    return res.status(204).send();
   } catch (error) {
     console.error('Error deleting driver:', error);
-    res.status(500).json({ error: 'Failed to delete driver' });
+    return res.status(500).json({ error: 'Failed to delete driver' });
   }
 };
