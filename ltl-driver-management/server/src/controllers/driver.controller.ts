@@ -24,7 +24,9 @@ export const getDrivers = async (req: Request, res: Response): Promise<Response>
         { name: { contains: search as string, mode: 'insensitive' } },
         { phoneNumber: { contains: search as string, mode: 'insensitive' } },
         { email: { contains: search as string, mode: 'insensitive' } },
-        { licenseNumber: { contains: search as string, mode: 'insensitive' } }
+        { licenseNumber: { contains: search as string, mode: 'insensitive' } },
+        { number: { contains: search as string, mode: 'insensitive' } },
+        { carrier: { name: { contains: search as string, mode: 'insensitive' } } }
       ];
     }
 
