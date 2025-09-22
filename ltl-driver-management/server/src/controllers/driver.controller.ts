@@ -1,6 +1,5 @@
 import { Request, Response } from 'express';
 import { PrismaClient } from '@prisma/client';
-import { AppError } from '../middleware/error.middleware';
 
 const prisma = new PrismaClient();
 
@@ -110,15 +109,13 @@ export const getDriverById = async (req: Request, res: Response) => {
     });
 
     if (!driver) {
-      throw new AppError('Driver not found', 404);
+      return res.status(404).json({ error: 'Driver not found' });
     }
 
     res.json(driver);
   } catch (error) {
     console.error('Error fetching driver:', error);
-    res.status(error instanceof AppError ? error.statusCode : 500).json({ 
-      error: error instanceof AppError ? error.message : 'Failed to fetch driver' 
-    });
+    res.status(500).json({ error: 'Failed to fetch driver' });
   }
 };
 
@@ -133,7 +130,7 @@ export const createDriver = async (req: Request, res: Response) => {
     });
 
     if (!carrier) {
-      throw new AppError('Carrier not found', 404);
+      return res.status(404).json({ error: 'Carrier not found' });
     }
 
     // Create driver with extended properties
@@ -160,9 +157,7 @@ export const createDriver = async (req: Request, res: Response) => {
     res.status(201).json(driver);
   } catch (error) {
     console.error('Error creating driver:', error);
-    res.status(error instanceof AppError ? error.statusCode : 500).json({ 
-      error: error instanceof AppError ? error.message : 'Failed to create driver' 
-    });
+    res.status(500).json({ error: 'Failed to create driver' });
   }
 };
 
@@ -178,7 +173,7 @@ export const updateDriver = async (req: Request, res: Response) => {
     });
 
     if (!existingDriver) {
-      throw new AppError('Driver not found', 404);
+      return res.status(404).json({ error: 'Driver not found' });
     }
 
     // If changing carrier, verify new carrier exists
@@ -188,7 +183,7 @@ export const updateDriver = async (req: Request, res: Response) => {
       });
 
       if (!carrier) {
-        throw new AppError('New carrier not found', 404);
+        return res.status(404).json({ error: 'New carrier not found' });
       }
     }
 
@@ -218,9 +213,7 @@ export const updateDriver = async (req: Request, res: Response) => {
     res.json(driver);
   } catch (error) {
     console.error('Error updating driver:', error);
-    res.status(error instanceof AppError ? error.statusCode : 500).json({ 
-      error: error instanceof AppError ? error.message : 'Failed to update driver' 
-    });
+    res.status(500).json({ error: 'Failed to update driver' });
   }
 };
 
@@ -235,7 +228,7 @@ export const deleteDriver = async (req: Request, res: Response) => {
     });
 
     if (!driver) {
-      throw new AppError('Driver not found', 404);
+      return res.status(404).json({ error: 'Driver not found' });
     }
 
     // Soft delete by marking as inactive
@@ -247,8 +240,6 @@ export const deleteDriver = async (req: Request, res: Response) => {
     res.status(204).send();
   } catch (error) {
     console.error('Error deleting driver:', error);
-    res.status(error instanceof AppError ? error.statusCode : 500).json({ 
-      error: error instanceof AppError ? error.message : 'Failed to delete driver' 
-    });
+    res.status(500).json({ error: 'Failed to delete driver' });
   }
 };
