@@ -198,6 +198,11 @@ export interface Booking {
   confirmationSignature?: string;
   signedPdfPath?: string;
   
+  // Document tracking
+  hasUploadedDocuments?: boolean;
+  documentUploadToken?: string;
+  documentUploadTokenCreatedAt?: string;
+  
   createdAt: string;
   updatedAt: string;
   carrier?: Carrier;
@@ -206,6 +211,7 @@ export interface Booking {
   lineItems?: BookingLineItem[];
   childBookings?: Booking[];
   parentBooking?: Booking;
+  documents?: BookingDocument[];
 }
 
 export interface Invoice {
@@ -226,6 +232,17 @@ export interface CarrierDocument {
   filename: string;
   filePath: string;
   uploadedAt: string;
+}
+
+export interface BookingDocument {
+  id: number;
+  bookingId: number;
+  documentType: string;
+  filename: string;
+  filePath: string;
+  uploadedAt: string;
+  legNumber?: number;
+  notes?: string;
 }
 
 export interface LoginCredentials {
