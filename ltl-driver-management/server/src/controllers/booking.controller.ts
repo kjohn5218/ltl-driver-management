@@ -1,7 +1,7 @@
 import { Request, Response } from 'express';
 import { prisma } from '../index';
 import { Prisma, BookingStatus } from '@prisma/client';
-import { sendBookingConfirmation, sendBookingCancellation, sendRateConfirmationEmail, sendBookingConfirmationWithUploadLink } from '../services/notification.service';
+import { sendBookingCancellation, sendRateConfirmationEmail, sendBookingConfirmationWithUploadLink } from '../services/notification.service';
 import { v4 as uuidv4 } from 'uuid';
 import multer from 'multer';
 import { PDFService } from '../services/pdf.service';
