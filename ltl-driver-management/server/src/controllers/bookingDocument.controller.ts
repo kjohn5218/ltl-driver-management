@@ -6,7 +6,7 @@ import fs from 'fs';
 
 // Configure multer for document uploads
 const storage = multer.diskStorage({
-  destination: async (req, file, cb) => {
+  destination: async (_req, _file, cb) => {
     const uploadDir = path.join(__dirname, '../../uploads/booking-documents');
     
     // Create directory if it doesn't exist
@@ -22,7 +22,7 @@ const storage = multer.diskStorage({
   }
 });
 
-const fileFilter = (req: any, file: Express.Multer.File, cb: any) => {
+const fileFilter = (_req: any, file: Express.Multer.File, cb: any) => {
   // Allow images and documents
   const allowedTypes = /jpeg|jpg|png|gif|pdf|doc|docx|xls|xlsx/;
   const extname = allowedTypes.test(path.extname(file.originalname).toLowerCase());
@@ -203,7 +203,7 @@ export const downloadDocument = async (req: Request, res: Response) => {
       return res.status(404).json({ message: 'Document file not found' });
     }
 
-    res.download(document.filePath, document.filename);
+    return res.download(document.filePath, document.filename);
   } catch (error) {
     console.error('Download document error:', error);
     return res.status(500).json({ message: 'Failed to download document' });
