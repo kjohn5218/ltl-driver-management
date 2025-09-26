@@ -7,7 +7,7 @@ import {
   deleteDocument,
   upload
 } from '../controllers/bookingDocument.controller';
-import { authenticateToken } from '../middleware/auth.middleware';
+import { authenticate } from '../middleware/auth.middleware';
 
 const router = express.Router();
 
@@ -16,7 +16,7 @@ router.get('/upload/:token', getBookingByToken);
 router.post('/upload/:token', upload.array('documents', 10), uploadBookingDocuments);
 
 // Protected routes (for internal use)
-router.use(authenticateToken);
+router.use(authenticate);
 router.get('/booking/:bookingId', getBookingDocuments);
 router.get('/download/:documentId', downloadDocument);
 router.delete('/:documentId', deleteDocument);
