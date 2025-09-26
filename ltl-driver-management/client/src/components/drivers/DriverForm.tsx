@@ -16,7 +16,7 @@ export const DriverForm: React.FC<DriverFormProps> = ({
   onCancel
 }) => {
   const [formData, setFormData] = useState({
-    carrierId: driver?.carrierId || '',
+    carrierId: driver?.carrierId ? driver.carrierId.toString() : '',
     name: driver?.name || '',
     number: driver?.number || '',
     phoneNumber: driver?.phoneNumber || '',
@@ -26,6 +26,25 @@ export const DriverForm: React.FC<DriverFormProps> = ({
   });
 
   const [errors, setErrors] = useState<Record<string, string>>({});
+
+  // Update form data when driver prop changes
+  useEffect(() => {
+    if (driver) {
+      console.log('DriverForm: Setting driver data:', driver);
+      console.log('DriverForm: CarrierId:', driver.carrierId);
+      setFormData({
+        carrierId: driver.carrierId ? driver.carrierId.toString() : '',
+        name: driver.name || '',
+        number: driver.number || '',
+        phoneNumber: driver.phoneNumber || '',
+        email: driver.email || '',
+        licenseNumber: driver.licenseNumber || '',
+        active: driver.active ?? true
+      });
+      // Clear any existing errors when driver changes
+      setErrors({});
+    }
+  }, [driver]);
 
   const validateForm = () => {
     const newErrors: Record<string, string> = {};
@@ -95,6 +114,11 @@ export const DriverForm: React.FC<DriverFormProps> = ({
         <label htmlFor="carrierId" className="flex items-center text-sm font-medium text-gray-700 mb-2">
           <Truck className="w-4 h-4 mr-2" />
           Carrier *
+          {driver && driver.carrier && (
+            <span className="ml-2 text-xs text-gray-500">
+              (Currently: {driver.carrier.name})
+            </span>
+          )}
         </label>
         <select
           id="carrierId"

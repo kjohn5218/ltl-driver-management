@@ -18,6 +18,7 @@ import { ConfirmationPage } from './pages/ConfirmationPage';
 import { CarrierRegistration } from './pages/CarrierRegistration';
 import { Administration } from './pages/Administration';
 import { Drivers } from './pages/Drivers';
+import { DocumentUpload } from './pages/DocumentUpload';
 
 // Create a client
 const queryClient = new QueryClient({
@@ -41,6 +42,7 @@ function App() {
             <Route path="/register" element={<RegisterForm />} />
             <Route path="/register/carrier" element={<CarrierRegistration />} />
             <Route path="/confirm/:token" element={<ConfirmationPage />} />
+            <Route path="/upload-documents/:token" element={<DocumentUpload />} />
             
             {/* Protected routes */}
             <Route

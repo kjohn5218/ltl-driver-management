@@ -1,7 +1,7 @@
 import { Request, Response } from 'express';
 import { prisma } from '../index';
 import { Prisma, BookingStatus } from '@prisma/client';
-import { sendBookingConfirmation, sendBookingCancellation, sendRateConfirmationEmail } from '../services/notification.service';
+import { sendBookingConfirmation, sendBookingCancellation, sendRateConfirmationEmail, sendBookingConfirmationWithUploadLink } from '../services/notification.service';
 import { v4 as uuidv4 } from 'uuid';
 import multer from 'multer';
 import { PDFService } from '../services/pdf.service';
@@ -99,7 +99,10 @@ export const getBookingById = async (req: Request, res: Response) => {
             route: true
           }
         },
-        parentBooking: true
+        parentBooking: true,
+        documents: {
+          orderBy: { uploadedAt: 'desc' }
+        }
       }
     });
 
@@ -329,6 +332,30 @@ export const updateBooking = async (req: Request, res: Response) => {
       return value;
     };
 
+    // Get the current booking to check status changes
+    const currentBooking = await prisma.booking.findUnique({
+      where: { id: parseInt(id) },
+      include: {
+        carrier: true,
+        route: true,
+        childBookings: {
+          include: {
+            route: true
+          }
+        }
+      }
+    });
+
+    if (!currentBooking) {
+      return res.status(404).json({ message: 'Booking not found' });
+    }
+
+    // Check if status is changing to CONFIRMED
+    const isStatusChangingToConfirmed = updateData.status === 'CONFIRMED' && currentBooking.status !== 'CONFIRMED';
+    
+    // Generate document upload token if confirming the booking
+    const documentUploadToken = isStatusChangingToConfirmed ? uuidv4() : undefined;
+
     const booking = await prisma.booking.update({
       where: { id: parseInt(id) },
       data: {
@@ -375,14 +402,27 @@ export const updateBooking = async (req: Request, res: Response) => {
         destinationContact: sanitizeValue(updateData.destinationContact),
         // Time fields
         departureTime: sanitizeValue(updateData.departureTime),
-        arrivalTime: sanitizeValue(updateData.arrivalTime)
+        arrivalTime: sanitizeValue(updateData.arrivalTime),
+        // Document upload token if confirming
+        documentUploadToken: documentUploadToken,
+        documentUploadTokenCreatedAt: documentUploadToken ? new Date() : undefined
       },
       include: {
         carrier: true,
         route: true,
-        lineItems: true
+        lineItems: true,
+        childBookings: {
+          include: {
+            route: true
+          }
+        }
       }
     });
+
+    // If status changed to CONFIRMED, send confirmation email with document upload link
+    if (isStatusChangingToConfirmed) {
+      await sendBookingConfirmationWithUploadLink(booking);
+    }
 
     return res.json(booking);
   } catch (error) {
@@ -418,15 +458,24 @@ export const confirmBooking = async (req: Request, res: Response) => {
 
     const updatedBooking = await prisma.booking.update({
       where: { id: parseInt(id) },
-      data: { status: 'CONFIRMED' },
+      data: { 
+        status: 'CONFIRMED',
+        documentUploadToken: uuidv4(),
+        documentUploadTokenCreatedAt: new Date()
+      },
       include: {
         carrier: true,
-        route: true
+        route: true,
+        childBookings: {
+          include: {
+            route: true
+          }
+        }
       }
     });
 
-    // Send confirmation notification
-    await sendBookingConfirmation(updatedBooking);
+    // Send confirmation notification with document upload link
+    await sendBookingConfirmationWithUploadLink(updatedBooking);
 
     return res.json(updatedBooking);
   } catch (error) {

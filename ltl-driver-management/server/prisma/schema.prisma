@@ -180,6 +180,12 @@ model Booking {
   route                 Route?        @relation(fields: [routeId], references: [id])
   invoice               Invoice?
   lineItems             BookingLineItem[]
+  documents             BookingDocument[]
+  
+  // Document tracking
+  hasUploadedDocuments  Boolean       @default(false)
+  documentUploadToken   String?       @unique
+  documentUploadTokenCreatedAt DateTime?
 
   @@map("bookings")
 }
@@ -239,6 +245,20 @@ model CarrierDriver {
   carrier     Carrier  @relation(fields: [carrierId], references: [id], onDelete: Cascade)
 
   @@map("carrier_drivers")
+}
+
+model BookingDocument {
+  id           Int      @id @default(autoincrement())
+  bookingId    Int
+  documentType String   // e.g., "manifest", "pod", "other"
+  filename     String
+  filePath     String
+  uploadedAt   DateTime @default(now())
+  legNumber    Int?     // For multi-leg bookings to associate with specific leg
+  notes        String?
+  booking      Booking  @relation(fields: [bookingId], references: [id], onDelete: Cascade)
+
+  @@map("booking_documents")
 }
 
 model Invoice {
