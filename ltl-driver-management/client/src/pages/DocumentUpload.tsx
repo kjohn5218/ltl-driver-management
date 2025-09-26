@@ -1,6 +1,5 @@
-import React, { useState, useCallback, useEffect } from 'react';
+import React, { useState, useEffect } from 'react';
 import { useParams, useNavigate } from 'react-router-dom';
-import { useDropzone } from 'react-dropzone';
 import {
   Upload,
   FileText,
@@ -8,8 +7,7 @@ import {
   CheckCircle,
   AlertCircle,
   Loader,
-  Download,
-  Trash2
+  Download
 } from 'lucide-react';
 import api from '../services/api';
 import toast from 'react-hot-toast';
@@ -81,22 +79,12 @@ export const DocumentUpload: React.FC = () => {
     }
   };
 
-  const onDrop = useCallback((acceptedFiles: File[]) => {
-    setSelectedFiles(prev => [...prev, ...acceptedFiles]);
-  }, []);
-
-  const { getRootProps, getInputProps, isDragActive } = useDropzone({
-    onDrop,
-    accept: {
-      'image/*': ['.jpeg', '.jpg', '.png', '.gif'],
-      'application/pdf': ['.pdf'],
-      'application/msword': ['.doc'],
-      'application/vnd.openxmlformats-officedocument.wordprocessingml.document': ['.docx'],
-      'application/vnd.ms-excel': ['.xls'],
-      'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet': ['.xlsx']
-    },
-    maxSize: 10 * 1024 * 1024 // 10MB
-  });
+  const handleFileSelect = (event: React.ChangeEvent<HTMLInputElement>) => {
+    if (event.target.files) {
+      const files = Array.from(event.target.files);
+      setSelectedFiles(prev => [...prev, ...files]);
+    }
+  };
 
   const removeFile = (index: number) => {
     setSelectedFiles(prev => prev.filter((_, i) => i !== index));
@@ -283,21 +271,24 @@ export const DocumentUpload: React.FC = () => {
                 />
               </div>
 
-              <div
-                {...getRootProps()}
-                className={`border-2 border-dashed rounded-lg p-6 text-center cursor-pointer transition-colors
-                  ${isDragActive ? 'border-blue-400 bg-blue-50' : 'border-gray-300 hover:border-gray-400'}`}
-              >
-                <input {...getInputProps()} />
-                <Upload className="mx-auto h-12 w-12 text-gray-400" />
-                <p className="mt-2 text-sm text-gray-600">
-                  {isDragActive
-                    ? "Drop the files here..."
-                    : "Drag and drop files here, or click to select"}
-                </p>
-                <p className="text-xs text-gray-500 mt-1">
-                  Supported formats: Images, PDF, Word, Excel (max 10MB)
-                </p>
+              <div className="border-2 border-dashed border-gray-300 rounded-lg p-6 text-center">
+                <input
+                  type="file"
+                  multiple
+                  accept=".jpeg,.jpg,.png,.gif,.pdf,.doc,.docx,.xls,.xlsx"
+                  onChange={handleFileSelect}
+                  className="hidden"
+                  id="file-upload"
+                />
+                <label htmlFor="file-upload" className="cursor-pointer">
+                  <Upload className="mx-auto h-12 w-12 text-gray-400" />
+                  <p className="mt-2 text-sm text-gray-600">
+                    Click to select files
+                  </p>
+                  <p className="text-xs text-gray-500 mt-1">
+                    Supported formats: Images, PDF, Word, Excel (max 10MB)
+                  </p>
+                </label>
               </div>
 
               {selectedFiles.length > 0 && (
