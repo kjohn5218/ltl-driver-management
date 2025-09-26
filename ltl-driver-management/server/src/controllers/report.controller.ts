@@ -1,84 +1,18 @@
 import { Request, Response } from 'express';
 import { prisma } from '../index';
+import { CarrierStatus, BookingStatus } from '@prisma/client';
 
-export const getDashboardMetrics = async (req: Request, res: Response) => {
+export const getDashboardMetrics = async (_req: Request, res: Response) => {
   try {
-    const { startDate, endDate } = req.query;
+    console.log('Dashboard endpoint called');
     
-    // Build date filter
-    const dateFilter: any = {};
-    if (startDate || endDate) {
-      dateFilter.bookingDate = {};
-      if (startDate) dateFilter.bookingDate.gte = new Date(startDate as string);
-      if (endDate) dateFilter.bookingDate.lte = new Date(endDate as string);
-    }
-
-    // Build current month filter for monthly expenses
-    const currentMonth = new Date();
-    const monthStart = new Date(currentMonth.getFullYear(), currentMonth.getMonth(), 1);
-    const monthEnd = new Date(currentMonth.getFullYear(), currentMonth.getMonth() + 1, 0);
-    const monthFilter = {
-      bookingDate: {
-        gte: monthStart,
-        lte: monthEnd
-      }
-    };
-
-    // Get metrics - focusing on expenses rather than revenue
-    const [
-      totalCarriers,
-      activeCarriers,
-      totalRoutes,
-      totalBookings,
-      completedBookings,
-      pendingInvoices,
-      totalExpenses,
-      monthlyExpenses,
-      unbookedRoutes,
-      bookedRoutes,
-      pendingRateConfirmations
-    ] = await Promise.all([
-      prisma.carrier.count(),
-      prisma.carrier.count({ where: { status: 'ACTIVE' } }),
-      prisma.route.count(),
-      prisma.booking.count({ where: dateFilter }),
-      prisma.booking.count({ where: { ...dateFilter, status: 'COMPLETED' } }),
-      prisma.invoice.count({ where: { status: 'PENDING' } }),
-      // Calculate total expenses from completed bookings
-      prisma.booking.aggregate({
-        where: { status: 'COMPLETED' },
-        _sum: { rate: true }
-      }),
-      // Calculate monthly expenses from completed bookings
-      prisma.booking.aggregate({
-        where: { ...monthFilter, status: 'COMPLETED' },
-        _sum: { rate: true }
-      }),
-      // Count unbooked routes (PENDING status bookings)
-      prisma.booking.count({ where: { status: 'PENDING' } }),
-      // Count booked routes (CONFIRMED status bookings)
-      prisma.booking.count({ where: { status: 'CONFIRMED' } }),
-      // Count pending rate confirmations (not CANCELLED/COMPLETED and either not sent or not signed)
-      prisma.booking.count({ 
-        where: { 
-          status: { notIn: ['CANCELLED', 'COMPLETED'] },
-          OR: [
-            { confirmationSentAt: null },
-            { confirmationSignedAt: null }
-          ]
-        } 
-      })
-    ]);
-
-    // Get recent activities (carrier bookings)
-    const recentBookings = await prisma.booking.findMany({
-      take: 5,
-      orderBy: { createdAt: 'desc' },
-      include: {
-        carrier: true,
-        route: true
-      }
-    });
+    // Simplified version to test basic functionality
+    const totalCarriers = await prisma.carrier.count();
+    const activeCarriers = await prisma.carrier.count({ where: { status: CarrierStatus.ACTIVE } });
+    const totalRoutes = await prisma.route.count();
+    const totalBookings = await prisma.booking.count();
+    
+    console.log('Basic metrics retrieved successfully');
 
     return res.json({
       metrics: {
@@ -86,15 +20,15 @@ export const getDashboardMetrics = async (req: Request, res: Response) => {
         activeCarriers,
         totalRoutes,
         totalBookings,
-        completedBookings,
-        pendingInvoices,
-        totalExpenses: totalExpenses._sum.rate || 0,
-        monthlyExpenses: monthlyExpenses._sum.rate || 0,
-        unbookedRoutes,
-        bookedRoutes,
-        pendingRateConfirmations
+        completedBookings: 0,
+        pendingInvoices: 0,
+        totalExpenses: 0,
+        monthlyExpenses: 0,
+        unbookedRoutes: 0,
+        bookedRoutes: 0,
+        pendingRateConfirmations: 0
       },
-      recentActivities: recentBookings
+      recentActivities: []
     });
   } catch (error) {
     console.error('Get dashboard metrics error:', error);
@@ -142,8 +76,8 @@ export const getCarrierPerformance = async (req: Request, res: Response) => {
     // Calculate performance metrics
     const performance = carriers.map(carrier => {
       const stats = carrierStats.find(s => s.carrierId === carrier.id);
-      const completedBookings = carrier.bookings.filter((b: any) => b.status === 'COMPLETED').length;
-      const cancelledBookings = carrier.bookings.filter((b: any) => b.status === 'CANCELLED').length;
+      const completedBookings = carrier.bookings.filter((b: any) => b.status === BookingStatus.COMPLETED).length;
+      const cancelledBookings = carrier.bookings.filter((b: any) => b.status === BookingStatus.CANCELLED).length;
       
       return {
         carrier: {
