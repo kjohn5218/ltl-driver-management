@@ -1499,6 +1499,12 @@ const BookingEditModal: React.FC<BookingEditModalProps> = ({ booking, onClose, o
     booking.carrier?.name || ''
   );
 
+  // Document upload states
+  const [selectedFiles, setSelectedFiles] = useState<FileList | null>(null);
+  const [documentType, setDocumentType] = useState('invoice');
+  const [isUploading, setIsUploading] = useState(false);
+  const [uploadedDocuments, setUploadedDocuments] = useState(booking.documents || []);
+
   // Multi-leg booking support
   const [multiLegInfo, setMultiLegInfo] = useState(() => {
     const legs = parseMultiLegBooking(booking.notes || null);
@@ -1812,6 +1818,59 @@ const BookingEditModal: React.FC<BookingEditModalProps> = ({ booking, onClose, o
       setSelectedCarrierName('');
       setFormData(prev => ({ ...prev, carrierId: null }));
     }
+  };
+
+  // Handle document upload
+  const handleDocumentUpload = async () => {
+    if (!selectedFiles || selectedFiles.length === 0) {
+      alert('Please select files to upload');
+      return;
+    }
+
+    setIsUploading(true);
+    try {
+      const formData = new FormData();
+      
+      // Add all selected files
+      for (let i = 0; i < selectedFiles.length; i++) {
+        formData.append('documents', selectedFiles[i]);
+      }
+      
+      // Add metadata
+      formData.append('documentType', documentType);
+      formData.append('uploadedBy', 'Admin User'); // You might want to get this from user context
+
+      const response = await api.post(`/bookings/${booking.id}/documents`, formData, {
+        headers: {
+          'Content-Type': 'multipart/form-data',
+        },
+      });
+
+      if (response.data.documents) {
+        // Add new documents to the uploaded documents list
+        setUploadedDocuments(prev => [...prev, ...response.data.documents]);
+        
+        // Clear file selection
+        setSelectedFiles(null);
+        const fileInput = document.querySelector('#document-upload') as HTMLInputElement;
+        if (fileInput) {
+          fileInput.value = '';
+        }
+        
+        alert(`Successfully uploaded ${response.data.documents.length} document(s)`);
+      }
+    } catch (error) {
+      console.error('Document upload error:', error);
+      alert('Failed to upload documents. Please try again.');
+    } finally {
+      setIsUploading(false);
+    }
+  };
+
+  // Handle file selection
+  const handleFileSelect = (e: React.ChangeEvent<HTMLInputElement>) => {
+    const files = e.target.files;
+    setSelectedFiles(files);
   };
 
   const handleSubmit = async (e: React.FormEvent) => {
@@ -2723,6 +2782,92 @@ const BookingEditModal: React.FC<BookingEditModalProps> = ({ booking, onClose, o
               className="w-full px-3 py-2 border border-gray-300 rounded-md focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
               placeholder="Additional notes..."
             />
+          </div>
+
+          {/* Document Upload Section */}
+          <div className="border-t pt-4">
+            <h3 className="text-lg font-semibold text-gray-900 mb-4">Documents</h3>
+            
+            {/* Current Documents */}
+            {uploadedDocuments.length > 0 && (
+              <div className="mb-4">
+                <label className="block text-sm font-medium text-gray-700 mb-2">Current Documents</label>
+                <div className="space-y-2">
+                  {uploadedDocuments.map((doc: any) => (
+                    <div key={doc.id} className="flex items-center justify-between p-2 bg-gray-50 rounded border">
+                      <div className="flex items-center gap-2">
+                        <FileText className="w-4 h-4 text-blue-500" />
+                        <div>
+                          <div className="text-sm font-medium">{doc.filename}</div>
+                          <div className="text-xs text-gray-500">{doc.documentType}</div>
+                        </div>
+                      </div>
+                      <button
+                        onClick={() => window.open(`/api/bookings/documents/${doc.id}/download`, '_blank')}
+                        className="text-blue-600 hover:text-blue-800 text-sm"
+                        type="button"
+                      >
+                        View
+                      </button>
+                    </div>
+                  ))}
+                </div>
+              </div>
+            )}
+
+            {/* Upload New Documents */}
+            <div className="space-y-4">
+              <div>
+                <label className="block text-sm font-medium text-gray-700 mb-1">Document Type</label>
+                <select
+                  value={documentType}
+                  onChange={(e) => setDocumentType(e.target.value)}
+                  className="w-full px-3 py-2 border border-gray-300 rounded-md focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
+                >
+                  <option value="invoice">Invoice</option>
+                  <option value="receipt">Receipt</option>
+                  <option value="manifest">Manifest</option>
+                  <option value="delivery_receipt">Delivery Receipt</option>
+                  <option value="other">Other</option>
+                </select>
+              </div>
+
+              <div>
+                <label className="block text-sm font-medium text-gray-700 mb-1">Select Files</label>
+                <input
+                  id="document-upload"
+                  type="file"
+                  multiple
+                  onChange={handleFileSelect}
+                  className="w-full px-3 py-2 border border-gray-300 rounded-md focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
+                  accept=".pdf,.jpg,.jpeg,.png,.doc,.docx"
+                />
+                {selectedFiles && selectedFiles.length > 0 && (
+                  <p className="text-xs text-gray-500 mt-1">
+                    {selectedFiles.length} file(s) selected
+                  </p>
+                )}
+              </div>
+
+              <button
+                type="button"
+                onClick={handleDocumentUpload}
+                disabled={!selectedFiles || selectedFiles.length === 0 || isUploading}
+                className="px-4 py-2 bg-green-600 text-white rounded hover:bg-green-700 disabled:bg-gray-400 disabled:cursor-not-allowed flex items-center gap-2"
+              >
+                {isUploading ? (
+                  <>
+                    <div className="animate-spin rounded-full h-4 w-4 border-b-2 border-white"></div>
+                    Uploading...
+                  </>
+                ) : (
+                  <>
+                    <FileText className="w-4 h-4" />
+                    Upload Documents
+                  </>
+                )}
+              </button>
+            </div>
           </div>
           
           <div className="flex justify-end gap-3 mt-6 pt-4 border-t">

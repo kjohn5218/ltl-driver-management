@@ -16,7 +16,8 @@ import {
   testEmailConfig,
   getDocumentUploadPage,
   uploadBookingDocuments,
-  downloadBookingDocument
+  downloadBookingDocument,
+  uploadDocumentsToBooking
 } from '../controllers/booking.controller';
 import { authenticate, authorize } from '../middleware/auth.middleware';
 import { validateRequest } from '../middleware/validation.middleware';
@@ -200,6 +201,14 @@ router.get(
   '/test-email-config',
   authorize(UserRole.ADMIN, UserRole.DISPATCHER),
   testEmailConfig
+);
+
+// Upload documents to booking (Admin/Dispatcher only)
+router.post(
+  '/:bookingId/documents',
+  authorize(UserRole.ADMIN, UserRole.DISPATCHER),
+  upload.array('documents', 10), // Allow up to 10 files
+  uploadDocumentsToBooking
 );
 
 export default router;

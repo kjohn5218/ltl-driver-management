@@ -1019,3 +1019,52 @@ export const downloadBookingDocument = async (req: Request, res: Response) => {
     return res.status(500).json({ message: 'Failed to download document' });
   }
 };
+
+// Upload documents directly to booking (authenticated endpoint)
+export const uploadDocumentsToBooking = async (req: Request, res: Response) => {
+  try {
+    const { bookingId } = req.params;
+    const { documentType, uploadedBy } = req.body;
+
+    if (!req.files || !Array.isArray(req.files) || req.files.length === 0) {
+      return res.status(400).json({ message: 'No files uploaded' });
+    }
+
+    const booking = await prisma.booking.findUnique({
+      where: { id: parseInt(bookingId) }
+    });
+
+    if (!booking) {
+      return res.status(404).json({ message: 'Booking not found' });
+    }
+
+    const uploadedDocuments = [];
+
+    for (const file of req.files as Express.Multer.File[]) {
+      const document = await prisma.bookingDocument.create({
+        data: {
+          bookingId: booking.id,
+          documentType: documentType || 'other',
+          filename: file.originalname,
+          filePath: file.path,
+          uploadedBy: uploadedBy || 'User'
+        }
+      });
+      uploadedDocuments.push(document);
+    }
+
+    return res.json({
+      message: `Successfully uploaded ${uploadedDocuments.length} document(s)`,
+      documents: uploadedDocuments.map(doc => ({
+        id: doc.id,
+        filename: doc.filename,
+        documentType: doc.documentType,
+        uploadedAt: doc.uploadedAt,
+        uploadedBy: doc.uploadedBy
+      }))
+    });
+  } catch (error) {
+    console.error('Document upload to booking error:', error);
+    return res.status(500).json({ message: 'Failed to upload documents' });
+  }
+};
