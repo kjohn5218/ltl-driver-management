@@ -3,7 +3,7 @@ import { useNavigate, useSearchParams } from 'react-router-dom';
 import { useQuery, useQueryClient, useMutation } from '@tanstack/react-query';
 import { api, sendRateConfirmationEmail } from '../services/api';
 import { Booking } from '../types';
-import { Plus, Search, Edit, Eye, Calendar, MapPin, User, DollarSign, X, ChevronUp, ChevronDown, Trash2, FileText, CheckCircle, Clock, Send, Truck } from 'lucide-react';
+import { Plus, Search, Edit, Eye, Calendar, MapPin, User, DollarSign, X, ChevronUp, ChevronDown, Trash2, FileText, CheckCircle, Clock, Send, Truck, Upload } from 'lucide-react';
 import { format, isAfter, isBefore, isSameDay, parseISO } from 'date-fns';
 import { RouteDetails } from '../components/LocationDisplay';
 import { RateConfirmationModal } from '../components/RateConfirmation';
@@ -514,7 +514,19 @@ export const Bookings: React.FC = () => {
             {filteredAndSortedBookings.map((booking) => (
               <tr key={booking.id} className="hover:bg-gray-50">
                 <td className="px-6 py-4 whitespace-nowrap text-sm font-medium text-gray-900">
-                  #{booking.id}
+                  <div className="flex items-center gap-2">
+                    <span>#{booking.id}</span>
+                    {booking.documents && booking.documents.length > 0 && (
+                      <div className="relative group">
+                        <div className="flex items-center justify-center w-6 h-6 bg-green-100 rounded-full">
+                          <Upload className="w-3 h-3 text-green-600" />
+                        </div>
+                        <div className="absolute bottom-full left-1/2 transform -translate-x-1/2 mb-2 px-2 py-1 text-xs text-white bg-gray-800 rounded opacity-0 group-hover:opacity-100 transition-opacity whitespace-nowrap z-10">
+                          {booking.documents.length} document{booking.documents.length !== 1 ? 's' : ''} uploaded
+                        </div>
+                      </div>
+                    )}
+                  </div>
                 </td>
                 <td className="px-6 py-4 whitespace-nowrap">
                   <div className="flex items-center">

@@ -48,6 +48,7 @@ export const getBookings = async (req: Request, res: Response) => {
         carrier: true,
         route: true,
         invoice: true,
+        documents: true,
         childBookings: {
           include: {
             route: true
