@@ -100,7 +100,10 @@ export const getBookingById = async (req: Request, res: Response) => {
             route: true
           }
         },
-        parentBooking: true
+        parentBooking: true,
+        documents: {
+          orderBy: { uploadedAt: 'desc' }
+        }
       }
     });
 
@@ -358,6 +361,7 @@ export const updateBooking = async (req: Request, res: Response) => {
         origin: sanitizeValue(updateData.origin),
         destination: sanitizeValue(updateData.destination),
         estimatedMiles: updateData.estimatedMiles ? parseFloat(updateData.estimatedMiles) : undefined,
+        manifestNumber: sanitizeValue(updateData.manifestNumber),
         // Route information fields
         routeFrequency: sanitizeValue(updateData.routeFrequency),
         routeStandardRate: updateData.routeStandardRate ? parseFloat(updateData.routeStandardRate) : undefined,
@@ -975,5 +979,43 @@ export const uploadBookingDocuments = async (req: Request, res: Response) => {
   } catch (error) {
     console.error('Document upload error:', error);
     return res.status(500).json({ message: 'Failed to upload documents' });
+  }
+};
+
+// Download booking document (public endpoint)
+export const downloadBookingDocument = async (req: Request, res: Response) => {
+  try {
+    const { documentId } = req.params;
+
+    const document = await prisma.bookingDocument.findUnique({
+      where: { id: parseInt(documentId) },
+      include: {
+        booking: {
+          select: { id: true }
+        }
+      }
+    });
+
+    if (!document) {
+      return res.status(404).json({ message: 'Document not found' });
+    }
+
+    // Check if file exists
+    const fs = require('fs');
+    const path = require('path');
+    
+    if (!fs.existsSync(document.filePath)) {
+      return res.status(404).json({ message: 'File not found on disk' });
+    }
+
+    // Set headers for file download
+    res.setHeader('Content-Disposition', `attachment; filename="${document.filename}"`);
+    res.setHeader('Content-Type', 'application/octet-stream');
+    
+    // Send file
+    return res.sendFile(path.resolve(document.filePath));
+  } catch (error) {
+    console.error('Download document error:', error);
+    return res.status(500).json({ message: 'Failed to download document' });
   }
 };

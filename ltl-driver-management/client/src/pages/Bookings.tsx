@@ -29,7 +29,8 @@ const parseMultiLegBooking = (notes: string | null) => {
         legNumber: parseInt(legMatch[1]),
         origin: legMatch[2],
         destination: legMatch[3],
-        rate: legMatch[4]
+        rate: legMatch[4],
+        manifestNumber: '' // Initialize empty, will be set from booking data if available
       });
     }
   }
@@ -913,6 +914,11 @@ const BookingViewModal: React.FC<BookingViewModalProps> = ({ booking, onClose, g
                             <div className="flex justify-between items-center mb-3">
                               <div className="font-medium text-sm text-gray-900">
                                 Leg {childBooking.legNumber}: {childBooking.route?.origin} → {childBooking.route?.destination}
+                                {childBooking.manifestNumber && (
+                                  <div className="text-xs text-gray-600 font-normal mt-1">
+                                    Manifest #: {childBooking.manifestNumber}
+                                  </div>
+                                )}
                               </div>
                               <div className="text-right">
                                 <div className="text-xs text-gray-500">
@@ -1085,6 +1091,11 @@ const BookingViewModal: React.FC<BookingViewModalProps> = ({ booking, onClose, g
                       <MapPin className="w-4 h-4 text-blue-500" />
                       {bookingToDisplay.route.name}
                     </div>
+                    {bookingToDisplay.manifestNumber && (
+                      <div className="text-xs text-gray-600 mt-1">
+                        Manifest #: {bookingToDisplay.manifestNumber}
+                      </div>
+                    )}
                     
                     <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
                       {/* Origin Information */}
@@ -1320,6 +1331,49 @@ const BookingViewModal: React.FC<BookingViewModalProps> = ({ booking, onClose, g
             </div>
           )}
           
+          {/* Documents Section */}
+          {console.log('BookingViewModal documents:', bookingToDisplay.documents)}
+          {bookingToDisplay.documents && bookingToDisplay.documents.length > 0 && (
+            <div>
+              <label className="block text-sm font-medium text-gray-700 mb-2">Uploaded Documents</label>
+              <div className="bg-gray-50 p-4 rounded-lg space-y-2">
+                {bookingToDisplay.documents.map((document: any) => (
+                  <div key={document.id} className="flex items-center justify-between bg-white p-3 rounded border border-gray-200">
+                    <div className="flex items-center gap-3">
+                      <FileText className="w-4 h-4 text-blue-500" />
+                      <div>
+                        <div className="text-sm font-medium text-gray-900">{document.filename}</div>
+                        <div className="text-xs text-gray-500">
+                          {document.documentType} • Uploaded {format(new Date(document.uploadedAt), 'MMM dd, yyyy HH:mm')}
+                          {document.uploadedBy && ` by ${document.uploadedBy}`}
+                        </div>
+                      </div>
+                    </div>
+                    <button
+                      onClick={() => {
+                        // Open document in new tab for viewing/download
+                        window.open(`/api/bookings/documents/${document.id}/download`, '_blank');
+                      }}
+                      className="text-blue-600 hover:text-blue-800 text-sm font-medium"
+                    >
+                      View
+                    </button>
+                  </div>
+                ))}
+              </div>
+            </div>
+          )}
+          
+          {/* Documents Section - Debug/Empty State */}
+          {(!bookingToDisplay.documents || bookingToDisplay.documents.length === 0) && (
+            <div>
+              <label className="block text-sm font-medium text-gray-700 mb-2">Uploaded Documents</label>
+              <div className="bg-gray-50 p-4 rounded-lg text-center text-gray-500 text-sm">
+                No documents uploaded yet
+              </div>
+            </div>
+          )}
+          
           <div className="grid grid-cols-2 gap-4 text-xs text-gray-500 mt-4 pt-4 border-t">
             <div>
               <label className="block font-medium mb-1">Created</label>
@@ -1406,6 +1460,7 @@ const BookingEditModal: React.FC<BookingEditModalProps> = ({ booking, onClose, o
       origin: booking.origin || '',
       destination: booking.destination || '',
       estimatedMiles: booking.estimatedMiles ? booking.estimatedMiles.toString() : '',
+      manifestNumber: booking.manifestNumber || '',
       routeName: booking.routeName || '',
       routeFrequency: booking.routeFrequency || '',
       routeStandardRate: booking.routeStandardRate ? booking.routeStandardRate.toString() : '',
@@ -1653,7 +1708,8 @@ const BookingEditModal: React.FC<BookingEditModalProps> = ({ booking, onClose, o
           legNumber: leg.legNumber,
           origin: leg.origin,
           destination: leg.destination,
-          rate: legRate.toFixed(2)
+          rate: legRate.toFixed(2),
+          manifestNumber: leg.manifestNumber || ''
         };
       });
       
@@ -1689,6 +1745,17 @@ const BookingEditModal: React.FC<BookingEditModalProps> = ({ booking, onClose, o
   const updateLegAddress = (legIndex: number, field: 'origin' | 'destination', newValue: string) => {
     const updatedLegs = editableLegs.map((leg, index) => 
       index === legIndex ? { ...leg, [field]: newValue } : leg
+    );
+    setEditableLegs(updatedLegs);
+    
+    // Update notes with new leg information
+    updateMultiLegNotes(updatedLegs);
+  };
+
+  // Update leg manifest number
+  const updateLegManifestNumber = (legIndex: number, manifestNumber: string) => {
+    const updatedLegs = editableLegs.map((leg, index) => 
+      index === legIndex ? { ...leg, manifestNumber } : leg
     );
     setEditableLegs(updatedLegs);
     
@@ -2108,6 +2175,18 @@ const BookingEditModal: React.FC<BookingEditModalProps> = ({ booking, onClose, o
                         placeholder="Destination location name..."
                       />
                     </div>
+                  </div>
+                  
+                  {/* Manifest Number Field */}
+                  <div>
+                    <label className="block text-sm font-medium text-gray-700 mb-1">Manifest #</label>
+                    <input
+                      type="text"
+                      value={formData.manifestNumber || ''}
+                      onChange={(e) => setFormData({ ...formData, manifestNumber: e.target.value })}
+                      className="w-full px-3 py-2 border border-gray-300 rounded-md focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
+                      placeholder="Enter manifest number..."
+                    />
                   </div>
                   
                   <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
@@ -2584,6 +2663,18 @@ const BookingEditModal: React.FC<BookingEditModalProps> = ({ booking, onClose, o
                             placeholder="Enter destination address..."
                           />
                         </div>
+                      </div>
+
+                      {/* Manifest Number Field */}
+                      <div className="mb-3">
+                        <label className="block text-xs font-medium text-gray-600 mb-1">Manifest #</label>
+                        <input
+                          type="text"
+                          value={leg.manifestNumber || ''}
+                          onChange={(e) => updateLegManifestNumber(index, e.target.value)}
+                          className="w-full px-2 py-1 border border-gray-300 rounded text-sm focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
+                          placeholder="Enter manifest number..."
+                        />
                       </div>
                     </div>
                     

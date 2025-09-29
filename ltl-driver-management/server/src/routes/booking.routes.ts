@@ -15,7 +15,8 @@ import {
   getSignedPDF,
   testEmailConfig,
   getDocumentUploadPage,
-  uploadBookingDocuments
+  uploadBookingDocuments,
+  downloadBookingDocument
 } from '../controllers/booking.controller';
 import { authenticate, authorize } from '../middleware/auth.middleware';
 import { validateRequest } from '../middleware/validation.middleware';
@@ -54,6 +55,12 @@ router.post(
   '/documents/upload/:token',
   upload.array('documents', 10), // Allow up to 10 files
   uploadBookingDocuments
+);
+
+// Download booking document (public access)
+router.get(
+  '/documents/:documentId/download',
+  downloadBookingDocument
 );
 
 // All routes below this line require authentication
