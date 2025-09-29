@@ -8,15 +8,15 @@ datasource db {
 }
 
 model User {
-  id                    Int              @id @default(autoincrement())
-  email                 String           @unique
+  id                    Int               @id @default(autoincrement())
+  email                 String            @unique
   password              String
   name                  String
-  role                  UserRole         @default(USER)
-  createdAt             DateTime         @default(now())
-  updatedAt             DateTime         @updatedAt
+  role                  UserRole          @default(USER)
+  createdAt             DateTime          @default(now())
+  updatedAt             DateTime          @updatedAt
+  createdLineItems      BookingLineItem[]
   systemSettingsUpdates SystemSettings[]
-  createdLineItems       BookingLineItem[]
 
   @@map("users")
 }
@@ -49,8 +49,8 @@ model Carrier {
   zipCode             String?
   bookings            Booking[]
   documents           CarrierDocument[]
-  preferredRoutes     CarrierPreferredRoute[]
   drivers             CarrierDriver[]
+  preferredRoutes     CarrierPreferredRoute[]
 
   @@map("carriers")
 }
@@ -102,87 +102,74 @@ model SystemSettings {
 }
 
 model Booking {
-  id                    Int           @id @default(autoincrement())
-  carrierId             Int?
-  routeId               Int?
-  bookingDate           DateTime
-  rate                  Decimal       @db.Decimal(8, 2)
-  status                BookingStatus @default(PENDING)
-  billable              Boolean       @default(false)
-  notes                 String?
-  createdAt             DateTime      @default(now())
-  updatedAt             DateTime      @updatedAt
-  bookingGroupId        String?
-  isParent              Boolean       @default(true)
-  legNumber             Int           @default(1)
-  parentBookingId       Int?
-  baseRate              Decimal?      @db.Decimal(8, 2)
-  fscRate               Decimal?      @db.Decimal(5, 2)
-  rateType              RateType      @default(FLAT_RATE)
-  driverName            String?
-  phoneNumber           String?
-  trailerLength         Int?
-  type                  BookingType   @default(POWER_ONLY)
-  carrierEmail          String?
-  carrierReportTime     String?
-  confirmationIpAddress String?
-  confirmationSentAt    DateTime?
-  confirmationSentVia   String?
-  confirmationSignature String?
-  confirmationSignedAt  DateTime?
-  confirmationSignedBy  String?
-  confirmationToken     String?       @unique
-  signedPdfPath         String?       // Path to signed PDF file
-  documentUploadToken   String?       @unique
+  id                           Int               @id @default(autoincrement())
+  carrierId                    Int?
+  routeId                      Int?
+  bookingDate                  DateTime
+  rate                         Decimal           @db.Decimal(8, 2)
+  status                       BookingStatus     @default(PENDING)
+  billable                     Boolean           @default(false)
+  notes                        String?
+  createdAt                    DateTime          @default(now())
+  updatedAt                    DateTime          @updatedAt
+  bookingGroupId               String?
+  isParent                     Boolean           @default(true)
+  legNumber                    Int               @default(1)
+  parentBookingId              Int?
+  baseRate                     Decimal?          @db.Decimal(8, 2)
+  fscRate                      Decimal?          @db.Decimal(5, 2)
+  rateType                     RateType          @default(FLAT_RATE)
+  driverName                   String?
+  phoneNumber                  String?
+  trailerLength                Int?
+  type                         BookingType       @default(POWER_ONLY)
+  carrierEmail                 String?
+  carrierReportTime            String?
+  confirmationIpAddress        String?
+  confirmationSentAt           DateTime?
+  confirmationSentVia          String?
+  confirmationSignature        String?
+  confirmationSignedAt         DateTime?
+  confirmationSignedBy         String?
+  confirmationToken            String?           @unique
+  signedPdfPath                String?
+  origin                       String?
+  destination                  String?
+  estimatedMiles               Decimal?          @db.Decimal(6, 1)
+  manifestNumber               String?
+  arrivalTime                  String?
+  departureTime                String?
+  destinationAddress           String?
+  destinationCity              String?
+  destinationContact           String?
+  destinationLatitude          Decimal?          @db.Decimal(10, 7)
+  destinationLongitude         Decimal?          @db.Decimal(10, 7)
+  destinationState             String?
+  destinationTimeZone          String?
+  destinationZipCode           String?
+  originAddress                String?
+  originCity                   String?
+  originContact                String?
+  originLatitude               Decimal?          @db.Decimal(10, 7)
+  originLongitude              Decimal?          @db.Decimal(10, 7)
+  originState                  String?
+  originTimeZone               String?
+  originZipCode                String?
+  routeFrequency               String?
+  routeName                    String?
+  routeRunTime                 Int?
+  routeStandardRate            Decimal?          @db.Decimal(8, 2)
+  legArrivalTimes              String?
+  legDepartureTimes            String?
+  documentUploadToken          String?           @unique
   documentUploadTokenCreatedAt DateTime?
-  
-  // Origin-destination booking fields
-  origin                String?
-  destination           String?
-  estimatedMiles        Decimal?      @db.Decimal(6, 1)
-  manifestNumber        String?       // For load completion workflow
-  
-  // Route information fields for custom bookings
-  routeName             String?
-  routeFrequency        String?
-  routeStandardRate     Decimal?      @db.Decimal(8, 2)
-  routeRunTime          Int?
-  
-  // Origin details
-  originAddress         String?
-  originCity            String?
-  originState           String?
-  originZipCode         String?
-  originContact         String?
-  originTimeZone        String?
-  originLatitude        Decimal?      @db.Decimal(10, 7)
-  originLongitude       Decimal?      @db.Decimal(10, 7)
-  
-  // Destination details
-  destinationAddress    String?
-  destinationCity       String?
-  destinationState      String?
-  destinationZipCode    String?
-  destinationContact    String?
-  destinationTimeZone   String?
-  destinationLatitude   Decimal?      @db.Decimal(10, 7)
-  destinationLongitude  Decimal?      @db.Decimal(10, 7)
-  
-  // Time fields
-  departureTime         String?
-  arrivalTime           String?
-  
-  // Multi-leg time arrays (JSON stored as strings)
-  legDepartureTimes     String?   // JSON array: ["18:00", "02:30"] 
-  legArrivalTimes       String?   // JSON array: ["04:45", "11:15"]
-  
-  carrier               Carrier?      @relation(fields: [carrierId], references: [id])
-  parentBooking         Booking?      @relation("BookingLegs", fields: [parentBookingId], references: [id])
-  childBookings         Booking[]     @relation("BookingLegs")
-  route                 Route?        @relation(fields: [routeId], references: [id])
-  invoice               Invoice?
-  lineItems             BookingLineItem[]
-  documents             BookingDocument[]
+  documents                    BookingDocument[]
+  lineItems                    BookingLineItem[]
+  carrier                      Carrier?          @relation(fields: [carrierId], references: [id])
+  parentBooking                Booking?          @relation("BookingLegs", fields: [parentBookingId], references: [id])
+  childBookings                Booking[]         @relation("BookingLegs")
+  route                        Route?            @relation(fields: [routeId], references: [id])
+  invoice                      Invoice?
 
   @@map("bookings")
 }
@@ -190,19 +177,18 @@ model Booking {
 model BookingLineItem {
   id          Int      @id @default(autoincrement())
   bookingId   Int
-  category    String   // e.g., "fuel_surcharge", "detention", "additional_stops", "lumper_fee", "custom"
+  category    String
   description String
   amount      Decimal  @db.Decimal(8, 2)
   quantity    Int      @default(1)
-  unitPrice   Decimal? @db.Decimal(8, 2) // For quantity-based charges
-  receiptPath String?  // Path to uploaded receipt
+  unitPrice   Decimal? @db.Decimal(8, 2)
+  receiptPath String?
   createdAt   DateTime @default(now())
   updatedAt   DateTime @updatedAt
-  createdBy   Int?     // User who added this line item
-  
+  createdBy   Int?
   booking     Booking  @relation(fields: [bookingId], references: [id], onDelete: Cascade)
   creator     User?    @relation(fields: [createdBy], references: [id])
-  
+
   @@map("booking_line_items")
 }
 
@@ -229,17 +215,17 @@ model CarrierDocument {
 }
 
 model CarrierDriver {
-  id          Int      @id @default(autoincrement())
-  carrierId   Int
-  name        String
-  number      String?  // Driver number for dispatch
-  phoneNumber String?
-  email       String?
+  id            Int      @id @default(autoincrement())
+  carrierId     Int
+  name          String
+  phoneNumber   String?
+  email         String?
   licenseNumber String?
-  active      Boolean  @default(true)
-  createdAt   DateTime @default(now())
-  updatedAt   DateTime @updatedAt
-  carrier     Carrier  @relation(fields: [carrierId], references: [id], onDelete: Cascade)
+  active        Boolean  @default(true)
+  createdAt     DateTime @default(now())
+  updatedAt     DateTime @updatedAt
+  number        String?
+  carrier       Carrier  @relation(fields: [carrierId], references: [id], onDelete: Cascade)
 
   @@map("carrier_drivers")
 }
@@ -247,14 +233,15 @@ model CarrierDriver {
 model BookingDocument {
   id           Int      @id @default(autoincrement())
   bookingId    Int
-  documentType String   // "invoice", "manifest", "other"
+  documentType String
   filename     String
   filePath     String
   uploadedAt   DateTime @default(now())
-  uploadedBy   String?  // Email or name of uploader
+  uploadedBy   String?
   notes        String?
   booking      Booking  @relation(fields: [bookingId], references: [id], onDelete: Cascade)
 
+  @@index([bookingId])
   @@map("booking_documents")
 }
 
@@ -280,14 +267,14 @@ model Location {
   state     String?
   zipCode   String?
   contact   String?
-  phone     String?
-  hours     String?
   timeZone  String?
   latitude  Decimal? @db.Decimal(10, 7)
   longitude Decimal? @db.Decimal(10, 7)
   active    Boolean  @default(true)
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
+  hours     String?
+  phone     String?
 
   @@map("locations")
 }

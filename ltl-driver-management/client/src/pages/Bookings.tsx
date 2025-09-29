@@ -1332,7 +1332,6 @@ const BookingViewModal: React.FC<BookingViewModalProps> = ({ booking, onClose, g
           )}
           
           {/* Documents Section */}
-          {console.log('BookingViewModal documents:', bookingToDisplay.documents)}
           {bookingToDisplay.documents && bookingToDisplay.documents.length > 0 && (
             <div>
               <label className="block text-sm font-medium text-gray-700 mb-2">Uploaded Documents</label>
