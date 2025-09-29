@@ -31,7 +31,10 @@ function DocumentUpload() {
 
   const fetchBookingInfo = useCallback(async () => {
     try {
+      console.log('Fetching booking info for token:', token);
       const response = await fetch(`/api/bookings/documents/upload/${token}`);
+      console.log('Response status:', response.status);
+      
       if (!response.ok) {
         if (response.status === 404) {
           throw new Error('Upload link not found or invalid');
@@ -42,8 +45,10 @@ function DocumentUpload() {
         throw new Error('Failed to load upload page');
       }
       const data = await response.json();
+      console.log('Booking data received:', data);
       setBookingInfo(data);
     } catch (err) {
+      console.error('Error fetching booking info:', err);
       setError(err instanceof Error ? err.message : 'An error occurred');
     } finally {
       setLoading(false);
@@ -151,7 +156,15 @@ function DocumentUpload() {
               </div>
               <div>
                 <p className="text-sm text-gray-600">Booking Date</p>
-                <p className="font-medium">{new Date(bookingInfo.bookingDate).toLocaleDateString()}</p>
+                <p className="font-medium">
+                  {(() => {
+                    try {
+                      return new Date(bookingInfo.bookingDate).toLocaleDateString();
+                    } catch (error) {
+                      return bookingInfo.bookingDate;
+                    }
+                  })()}
+                </p>
               </div>
             </div>
           </div>
@@ -220,7 +233,13 @@ function DocumentUpload() {
                         <div>
                           <p className="font-medium text-gray-900">{doc.filename}</p>
                           <p className="text-sm text-gray-500">
-                            Uploaded on {new Date(doc.uploadedAt).toLocaleString()}
+                            Uploaded on {(() => {
+                              try {
+                                return new Date(doc.uploadedAt).toLocaleString();
+                              } catch (error) {
+                                return doc.uploadedAt;
+                              }
+                            })()}
                           </p>
                         </div>
                       </div>
