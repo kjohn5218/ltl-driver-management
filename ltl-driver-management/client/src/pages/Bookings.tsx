@@ -677,10 +677,12 @@ export const Bookings: React.FC = () => {
         <BookingEditModal 
           booking={editingBooking} 
           onClose={handleCloseEdit} 
-          onSave={(_updatedBooking) => {
+          onSave={(updatedBooking) => {
             setEditingBooking(null);
             // Invalidate and refetch bookings data
             queryClient.invalidateQueries({ queryKey: ['bookings'] });
+            // Also invalidate individual booking data for booking details modal
+            queryClient.invalidateQueries({ queryKey: ['booking', updatedBooking.id] });
           }}
         />
       )}
@@ -1858,6 +1860,19 @@ const BookingEditModal: React.FC<BookingEditModalProps> = ({ booking, onClose, o
         }
         
         alert(`Successfully uploaded ${response.data.documents.length} document(s)`);
+        
+        // Refresh the booking data by fetching updated booking info
+        try {
+          const updatedBookingResponse = await api.get(`/bookings/${booking.id}`);
+          if (updatedBookingResponse.data) {
+            // Call onSave to update the booking in the parent component
+            onSave(updatedBookingResponse.data);
+          }
+        } catch (refreshError) {
+          console.error('Failed to refresh booking data:', refreshError);
+        }
+        
+        // Note: queryClient invalidation will be handled by the parent component through onSave
       }
     } catch (error) {
       console.error('Document upload error:', error);
