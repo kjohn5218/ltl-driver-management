@@ -11,11 +11,14 @@ interface BookingData {
   carrier: {
     name: string;
   };
-  route: {
+  route?: {
     origin: string;
     destination: string;
     distance: string;
-  };
+  } | null;
+  origin?: string;
+  destination?: string;
+  estimatedMiles?: string;
   childBookings?: Array<{
     route: {
       origin: string;
@@ -250,17 +253,17 @@ export const ConfirmationPage: React.FC = () => {
                       <div className="flex justify-between items-start mb-2">
                         <div className="flex-1">
                           <p className="text-sm text-gray-600">Origin</p>
-                          <p className="font-medium">{booking.route.origin}</p>
+                          <p className="font-medium">{booking.route?.origin || booking.origin || 'N/A'}</p>
                         </div>
                         <div className="mx-4 text-gray-400">→</div>
                         <div className="flex-1">
                           <p className="text-sm text-gray-600">Destination</p>
-                          <p className="font-medium">{booking.route.destination}</p>
+                          <p className="font-medium">{booking.route?.destination || booking.destination || 'N/A'}</p>
                         </div>
                       </div>
                       <div className="flex justify-between mt-2">
                         <span className="text-sm text-gray-600">
-                          Leg 1 • Distance: {booking.route.distance} miles
+                          Leg 1 • Distance: {booking.route?.distance || 'N/A'} miles
                         </span>
                         <span className="font-semibold text-green-600">
                           ${booking.rate}
@@ -313,17 +316,17 @@ export const ConfirmationPage: React.FC = () => {
                     <div className="flex justify-between items-start mb-2">
                       <div className="flex-1">
                         <p className="text-sm text-gray-600">Origin</p>
-                        <p className="font-medium">{booking.route.origin}</p>
+                        <p className="font-medium">{booking.route?.origin || booking.origin || 'N/A'}</p>
                       </div>
                       <div className="mx-4 text-gray-400">→</div>
                       <div className="flex-1">
                         <p className="text-sm text-gray-600">Destination</p>
-                        <p className="font-medium">{booking.route.destination}</p>
+                        <p className="font-medium">{booking.route?.destination || booking.destination || 'N/A'}</p>
                       </div>
                     </div>
                     <div className="flex justify-between mt-2">
                       <span className="text-sm text-gray-600">
-                        Distance: {booking.route.distance} miles
+                        Distance: {booking.route?.distance || 'N/A'} miles
                       </span>
                       <span className="font-semibold text-green-600">
                         ${booking.rate}
