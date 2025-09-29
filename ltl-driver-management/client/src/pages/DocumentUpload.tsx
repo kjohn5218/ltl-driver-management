@@ -25,8 +25,8 @@ function DocumentUpload() {
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const [selectedFiles, setSelectedFiles] = useState<FileList | null>(null);
-  const [documentType, setDocumentType] = useState('invoice');
-  const [uploaderName, setUploaderName] = useState('');
+  const [documentType] = useState('invoice'); // Default to invoice, no user selection needed
+  const [uploaderName] = useState('Carrier'); // Default uploader name
   const [uploading, setUploading] = useState(false);
 
   const fetchBookingInfo = useCallback(async () => {
@@ -63,11 +63,6 @@ function DocumentUpload() {
   const handleUpload = async () => {
     if (!selectedFiles || selectedFiles.length === 0) {
       toast.error('Please select files to upload');
-      return;
-    }
-
-    if (!uploaderName.trim()) {
-      toast.error('Please enter your name');
       return;
     }
 
@@ -167,34 +162,6 @@ function DocumentUpload() {
             <div className="space-y-4">
               <div>
                 <label className="block text-sm font-medium text-gray-700 mb-2">
-                  Your Name
-                </label>
-                <input
-                  type="text"
-                  value={uploaderName}
-                  onChange={(e) => setUploaderName(e.target.value)}
-                  className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500"
-                  placeholder="Enter your name"
-                />
-              </div>
-
-              <div>
-                <label className="block text-sm font-medium text-gray-700 mb-2">
-                  Document Type
-                </label>
-                <select
-                  value={documentType}
-                  onChange={(e) => setDocumentType(e.target.value)}
-                  className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500"
-                >
-                  <option value="invoice">Invoice</option>
-                  <option value="manifest">Trip Manifest</option>
-                  <option value="other">Other</option>
-                </select>
-              </div>
-
-              <div>
-                <label className="block text-sm font-medium text-gray-700 mb-2">
                   Select Files
                 </label>
                 <input
@@ -253,7 +220,7 @@ function DocumentUpload() {
                         <div>
                           <p className="font-medium text-gray-900">{doc.filename}</p>
                           <p className="text-sm text-gray-500">
-                            {doc.documentType} • Uploaded by {doc.uploadedBy} on {new Date(doc.uploadedAt).toLocaleString()}
+                            Uploaded on {new Date(doc.uploadedAt).toLocaleString()}
                           </p>
                         </div>
                       </div>
