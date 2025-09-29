@@ -45,6 +45,7 @@ export const Bookings: React.FC = () => {
   const [statusFilter, setStatusFilter] = useState('');
   const [dateFromFilter, setDateFromFilter] = useState('');
   const [dateToFilter, setDateToFilter] = useState('');
+  const [documentsFilter, setDocumentsFilter] = useState('');
   const [sortField, setSortField] = useState<SortField>('bookingDate');
   const [sortDirection, setSortDirection] = useState<SortDirection>('desc');
   const [viewingBooking, setViewingBooking] = useState<Booking | null>(null);
@@ -140,7 +141,15 @@ export const Bookings: React.FC = () => {
           (!booking.confirmationSentAt || !booking.confirmationSignedAt);
       }
       
-      return matchesSearch && matchesStatus && matchesDate && matchesRateConfirmation;
+      // Documents filter
+      let matchesDocuments = true;
+      if (documentsFilter === 'with_documents') {
+        matchesDocuments = booking.documents && booking.documents.length > 0;
+      } else if (documentsFilter === 'without_documents') {
+        matchesDocuments = !booking.documents || booking.documents.length === 0;
+      }
+      
+      return matchesSearch && matchesStatus && matchesDate && matchesRateConfirmation && matchesDocuments;
     });
 
     // Then, sort the filtered results
@@ -190,7 +199,7 @@ export const Bookings: React.FC = () => {
     });
 
     return filtered;
-  }, [bookings, searchTerm, statusFilter, dateFromFilter, dateToFilter, sortField, sortDirection]);
+  }, [bookings, searchTerm, statusFilter, dateFromFilter, dateToFilter, documentsFilter, rateConfirmationFilter, sortField, sortDirection]);
 
   const handleSort = (field: SortField) => {
     if (sortField === field) {
@@ -392,6 +401,15 @@ export const Bookings: React.FC = () => {
             <option value="IN_PROGRESS">In Progress</option>
             <option value="COMPLETED">Completed</option>
             <option value="CANCELLED">Cancelled</option>
+          </select>
+          <select
+            className="px-3 py-2 border border-gray-300 rounded-md focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
+            value={documentsFilter}
+            onChange={(e) => setDocumentsFilter(e.target.value)}
+          >
+            <option value="">All Documents</option>
+            <option value="with_documents">With Documents</option>
+            <option value="without_documents">Without Documents</option>
           </select>
         </div>
         
