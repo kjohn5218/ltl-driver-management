@@ -13,10 +13,13 @@ import {
   getConfirmationByToken,
   submitSignedConfirmation,
   getSignedPDF,
-  testEmailConfig
+  testEmailConfig,
+  getDocumentUploadPage,
+  uploadBookingDocuments
 } from '../controllers/booking.controller';
 import { authenticate, authorize } from '../middleware/auth.middleware';
 import { validateRequest } from '../middleware/validation.middleware';
+import { upload } from '../middleware/upload.middleware';
 import { UserRole } from '@prisma/client';
 
 const router = Router();
@@ -38,6 +41,19 @@ router.post(
   ],
   validateRequest,
   submitSignedConfirmation
+);
+
+// Get document upload page info
+router.get(
+  '/documents/upload/:token',
+  getDocumentUploadPage
+);
+
+// Upload documents for booking
+router.post(
+  '/documents/upload/:token',
+  upload.array('documents', 10), // Allow up to 10 files
+  uploadBookingDocuments
 );
 
 // All routes below this line require authentication

@@ -165,6 +165,218 @@ export const sendInsuranceExpiryReminder = async (carrier: Carrier) => {
   }
 };
 
+export const sendRateConfirmationSubmittedEmail = async (
+  booking: BookingWithRelations,
+  recipientEmail: string,
+  documentUploadToken: string
+) => {
+  // Use test email override in development if configured
+  const actualRecipientEmail = process.env.TEST_EMAIL_OVERRIDE || recipientEmail;
+  
+  try {
+    console.log(`Sending rate confirmation submission thank you email to: ${recipientEmail}`);
+    const shipmentNumber = `CCFS${booking.id.toString().padStart(5, '0')}`;
+    
+    const fromEmail = process.env.EMAIL_USER || 'ratecon@ccfs.com';
+    const uploadLink = `${process.env.API_BASE_URL || 'http://localhost:3001'}/api/bookings/documents/upload/${documentUploadToken}`;
+    
+    if (process.env.TEST_EMAIL_OVERRIDE && process.env.TEST_EMAIL_OVERRIDE !== recipientEmail) {
+      console.log(`📧 Email override: Routing email from ${recipientEmail} to ${process.env.TEST_EMAIL_OVERRIDE}`);
+    }
+
+    // Parse route information similar to sendRateConfirmationEmail
+    const routeInfo = (() => {
+      const notes = booking.notes || '';
+      const hasMultiLeg = notes.includes('--- Multi-Leg Booking ---');
+      
+      if (hasMultiLeg) {
+        const legs = [];
+        const lines = notes.split('\n');
+        for (const line of lines) {
+          const legMatch = line.match(/^Leg (\d+): (.+) → (.+?)(?:\s*\(([^)]+)\))?(?:\s+Depart:\s*(\d{2}:\d{2}))?\s*\(\$(.+)\)$/);
+          if (legMatch) {
+            legs.push({
+              leg: legMatch[1],
+              origin: legMatch[2],
+              destination: legMatch[3],
+              date: legMatch[4],
+              departureTime: legMatch[5]
+            });
+          }
+        }
+        return legs;
+      }
+      
+      if (booking.childBookings && booking.childBookings.length > 0) {
+        const routes = [];
+        if (booking.route) {
+          routes.push({
+            leg: '1',
+            origin: booking.route.origin,
+            destination: booking.route.destination,
+            departureTime: booking.departureTime
+          });
+        } else if (booking.origin && booking.destination) {
+          routes.push({
+            leg: '1',
+            origin: booking.origin,
+            destination: booking.destination,
+            departureTime: booking.departureTime
+          });
+        }
+        booking.childBookings.forEach((child, index) => {
+          if (child.route) {
+            routes.push({
+              leg: (index + 2).toString(),
+              origin: child.route.origin,
+              destination: child.route.destination,
+              departureTime: child.departureTime
+            });
+          }
+        });
+        return routes;
+      }
+      
+      return [{
+        leg: '1',
+        origin: booking.route?.origin || booking.origin || 'N/A',
+        destination: booking.route?.destination || booking.destination || 'N/A',
+        departureTime: booking.departureTime
+      }];
+    })();
+
+    // Generate stops HTML
+    const stopsHtml = routeInfo.map(leg => `
+      <tr>
+        <td style="padding: 8px; border: 1px solid #ddd;">Stop ${leg.leg}</td>
+        <td style="padding: 8px; border: 1px solid #ddd;">${leg.origin}</td>
+        <td style="padding: 8px; border: 1px solid #ddd;">${leg.destination}</td>
+        <td style="padding: 8px; border: 1px solid #ddd;">${leg.departureTime || 'TBD'}</td>
+      </tr>
+    `).join('');
+    
+    const mailOptions = {
+      from: fromEmail,
+      replyTo: fromEmail,
+      to: actualRecipientEmail,
+      subject: `Thank You - Rate Confirmation Received - ${shipmentNumber}${process.env.TEST_EMAIL_OVERRIDE ? ' [TEST EMAIL]' : ''}`,
+      html: `
+        <div style="font-family: Arial, sans-serif; max-width: 650px; margin: 0 auto;">
+          <h2 style="color: #2c3e50;">Thank You for Submitting Your Rate Confirmation</h2>
+          
+          ${process.env.TEST_EMAIL_OVERRIDE && process.env.TEST_EMAIL_OVERRIDE !== recipientEmail ? 
+            `<div style="background-color: #fff3cd; border: 1px solid #ffeaa7; padding: 10px; margin: 10px 0; border-radius: 5px;">
+              <strong>🧪 TEST EMAIL OVERRIDE:</strong> This email was originally intended for <strong>${recipientEmail}</strong> but was redirected to this address for testing purposes.
+            </div>` : ''
+          }
+          
+          <p>Dear ${booking.carrier?.name || 'Valued Partner'},</p>
+          
+          <p>Thank you for submitting your signed rate confirmation for <strong>Shipment #${shipmentNumber}</strong>. Your booking has been confirmed.</p>
+          
+          <div style="background-color: #f8f9fa; padding: 20px; border-radius: 8px; margin: 20px 0;">
+            <h3 style="color: #2c3e50; margin-top: 0;">Booking Details</h3>
+            <table style="width: 100%; border-collapse: collapse;">
+              <tr>
+                <td style="padding: 8px 0;"><strong>Shipment #:</strong></td>
+                <td style="padding: 8px 0;">${shipmentNumber}</td>
+              </tr>
+              <tr>
+                <td style="padding: 8px 0;"><strong>Booking Date:</strong></td>
+                <td style="padding: 8px 0;">${booking.bookingDate.toLocaleDateString()}</td>
+              </tr>
+              <tr>
+                <td style="padding: 8px 0;"><strong>Total Rate:</strong></td>
+                <td style="padding: 8px 0;">$${booking.rate.toString()}</td>
+              </tr>
+              ${booking.driverName ? `
+              <tr>
+                <td style="padding: 8px 0;"><strong>Driver:</strong></td>
+                <td style="padding: 8px 0;">${booking.driverName}</td>
+              </tr>
+              ` : ''}
+              ${booking.phoneNumber ? `
+              <tr>
+                <td style="padding: 8px 0;"><strong>Phone:</strong></td>
+                <td style="padding: 8px 0;">${booking.phoneNumber}</td>
+              </tr>
+              ` : ''}
+            </table>
+          </div>
+          
+          <div style="background-color: #e7f3ff; padding: 20px; border-radius: 8px; margin: 20px 0;">
+            <h3 style="color: #2c3e50; margin-top: 0;">📍 Important: Real-Time Tracking Required</h3>
+            <p style="margin-bottom: 10px;">Departure and arrival of each stop <strong>MUST</strong> be recorded in real-time on a mobile browser at:</p>
+            <p style="text-align: center; margin: 15px 0;">
+              <a href="https://driver.ccfs.com" style="display: inline-block; background-color: #007bff; color: white; padding: 12px 30px; text-decoration: none; border-radius: 5px; font-weight: bold;">driver.ccfs.com</a>
+            </p>
+            <table style="width: 100%; border-collapse: collapse; margin-top: 15px;">
+              <thead>
+                <tr style="background-color: #f0f0f0;">
+                  <th style="padding: 8px; border: 1px solid #ddd; text-align: left;">Stop</th>
+                  <th style="padding: 8px; border: 1px solid #ddd; text-align: left;">Origin</th>
+                  <th style="padding: 8px; border: 1px solid #ddd; text-align: left;">Destination</th>
+                  <th style="padding: 8px; border: 1px solid #ddd; text-align: left;">Departure</th>
+                </tr>
+              </thead>
+              <tbody>
+                ${stopsHtml}
+              </tbody>
+            </table>
+          </div>
+          
+          <div style="background-color: #fff4e5; padding: 20px; border-radius: 8px; margin: 20px 0;">
+            <h3 style="color: #2c3e50; margin-top: 0;">📞 Support Information</h3>
+            <p>For delays or assistance, contact:</p>
+            <ul style="margin: 10px 0;">
+              <li><strong>Linehaul Support:</strong> 701-204-0480 (M-F 9:30 PM – 6:30 AM CT)</li>
+              <li><strong>CCFS Service Center:</strong> During regular business hours</li>
+            </ul>
+          </div>
+          
+          <div style="background-color: #f0f8ff; padding: 20px; border-radius: 8px; margin: 20px 0;">
+            <h3 style="color: #2c3e50; margin-top: 0;">💰 Billing Instructions</h3>
+            <p>Upon completion of the trip, please submit:</p>
+            <ol style="margin: 10px 0;">
+              <li>Your invoice</li>
+              <li>Copies of trip manifests</li>
+            </ol>
+            <p><strong>Submit documents via:</strong></p>
+            <p style="text-align: center; margin: 15px 0;">
+              <a href="${uploadLink}" style="display: inline-block; background-color: #28a745; color: white; padding: 12px 30px; text-decoration: none; border-radius: 5px; font-weight: bold;">Upload Documents</a>
+            </p>
+            <p style="text-align: center; margin: 10px 0;">
+              <em>- OR -</em>
+            </p>
+            <p style="text-align: center;">
+              Email to: <a href="mailto:ratecon@ccfs.com">ratecon@ccfs.com</a>
+            </p>
+          </div>
+          
+          <hr style="border: none; border-top: 1px solid #e0e0e0; margin: 30px 0;">
+          
+          <p style="color: #666; font-size: 14px;">
+            Thank you for your partnership. We look forward to a successful trip.
+          </p>
+          
+          <p style="color: #666; font-size: 14px;">
+            Best regards,<br>
+            <strong>Cross Country Freight Solutions</strong><br>
+            LTL Management Team
+          </p>
+        </div>
+      `
+    };
+    
+    await transporter.sendMail(mailOptions);
+    console.log(`Rate confirmation submission email sent to ${actualRecipientEmail}`);
+    return true;
+  } catch (error) {
+    console.error('Failed to send rate confirmation submission email:', error);
+    throw error;
+  }
+};
+
 export const sendRateConfirmationEmail = async (
   booking: BookingWithRelations,
   recipientEmail: string,

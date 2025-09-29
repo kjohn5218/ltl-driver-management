@@ -133,6 +133,8 @@ model Booking {
   confirmationSignedBy  String?
   confirmationToken     String?       @unique
   signedPdfPath         String?       // Path to signed PDF file
+  documentUploadToken   String?       @unique
+  documentUploadTokenCreatedAt DateTime?
   
   // Origin-destination booking fields
   origin                String?
@@ -180,6 +182,7 @@ model Booking {
   route                 Route?        @relation(fields: [routeId], references: [id])
   invoice               Invoice?
   lineItems             BookingLineItem[]
+  documents             BookingDocument[]
 
   @@map("bookings")
 }
@@ -239,6 +242,20 @@ model CarrierDriver {
   carrier     Carrier  @relation(fields: [carrierId], references: [id], onDelete: Cascade)
 
   @@map("carrier_drivers")
+}
+
+model BookingDocument {
+  id           Int      @id @default(autoincrement())
+  bookingId    Int
+  documentType String   // "invoice", "manifest", "other"
+  filename     String
+  filePath     String
+  uploadedAt   DateTime @default(now())
+  uploadedBy   String?  // Email or name of uploader
+  notes        String?
+  booking      Booking  @relation(fields: [bookingId], references: [id], onDelete: Cascade)
+
+  @@map("booking_documents")
 }
 
 model Invoice {

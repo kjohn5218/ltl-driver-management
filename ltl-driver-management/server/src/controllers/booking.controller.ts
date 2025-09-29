@@ -1,7 +1,7 @@
 import { Request, Response } from 'express';
 import { prisma } from '../index';
 import { Prisma, BookingStatus } from '@prisma/client';
-import { sendBookingConfirmation, sendBookingCancellation, sendRateConfirmationEmail } from '../services/notification.service';
+import * as NotificationService from '../services/notification.service';
 import { v4 as uuidv4 } from 'uuid';
 import multer from 'multer';
 import { PDFService } from '../services/pdf.service';
@@ -426,7 +426,7 @@ export const confirmBooking = async (req: Request, res: Response) => {
     });
 
     // Send confirmation notification
-    await sendBookingConfirmation(updatedBooking);
+    await NotificationService.sendBookingConfirmation(updatedBooking);
 
     return res.json(updatedBooking);
   } catch (error) {
@@ -504,7 +504,7 @@ export const cancelBooking = async (req: Request, res: Response) => {
     });
 
     // Send cancellation notification
-    await sendBookingCancellation(updatedBooking, reason);
+    await NotificationService.sendBookingCancellation(updatedBooking, reason);
 
     return res.json(updatedBooking);
   } catch (error) {
@@ -628,7 +628,7 @@ export const sendRateConfirmation = async (req: Request, res: Response) => {
       const confirmationUrl = `${process.env.FRONTEND_URL}/confirm/${confirmationToken}`;
       
       if (sendMethod === 'email') {
-        await sendRateConfirmationEmail(
+        await NotificationService.sendRateConfirmationEmail(
           booking,
           recipientEmail,
           pdfBuffer,
@@ -758,6 +758,12 @@ export const submitSignedConfirmation = async (req: Request, res: Response) => {
       }
     }
 
+    // Generate document upload token for approved confirmations
+    let documentUploadToken = null;
+    if (approved) {
+      documentUploadToken = uuidv4();
+    }
+
     // Update booking with signature details
     const updatedBooking = await prisma.booking.update({
       where: { id: booking.id },
@@ -767,18 +773,43 @@ export const submitSignedConfirmation = async (req: Request, res: Response) => {
         confirmationIpAddress: ipAddress,
         confirmationSignature: approved ? 'APPROVED' : (signature || 'REJECTED'),
         status: approved ? 'CONFIRMED' : booking.status,
-        signedPdfPath: signedPdfPath
+        signedPdfPath: signedPdfPath,
+        documentUploadToken: approved ? documentUploadToken : null,
+        documentUploadTokenCreatedAt: approved ? signedAt : null
       },
       include: {
         carrier: true,
-        route: true
+        route: true,
+        childBookings: {
+          include: {
+            route: true
+          }
+        }
       }
     });
+
+    // Send thank you email if approved
+    if (approved && updatedBooking.carrier) {
+      try {
+        const recipientEmail = booking.carrierEmail || updatedBooking.carrier.email;
+        if (recipientEmail) {
+          await NotificationService.sendRateConfirmationSubmittedEmail(
+            updatedBooking,
+            recipientEmail,
+            documentUploadToken!
+          );
+        }
+      } catch (emailError) {
+        console.error('Failed to send thank you email:', emailError);
+        // Continue even if email fails
+      }
+    }
 
     return res.json({ 
       message: approved ? 'Confirmation approved successfully' : 'Confirmation rejected',
       booking: updatedBooking,
-      signedPdf: signedPdfPath ? true : false
+      signedPdf: signedPdfPath ? true : false,
+      documentUploadUrl: approved ? `${process.env.API_BASE_URL || 'http://localhost:3001'}/api/bookings/documents/upload/${documentUploadToken}` : null
     });
   } catch (error) {
     console.error('Submit confirmation error:', error);
@@ -843,5 +874,105 @@ export const testEmailConfig = async (_req: Request, res: Response) => {
   } catch (error) {
     console.error('Test email config error:', error);
     return res.status(500).json({ message: 'Failed to test email configuration' });
+  }
+};
+
+// Get document upload page (public endpoint)
+export const getDocumentUploadPage = async (req: Request, res: Response) => {
+  try {
+    const { token } = req.params;
+
+    const booking = await prisma.booking.findFirst({
+      where: { documentUploadToken: token },
+      include: {
+        carrier: true,
+        route: true
+      }
+    });
+
+    if (!booking) {
+      return res.status(404).json({ message: 'Upload link not found or expired' });
+    }
+
+    // Check if token is expired (24 hours)
+    if (booking.documentUploadTokenCreatedAt) {
+      const tokenAge = Date.now() - booking.documentUploadTokenCreatedAt.getTime();
+      const twentyFourHours = 24 * 60 * 60 * 1000;
+      if (tokenAge > twentyFourHours) {
+        return res.status(410).json({ message: 'Upload link has expired' });
+      }
+    }
+
+    const shipmentNumber = `CCFS${booking.id.toString().padStart(5, '0')}`;
+
+    return res.json({
+      shipmentNumber,
+      carrierName: booking.carrier?.name || 'Unknown Carrier',
+      route: booking.route 
+        ? `${booking.route.origin} to ${booking.route.destination}`
+        : `${booking.origin} to ${booking.destination}`,
+      bookingDate: booking.bookingDate,
+      documents: []
+    });
+  } catch (error) {
+    console.error('Document upload page error:', error);
+    return res.status(500).json({ message: 'Failed to load upload page' });
+  }
+};
+
+// Upload documents for booking (public endpoint)
+export const uploadBookingDocuments = async (req: Request, res: Response) => {
+  try {
+    const { token } = req.params;
+    const { documentType, uploadedBy } = req.body;
+
+    if (!req.files || !Array.isArray(req.files) || req.files.length === 0) {
+      return res.status(400).json({ message: 'No files uploaded' });
+    }
+
+    const booking = await prisma.booking.findFirst({
+      where: { documentUploadToken: token }
+    });
+
+    if (!booking) {
+      return res.status(404).json({ message: 'Upload link not found or expired' });
+    }
+
+    // Check if token is expired (24 hours)
+    if (booking.documentUploadTokenCreatedAt) {
+      const tokenAge = Date.now() - booking.documentUploadTokenCreatedAt.getTime();
+      const twentyFourHours = 24 * 60 * 60 * 1000;
+      if (tokenAge > twentyFourHours) {
+        return res.status(410).json({ message: 'Upload link has expired' });
+      }
+    }
+
+    const uploadedDocuments = [];
+
+    for (const file of req.files as Express.Multer.File[]) {
+      const document = await prisma.bookingDocument.create({
+        data: {
+          bookingId: booking.id,
+          documentType: documentType || 'other',
+          filename: file.originalname,
+          filePath: file.path,
+          uploadedBy: uploadedBy || 'Carrier'
+        }
+      });
+      uploadedDocuments.push(document);
+    }
+
+    return res.json({
+      message: `Successfully uploaded ${uploadedDocuments.length} document(s)`,
+      documents: uploadedDocuments.map(doc => ({
+        id: doc.id,
+        filename: doc.filename,
+        documentType: doc.documentType,
+        uploadedAt: doc.uploadedAt
+      }))
+    });
+  } catch (error) {
+    console.error('Document upload error:', error);
+    return res.status(500).json({ message: 'Failed to upload documents' });
   }
 };
