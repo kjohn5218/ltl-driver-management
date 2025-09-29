@@ -178,7 +178,7 @@ export const sendRateConfirmationSubmittedEmail = async (
     const shipmentNumber = `CCFS${booking.id.toString().padStart(5, '0')}`;
     
     const fromEmail = process.env.EMAIL_USER || 'ratecon@ccfs.com';
-    const uploadLink = `${process.env.API_BASE_URL || 'http://localhost:3001'}/api/bookings/documents/upload/${documentUploadToken}`;
+    const uploadLink = `${process.env.CLIENT_BASE_URL || 'http://localhost:5174'}/documents/upload/${documentUploadToken}`;
     
     if (process.env.TEST_EMAIL_OVERRIDE && process.env.TEST_EMAIL_OVERRIDE !== recipientEmail) {
       console.log(`📧 Email override: Routing email from ${recipientEmail} to ${process.env.TEST_EMAIL_OVERRIDE}`);

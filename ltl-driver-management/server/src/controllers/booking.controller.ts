@@ -809,7 +809,7 @@ export const submitSignedConfirmation = async (req: Request, res: Response) => {
       message: approved ? 'Confirmation approved successfully' : 'Confirmation rejected',
       booking: updatedBooking,
       signedPdf: signedPdfPath ? true : false,
-      documentUploadUrl: approved ? `${process.env.API_BASE_URL || 'http://localhost:3001'}/api/bookings/documents/upload/${documentUploadToken}` : null
+      documentUploadUrl: approved ? `${process.env.CLIENT_BASE_URL || 'http://localhost:5174'}/documents/upload/${documentUploadToken}` : null
     });
   } catch (error) {
     console.error('Submit confirmation error:', error);
