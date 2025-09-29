@@ -31,9 +31,7 @@ function DocumentUpload() {
 
   const fetchBookingInfo = useCallback(async () => {
     try {
-      console.log('Fetching booking info for token:', token);
       const response = await fetch(`/api/bookings/documents/upload/${token}`);
-      console.log('Response status:', response.status);
       
       if (!response.ok) {
         if (response.status === 404) {
@@ -45,7 +43,6 @@ function DocumentUpload() {
         throw new Error('Failed to load upload page');
       }
       const data = await response.json();
-      console.log('Booking data received:', data);
       setBookingInfo(data);
     } catch (err) {
       console.error('Error fetching booking info:', err);
