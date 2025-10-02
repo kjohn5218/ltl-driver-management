@@ -395,6 +395,9 @@ export const Invoices: React.FC = () => {
                 Invoice #
               </th>
               <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
+                Booking #
+              </th>
+              <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
                 Carrier
               </th>
               <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
@@ -417,13 +420,13 @@ export const Invoices: React.FC = () => {
           <tbody className="bg-white divide-y divide-gray-200">
             {isLoading ? (
               <tr>
-                <td colSpan={8} className="text-center py-4 text-gray-500">
+                <td colSpan={9} className="text-center py-4 text-gray-500">
                   Loading invoices...
                 </td>
               </tr>
             ) : filteredInvoices.length === 0 ? (
               <tr>
-                <td colSpan={8} className="text-center py-4 text-gray-500">
+                <td colSpan={9} className="text-center py-4 text-gray-500">
                   No invoices found
                 </td>
               </tr>
@@ -440,6 +443,9 @@ export const Invoices: React.FC = () => {
                   </td>
                   <td className="px-4 py-3 text-sm font-medium text-gray-900">
                     {invoice.invoiceNumber}
+                  </td>
+                  <td className="px-4 py-3 text-sm text-gray-900">
+                    #{invoice.booking.id}
                   </td>
                   <td className="px-4 py-3 text-sm text-gray-900">
                     {invoice.booking.carrier?.name || 'N/A'}
