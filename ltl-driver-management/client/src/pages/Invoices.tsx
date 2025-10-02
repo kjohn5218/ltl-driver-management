@@ -180,6 +180,7 @@ export const Invoices: React.FC = () => {
       'State': invoice.carrierState || '',
       'Zip Code': invoice.carrierZipCode || '',
       'Route': invoice.booking.route?.name || 'N/A',
+      'Manifest Number': invoice.booking.manifestNumber || '',
       'Booking Date': format(parseISO(invoice.booking.bookingDate), 'MM/dd/yyyy'),
       'Base Amount': Number(invoice.baseAmount),
       'Additional Charges': Number(invoice.lineItemsAmount),
