@@ -14,7 +14,9 @@ import {
   addCarrierDriver,
   updateCarrierDriver,
   deleteCarrierDriver,
-  getCarrierDrivers
+  getCarrierDrivers,
+  getCarrierInvitations,
+  cancelCarrierInvitation
 } from '../controllers/carrier.controller';
 import { authenticate, authorize } from '../middleware/auth.middleware';
 import { validateRequest } from '../middleware/validation.middleware';
@@ -52,6 +54,19 @@ router.get(
   ],
   validateRequest,
   searchCarriers
+);
+
+// Get carrier invitations (Admin/Dispatcher only) - Must come before /:id route
+router.get(
+  '/invitations',
+  authorize(UserRole.ADMIN, UserRole.DISPATCHER),
+  [
+    query('page').optional().isInt({ min: 1 }),
+    query('limit').optional().isInt({ min: 1, max: 100 }),
+    query('status').optional().isIn(['PENDING', 'REGISTERED', 'EXPIRED', 'CANCELLED'])
+  ],
+  validateRequest,
+  getCarrierInvitations
 );
 
 // Get specific carrier
@@ -124,6 +139,13 @@ router.post(
   ],
   validateRequest,
   inviteCarrier
+);
+
+// Cancel carrier invitation (Admin/Dispatcher only)
+router.put(
+  '/invitations/:id/cancel',
+  authorize(UserRole.ADMIN, UserRole.DISPATCHER),
+  cancelCarrierInvitation
 );
 
 // Driver management routes

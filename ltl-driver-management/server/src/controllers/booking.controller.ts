@@ -5,6 +5,7 @@ import * as NotificationService from '../services/notification.service';
 import { v4 as uuidv4 } from 'uuid';
 import multer from 'multer';
 import { PDFService } from '../services/pdf.service';
+import invoiceService from '../services/invoice.service';
 
 export const getBookings = async (req: Request, res: Response) => {
   try {
@@ -333,6 +334,11 @@ export const updateBooking = async (req: Request, res: Response) => {
       return value;
     };
 
+    // Get the original booking to check if status is changing to COMPLETED
+    const originalBooking = await prisma.booking.findUnique({
+      where: { id: parseInt(id) }
+    });
+
     const booking = await prisma.booking.update({
       where: { id: parseInt(id) },
       data: {
@@ -388,6 +394,22 @@ export const updateBooking = async (req: Request, res: Response) => {
         lineItems: true
       }
     });
+
+    // Check if status changed to COMPLETED and generate invoice automatically
+    if (originalBooking && 
+        originalBooking.status !== 'COMPLETED' && 
+        updateData.status === 'COMPLETED') {
+      try {
+        const invoice = await invoiceService.createInvoice(booking.id);
+        // Copy booking documents to invoice attachments
+        await invoiceService.copyBookingDocuments(invoice.id);
+        console.log(`Invoice ${invoice.invoiceNumber} generated for completed booking ${booking.id}`);
+      } catch (invoiceError: any) {
+        console.error('Failed to generate invoice for completed booking:', invoiceError);
+        // Don't fail the booking update if invoice generation fails
+        // Just log the error and continue
+      }
+    }
 
     return res.json(booking);
   } catch (error) {
@@ -467,6 +489,18 @@ export const completeBooking = async (req: Request, res: Response) => {
         route: true
       }
     });
+
+    // Automatically generate invoice for completed booking
+    try {
+      const invoice = await invoiceService.createInvoice(updatedBooking.id);
+      // Copy booking documents to invoice attachments
+      await invoiceService.copyBookingDocuments(invoice.id);
+      console.log(`Invoice ${invoice.invoiceNumber} generated for completed booking ${updatedBooking.id}`);
+    } catch (invoiceError: any) {
+      console.error('Failed to generate invoice for completed booking:', invoiceError);
+      // Don't fail the booking completion if invoice generation fails
+      // Just log the error and continue
+    }
 
     return res.json(updatedBooking);
   } catch (error) {

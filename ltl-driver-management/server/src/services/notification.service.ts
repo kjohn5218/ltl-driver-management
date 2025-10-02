@@ -1,11 +1,17 @@
 import nodemailer from 'nodemailer';
 import { Booking, Carrier, Route } from '@prisma/client';
+import { PDFService } from './pdf.service';
 
 interface EmailOptions {
   to: string;
   subject: string;
   html: string;
   from?: string;
+  attachments?: Array<{
+    filename: string;
+    content: Buffer;
+    contentType: string;
+  }>;
 }
 
 // Create transporter
@@ -30,15 +36,27 @@ interface BookingWithRelations extends Booking {
 
 export const sendEmail = async (options: EmailOptions) => {
   try {
+    // Use test email override if configured
+    const actualRecipient = process.env.TEST_EMAIL_OVERRIDE || options.to;
+    
     const mailOptions = {
       from: options.from || process.env.EMAIL_USER || 'noreply@crosscountryfreight.com',
-      to: options.to,
-      subject: options.subject,
-      html: options.html
+      to: actualRecipient,
+      subject: options.subject + (process.env.TEST_EMAIL_OVERRIDE ? ' [TEST EMAIL]' : ''),
+      html: process.env.TEST_EMAIL_OVERRIDE && process.env.TEST_EMAIL_OVERRIDE !== options.to ? 
+        `<div style="background-color: #fff3cd; border: 1px solid #ffeaa7; padding: 15px; margin: 15px 0; border-radius: 5px;">
+          <strong>🧪 TEST EMAIL OVERRIDE:</strong> This email was originally intended for <strong>${options.to}</strong> but was redirected to this address for testing purposes.
+        </div>
+        ${options.html}` : options.html,
+      attachments: options.attachments || []
     };
     
+    if (process.env.TEST_EMAIL_OVERRIDE && process.env.TEST_EMAIL_OVERRIDE !== options.to) {
+      console.log(`📧 Email override: Routing email from ${options.to} to ${process.env.TEST_EMAIL_OVERRIDE}`);
+    }
+    
     await transporter.sendMail(mailOptions);
-    console.log('Email sent successfully to:', options.to);
+    console.log(`Email sent successfully to: ${actualRecipient}${actualRecipient !== options.to ? ` (originally intended for ${options.to})` : ''}`);
     return true;
   } catch (error) {
     console.error('Error sending email:', error);
@@ -69,8 +87,7 @@ export const sendBookingConfirmation = async (booking: BookingWithRelations) => 
           arrivalTime: null
         };
 
-    const mailOptions = {
-      from: process.env.EMAIL_USER,
+    await sendEmail({
       to: booking.carrier.email,
       subject: `Booking Confirmed - ${routeInfo.name}`,
       html: `
@@ -90,9 +107,8 @@ export const sendBookingConfirmation = async (booking: BookingWithRelations) => 
         <p>Please ensure all required documentation is up to date.</p>
         <p>Best regards,<br>LTL Management Team</p>
       `
-    };
+    });
 
-    await transporter.sendMail(mailOptions);
     console.log(`Confirmation email sent to ${booking.carrier.email}`);
   } catch (error) {
     console.error('Failed to send booking confirmation:', error);
@@ -116,8 +132,7 @@ export const sendBookingCancellation = async (booking: BookingWithRelations, rea
           destination: booking.destination || 'N/A'
         };
 
-    const mailOptions = {
-      from: process.env.EMAIL_USER,
+    await sendEmail({
       to: booking.carrier.email,
       subject: `Booking Cancelled - ${routeInfo.name}`,
       html: `
@@ -132,9 +147,8 @@ export const sendBookingCancellation = async (booking: BookingWithRelations, rea
         <p>We apologize for any inconvenience.</p>
         <p>Best regards,<br>LTL Management Team</p>
       `
-    };
+    });
 
-    await transporter.sendMail(mailOptions);
     console.log(`Cancellation email sent to ${booking.carrier.email}`);
   } catch (error) {
     console.error('Failed to send booking cancellation:', error);
@@ -145,8 +159,7 @@ export const sendInsuranceExpiryReminder = async (carrier: Carrier) => {
   try {
     if (!carrier.email || !carrier.insuranceExpiration) return;
 
-    const mailOptions = {
-      from: process.env.EMAIL_USER,
+    await sendEmail({
       to: carrier.email,
       subject: 'Insurance Expiry Reminder',
       html: `
@@ -156,9 +169,8 @@ export const sendInsuranceExpiryReminder = async (carrier: Carrier) => {
         <p>Please submit updated insurance documentation at your earliest convenience to maintain your active status.</p>
         <p>Best regards,<br>LTL Management Team</p>
       `
-    };
+    });
 
-    await transporter.sendMail(mailOptions);
     console.log(`Insurance reminder sent to ${carrier.email}`);
   } catch (error) {
     console.error('Failed to send insurance reminder:', error);
@@ -578,5 +590,120 @@ export const sendRateConfirmationEmail = async (
     } else {
       throw new Error(`Email sending failed: ${error.message}`);
     }
+  }
+};
+
+// Send invoice(s) to AP function
+export const sendInvoicesToAP = async (invoices: any[], includeDocuments: boolean = true) => {
+  try {
+    const apEmail = 'ap@ccfs.com';
+    
+    // Generate PDF attachments for each invoice
+    const attachments: Array<{
+      filename: string;
+      content: Buffer;
+      contentType: string;
+    }> = [];
+    
+    console.log(`Generating PDFs for ${invoices.length} invoice(s)...`);
+    
+    for (const invoice of invoices) {
+      try {
+        const pdfBuffer = await PDFService.generateInvoicePDF(invoice);
+        attachments.push({
+          filename: `invoice-${invoice.invoiceNumber}.pdf`,
+          content: pdfBuffer,
+          contentType: 'application/pdf'
+        });
+        console.log(`✅ Generated PDF for invoice ${invoice.invoiceNumber}`);
+      } catch (pdfError) {
+        console.error(`❌ Failed to generate PDF for invoice ${invoice.invoiceNumber}:`, pdfError);
+        // Continue with other invoices even if one fails
+      }
+    }
+    
+    // Generate invoice table rows
+    const invoiceRows = invoices.map(invoice => `
+      <tr>
+        <td style="padding: 8px; border: 1px solid #ddd;">${invoice.invoiceNumber}</td>
+        <td style="padding: 8px; border: 1px solid #ddd;">${invoice.carrierName || invoice.booking?.carrier?.name || 'N/A'}</td>
+        <td style="padding: 8px; border: 1px solid #ddd;">${invoice.booking?.route?.name || 'Custom Route'}</td>
+        <td style="padding: 8px; border: 1px solid #ddd;">${new Date(invoice.booking?.bookingDate).toLocaleDateString()}</td>
+        <td style="padding: 8px; border: 1px solid #ddd; text-align: right;">$${Number(invoice.amount).toFixed(2)}</td>
+      </tr>
+    `).join('');
+    
+    const totalAmount = invoices.reduce((sum, inv) => sum + Number(inv.amount), 0);
+    
+    const emailHTML = `
+      <div style="font-family: Arial, sans-serif; max-width: 800px; margin: 0 auto;">
+        <h2 style="color: #2c3e50;">Carrier Payment Processing Required</h2>
+        
+        <p>The following invoice${invoices.length > 1 ? 's require' : ' requires'} payment processing:</p>
+        
+        <table style="width: 100%; border-collapse: collapse; margin: 20px 0;">
+          <thead>
+            <tr style="background-color: #f8f9fa;">
+              <th style="padding: 12px 8px; border: 1px solid #ddd; text-align: left;">Invoice #</th>
+              <th style="padding: 12px 8px; border: 1px solid #ddd; text-align: left;">Carrier</th>
+              <th style="padding: 12px 8px; border: 1px solid #ddd; text-align: left;">Route</th>
+              <th style="padding: 12px 8px; border: 1px solid #ddd; text-align: left;">Service Date</th>
+              <th style="padding: 12px 8px; border: 1px solid #ddd; text-align: right;">Amount</th>
+            </tr>
+          </thead>
+          <tbody>
+            ${invoiceRows}
+          </tbody>
+          <tfoot>
+            <tr style="background-color: #e9ecef; font-weight: bold;">
+              <td colspan="4" style="padding: 12px 8px; border: 1px solid #ddd; text-align: right;">Total Payment Required:</td>
+              <td style="padding: 12px 8px; border: 1px solid #ddd; text-align: right; color: #28a745;">$${totalAmount.toFixed(2)}</td>
+            </tr>
+          </tfoot>
+        </table>
+        
+        ${attachments.length > 0 ? `
+        <div style="background-color: #e7f3ff; padding: 20px; border-radius: 8px; margin: 20px 0;">
+          <h3 style="color: #2c3e50; margin-top: 0;">📎 Attached Documents</h3>
+          <p>This email includes the following invoice PDFs:</p>
+          <ul>
+            ${attachments.map(att => `<li>${att.filename}</li>`).join('')}
+          </ul>
+        </div>
+        ` : ''}
+        
+        <div style="background-color: #f0f8ff; padding: 20px; border-radius: 8px; margin: 20px 0;">
+          <h3 style="color: #2c3e50; margin-top: 0;">Payment Instructions</h3>
+          <ul>
+            <li><strong>Payment Method:</strong> ACH or Check as per carrier preference</li>
+            <li><strong>Payment Terms:</strong> Net 30 days from invoice date</li>
+            <li><strong>Supporting Documents:</strong> ${includeDocuments ? 'Invoice PDFs attached to this email' : 'Available upon request'}</li>
+          </ul>
+        </div>
+        
+        <div style="background-color: #fff3cd; padding: 15px; border-radius: 8px; margin: 20px 0;">
+          <h4 style="color: #856404; margin-top: 0;">📋 Action Required</h4>
+          <p style="margin-bottom: 0;">Please process payment${invoices.length > 1 ? 's' : ''} to the carrier${invoices.length > 1 ? 's' : ''} listed above according to their remit-to information on file.</p>
+        </div>
+        
+        <p style="color: #666; font-size: 14px; margin-top: 30px;">
+          This email was generated automatically by the LTL Driver Management System.<br>
+          For questions, contact the Linehaul Department.
+        </p>
+      </div>
+    `;
+    
+    await sendEmail({
+      to: apEmail,
+      subject: `Carrier Payment Processing Required - ${invoices.length} Invoice${invoices.length > 1 ? 's' : ''}`,
+      html: emailHTML,
+      attachments: attachments
+    });
+
+    console.log(`✅ Invoice${invoices.length > 1 ? 's' : ''} sent to AP with ${attachments.length} PDF attachment${attachments.length > 1 ? 's' : ''}: ${invoices.map(inv => inv.invoiceNumber).join(', ')}`);
+    return true;
+  } catch (error) {
+    console.error('Failed to send invoices to AP:', error);
+    throw error;
   }
 };

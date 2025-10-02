@@ -1388,22 +1388,57 @@ const BookingViewModal: React.FC<BookingViewModalProps> = ({ booking, onClose, g
         </div>
         
         <div className="flex justify-between mt-6 pt-4 border-t">
-          {onRateConfirmation && (
-            <button 
-              onClick={() => {
-                onClose();
-                onRateConfirmation(bookingToDisplay);
-              }}
-              disabled={!bookingToDisplay.carrier}
-              className="px-4 py-2 bg-green-600 text-white rounded hover:bg-green-700 disabled:bg-gray-400 disabled:cursor-not-allowed flex items-center gap-2"
-            >
-              <FileText className="w-4 h-4" />
-              Rate Confirmation
-            </button>
-          )}
+          <div className="flex gap-2">
+            {onRateConfirmation && (
+              <button 
+                onClick={() => {
+                  onClose();
+                  onRateConfirmation(bookingToDisplay);
+                }}
+                disabled={!bookingToDisplay.carrier}
+                className="px-4 py-2 bg-green-600 text-white rounded hover:bg-green-700 disabled:bg-gray-400 disabled:cursor-not-allowed flex items-center gap-2"
+              >
+                <FileText className="w-4 h-4" />
+                Rate Confirmation
+              </button>
+            )}
+            {bookingToDisplay.status === 'COMPLETED' && !bookingToDisplay.invoice && (
+              <button
+                onClick={async () => {
+                  try {
+                    const response = await api.post('/invoices', { 
+                      bookingId: bookingToDisplay.id 
+                    });
+                    alert('Invoice generated successfully!');
+                    onClose();
+                    // Refresh bookings data
+                    window.location.reload();
+                  } catch (error: any) {
+                    alert(error.response?.data?.error || 'Failed to generate invoice');
+                  }
+                }}
+                className="px-4 py-2 bg-blue-600 text-white rounded hover:bg-blue-700 flex items-center gap-2"
+              >
+                <DollarSign className="w-4 h-4" />
+                Generate Invoice
+              </button>
+            )}
+            {bookingToDisplay.invoice && (
+              <button
+                onClick={() => {
+                  // Navigate to invoice page
+                  window.location.href = '/invoices?invoiceId=' + bookingToDisplay.invoice.id;
+                }}
+                className="px-4 py-2 bg-purple-600 text-white rounded hover:bg-purple-700 flex items-center gap-2"
+              >
+                <FileText className="w-4 h-4" />
+                View Invoice
+              </button>
+            )}
+          </div>
           <button 
             onClick={onClose}
-            className="px-4 py-2 bg-gray-500 text-white rounded hover:bg-gray-600 ml-auto"
+            className="px-4 py-2 bg-gray-500 text-white rounded hover:bg-gray-600"
           >
             Close
           </button>
@@ -1503,7 +1538,7 @@ const BookingEditModal: React.FC<BookingEditModalProps> = ({ booking, onClose, o
 
   // Document upload states
   const [selectedFiles, setSelectedFiles] = useState<FileList | null>(null);
-  const [documentType, setDocumentType] = useState('invoice');
+  const [documentType, setDocumentType] = useState('other');
   const [isUploading, setIsUploading] = useState(false);
   const [uploadedDocuments, setUploadedDocuments] = useState(booking.documents || []);
 
@@ -2832,20 +2867,6 @@ const BookingEditModal: React.FC<BookingEditModalProps> = ({ booking, onClose, o
 
             {/* Upload New Documents */}
             <div className="space-y-4">
-              <div>
-                <label className="block text-sm font-medium text-gray-700 mb-1">Document Type</label>
-                <select
-                  value={documentType}
-                  onChange={(e) => setDocumentType(e.target.value)}
-                  className="w-full px-3 py-2 border border-gray-300 rounded-md focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
-                >
-                  <option value="invoice">Invoice</option>
-                  <option value="receipt">Receipt</option>
-                  <option value="manifest">Manifest</option>
-                  <option value="delivery_receipt">Delivery Receipt</option>
-                  <option value="other">Other</option>
-                </select>
-              </div>
 
               <div>
                 <label className="block text-sm font-medium text-gray-700 mb-1">Select Files</label>

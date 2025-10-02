@@ -127,12 +127,16 @@ export const CarrierRegistration: React.FC = () => {
       // Create FormData for file upload
       const submitData = new FormData();
       
-      // Append all form fields
+      // Append all form fields (including empty strings as they might be checked on server)
       Object.entries(formData).forEach(([key, value]) => {
-        if (value) {
-          submitData.append(key, value);
-        }
+        submitData.append(key, value || '');
       });
+      
+      // Debug: Log what we're sending
+      console.log('Form data being sent:');
+      for (const [key, value] of submitData.entries()) {
+        console.log(`${key}:`, value);
+      }
       
       // Append the insurance file
       if (insuranceFile) {
@@ -151,6 +155,9 @@ export const CarrierRegistration: React.FC = () => {
       setIsSubmitted(true);
     } catch (error: any) {
       console.error('Error submitting registration:', error);
+      console.error('Error response:', error.response?.data);
+      console.error('Error status:', error.response?.status);
+      console.error('Token being sent:', token);
       
       // Extract validation errors from server response
       let errorMessages = ['Failed to submit registration. Please try again.'];
@@ -199,16 +206,20 @@ export const CarrierRegistration: React.FC = () => {
     );
   }
 
-  // Invalid token
-  if (tokenValid === false) {
+  // Invalid token or missing token
+  if (tokenValid === false || !token) {
     return (
       <div className="min-h-screen flex items-center justify-center bg-gray-50">
         <div className="max-w-md w-full bg-white shadow-lg rounded-lg p-8 text-center">
           <AlertCircle className="w-16 h-16 text-red-500 mx-auto mb-4" />
-          <h1 className="text-2xl font-bold text-gray-900 mb-4">Invalid Invitation</h1>
+          <h1 className="text-2xl font-bold text-gray-900 mb-4">
+            {!token ? 'Missing Registration Token' : 'Invalid Invitation'}
+          </h1>
           <p className="text-gray-600 mb-6">
-            This invitation link is invalid or has expired. Please contact CrossCountry Freight Solutions 
-            at (800) 521-0287 for assistance.
+            {!token 
+              ? 'This page requires a valid registration token. Please use the link from your invitation email.'
+              : 'This invitation link is invalid or has expired.'
+            } Please contact CrossCountry Freight Solutions at (800) 521-0287 for assistance.
           </p>
         </div>
       </div>

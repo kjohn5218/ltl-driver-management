@@ -144,28 +144,53 @@ export const NewBookingSimplified: React.FC<NewBookingSimplifiedProps> = () => {
       try {
         const drivers = await driverService.getAllDrivers();
         setAllDrivers(drivers);
+        // If no carrier is selected, show all drivers
+        if (!carrierId) {
+          setAvailableDrivers(drivers);
+        }
       } catch (error) {
         console.error('Failed to fetch all drivers:', error);
         setAllDrivers([]);
+        setAvailableDrivers([]);
       }
     };
     fetchAllDrivers();
   }, []);
 
-  // Filter drivers based on selected carrier
+  // Fetch drivers for selected carrier
   useEffect(() => {
-    if (carrierId) {
-      const carrierDrivers = allDrivers.filter(driver => driver.carrierId === parseInt(carrierId));
-      setAvailableDrivers(carrierDrivers);
-    } else {
-      setAvailableDrivers(allDrivers);
-    }
-    // Reset driver selection when carrier changes
-    setSelectedDriverId('');
-    setDriverName('');
-    setPhoneNumber('');
-    setDriverSearch('');
-    setPhoneSearch('');
+    const fetchCarrierDrivers = async () => {
+      console.log('🚛 Driver fetch effect triggered - carrierId:', carrierId, 'allDrivers count:', allDrivers.length);
+      
+      if (carrierId) {
+        try {
+          console.log('🔍 Fetching drivers for carrier ID:', carrierId);
+          const carrierDrivers = await driverService.getDriversByCarrier(parseInt(carrierId));
+          console.log('✅ API returned drivers for carrier:', carrierDrivers.length, carrierDrivers);
+          setAvailableDrivers(carrierDrivers);
+        } catch (error) {
+          console.error('❌ Failed to fetch carrier drivers via API:', error);
+          // Fallback to filtering from all drivers
+          const carrierIdNum = parseInt(carrierId);
+          const filteredDrivers = allDrivers.filter(driver => driver.carrierId === carrierIdNum);
+          console.log('🔄 Fallback filtered drivers:', filteredDrivers.length, filteredDrivers);
+          setAvailableDrivers(filteredDrivers);
+        }
+      } else {
+        // No carrier selected, show all drivers
+        console.log('🌐 No carrier selected, showing all drivers:', allDrivers.length);
+        setAvailableDrivers(allDrivers);
+      }
+      
+      // Reset driver selection when carrier changes
+      setSelectedDriverId('');
+      setDriverName('');
+      setPhoneNumber('');
+      setDriverSearch('');
+      setPhoneSearch('');
+    };
+
+    fetchCarrierDrivers();
   }, [carrierId, allDrivers]);
 
   // Filtered carriers
@@ -707,6 +732,7 @@ export const NewBookingSimplified: React.FC<NewBookingSimplifiedProps> = () => {
                     key={carrier.id}
                     type="button"
                     onClick={() => {
+                      console.log('🚚 Carrier selected:', carrier.name, 'ID:', carrier.id);
                       setCarrierId(carrier.id.toString());
                       setCarrierSearch(carrier.name);
                       setShowCarrierDropdown(false);

@@ -511,4 +511,357 @@ export class PDFService {
     const fullPath = this.getSignedPDFPath(relativePath);
     return fs.existsSync(fullPath);
   }
+
+  // Generate invoice PDF
+  static async generateInvoicePDF(invoice: any): Promise<Buffer> {
+    const browser = await puppeteer.launch({
+      headless: true,
+      args: ['--no-sandbox', '--disable-setuid-sandbox']
+    });
+
+    try {
+      const page = await browser.newPage();
+      
+      // Calculate totals
+      const baseAmount = Number(invoice.baseAmount) || 0;
+      const lineItemsAmount = Number(invoice.lineItemsAmount) || 0;
+      const totalAmount = Number(invoice.amount) || 0;
+
+      // Generate line items HTML if they exist
+      const lineItemsHTML = invoice.booking?.lineItems && invoice.booking.lineItems.length > 0 
+        ? invoice.booking.lineItems.map((item: any) => `
+            <tr>
+              <td style="padding: 12px 8px; border-bottom: 1px solid #ddd; text-align: left;">${item.description}</td>
+              <td style="padding: 12px 8px; border-bottom: 1px solid #ddd; text-align: center;">${item.category}</td>
+              <td style="padding: 12px 8px; border-bottom: 1px solid #ddd; text-align: center;">${item.quantity}</td>
+              <td style="padding: 12px 8px; border-bottom: 1px solid #ddd; text-align: right;">$${Number(item.amount).toFixed(2)}</td>
+            </tr>
+          `).join('')
+        : '';
+
+      // HTML template for the invoice
+      const html = `
+        <!DOCTYPE html>
+        <html>
+        <head>
+          <meta charset="UTF-8">
+          <title>Invoice - ${invoice.invoiceNumber}</title>
+          <style>
+            body {
+              font-family: Arial, sans-serif;
+              margin: 0;
+              padding: 40px;
+              line-height: 1.4;
+              color: #333;
+            }
+            .header {
+              display: flex;
+              justify-content: space-between;
+              align-items: flex-start;
+              margin-bottom: 40px;
+              border-bottom: 2px solid #2c3e50;
+              padding-bottom: 20px;
+            }
+            .company-info h1 {
+              font-size: 32px;
+              margin: 0 0 5px 0;
+              color: #2c3e50;
+            }
+            .invoice-info {
+              text-align: right;
+            }
+            .invoice-info h2 {
+              font-size: 24px;
+              margin: 0 0 10px 0;
+              color: #2c3e50;
+            }
+            .status-badge {
+              display: inline-block;
+              padding: 6px 12px;
+              border-radius: 20px;
+              font-size: 12px;
+              font-weight: bold;
+              text-transform: uppercase;
+            }
+            .status-pending { background-color: #fff3cd; color: #856404; }
+            .status-sent { background-color: #d1ecf1; color: #0c5460; }
+            .status-paid { background-color: #d4edda; color: #155724; }
+            .billing-section {
+              display: grid;
+              grid-template-columns: 1fr 1fr;
+              gap: 40px;
+              margin-bottom: 40px;
+            }
+            .bill-to, .remit-to {
+              padding: 20px;
+              border-radius: 8px;
+            }
+            .bill-to {
+              background-color: #f8f9fa;
+              border-left: 4px solid #2c3e50;
+            }
+            .remit-to {
+              background-color: #f0f8ff;
+              border-left: 4px solid #007bff;
+            }
+            .section-title {
+              font-size: 16px;
+              font-weight: bold;
+              color: #2c3e50;
+              margin-bottom: 15px;
+            }
+            .service-details {
+              background-color: #f8f9fa;
+              padding: 20px;
+              border-radius: 8px;
+              margin-bottom: 30px;
+            }
+            .service-grid {
+              display: grid;
+              grid-template-columns: 1fr 1fr;
+              gap: 20px;
+            }
+            .service-item label {
+              font-size: 12px;
+              color: #666;
+              display: block;
+              margin-bottom: 5px;
+            }
+            .service-item value {
+              font-weight: bold;
+              color: #333;
+            }
+            .services-table {
+              width: 100%;
+              border-collapse: collapse;
+              margin-bottom: 30px;
+            }
+            .services-table th {
+              background-color: #f8f9fa;
+              padding: 15px 8px;
+              border: 1px solid #dee2e6;
+              text-align: left;
+              font-weight: 600;
+              color: #2c3e50;
+            }
+            .services-table td {
+              padding: 12px 8px;
+              border: 1px solid #dee2e6;
+            }
+            .services-table .amount {
+              text-align: right;
+              font-weight: bold;
+            }
+            .totals-section {
+              display: flex;
+              justify-content: flex-end;
+              margin-bottom: 40px;
+            }
+            .totals-table {
+              width: 300px;
+              border-collapse: collapse;
+            }
+            .totals-table td {
+              padding: 8px 12px;
+              border-bottom: 1px solid #dee2e6;
+            }
+            .totals-table .total-row {
+              background-color: #f8f9fa;
+              font-weight: bold;
+              font-size: 18px;
+              color: #28a745;
+            }
+            .payment-terms {
+              display: grid;
+              grid-template-columns: 1fr 1fr;
+              gap: 40px;
+              margin-top: 40px;
+              padding-top: 30px;
+              border-top: 1px solid #dee2e6;
+            }
+            .payment-section {
+              background-color: #f0f8ff;
+              padding: 20px;
+              border-radius: 8px;
+            }
+            .payment-section h4 {
+              margin-top: 0;
+              color: #2c3e50;
+            }
+            .notes-section {
+              background-color: #fff3cd;
+              padding: 20px;
+              border-radius: 8px;
+              margin-top: 30px;
+            }
+            .footer {
+              margin-top: 50px;
+              padding-top: 20px;
+              border-top: 1px solid #dee2e6;
+              font-size: 12px;
+              color: #666;
+              text-align: center;
+            }
+          </style>
+        </head>
+        <body>
+          <div class="header">
+            <div class="company-info">
+              <h1>INVOICE</h1>
+              <p style="margin: 0; color: #666;">${invoice.invoiceNumber}</p>
+            </div>
+            <div class="invoice-info">
+              <p style="margin: 0; color: #666;">Invoice Date</p>
+              <p style="font-size: 16px; font-weight: bold; margin: 5px 0;">${format(new Date(invoice.createdAt), 'MMM dd, yyyy')}</p>
+              <div class="status-badge status-${invoice.status.toLowerCase().replace('_', '-')}">
+                ${invoice.status.replace('_', ' ')}
+              </div>
+            </div>
+          </div>
+
+          <div class="billing-section">
+            <div class="bill-to">
+              <h3 class="section-title">Bill To:</h3>
+              <div style="font-size: 16px; font-weight: bold; margin-bottom: 5px;">
+                CrossCountry Freight Solutions, Inc.
+              </div>
+              <div style="color: #666;">Linehaul Department</div>
+              <div style="color: #666;">PO Box 4030</div>
+              <div style="color: #666;">Bismarck, ND 58501</div>
+            </div>
+
+            <div class="remit-to">
+              <h3 class="section-title">Remit To:</h3>
+              <div style="font-size: 16px; font-weight: bold; margin-bottom: 5px;">
+                ${invoice.carrierName || invoice.booking?.carrier?.name || 'N/A'}
+              </div>
+              ${invoice.carrierContactPerson ? `<div style="color: #666;">Attn: ${invoice.carrierContactPerson}</div>` : ''}
+              ${invoice.carrierStreetAddress1 ? `<div style="color: #666;">${invoice.carrierStreetAddress1}</div>` : ''}
+              ${invoice.carrierStreetAddress2 ? `<div style="color: #666;">${invoice.carrierStreetAddress2}</div>` : ''}
+              ${(invoice.carrierCity || invoice.carrierState || invoice.carrierZipCode) ? 
+                `<div style="color: #666;">${[invoice.carrierCity, invoice.carrierState, invoice.carrierZipCode].filter(Boolean).join(', ')}</div>` : ''}
+              ${invoice.carrierPhone ? `<div style="color: #666;">Phone: ${invoice.carrierPhone}</div>` : ''}
+              ${invoice.carrierEmail ? `<div style="color: #666;">Email: ${invoice.carrierEmail}</div>` : ''}
+            </div>
+          </div>
+
+          <div class="service-details">
+            <h3 class="section-title">Service Details:</h3>
+            <div class="service-grid">
+              <div class="service-item">
+                <label>Booking ID</label>
+                <div style="font-weight: bold;">#${invoice.booking?.id || 'N/A'}</div>
+              </div>
+              <div class="service-item">
+                <label>Service Date</label>
+                <div style="font-weight: bold;">${format(new Date(invoice.booking?.bookingDate || invoice.createdAt), 'MMM dd, yyyy')}</div>
+              </div>
+              ${invoice.booking?.manifestNumber ? `
+              <div class="service-item">
+                <label>Manifest Number</label>
+                <div style="font-weight: bold;">${invoice.booking.manifestNumber}</div>
+              </div>
+              ` : ''}
+              <div class="service-item">
+                <label>Route</label>
+                <div style="font-weight: bold;">${invoice.booking?.route?.name || 'Custom Route'}</div>
+                <div style="font-size: 12px; color: #666;">
+                  ${invoice.booking?.route?.origin || invoice.booking?.origin || 'N/A'} → ${invoice.booking?.route?.destination || invoice.booking?.destination || 'N/A'}
+                </div>
+              </div>
+            </div>
+          </div>
+
+          <table class="services-table">
+            <thead>
+              <tr>
+                <th>Service Description</th>
+                <th style="text-align: right;">Payment Amount</th>
+              </tr>
+            </thead>
+            <tbody>
+              <tr>
+                <td>
+                  <div style="font-weight: bold;">Linehaul Transportation Services - ${invoice.booking?.route?.name || 'Custom Route'}</div>
+                  <div style="font-size: 12px; color: #666; margin-top: 5px;">
+                    Route: ${invoice.booking?.route?.origin || invoice.booking?.origin || 'N/A'} to ${invoice.booking?.route?.destination || invoice.booking?.destination || 'N/A'}
+                  </div>
+                  <div style="font-size: 12px; color: #666;">
+                    Service Date: ${format(new Date(invoice.booking?.bookingDate || invoice.createdAt), 'MMM dd, yyyy')}
+                  </div>
+                </td>
+                <td class="amount">$${baseAmount.toFixed(2)}</td>
+              </tr>
+              ${lineItemsHTML}
+            </tbody>
+          </table>
+
+          <div class="totals-section">
+            <table class="totals-table">
+              <tr>
+                <td>Base Service Rate:</td>
+                <td style="text-align: right; font-weight: bold;">$${baseAmount.toFixed(2)}</td>
+              </tr>
+              ${lineItemsAmount > 0 ? `
+              <tr>
+                <td>Additional Payments:</td>
+                <td style="text-align: right; font-weight: bold;">$${lineItemsAmount.toFixed(2)}</td>
+              </tr>
+              ` : ''}
+              <tr class="total-row">
+                <td>Total Payment Due:</td>
+                <td style="text-align: right;">$${totalAmount.toFixed(2)}</td>
+              </tr>
+            </table>
+          </div>
+
+          <div class="payment-terms">
+            <div class="payment-section">
+              <h4>Payment Terms:</h4>
+              <p style="margin: 0 0 10px 0; font-size: 14px;">Net 30 days from invoice date</p>
+              <p style="margin: 0 0 10px 0; font-size: 14px;">Payment due: ${format(new Date(new Date(invoice.createdAt).getTime() + 30 * 24 * 60 * 60 * 1000), 'MMM dd, yyyy')}</p>
+              <p style="margin: 0; font-size: 14px;">Payment will be processed to carrier via ACH or check</p>
+            </div>
+            <div class="payment-section">
+              <h4>Invoice Questions:</h4>
+              <p style="margin: 0 0 5px 0; font-size: 14px;">CrossCountry Freight Solutions, Inc.</p>
+              <p style="margin: 0 0 5px 0; font-size: 14px;">Linehaul Department</p>
+              <p style="margin: 0 0 5px 0; font-size: 14px;">accounts@ccfs.com</p>
+              <p style="margin: 0; font-size: 14px;">Phone: (701) 555-0123</p>
+            </div>
+          </div>
+
+          ${invoice.notes ? `
+          <div class="notes-section">
+            <h4 style="margin-top: 0; color: #856404;">Notes:</h4>
+            <p style="margin: 0; font-size: 14px;">${invoice.notes}</p>
+          </div>
+          ` : ''}
+
+          <div class="footer">
+            Generated on ${format(new Date(), 'PPP p')} | CrossCountry Freight Solutions, Inc.<br>
+            Linehaul Department - Invoice Processing System
+          </div>
+        </body>
+        </html>
+      `;
+
+      await page.setContent(html, { waitUntil: 'networkidle0' });
+      
+      const pdfBuffer = await page.pdf({
+        format: 'A4',
+        printBackground: true,
+        margin: {
+          top: '20px',
+          right: '20px',
+          bottom: '20px',
+          left: '20px'
+        }
+      });
+
+      return pdfBuffer;
+    } finally {
+      await browser.close();
+    }
+  }
 }

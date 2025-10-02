@@ -95,8 +95,21 @@ export const getCarrierById = async (req: Request, res: Response) => {
   try {
     const { id } = req.params;
     
+    console.log('Get carrier by ID request - id param:', id);
+    
+    if (!id) {
+      return res.status(400).json({ message: 'Carrier ID is required' });
+    }
+    
+    const carrierId = parseInt(id);
+    if (isNaN(carrierId)) {
+      return res.status(400).json({ message: 'Invalid carrier ID' });
+    }
+    
+    console.log('Parsed carrier ID:', carrierId);
+    
     const carrier = await prisma.carrier.findUnique({
-      where: { id: parseInt(id) },
+      where: { id: carrierId },
       include: {
         drivers: {
           where: { active: true },
@@ -279,6 +292,7 @@ export const uploadDocument = async (req: Request, res: Response) => {
 export const inviteCarrier = async (req: Request, res: Response) => {
   try {
     const { email } = req.body;
+    const userId = (req as any).user?.id;
     
     // Check if carrier with this email already exists
     const existingCarrier = await prisma.carrier.findFirst({
@@ -289,12 +303,44 @@ export const inviteCarrier = async (req: Request, res: Response) => {
       return res.status(400).json({ message: 'A carrier with this email already exists' });
     }
     
+    // Check if there's already a pending invitation
+    const existingInvitation = await prisma.carrierInvitation.findFirst({
+      where: { 
+        email,
+        status: 'PENDING',
+        expiresAt: { gt: new Date() }
+      }
+    });
+    
+    if (existingInvitation) {
+      return res.status(409).json({ message: 'An active invitation already exists for this email' });
+    }
+    
     // Import email service
     const { sendEmail } = await import('../services/notification.service');
     
     // Generate a unique registration token
     const registrationToken = Buffer.from(`${email}:${Date.now()}`).toString('base64');
     const registrationLink = `${process.env.FRONTEND_URL}/register/carrier?token=${encodeURIComponent(registrationToken)}`;
+    
+    // Set expiration (7 days from now)
+    const expiresAt = new Date();
+    expiresAt.setDate(expiresAt.getDate() + 7);
+    
+    // Create invitation record
+    const invitation = await prisma.carrierInvitation.create({
+      data: {
+        email,
+        token: registrationToken,
+        expiresAt,
+        createdBy: userId
+      },
+      include: {
+        createdByUser: {
+          select: { name: true, email: true }
+        }
+      }
+    });
     
     // Send invitation email
     const emailContent = `
@@ -333,12 +379,14 @@ export const inviteCarrier = async (req: Request, res: Response) => {
       html: emailContent
     });
     
-    // Store the invitation in the database (optional - for tracking)
-    // You might want to create a CarrierInvitation model to track these
-    
     return res.status(200).json({ 
       message: 'Invitation sent successfully',
-      email 
+      email,
+      invitation: {
+        id: invitation.id,
+        sentAt: invitation.sentAt,
+        expiresAt: invitation.expiresAt
+      }
     });
   } catch (error) {
     console.error('Invite carrier error:', error);
@@ -394,6 +442,11 @@ export const validateInvitation = async (req: Request, res: Response) => {
 
 export const registerCarrier = async (req: Request, res: Response) => {
   try {
+    console.log('=== Carrier Registration Request ===');
+    console.log('Request body:', req.body);
+    console.log('Request file:', req.file ? { filename: req.file.filename, originalname: req.file.originalname, size: req.file.size } : 'No file');
+    console.log('======================================');
+    
     const {
       token,
       name,
@@ -421,30 +474,47 @@ export const registerCarrier = async (req: Request, res: Response) => {
     
     // Validate token first
     if (!token) {
+      console.log('❌ Registration failed: No token provided');
       return res.status(400).json({ message: 'Registration token is required' });
     }
+    
+    console.log('🔍 Token validation - received token:', token);
     
     try {
       // Decode the token
       const decoded = Buffer.from(decodeURIComponent(token), 'base64').toString();
+      console.log('🔓 Decoded token:', decoded);
+      
       const [tokenEmail, timestampStr] = decoded.split(':');
       const timestamp = parseInt(timestampStr);
       
+      console.log('📧 Token email:', tokenEmail);
+      console.log('⏰ Token timestamp:', timestamp);
+      console.log('📧 Form email:', email);
+      
       if (!tokenEmail || !timestamp) {
+        console.log('❌ Registration failed: Invalid token format');
         return res.status(400).json({ message: 'Invalid registration token' });
       }
       
       // Check if token is expired (7 days)
       const expirationTime = 7 * 24 * 60 * 60 * 1000; // 7 days in milliseconds
       if (Date.now() - timestamp > expirationTime) {
+        console.log('❌ Registration failed: Token expired');
         return res.status(400).json({ message: 'Registration token has expired' });
       }
       
-      // Validate that the email matches the token
-      if (email !== tokenEmail) {
+      // Validate that the email matches the token (case insensitive)
+      if (email.toLowerCase().trim() !== tokenEmail.toLowerCase().trim()) {
+        console.log('❌ Registration failed: Email mismatch');
+        console.log('Token email:', tokenEmail);
+        console.log('Form email:', email);
         return res.status(400).json({ message: 'Email does not match invitation' });
       }
+      
+      console.log('✅ Token validation passed');
     } catch (decodeError) {
+      console.log('❌ Registration failed: Token decode error:', decodeError);
       return res.status(400).json({ message: 'Invalid registration token' });
     }
     
@@ -465,15 +535,18 @@ export const registerCarrier = async (req: Request, res: Response) => {
     const missingFields = [];
     for (const [field, label] of Object.entries(requiredFields)) {
       if (!req.body[field] || !req.body[field].trim()) {
+        console.log(`Missing or empty field: ${field} (${label}) = "${req.body[field]}"`);
         missingFields.push(label);
       }
     }
     
     if (!insuranceFile) {
+      console.log('Missing insurance file');
       missingFields.push('Insurance document');
     }
     
     if (missingFields.length > 0) {
+      console.log('Registration failed - missing fields:', missingFields);
       return res.status(400).json({ 
         message: `Missing required fields: ${missingFields.join(', ')}` 
       });
@@ -498,12 +571,18 @@ export const registerCarrier = async (req: Request, res: Response) => {
       }
     }
     
-    // Check if carrier with this email already exists
+    // Check if carrier with this email already exists (case insensitive)
     const existingCarrier = await prisma.carrier.findFirst({
-      where: { email }
+      where: { 
+        email: {
+          equals: email.toLowerCase().trim(),
+          mode: 'insensitive'
+        }
+      }
     });
     
     if (existingCarrier) {
+      console.log('❌ Registration failed: Carrier with this email already exists');
       return res.status(409).json({ message: 'Carrier with this email already exists' });
     }
     
@@ -512,7 +591,7 @@ export const registerCarrier = async (req: Request, res: Response) => {
       name: name.trim(),
       contactPerson: contactPerson.trim(),
       phone: phone.trim(),
-      email: email.trim(),
+      email: email.toLowerCase().trim(),
       mcNumber: mcNumber.trim(),
       dotNumber: dotNumber.trim(),
       streetAddress1: streetAddress1.trim(),
@@ -590,6 +669,23 @@ export const registerCarrier = async (req: Request, res: Response) => {
       html: adminEmailContent
     });
     
+    // Mark invitation as registered if it exists
+    try {
+      await prisma.carrierInvitation.updateMany({
+        where: {
+          email: carrier.email!,
+          status: 'PENDING'
+        },
+        data: {
+          status: 'REGISTERED',
+          registeredAt: new Date()
+        }
+      });
+    } catch (invitationUpdateError) {
+      console.error('Failed to update invitation status:', invitationUpdateError);
+      // Continue execution - don't fail registration due to this
+    }
+    
     return res.status(201).json({ 
       message: 'Registration submitted successfully',
       carrierId: carrier.id 
@@ -607,6 +703,127 @@ export const registerCarrier = async (req: Request, res: Response) => {
     }
     
     return res.status(500).json({ message: 'Failed to submit registration' });
+  }
+};
+
+// Get carrier invitations
+export const getCarrierInvitations = async (req: Request, res: Response) => {
+  try {
+    const { page = 1, limit = 20, status } = req.query;
+    
+    // First, clean up expired invitations automatically
+    await cleanupExpiredInvitations();
+    
+    const where: any = {};
+    if (status) {
+      where.status = status as string;
+    }
+    
+    const pageNum = parseInt(page as string);
+    const limitNum = parseInt(limit as string);
+    
+    const [invitations, total] = await Promise.all([
+      prisma.carrierInvitation.findMany({
+        where,
+        include: {
+          createdByUser: {
+            select: { name: true, email: true }
+          }
+        },
+        orderBy: { sentAt: 'desc' },
+        skip: (pageNum - 1) * limitNum,
+        take: limitNum
+      }),
+      prisma.carrierInvitation.count({ where })
+    ]);
+
+    return res.json({
+      invitations,
+      pagination: {
+        page: pageNum,
+        limit: limitNum,
+        total,
+        pages: Math.ceil(total / limitNum)
+      }
+    });
+  } catch (error) {
+    console.error('Get carrier invitations error:', error);
+    return res.status(500).json({ message: 'Failed to fetch invitations' });
+  }
+};
+
+// Clean up expired invitations automatically
+export const cleanupExpiredInvitations = async () => {
+  try {
+    const now = new Date();
+    
+    // Find all pending invitations that have expired
+    const expiredInvitations = await prisma.carrierInvitation.findMany({
+      where: {
+        status: 'PENDING',
+        expiresAt: {
+          lt: now
+        }
+      }
+    });
+    
+    if (expiredInvitations.length > 0) {
+      // Update expired invitations to EXPIRED status
+      await prisma.carrierInvitation.updateMany({
+        where: {
+          status: 'PENDING',
+          expiresAt: {
+            lt: now
+          }
+        },
+        data: {
+          status: 'EXPIRED',
+          updatedAt: now
+        }
+      });
+      
+      console.log(`✅ Cleaned up ${expiredInvitations.length} expired invitation(s)`);
+    }
+    
+    return expiredInvitations.length;
+  } catch (error) {
+    console.error('Error cleaning up expired invitations:', error);
+    return 0;
+  }
+};
+
+// Cancel carrier invitation
+export const cancelCarrierInvitation = async (req: Request, res: Response) => {
+  try {
+    const { id } = req.params;
+    
+    const invitation = await prisma.carrierInvitation.findUnique({
+      where: { id: parseInt(id) }
+    });
+    
+    if (!invitation) {
+      return res.status(404).json({ message: 'Invitation not found' });
+    }
+    
+    if (invitation.status !== 'PENDING') {
+      return res.status(400).json({ message: 'Only pending invitations can be cancelled' });
+    }
+    
+    const updatedInvitation = await prisma.carrierInvitation.update({
+      where: { id: parseInt(id) },
+      data: {
+        status: 'CANCELLED',
+        updatedAt: new Date()
+      }
+    });
+    
+    return res.json({
+      message: 'Invitation cancelled successfully',
+      invitation: updatedInvitation
+    });
+  } catch (error) {
+    console.error('Cancel carrier invitation error:', error);
+    return res.status(500).json({ message: 'Failed to cancel invitation' });
   }
 };
 

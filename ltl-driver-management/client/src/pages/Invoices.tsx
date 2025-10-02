@@ -1,665 +1,631 @@
 import React, { useState, useMemo } from 'react';
-import { useQuery, useQueryClient } from '@tanstack/react-query';
+import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { api } from '../services/api';
-import { Invoice, Booking } from '../types';
-import { Plus, Search, Download, Eye, Calendar, DollarSign, FileText, X, ChevronUp, ChevronDown, CheckCircle } from 'lucide-react';
-import { format, isAfter, isBefore, isSameDay, parseISO } from 'date-fns';
+import { 
+  FileText, Search, Filter, Download, Send, DollarSign, 
+  Calendar, ChevronDown, Check, X, Eye, Trash2, Mail,
+  CheckCircle, Clock, AlertCircle, FileImage, Printer
+} from 'lucide-react';
+import { format, parseISO } from 'date-fns';
+import * as XLSX from 'xlsx';
+import { saveAs } from 'file-saver';
 
-type SortField = 'invoiceNumber' | 'bookingId' | 'amount' | 'createdAt' | 'paidAt' | 'status';
-type SortDirection = 'asc' | 'desc';
+interface Invoice {
+  id: number;
+  invoiceNumber: string;
+  amount: number;
+  baseAmount: number;
+  lineItemsAmount: number;
+  status: 'PENDING' | 'SENT_TO_AP' | 'PAID' | 'OVERDUE' | 'CANCELLED';
+  createdAt: string;
+  updatedAt: string;
+  sentToAPAt?: string;
+  sentToAPBy?: string;
+  paidAt?: string;
+  includesDocuments: boolean;
+  notes?: string;
+  // Carrier address information
+  carrierName?: string;
+  carrierContactPerson?: string;
+  carrierPhone?: string;
+  carrierEmail?: string;
+  carrierStreetAddress1?: string;
+  carrierStreetAddress2?: string;
+  carrierCity?: string;
+  carrierState?: string;
+  carrierZipCode?: string;
+  booking: {
+    id: number;
+    carrier?: {
+      id: number;
+      name: string;
+    };
+    route?: {
+      name: string;
+      origin: string;
+      destination: string;
+    };
+    bookingDate: string;
+    manifestNumber?: string;
+  };
+  attachments?: any[];
+}
 
 export const Invoices: React.FC = () => {
   const queryClient = useQueryClient();
   const [searchTerm, setSearchTerm] = useState('');
   const [statusFilter, setStatusFilter] = useState('');
-  const [dateFromFilter, setDateFromFilter] = useState('');
-  const [dateToFilter, setDateToFilter] = useState('');
-  const [sortField, setSortField] = useState<SortField>('createdAt');
-  const [sortDirection, setSortDirection] = useState<SortDirection>('desc');
+  const [fromDate, setFromDate] = useState('');
+  const [toDate, setToDate] = useState('');
+  const [selectedInvoices, setSelectedInvoices] = useState<number[]>([]);
+  const [showSendModal, setShowSendModal] = useState(false);
+  const [includeDocuments, setIncludeDocuments] = useState(true);
   const [viewingInvoice, setViewingInvoice] = useState<Invoice | null>(null);
-  const [showGenerateModal, setShowGenerateModal] = useState(false);
+  const [previewingInvoice, setPreviewingInvoice] = useState<Invoice | null>(null);
 
-  const { data: invoices, isLoading } = useQuery({
-    queryKey: ['invoices'],
+  // Fetch invoices
+  const { data: invoicesData, isLoading } = useQuery({
+    queryKey: ['invoices', statusFilter, fromDate, toDate],
     queryFn: async () => {
-      const response = await api.get('/invoices');
-      return response.data.invoices as Invoice[];
+      const params = new URLSearchParams();
+      if (statusFilter) params.append('status', statusFilter);
+      if (fromDate) params.append('fromDate', fromDate);
+      if (toDate) params.append('toDate', toDate);
+      
+      const response = await api.get(`/invoices?${params.toString()}&limit=1000`);
+      return response.data;
     }
   });
 
-  const filteredAndSortedInvoices = useMemo(() => {
-    if (!invoices) return [];
+  // Update invoice status mutation
+  const updateStatusMutation = useMutation({
+    mutationFn: async ({ id, status }: { id: number; status: string }) => {
+      const response = await api.put(`/invoices/${id}/status`, { status });
+      return response.data;
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ['invoices'] });
+    }
+  });
 
-    // First, filter the invoices
-    let filtered = invoices.filter(invoice => {
-      // Search filter
-      const matchesSearch = searchTerm === '' || 
+  // Send to AP mutation
+  const sendToAPMutation = useMutation({
+    mutationFn: async ({ invoiceIds, includeDocuments }: { 
+      invoiceIds: number[]; 
+      includeDocuments: boolean;
+    }) => {
+      const response = await api.post('/invoices/send-to-ap', {
+        invoiceIds,
+        includeDocuments
+      });
+      return response.data;
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ['invoices'] });
+      setSelectedInvoices([]);
+      setShowSendModal(false);
+      alert('Invoices sent to AP successfully!');
+    }
+  });
+
+  // Delete invoice mutation
+  const deleteInvoiceMutation = useMutation({
+    mutationFn: async (id: number) => {
+      await api.delete(`/invoices/${id}`);
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ['invoices'] });
+    }
+  });
+
+  // Filter invoices based on search term
+  const filteredInvoices = useMemo(() => {
+    if (!invoicesData?.invoices) return [];
+    
+    return invoicesData.invoices.filter((invoice: Invoice) => {
+      const matchesSearch = searchTerm === '' ||
         invoice.invoiceNumber.toLowerCase().includes(searchTerm.toLowerCase()) ||
-        invoice.bookingId.toString().includes(searchTerm);
+        invoice.booking.carrier?.name.toLowerCase().includes(searchTerm.toLowerCase()) ||
+        invoice.booking.route?.name.toLowerCase().includes(searchTerm.toLowerCase());
       
-      // Status filter
-      const matchesStatus = statusFilter === '' || invoice.status === statusFilter;
-      
-      // Date filter
-      let matchesDate = true;
-      if (dateFromFilter || dateToFilter) {
-        const invoiceDate = parseISO(invoice.createdAt);
-        
-        if (dateFromFilter) {
-          const fromDate = parseISO(dateFromFilter);
-          matchesDate = matchesDate && (isAfter(invoiceDate, fromDate) || isSameDay(invoiceDate, fromDate));
-        }
-        
-        if (dateToFilter) {
-          const toDate = parseISO(dateToFilter);
-          matchesDate = matchesDate && (isBefore(invoiceDate, toDate) || isSameDay(invoiceDate, toDate));
-        }
-      }
-      
-      return matchesSearch && matchesStatus && matchesDate;
+      return matchesSearch;
     });
+  }, [invoicesData, searchTerm]);
 
-    // Then, sort the filtered results
-    filtered.sort((a, b) => {
-      let aValue: any;
-      let bValue: any;
-
-      switch (sortField) {
-        case 'invoiceNumber':
-          aValue = a.invoiceNumber;
-          bValue = b.invoiceNumber;
-          break;
-        case 'bookingId':
-          aValue = a.bookingId;
-          bValue = b.bookingId;
-          break;
-        case 'amount':
-          aValue = a.amount;
-          bValue = b.amount;
-          break;
-        case 'createdAt':
-          aValue = new Date(a.createdAt);
-          bValue = new Date(b.createdAt);
-          break;
-        case 'paidAt':
-          aValue = a.paidAt ? new Date(a.paidAt) : new Date(0);
-          bValue = b.paidAt ? new Date(b.paidAt) : new Date(0);
-          break;
-        case 'status':
-          aValue = a.status;
-          bValue = b.status;
-          break;
-        default:
-          return 0;
-      }
-
-      // Handle string comparison
-      if (typeof aValue === 'string' && typeof bValue === 'string') {
-        const comparison = aValue.localeCompare(bValue);
-        return sortDirection === 'asc' ? comparison : -comparison;
-      }
-
-      // Handle number and date comparison
-      if (aValue < bValue) return sortDirection === 'asc' ? -1 : 1;
-      if (aValue > bValue) return sortDirection === 'asc' ? 1 : -1;
-      return 0;
-    });
-
-    return filtered;
-  }, [invoices, searchTerm, statusFilter, dateFromFilter, dateToFilter, sortField, sortDirection]);
-
-  const handleSort = (field: SortField) => {
-    if (sortField === field) {
-      setSortDirection(sortDirection === 'asc' ? 'desc' : 'asc');
-    } else {
-      setSortField(field);
-      setSortDirection('asc');
-    }
-  };
-
-  const getSortIcon = (field: SortField) => {
-    if (sortField !== field) {
-      return null;
-    }
-    return sortDirection === 'asc' ? 
-      <ChevronUp className="w-4 h-4 ml-1 inline" /> : 
-      <ChevronDown className="w-4 h-4 ml-1 inline" />;
-  };
-
-  const handleViewInvoice = (invoice: Invoice) => {
-    setViewingInvoice(invoice);
-  };
-
-  const handleDownloadInvoice = async (invoice: Invoice) => {
-    try {
-      // Create a simple PDF-like content for download
-      const content = `
-Invoice: ${invoice.invoiceNumber}
-Booking ID: ${invoice.bookingId}
-Amount: $${invoice.amount}
-Status: ${invoice.status}
-Created: ${format(new Date(invoice.createdAt), 'MMM dd, yyyy')}
-${invoice.paidAt ? `Paid: ${format(new Date(invoice.paidAt), 'MMM dd, yyyy')}` : ''}
-`;
-      
-      const blob = new Blob([content], { type: 'text/plain' });
-      const url = window.URL.createObjectURL(blob);
-      const a = document.createElement('a');
-      a.style.display = 'none';
-      a.href = url;
-      a.download = `invoice-${invoice.invoiceNumber}.txt`;
-      document.body.appendChild(a);
-      a.click();
-      window.URL.revokeObjectURL(url);
-      document.body.removeChild(a);
-    } catch (error) {
-      console.error('Error downloading invoice:', error);
-      alert('Error downloading invoice. Please try again.');
-    }
-  };
-
-  const getStatusBadge = (status: string) => {
-    const statusColors = {
-      PENDING: 'bg-yellow-100 text-yellow-800',
-      SENT: 'bg-blue-100 text-blue-800',
-      PAID: 'bg-green-100 text-green-800',
-      OVERDUE: 'bg-red-100 text-red-800',
-      CANCELLED: 'bg-gray-100 text-gray-800'
+  // Calculate summary statistics
+  const summary = useMemo(() => {
+    if (!filteredInvoices) return null;
+    
+    return {
+      total: filteredInvoices.length,
+      totalAmount: filteredInvoices.reduce((sum, inv) => sum + Number(inv.amount), 0),
+      pending: filteredInvoices.filter(inv => inv.status === 'PENDING').length,
+      sentToAP: filteredInvoices.filter(inv => inv.status === 'SENT_TO_AP').length,
+      paid: filteredInvoices.filter(inv => inv.status === 'PAID').length,
+      overdue: filteredInvoices.filter(inv => inv.status === 'OVERDUE').length
     };
-    return statusColors[status as keyof typeof statusColors] || 'bg-gray-100 text-gray-800';
-  };
+  }, [filteredInvoices]);
 
-  const getTotalAmount = () => {
-    if (!invoices) return 0;
-    return invoices.reduce((total, invoice) => total + Number(invoice.amount), 0);
-  };
-
-  const getPaidAmount = () => {
-    if (!invoices) return 0;
-    return invoices
-      .filter(invoice => invoice.status === 'PAID')
-      .reduce((total, invoice) => total + Number(invoice.amount), 0);
-  };
-
-  const getPendingAmount = () => {
-    if (!invoices) return 0;
-    return invoices
-      .filter(invoice => ['PENDING', 'SENT', 'OVERDUE'].includes(invoice.status))
-      .reduce((total, invoice) => total + Number(invoice.amount), 0);
-  };
-
-  if (isLoading) {
-    return (
-      <div className="flex items-center justify-center min-h-96">
-        <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-blue-600"></div>
-      </div>
+  // Toggle invoice selection
+  const toggleInvoiceSelection = (id: number) => {
+    setSelectedInvoices(prev => 
+      prev.includes(id) 
+        ? prev.filter(invId => invId !== id)
+        : [...prev, id]
     );
-  }
+  };
+
+  // Select all visible invoices
+  const selectAll = () => {
+    const allIds = filteredInvoices.map(inv => inv.id);
+    setSelectedInvoices(allIds);
+  };
+
+  // Clear selection
+  const clearSelection = () => {
+    setSelectedInvoices([]);
+  };
+
+  // Export to Excel
+  const exportToExcel = () => {
+    const data = filteredInvoices.map(invoice => ({
+      'Invoice #': invoice.invoiceNumber,
+      'Carrier': invoice.carrierName || invoice.booking.carrier?.name || 'N/A',
+      'Contact Person': invoice.carrierContactPerson || '',
+      'Phone': invoice.carrierPhone || '',
+      'Email': invoice.carrierEmail || '',
+      'Address': invoice.carrierStreetAddress1 || '',
+      'Address 2': invoice.carrierStreetAddress2 || '',
+      'City': invoice.carrierCity || '',
+      'State': invoice.carrierState || '',
+      'Zip Code': invoice.carrierZipCode || '',
+      'Route': invoice.booking.route?.name || 'N/A',
+      'Booking Date': format(parseISO(invoice.booking.bookingDate), 'MM/dd/yyyy'),
+      'Base Amount': Number(invoice.baseAmount),
+      'Additional Charges': Number(invoice.lineItemsAmount),
+      'Total Amount': Number(invoice.amount),
+      'Status': invoice.status,
+      'Created': format(parseISO(invoice.createdAt), 'MM/dd/yyyy'),
+      'Sent to AP': invoice.sentToAPAt ? format(parseISO(invoice.sentToAPAt), 'MM/dd/yyyy') : '',
+      'Paid': invoice.paidAt ? format(parseISO(invoice.paidAt), 'MM/dd/yyyy') : ''
+    }));
+
+    const ws = XLSX.utils.json_to_sheet(data);
+    const wb = XLSX.utils.book_new();
+    XLSX.utils.book_append_sheet(wb, ws, 'Invoices');
+    const excelBuffer = XLSX.write(wb, { bookType: 'xlsx', type: 'array' });
+    const blob = new Blob([excelBuffer], { type: 'application/octet-stream' });
+    saveAs(blob, `invoices-${format(new Date(), 'yyyyMMdd')}.xlsx`);
+  };
+
+  // Get status badge classes
+  const getStatusBadge = (status: string) => {
+    switch (status) {
+      case 'PENDING':
+        return 'bg-yellow-100 text-yellow-800';
+      case 'SENT_TO_AP':
+        return 'bg-blue-100 text-blue-800';
+      case 'PAID':
+        return 'bg-green-100 text-green-800';
+      case 'OVERDUE':
+        return 'bg-red-100 text-red-800';
+      case 'CANCELLED':
+        return 'bg-gray-100 text-gray-800';
+      default:
+        return 'bg-gray-100 text-gray-800';
+    }
+  };
+
+  // Get status icon
+  const getStatusIcon = (status: string) => {
+    switch (status) {
+      case 'PENDING':
+        return <Clock className="w-4 h-4" />;
+      case 'SENT_TO_AP':
+        return <Send className="w-4 h-4" />;
+      case 'PAID':
+        return <CheckCircle className="w-4 h-4" />;
+      case 'OVERDUE':
+        return <AlertCircle className="w-4 h-4" />;
+      default:
+        return <X className="w-4 h-4" />;
+    }
+  };
 
   return (
-    <div className="space-y-6">
-      {/* Header */}
-      <div className="flex justify-between items-center">
-        <div>
-          <h1 className="text-2xl font-bold text-gray-900">Invoices</h1>
-          <p className="text-gray-600">Manage billing and payments</p>
-        </div>
-        <button 
-          onClick={() => setShowGenerateModal(true)}
-          className="btn-primary flex items-center gap-2"
-        >
-          <Plus className="w-4 h-4" />
-          Generate Invoice
-        </button>
+    <div>
+      <div className="mb-6">
+        <h1 className="text-2xl font-bold text-gray-900 flex items-center gap-2">
+          <FileText className="w-8 h-8" />
+          Invoice Management
+        </h1>
       </div>
 
       {/* Summary Cards */}
-      <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
-        <div className="bg-white p-6 rounded-lg shadow-sm border border-gray-200">
-          <div className="flex items-center">
-            <div className="flex-shrink-0">
-              <DollarSign className="h-6 w-6 text-green-600" />
+      {summary && (
+        <div className="grid grid-cols-1 md:grid-cols-5 gap-4 mb-6">
+          <div className="bg-white p-4 rounded-lg shadow-sm border">
+            <div className="flex items-center justify-between">
+              <div>
+                <p className="text-sm text-gray-600">Total Invoices</p>
+                <p className="text-2xl font-bold text-gray-900">{summary.total}</p>
+              </div>
+              <FileText className="w-8 h-8 text-gray-400" />
             </div>
-            <div className="ml-3">
-              <p className="text-sm font-medium text-gray-500">Total Amount</p>
-              <p className="text-2xl font-semibold text-gray-900">${getTotalAmount().toLocaleString()}</p>
+          </div>
+          
+          <div className="bg-white p-4 rounded-lg shadow-sm border">
+            <div className="flex items-center justify-between">
+              <div>
+                <p className="text-sm text-gray-600">Total Amount</p>
+                <p className="text-2xl font-bold text-green-600">
+                  ${Number(summary.totalAmount).toFixed(2)}
+                </p>
+              </div>
+              <DollarSign className="w-8 h-8 text-green-400" />
+            </div>
+          </div>
+          
+          <div className="bg-white p-4 rounded-lg shadow-sm border">
+            <div className="flex items-center justify-between">
+              <div>
+                <p className="text-sm text-gray-600">Pending</p>
+                <p className="text-2xl font-bold text-yellow-600">{summary.pending}</p>
+              </div>
+              <Clock className="w-8 h-8 text-yellow-400" />
+            </div>
+          </div>
+          
+          <div className="bg-white p-4 rounded-lg shadow-sm border">
+            <div className="flex items-center justify-between">
+              <div>
+                <p className="text-sm text-gray-600">Sent to AP</p>
+                <p className="text-2xl font-bold text-blue-600">{summary.sentToAP}</p>
+              </div>
+              <Send className="w-8 h-8 text-blue-400" />
+            </div>
+          </div>
+          
+          <div className="bg-white p-4 rounded-lg shadow-sm border">
+            <div className="flex items-center justify-between">
+              <div>
+                <p className="text-sm text-gray-600">Paid</p>
+                <p className="text-2xl font-bold text-green-600">{summary.paid}</p>
+              </div>
+              <CheckCircle className="w-8 h-8 text-green-400" />
             </div>
           </div>
         </div>
+      )}
 
-        <div className="bg-white p-6 rounded-lg shadow-sm border border-gray-200">
-          <div className="flex items-center">
-            <div className="flex-shrink-0">
-              <DollarSign className="h-6 w-6 text-blue-600" />
-            </div>
-            <div className="ml-3">
-              <p className="text-sm font-medium text-gray-500">Paid Amount</p>
-              <p className="text-2xl font-semibold text-gray-900">${getPaidAmount().toLocaleString()}</p>
+      {/* Filters and Actions */}
+      <div className="bg-white p-4 rounded-lg shadow-sm mb-4">
+        <div className="flex flex-wrap items-center gap-4">
+          <div className="flex-1 min-w-[300px]">
+            <div className="relative">
+              <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 text-gray-400 w-5 h-5" />
+              <input
+                type="text"
+                placeholder="Search by invoice #, carrier, or route..."
+                className="w-full pl-10 pr-4 py-2 border rounded-lg"
+                value={searchTerm}
+                onChange={(e) => setSearchTerm(e.target.value)}
+              />
             </div>
           </div>
-        </div>
-
-        <div className="bg-white p-6 rounded-lg shadow-sm border border-gray-200">
-          <div className="flex items-center">
-            <div className="flex-shrink-0">
-              <DollarSign className="h-6 w-6 text-yellow-600" />
-            </div>
-            <div className="ml-3">
-              <p className="text-sm font-medium text-gray-500">Pending Amount</p>
-              <p className="text-2xl font-semibold text-gray-900">${getPendingAmount().toLocaleString()}</p>
-            </div>
-          </div>
-        </div>
-      </div>
-
-      {/* Filters */}
-      <div className="space-y-4 mb-6">
-        <div className="flex gap-4">
-          <div className="flex-1 relative">
-            <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 text-gray-400 w-4 h-4" />
-            <input
-              type="text"
-              placeholder="Search by invoice number or booking ID..."
-              className="w-full pl-10 pr-4 py-2 border border-gray-300 rounded-md focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
-              value={searchTerm}
-              onChange={(e) => setSearchTerm(e.target.value)}
-            />
-          </div>
+          
           <select
-            className="px-3 py-2 border border-gray-300 rounded-md focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
+            className="px-4 py-2 border rounded-lg"
             value={statusFilter}
             onChange={(e) => setStatusFilter(e.target.value)}
           >
-            <option value="">All Status</option>
+            <option value="">All Statuses</option>
             <option value="PENDING">Pending</option>
-            <option value="SENT">Sent</option>
+            <option value="SENT_TO_AP">Sent to AP</option>
             <option value="PAID">Paid</option>
             <option value="OVERDUE">Overdue</option>
             <option value="CANCELLED">Cancelled</option>
           </select>
-        </div>
-        
-        {/* Date Filters */}
-        <div className="flex gap-4 items-center">
-          <Calendar className="w-4 h-4 text-gray-400" />
-          <span className="text-sm font-medium text-gray-700">Created Date Range:</span>
-          <div className="flex gap-2 items-center">
+          
+          <div className="flex items-center gap-2">
             <input
               type="date"
-              value={dateFromFilter}
-              onChange={(e) => setDateFromFilter(e.target.value)}
-              className="px-3 py-2 border border-gray-300 rounded-md focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
-              placeholder="From date"
+              className="px-3 py-2 border rounded-lg"
+              value={fromDate}
+              onChange={(e) => setFromDate(e.target.value)}
+              placeholder="From Date"
             />
             <span className="text-gray-500">to</span>
             <input
               type="date"
-              value={dateToFilter}
-              onChange={(e) => setDateToFilter(e.target.value)}
-              className="px-3 py-2 border border-gray-300 rounded-md focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
-              placeholder="To date"
+              className="px-3 py-2 border rounded-lg"
+              value={toDate}
+              onChange={(e) => setToDate(e.target.value)}
+              placeholder="To Date"
             />
           </div>
-          {(dateFromFilter || dateToFilter) && (
+          
+          <div className="flex items-center gap-2 ml-auto">
+            {selectedInvoices.length > 0 && (
+              <>
+                <span className="text-sm text-gray-600">
+                  {selectedInvoices.length} selected
+                </span>
+                <button
+                  onClick={clearSelection}
+                  className="text-sm text-blue-600 hover:text-blue-700"
+                >
+                  Clear
+                </button>
+                <button
+                  onClick={() => setShowSendModal(true)}
+                  className="px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 flex items-center gap-2"
+                >
+                  <Mail className="w-4 h-4" />
+                  Send to AP
+                </button>
+              </>
+            )}
             <button
-              onClick={() => {
-                setDateFromFilter('');
-                setDateToFilter('');
-              }}
-              className="text-gray-500 hover:text-red-600 transition-colors"
-              title="Clear date filters"
+              onClick={exportToExcel}
+              className="px-4 py-2 bg-green-600 text-white rounded-lg hover:bg-green-700 flex items-center gap-2"
             >
-              <X className="w-4 h-4" />
+              <Download className="w-4 h-4" />
+              Export
             </button>
-          )}
+          </div>
         </div>
       </div>
 
-      {/* Invoices Table */}
-      <div className="bg-white shadow-sm border border-gray-200 rounded-lg overflow-hidden">
-        <table className="min-w-full divide-y divide-gray-200">
-          <thead className="bg-gray-50">
-            <tr>
-              <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
-                <button
-                  onClick={() => handleSort('invoiceNumber')}
-                  className="flex items-center hover:text-gray-700 transition-colors"
-                >
-                  Invoice #
-                  {getSortIcon('invoiceNumber')}
-                </button>
+      {/* Invoice Table */}
+      <div className="bg-white rounded-lg shadow-sm overflow-hidden">
+        <table className="min-w-full">
+          <thead>
+            <tr className="bg-gray-50">
+              <th className="px-4 py-3 text-left">
+                <input
+                  type="checkbox"
+                  checked={selectedInvoices.length === filteredInvoices.length && filteredInvoices.length > 0}
+                  onChange={(e) => e.target.checked ? selectAll() : clearSelection()}
+                  className="rounded"
+                />
               </th>
-              <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
-                <button
-                  onClick={() => handleSort('bookingId')}
-                  className="flex items-center hover:text-gray-700 transition-colors"
-                >
-                  Booking
-                  {getSortIcon('bookingId')}
-                </button>
+              <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
+                Invoice #
               </th>
-              <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
-                <button
-                  onClick={() => handleSort('amount')}
-                  className="flex items-center hover:text-gray-700 transition-colors"
-                >
-                  Amount
-                  {getSortIcon('amount')}
-                </button>
+              <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
+                Carrier
               </th>
-              <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
-                <button
-                  onClick={() => handleSort('createdAt')}
-                  className="flex items-center hover:text-gray-700 transition-colors"
-                >
-                  Created Date
-                  {getSortIcon('createdAt')}
-                </button>
+              <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
+                Route
               </th>
-              <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
-                <button
-                  onClick={() => handleSort('paidAt')}
-                  className="flex items-center hover:text-gray-700 transition-colors"
-                >
-                  Paid Date
-                  {getSortIcon('paidAt')}
-                </button>
+              <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
+                Booking Date
               </th>
-              <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
-                <button
-                  onClick={() => handleSort('status')}
-                  className="flex items-center hover:text-gray-700 transition-colors"
-                >
-                  Status
-                  {getSortIcon('status')}
-                </button>
+              <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
+                Amount
               </th>
-              <th className="px-6 py-3 text-right text-xs font-medium text-gray-500 uppercase tracking-wider">
+              <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
+                Status
+              </th>
+              <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
                 Actions
               </th>
             </tr>
           </thead>
           <tbody className="bg-white divide-y divide-gray-200">
-            {filteredAndSortedInvoices.map((invoice) => (
-              <tr key={invoice.id} className="hover:bg-gray-50">
-                <td className="px-6 py-4 whitespace-nowrap">
-                  <div className="flex items-center">
-                    <FileText className="w-4 h-4 mr-2 text-gray-400" />
-                    <span className="text-sm font-medium text-gray-900">{invoice.invoiceNumber}</span>
-                  </div>
-                </td>
-                <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-900">
-                  #{invoice.bookingId}
-                </td>
-                <td className="px-6 py-4 whitespace-nowrap">
-                  <div className="flex items-center text-sm font-medium text-gray-900">
-                    <DollarSign className="w-4 h-4 mr-1 text-gray-400" />
-                    ${invoice.amount.toLocaleString()}
-                  </div>
-                </td>
-                <td className="px-6 py-4 whitespace-nowrap">
-                  <div className="flex items-center text-sm text-gray-900">
-                    <Calendar className="w-4 h-4 mr-2 text-gray-400" />
-                    {format(new Date(invoice.createdAt), 'MMM dd, yyyy')}
-                  </div>
-                </td>
-                <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-900">
-                  {invoice.paidAt ? format(new Date(invoice.paidAt), 'MMM dd, yyyy') : '-'}
-                </td>
-                <td className="px-6 py-4 whitespace-nowrap">
-                  <span className={`inline-flex px-2 py-1 rounded-full text-xs font-medium ${getStatusBadge(invoice.status)}`}>
-                    {invoice.status}
-                  </span>
-                </td>
-                <td className="px-6 py-4 whitespace-nowrap text-right text-sm font-medium">
-                  <div className="flex items-center gap-2 justify-end">
-                    <button 
-                      onClick={() => handleViewInvoice(invoice)}
-                      className="text-gray-500 hover:text-blue-600 transition-colors"
-                      title="View invoice details"
-                    >
-                      <Eye className="w-4 h-4" />
-                    </button>
-                    <button 
-                      onClick={() => handleDownloadInvoice(invoice)}
-                      className="text-gray-500 hover:text-green-600 transition-colors"
-                      title="Download invoice"
-                    >
-                      <Download className="w-4 h-4" />
-                    </button>
-                  </div>
+            {isLoading ? (
+              <tr>
+                <td colSpan={8} className="text-center py-4 text-gray-500">
+                  Loading invoices...
                 </td>
               </tr>
-            ))}
+            ) : filteredInvoices.length === 0 ? (
+              <tr>
+                <td colSpan={8} className="text-center py-4 text-gray-500">
+                  No invoices found
+                </td>
+              </tr>
+            ) : (
+              filteredInvoices.map((invoice: Invoice) => (
+                <tr key={invoice.id} className="hover:bg-gray-50">
+                  <td className="px-4 py-3">
+                    <input
+                      type="checkbox"
+                      checked={selectedInvoices.includes(invoice.id)}
+                      onChange={() => toggleInvoiceSelection(invoice.id)}
+                      className="rounded"
+                    />
+                  </td>
+                  <td className="px-4 py-3 text-sm font-medium text-gray-900">
+                    {invoice.invoiceNumber}
+                  </td>
+                  <td className="px-4 py-3 text-sm text-gray-900">
+                    {invoice.booking.carrier?.name || 'N/A'}
+                  </td>
+                  <td className="px-4 py-3 text-sm text-gray-900">
+                    {invoice.booking.route?.name || 'N/A'}
+                  </td>
+                  <td className="px-4 py-3 text-sm text-gray-900">
+                    {format(parseISO(invoice.booking.bookingDate), 'MMM dd, yyyy')}
+                  </td>
+                  <td className="px-4 py-3 text-sm font-medium text-gray-900">
+                    ${Number(invoice.amount).toFixed(2)}
+                    {Number(invoice.lineItemsAmount) > 0 && (
+                      <span className="text-xs text-gray-500 block">
+                        +${Number(invoice.lineItemsAmount).toFixed(2)} charges
+                      </span>
+                    )}
+                  </td>
+                  <td className="px-4 py-3">
+                    <span className={`inline-flex items-center gap-1 px-2 py-1 rounded-full text-xs font-medium ${getStatusBadge(invoice.status)}`}>
+                      {getStatusIcon(invoice.status)}
+                      {invoice.status.replace('_', ' ')}
+                    </span>
+                  </td>
+                  <td className="px-4 py-3 text-sm">
+                    <div className="flex items-center gap-2">
+                      <button
+                        onClick={() => setViewingInvoice(invoice)}
+                        className="text-blue-600 hover:text-blue-700"
+                        title="View details"
+                      >
+                        <Eye className="w-4 h-4" />
+                      </button>
+                      <button
+                        onClick={() => setPreviewingInvoice(invoice)}
+                        className="text-purple-600 hover:text-purple-700"
+                        title="Preview invoice"
+                      >
+                        <FileImage className="w-4 h-4" />
+                      </button>
+                      {invoice.status === 'PENDING' && (
+                        <>
+                          <button
+                            onClick={() => {
+                              setSelectedInvoices([invoice.id]);
+                              setShowSendModal(true);
+                            }}
+                            className="text-green-600 hover:text-green-700"
+                            title="Send to AP"
+                          >
+                            <Mail className="w-4 h-4" />
+                          </button>
+                          <button
+                            onClick={() => {
+                              if (confirm('Are you sure you want to delete this invoice?')) {
+                                deleteInvoiceMutation.mutate(invoice.id);
+                              }
+                            }}
+                            className="text-red-600 hover:text-red-700"
+                            title="Delete invoice"
+                          >
+                            <Trash2 className="w-4 h-4" />
+                          </button>
+                        </>
+                      )}
+                      {invoice.status === 'SENT_TO_AP' && (
+                        <button
+                          onClick={() => updateStatusMutation.mutate({
+                            id: invoice.id,
+                            status: 'PAID'
+                          })}
+                          className="text-green-600 hover:text-green-700"
+                          title="Mark as paid"
+                        >
+                          <CheckCircle className="w-4 h-4" />
+                        </button>
+                      )}
+                    </div>
+                  </td>
+                </tr>
+              ))
+            )}
           </tbody>
         </table>
       </div>
 
-      {filteredAndSortedInvoices.length === 0 && (
-        <div className="text-center py-12">
-          <p className="text-gray-500">No invoices found matching your criteria.</p>
+      {/* Send to AP Modal */}
+      {showSendModal && (
+        <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50">
+          <div className="bg-white rounded-lg p-6 w-full max-w-md">
+            <h3 className="text-lg font-semibold mb-4">Send Invoices to AP</h3>
+            
+            <p className="text-sm text-gray-600 mb-4">
+              You are about to send {selectedInvoices.length} invoice(s) to ap@ccfs.com
+            </p>
+            
+            <div className="mb-4">
+              <label className="flex items-center gap-2">
+                <input
+                  type="checkbox"
+                  checked={includeDocuments}
+                  onChange={(e) => setIncludeDocuments(e.target.checked)}
+                  className="rounded"
+                />
+                <span className="text-sm">Include supporting documents</span>
+              </label>
+            </div>
+            
+            <div className="flex justify-end gap-2">
+              <button
+                onClick={() => setShowSendModal(false)}
+                className="px-4 py-2 bg-gray-200 text-gray-700 rounded hover:bg-gray-300"
+              >
+                Cancel
+              </button>
+              <button
+                onClick={() => sendToAPMutation.mutate({
+                  invoiceIds: selectedInvoices,
+                  includeDocuments
+                })}
+                disabled={sendToAPMutation.isPending}
+                className="px-4 py-2 bg-blue-600 text-white rounded hover:bg-blue-700 disabled:opacity-50"
+              >
+                {sendToAPMutation.isPending ? 'Sending...' : 'Send to AP'}
+              </button>
+            </div>
+          </div>
         </div>
       )}
 
-      {/* Generate Invoice Modal */}
-      {showGenerateModal && (
-        <GenerateInvoiceModal
-          onClose={() => setShowGenerateModal(false)}
-          onSuccess={() => {
-            queryClient.invalidateQueries({ queryKey: ['invoices'] });
-            setShowGenerateModal(false);
+      {/* Invoice Details Modal */}
+      {viewingInvoice && (
+        <InvoiceDetailsModal
+          invoice={viewingInvoice}
+          onClose={() => setViewingInvoice(null)}
+        />
+      )}
+
+      {/* Invoice Preview Modal */}
+      {previewingInvoice && (
+        <InvoicePreviewModal
+          invoice={previewingInvoice}
+          onClose={() => setPreviewingInvoice(null)}
+          onSendToAP={(invoiceId) => {
+            setSelectedInvoices([invoiceId]);
+            setShowSendModal(true);
+            setPreviewingInvoice(null);
           }}
         />
       )}
-
-      {/* Invoice View Modal */}
-      {viewingInvoice && (
-        <InvoiceViewModal 
-          invoice={viewingInvoice}
-          onClose={() => setViewingInvoice(null)}
-          onDownload={() => handleDownloadInvoice(viewingInvoice)}
-        />
-      )}
     </div>
   );
 };
 
-// Invoice View Modal Component
-interface InvoiceViewModalProps {
+// Invoice Details Modal Component
+const InvoiceDetailsModal: React.FC<{
   invoice: Invoice;
   onClose: () => void;
-  onDownload: () => void;
-}
-
-const InvoiceViewModal: React.FC<InvoiceViewModalProps> = ({ invoice, onClose, onDownload }) => {
-  const getStatusBadge = (status: string) => {
-    const statusColors = {
-      PENDING: 'bg-yellow-100 text-yellow-800',
-      SENT: 'bg-blue-100 text-blue-800',
-      PAID: 'bg-green-100 text-green-800',
-      OVERDUE: 'bg-red-100 text-red-800',
-      CANCELLED: 'bg-gray-100 text-gray-800'
-    };
-    return statusColors[status as keyof typeof statusColors] || 'bg-gray-100 text-gray-800';
-  };
-
-  return (
-    <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50">
-      <div className="bg-white rounded-lg p-6 w-full max-w-2xl max-h-[90vh] overflow-y-auto">
-        <div className="flex justify-between items-center mb-6">
-          <h2 className="text-xl font-bold text-gray-900">Invoice Details</h2>
-          <button 
-            onClick={onClose}
-            className="text-gray-400 hover:text-gray-600"
-          >
-            <X className="w-5 h-5" />
-          </button>
-        </div>
-        
-        <div className="space-y-6">
-          {/* Invoice Header */}
-          <div className="bg-gray-50 p-4 rounded-lg">
-            <div className="flex justify-between items-start">
-              <div>
-                <h3 className="text-lg font-semibold text-gray-900">{invoice.invoiceNumber}</h3>
-                <p className="text-gray-600">Booking ID: #{invoice.bookingId}</p>
-              </div>
-              <span className={`inline-flex px-3 py-1 rounded-full text-sm font-medium ${getStatusBadge(invoice.status)}`}>
-                {invoice.status}
-              </span>
-            </div>
-          </div>
-
-          {/* Invoice Details */}
-          <div className="grid grid-cols-2 gap-6">
-            <div>
-              <h4 className="text-sm font-medium text-gray-700 mb-3">Invoice Information</h4>
-              <div className="space-y-2 text-sm">
-                <div className="flex justify-between">
-                  <span className="text-gray-600">Invoice Number:</span>
-                  <span className="font-medium">{invoice.invoiceNumber}</span>
-                </div>
-                <div className="flex justify-between">
-                  <span className="text-gray-600">Amount:</span>
-                  <span className="font-medium text-lg">${invoice.amount.toLocaleString()}</span>
-                </div>
-                <div className="flex justify-between">
-                  <span className="text-gray-600">Status:</span>
-                  <span className="font-medium">{invoice.status}</span>
-                </div>
-              </div>
-            </div>
-
-            <div>
-              <h4 className="text-sm font-medium text-gray-700 mb-3">Dates</h4>
-              <div className="space-y-2 text-sm">
-                <div className="flex justify-between">
-                  <span className="text-gray-600">Created:</span>
-                  <span className="font-medium">{format(new Date(invoice.createdAt), 'MMM dd, yyyy')}</span>
-                </div>
-                {invoice.paidAt && (
-                  <div className="flex justify-between">
-                    <span className="text-gray-600">Paid:</span>
-                    <span className="font-medium text-green-600">{format(new Date(invoice.paidAt), 'MMM dd, yyyy')}</span>
-                  </div>
-                )}
-              </div>
-            </div>
-          </div>
-
-          {/* Booking Information */}
-          {invoice.booking && (
-            <div>
-              <h4 className="text-sm font-medium text-gray-700 mb-3">Related Booking</h4>
-              <div className="bg-gray-50 p-3 rounded-md">
-                <div className="text-sm space-y-1">
-                  <div className="flex justify-between">
-                    <span className="text-gray-600">Booking ID:</span>
-                    <span className="font-medium">#{invoice.booking.id}</span>
-                  </div>
-                  {invoice.booking.carrier && (
-                    <div className="flex justify-between">
-                      <span className="text-gray-600">Carrier:</span>
-                      <span className="font-medium">{invoice.booking.carrier.name}</span>
-                    </div>
-                  )}
-                  {invoice.booking.route && (
-                    <div className="flex justify-between">
-                      <span className="text-gray-600">Route:</span>
-                      <span className="font-medium">{invoice.booking.route.name}</span>
-                    </div>
-                  )}
-                </div>
-              </div>
-            </div>
-          )}
-
-          {/* Summary */}
-          <div className="border-t pt-4">
-            <div className="flex justify-between items-center text-lg font-semibold">
-              <span>Total Amount:</span>
-              <span className="text-green-600">${invoice.amount.toLocaleString()}</span>
-            </div>
-          </div>
-        </div>
-        
-        <div className="flex justify-end gap-3 mt-6 pt-4 border-t">
-          <button 
-            onClick={onClose}
-            className="px-4 py-2 bg-gray-500 text-white rounded hover:bg-gray-600"
-          >
-            Close
-          </button>
-          <button 
-            onClick={onDownload}
-            className="px-4 py-2 bg-green-600 text-white rounded hover:bg-green-700 flex items-center gap-2"
-          >
-            <Download className="w-4 h-4" />
-            Download
-          </button>
-        </div>
-      </div>
-    </div>
-  );
-};
-
-// Generate Invoice Modal Component
-interface GenerateInvoiceModalProps {
-  onClose: () => void;
-  onSuccess: () => void;
-}
-
-const GenerateInvoiceModal: React.FC<GenerateInvoiceModalProps> = ({ onClose, onSuccess }) => {
-  const [searchTerm, setSearchTerm] = useState('');
-  const [selectedBooking, setSelectedBooking] = useState<Booking | null>(null);
-  const [isSubmitting, setIsSubmitting] = useState(false);
-
-  // Fetch completed bookings without invoices
-  const { data: bookings, isLoading } = useQuery({
-    queryKey: ['completed-bookings-without-invoices'],
+}> = ({ invoice, onClose }) => {
+  const { data: fullInvoice, isLoading } = useQuery({
+    queryKey: ['invoice', invoice.id],
     queryFn: async () => {
-      const response = await api.get('/bookings?status=COMPLETED');
-      // Filter out bookings that already have invoices
-      return response.data.bookings.filter((booking: Booking) => !booking.invoice) as Booking[];
+      const response = await api.get(`/invoices/${invoice.id}`);
+      return response.data;
     }
   });
 
-  const filteredBookings = useMemo(() => {
-    if (!bookings) return [];
-    
-    if (searchTerm === '') return bookings;
-    
-    return bookings.filter(booking =>
-      booking.id.toString().includes(searchTerm) ||
-      booking.carrier?.name.toLowerCase().includes(searchTerm.toLowerCase()) ||
-      booking.route?.name.toLowerCase().includes(searchTerm.toLowerCase())
+  if (isLoading) {
+    return (
+      <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50">
+        <div className="bg-white rounded-lg p-6 w-full max-w-4xl">
+          <p>Loading invoice details...</p>
+        </div>
+      </div>
     );
-  }, [bookings, searchTerm]);
+  }
 
-  const handleGenerateInvoice = async () => {
-    if (!selectedBooking) return;
-
-    setIsSubmitting(true);
-    try {
-      await api.post('/invoices', {
-        bookingId: selectedBooking.id
-      });
-      
-      onSuccess();
-    } catch (error) {
-      console.error('Error generating invoice:', error);
-      alert('Error generating invoice. Please try again.');
-    } finally {
-      setIsSubmitting(false);
-    }
-  };
+  const invoiceData = fullInvoice || invoice;
 
   return (
     <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50">
       <div className="bg-white rounded-lg p-6 w-full max-w-4xl max-h-[90vh] overflow-y-auto">
         <div className="flex justify-between items-center mb-6">
-          <h2 className="text-xl font-bold text-gray-900">Generate Invoice</h2>
-          <button 
+          <h2 className="text-xl font-bold text-gray-900">
+            Invoice {invoiceData.invoiceNumber}
+          </h2>
+          <button
             onClick={onClose}
             className="text-gray-400 hover:text-gray-600"
           >
@@ -667,145 +633,492 @@ const GenerateInvoiceModal: React.FC<GenerateInvoiceModalProps> = ({ onClose, on
           </button>
         </div>
 
-        {/* Search */}
-        <div className="mb-6">
-          <div className="relative">
-            <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 text-gray-400 w-4 h-4" />
-            <input
-              type="text"
-              placeholder="Search by booking ID, carrier, or route..."
-              className="w-full pl-10 pr-4 py-2 border border-gray-300 rounded-md focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
-              value={searchTerm}
-              onChange={(e) => setSearchTerm(e.target.value)}
-            />
+        {/* Invoice Header */}
+        <div className="grid grid-cols-1 md:grid-cols-2 gap-4 mb-6">
+          <div>
+            <h3 className="text-sm font-medium text-gray-700 mb-2">Carrier Information (Remit To)</h3>
+            <p className="text-sm text-gray-900 font-medium">
+              {invoiceData.carrierName || invoiceData.booking.carrier?.name || 'N/A'}
+            </p>
+            {invoiceData.carrierContactPerson && (
+              <p className="text-sm text-gray-600">
+                Contact: {invoiceData.carrierContactPerson}
+              </p>
+            )}
+            {invoiceData.carrierPhone && (
+              <p className="text-sm text-gray-600">
+                Phone: {invoiceData.carrierPhone}
+              </p>
+            )}
+            {invoiceData.carrierEmail && (
+              <p className="text-sm text-gray-600">
+                Email: {invoiceData.carrierEmail}
+              </p>
+            )}
+            
+            {/* Address */}
+            {(invoiceData.carrierStreetAddress1 || invoiceData.carrierCity || invoiceData.carrierState) && (
+              <div className="mt-2 pt-2 border-t border-gray-200">
+                <p className="text-xs text-gray-500 mb-1">Payment Address:</p>
+                {invoiceData.carrierStreetAddress1 && (
+                  <p className="text-sm text-gray-600">{invoiceData.carrierStreetAddress1}</p>
+                )}
+                {invoiceData.carrierStreetAddress2 && (
+                  <p className="text-sm text-gray-600">{invoiceData.carrierStreetAddress2}</p>
+                )}
+                {(invoiceData.carrierCity || invoiceData.carrierState || invoiceData.carrierZipCode) && (
+                  <p className="text-sm text-gray-600">
+                    {[invoiceData.carrierCity, invoiceData.carrierState, invoiceData.carrierZipCode].filter(Boolean).join(', ')}
+                  </p>
+                )}
+              </div>
+            )}
+            
+            <div className="mt-2 pt-2 border-t border-gray-200">
+              <p className="text-sm text-gray-600">
+                Booking #{invoiceData.booking.id}
+              </p>
+              {invoiceData.booking.manifestNumber && (
+                <p className="text-sm text-gray-600">
+                  Manifest: {invoiceData.booking.manifestNumber}
+                </p>
+              )}
+            </div>
+          </div>
+          
+          <div>
+            <h3 className="text-sm font-medium text-gray-700 mb-2">Invoice Details</h3>
+            <div className="space-y-1">
+              <p className="text-sm">
+                <span className="text-gray-600">Status:</span>{' '}
+                <span className={`inline-flex items-center gap-1 px-2 py-1 rounded-full text-xs font-medium ${getStatusBadge(invoiceData.status)}`}>
+                  {invoiceData.status.replace('_', ' ')}
+                </span>
+              </p>
+              <p className="text-sm">
+                <span className="text-gray-600">Created:</span>{' '}
+                <span className="text-gray-900">
+                  {format(parseISO(invoiceData.createdAt), 'MMM dd, yyyy')}
+                </span>
+              </p>
+              {invoiceData.sentToAPAt && (
+                <p className="text-sm">
+                  <span className="text-gray-600">Sent to AP:</span>{' '}
+                  <span className="text-gray-900">
+                    {format(parseISO(invoiceData.sentToAPAt), 'MMM dd, yyyy')}
+                    {invoiceData.sentToAPBy && ` by ${invoiceData.sentToAPBy}`}
+                  </span>
+                </p>
+              )}
+              {invoiceData.paidAt && (
+                <p className="text-sm">
+                  <span className="text-gray-600">Paid:</span>{' '}
+                  <span className="text-gray-900">
+                    {format(parseISO(invoiceData.paidAt), 'MMM dd, yyyy')}
+                  </span>
+                </p>
+              )}
+            </div>
           </div>
         </div>
 
-        {isLoading ? (
-          <div className="flex items-center justify-center py-12">
-            <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-blue-600"></div>
+        {/* Route Information */}
+        <div className="mb-6">
+          <h3 className="text-sm font-medium text-gray-700 mb-2">Route Information</h3>
+          <div className="bg-gray-50 p-4 rounded-lg">
+            <p className="text-sm font-medium text-gray-900">
+              {invoiceData.booking.route?.name || 'Custom Route'}
+            </p>
+            <p className="text-sm text-gray-600">
+              {invoiceData.booking.route?.origin} → {invoiceData.booking.route?.destination}
+            </p>
+            <p className="text-sm text-gray-600">
+              Booking Date: {format(parseISO(invoiceData.booking.bookingDate), 'MMM dd, yyyy')}
+            </p>
           </div>
-        ) : (
-          <>
-            {/* Bookings List */}
-            <div className="mb-6 max-h-96 overflow-y-auto border border-gray-200 rounded-lg">
-              {filteredBookings.length === 0 ? (
-                <div className="text-center py-8 text-gray-500">
-                  {bookings?.length === 0 
-                    ? 'No completed bookings without invoices found.'
-                    : 'No bookings match your search criteria.'}
-                </div>
-              ) : (
-                <table className="min-w-full divide-y divide-gray-200">
-                  <thead className="bg-gray-50">
-                    <tr>
-                      <th className="px-4 py-2 text-left text-xs font-medium text-gray-500 uppercase">Select</th>
-                      <th className="px-4 py-2 text-left text-xs font-medium text-gray-500 uppercase">Booking</th>
-                      <th className="px-4 py-2 text-left text-xs font-medium text-gray-500 uppercase">Carrier</th>
-                      <th className="px-4 py-2 text-left text-xs font-medium text-gray-500 uppercase">Route</th>
-                      <th className="px-4 py-2 text-left text-xs font-medium text-gray-500 uppercase">Date</th>
-                      <th className="px-4 py-2 text-left text-xs font-medium text-gray-500 uppercase">Amount</th>
-                    </tr>
-                  </thead>
-                  <tbody className="bg-white divide-y divide-gray-200">
-                    {filteredBookings.map((booking) => (
-                      <tr 
-                        key={booking.id}
-                        className={`hover:bg-gray-50 cursor-pointer ${
-                          selectedBooking?.id === booking.id ? 'bg-blue-50' : ''
-                        }`}
-                        onClick={() => setSelectedBooking(booking)}
-                      >
-                        <td className="px-4 py-3">
-                          <input
-                            type="radio"
-                            checked={selectedBooking?.id === booking.id}
-                            onChange={() => setSelectedBooking(booking)}
-                            className="h-4 w-4 text-blue-600 focus:ring-blue-500"
-                          />
-                        </td>
-                        <td className="px-4 py-3 text-sm font-medium text-gray-900">
-                          #{booking.id}
-                        </td>
-                        <td className="px-4 py-3 text-sm text-gray-900">
-                          {booking.carrier?.name || 'N/A'}
-                        </td>
-                        <td className="px-4 py-3 text-sm text-gray-900">
-                          <div>
-                            <div className="font-medium">{booking.route?.name}</div>
-                            <div className="text-gray-500 text-xs">
-                              {booking.route?.origin} → {booking.route?.destination}
-                            </div>
-                          </div>
-                        </td>
-                        <td className="px-4 py-3 text-sm text-gray-900">
-                          {format(new Date(booking.bookingDate), 'MMM dd, yyyy')}
-                        </td>
-                        <td className="px-4 py-3 text-sm font-medium text-gray-900">
-                          ${booking.rate.toLocaleString()}
-                        </td>
-                      </tr>
-                    ))}
-                  </tbody>
-                </table>
-              )}
-            </div>
+        </div>
 
-            {/* Selected Booking Details */}
-            {selectedBooking && (
-              <div className="mb-6 p-4 bg-blue-50 rounded-lg border border-blue-200">
-                <h3 className="text-sm font-medium text-blue-900 mb-2">Selected Booking Details</h3>
-                <div className="grid grid-cols-2 gap-4 text-sm">
-                  <div>
-                    <span className="text-blue-700 font-medium">Booking ID:</span>
-                    <span className="ml-2 text-blue-900">#{selectedBooking.id}</span>
-                  </div>
-                  <div>
-                    <span className="text-blue-700 font-medium">Carrier:</span>
-                    <span className="ml-2 text-blue-900">{selectedBooking.carrier?.name}</span>
-                  </div>
-                  <div>
-                    <span className="text-blue-700 font-medium">Route:</span>
-                    <span className="ml-2 text-blue-900">{selectedBooking.route?.name}</span>
-                  </div>
-                  <div>
-                    <span className="text-blue-700 font-medium">Amount:</span>
-                    <span className="ml-2 text-blue-900 font-semibold">${selectedBooking.rate.toLocaleString()}</span>
-                  </div>
-                </div>
+        {/* Amount Breakdown */}
+        <div className="mb-6">
+          <h3 className="text-sm font-medium text-gray-700 mb-2">Payment Breakdown</h3>
+          <div className="bg-gray-50 p-4 rounded-lg space-y-2">
+            <div className="flex justify-between text-sm">
+              <span>Base Service Rate:</span>
+              <span className="font-medium">${Number(invoiceData.baseAmount).toFixed(2)}</span>
+            </div>
+            {Number(invoiceData.lineItemsAmount) > 0 && (
+              <div className="flex justify-between text-sm">
+                <span>Additional Payments:</span>
+                <span className="font-medium">${Number(invoiceData.lineItemsAmount).toFixed(2)}</span>
               </div>
             )}
-          </>
+            <div className="border-t pt-2 flex justify-between text-base font-semibold">
+              <span>Total Payment Due:</span>
+              <span className="text-green-600">${Number(invoiceData.amount).toFixed(2)}</span>
+            </div>
+          </div>
+        </div>
+
+        {/* Line Items */}
+        {invoiceData.booking?.lineItems && invoiceData.booking.lineItems.length > 0 && (
+          <div className="mb-6">
+            <h3 className="text-sm font-medium text-gray-700 mb-2">Line Items</h3>
+            <div className="border rounded-lg overflow-hidden">
+              <table className="min-w-full">
+                <thead className="bg-gray-50">
+                  <tr>
+                    <th className="px-4 py-2 text-left text-xs font-medium text-gray-500">Category</th>
+                    <th className="px-4 py-2 text-left text-xs font-medium text-gray-500">Description</th>
+                    <th className="px-4 py-2 text-left text-xs font-medium text-gray-500">Qty</th>
+                    <th className="px-4 py-2 text-left text-xs font-medium text-gray-500">Amount</th>
+                  </tr>
+                </thead>
+                <tbody className="divide-y divide-gray-200">
+                  {invoiceData.booking.lineItems.map((item: any) => (
+                    <tr key={item.id}>
+                      <td className="px-4 py-2 text-sm">{item.category}</td>
+                      <td className="px-4 py-2 text-sm">{item.description}</td>
+                      <td className="px-4 py-2 text-sm">{item.quantity}</td>
+                      <td className="px-4 py-2 text-sm">${Number(item.amount).toFixed(2)}</td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+            </div>
+          </div>
         )}
 
-        {/* Action Buttons */}
-        <div className="flex justify-end gap-3 pt-4 border-t">
-          <button 
+        {/* Attachments */}
+        {invoiceData.attachments && invoiceData.attachments.length > 0 && (
+          <div className="mb-6">
+            <h3 className="text-sm font-medium text-gray-700 mb-2">Attachments</h3>
+            <div className="space-y-2">
+              {invoiceData.attachments.map((attachment: any) => (
+                <div key={attachment.id} className="flex items-center gap-2 p-2 bg-gray-50 rounded">
+                  <FileText className="w-4 h-4 text-blue-500" />
+                  <span className="text-sm">{attachment.filename}</span>
+                  <span className="text-xs text-gray-500">({attachment.documentType})</span>
+                </div>
+              ))}
+            </div>
+          </div>
+        )}
+
+        {/* Notes */}
+        {invoiceData.notes && (
+          <div className="mb-6">
+            <h3 className="text-sm font-medium text-gray-700 mb-2">Notes</h3>
+            <p className="text-sm text-gray-900 bg-gray-50 p-3 rounded">{invoiceData.notes}</p>
+          </div>
+        )}
+
+        {/* Actions */}
+        <div className="flex justify-end mt-6 pt-4 border-t">
+          <button
             onClick={onClose}
             className="px-4 py-2 bg-gray-500 text-white rounded hover:bg-gray-600"
-            disabled={isSubmitting}
           >
-            Cancel
-          </button>
-          <button 
-            onClick={handleGenerateInvoice}
-            disabled={!selectedBooking || isSubmitting}
-            className="px-4 py-2 bg-blue-600 text-white rounded hover:bg-blue-700 disabled:bg-blue-400 flex items-center gap-2"
-          >
-            {isSubmitting ? (
-              <>
-                <div className="animate-spin rounded-full h-4 w-4 border-b-2 border-white"></div>
-                Generating...
-              </>
-            ) : (
-              <>
-                <CheckCircle className="w-4 h-4" />
-                Generate Invoice
-              </>
-            )}
+            Close
           </button>
         </div>
       </div>
     </div>
   );
 };
+
+// Invoice Preview Modal Component
+const InvoicePreviewModal: React.FC<{
+  invoice: Invoice;
+  onClose: () => void;
+  onSendToAP: (invoiceId: number) => void;
+}> = ({ invoice, onClose, onSendToAP }) => {
+  const { data: fullInvoice, isLoading } = useQuery({
+    queryKey: ['invoice', invoice.id],
+    queryFn: async () => {
+      const response = await api.get(`/invoices/${invoice.id}`);
+      return response.data;
+    }
+  });
+
+  if (isLoading) {
+    return (
+      <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50">
+        <div className="bg-white rounded-lg p-6 w-full max-w-4xl">
+          <p>Loading invoice preview...</p>
+        </div>
+      </div>
+    );
+  }
+
+  const invoiceData = fullInvoice || invoice;
+
+  return (
+    <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50">
+      <div className="bg-white rounded-lg w-full max-w-6xl max-h-[95vh] overflow-hidden flex flex-col">
+        {/* Header */}
+        <div className="flex justify-between items-center p-6 border-b">
+          <h2 className="text-xl font-bold text-gray-900 flex items-center gap-2">
+            <FileImage className="w-5 h-5" />
+            Invoice Preview: {invoiceData.invoiceNumber}
+          </h2>
+          <div className="flex items-center gap-2">
+            {invoiceData.status === 'PENDING' && (
+              <button
+                onClick={() => onSendToAP(invoiceData.id)}
+                className="px-4 py-2 bg-blue-600 text-white rounded hover:bg-blue-700 flex items-center gap-2"
+              >
+                <Mail className="w-4 h-4" />
+                Send to AP
+              </button>
+            )}
+            <button
+              onClick={onClose}
+              className="text-gray-400 hover:text-gray-600"
+            >
+              <X className="w-5 h-5" />
+            </button>
+          </div>
+        </div>
+
+        {/* Invoice Preview Content */}
+        <div className="flex-1 overflow-y-auto p-6">
+          <div className="bg-white shadow-lg rounded-lg p-8 max-w-4xl mx-auto">
+            {/* Invoice Header */}
+            <div className="flex justify-between items-start mb-8">
+              <div>
+                <h1 className="text-3xl font-bold text-gray-900 mb-2">INVOICE</h1>
+                <p className="text-lg text-gray-600">{invoiceData.invoiceNumber}</p>
+              </div>
+              <div className="text-right">
+                <p className="text-sm text-gray-600">Invoice Date</p>
+                <p className="text-lg font-semibold">{format(parseISO(invoiceData.createdAt), 'MMM dd, yyyy')}</p>
+                <div className="mt-2">
+                  <span className={`inline-flex items-center gap-1 px-3 py-1 rounded-full text-sm font-medium ${getStatusBadge(invoiceData.status)}`}>
+                    {invoiceData.status.replace('_', ' ')}
+                  </span>
+                </div>
+              </div>
+            </div>
+
+            {/* Bill To Section */}
+            <div className="grid grid-cols-1 md:grid-cols-2 gap-8 mb-8">
+              <div>
+                <h3 className="text-lg font-semibold text-gray-900 mb-4">Bill To:</h3>
+                <div className="bg-gray-50 p-4 rounded-lg">
+                  <p className="text-lg font-semibold text-gray-900">
+                    CrossCountry Freight Solutions, Inc.
+                  </p>
+                  <p className="text-gray-600">Linehaul Department</p>
+                  <p className="text-gray-600">PO Box 4030</p>
+                  <p className="text-gray-600">Bismarck, ND 58501</p>
+                </div>
+              </div>
+
+              <div>
+                <h3 className="text-lg font-semibold text-gray-900 mb-4">Remit To:</h3>
+                <div className="bg-gray-50 p-4 rounded-lg">
+                  <p className="text-lg font-semibold text-gray-900">
+                    {invoiceData.carrierName || invoiceData.booking.carrier?.name || 'N/A'}
+                  </p>
+                  {invoiceData.carrierContactPerson && (
+                    <p className="text-gray-600">Attn: {invoiceData.carrierContactPerson}</p>
+                  )}
+                  {invoiceData.carrierStreetAddress1 && (
+                    <p className="text-gray-600">{invoiceData.carrierStreetAddress1}</p>
+                  )}
+                  {invoiceData.carrierStreetAddress2 && (
+                    <p className="text-gray-600">{invoiceData.carrierStreetAddress2}</p>
+                  )}
+                  {(invoiceData.carrierCity || invoiceData.carrierState || invoiceData.carrierZipCode) && (
+                    <p className="text-gray-600">
+                      {[invoiceData.carrierCity, invoiceData.carrierState, invoiceData.carrierZipCode].filter(Boolean).join(', ')}
+                    </p>
+                  )}
+                  {invoiceData.carrierPhone && (
+                    <p className="text-gray-600">Phone: {invoiceData.carrierPhone}</p>
+                  )}
+                  {invoiceData.carrierEmail && (
+                    <p className="text-gray-600">Email: {invoiceData.carrierEmail}</p>
+                  )}
+                </div>
+              </div>
+            </div>
+
+            {/* Service Details Section */}
+            <div className="mb-8">
+              <h3 className="text-lg font-semibold text-gray-900 mb-4">Service Details:</h3>
+              <div className="bg-gray-50 p-4 rounded-lg">
+                <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                  <div>
+                    <p className="text-sm text-gray-600">Booking ID</p>
+                    <p className="font-semibold">#{invoiceData.booking.id}</p>
+                  </div>
+                  <div>
+                    <p className="text-sm text-gray-600">Service Date</p>
+                    <p className="font-semibold">{format(parseISO(invoiceData.booking.bookingDate), 'MMM dd, yyyy')}</p>
+                  </div>
+                  {invoiceData.booking.manifestNumber && (
+                    <div>
+                      <p className="text-sm text-gray-600">Manifest Number</p>
+                      <p className="font-semibold">{invoiceData.booking.manifestNumber}</p>
+                    </div>
+                  )}
+                  <div>
+                    <p className="text-sm text-gray-600">Route</p>
+                    <p className="font-semibold">{invoiceData.booking.route?.name || 'Custom Route'}</p>
+                    <p className="text-gray-600 text-sm">
+                      {invoiceData.booking.route?.origin || invoiceData.booking.origin} → {invoiceData.booking.route?.destination || invoiceData.booking.destination}
+                    </p>
+                  </div>
+                </div>
+              </div>
+            </div>
+
+            {/* Service Items Table */}
+            <div className="mb-8">
+              <h3 className="text-lg font-semibold text-gray-900 mb-4">Payment for Services Provided by Carrier:</h3>
+              <div className="overflow-x-auto">
+                <table className="w-full border border-gray-200">
+                  <thead className="bg-gray-50">
+                    <tr>
+                      <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider border-b">Service Description</th>
+                      <th className="px-4 py-3 text-right text-xs font-medium text-gray-500 uppercase tracking-wider border-b">Payment Amount</th>
+                    </tr>
+                  </thead>
+                  <tbody className="bg-white divide-y divide-gray-200">
+                    <tr>
+                      <td className="px-4 py-4 text-sm text-gray-900">
+                        Linehaul Transportation Services - {invoiceData.booking.route?.name || 'Custom Route'}
+                        <br />
+                        <span className="text-gray-600 text-xs">
+                          Route: {invoiceData.booking.route?.origin || invoiceData.booking.origin} to {invoiceData.booking.route?.destination || invoiceData.booking.destination}
+                        </span>
+                        <br />
+                        <span className="text-gray-600 text-xs">
+                          Service Date: {format(parseISO(invoiceData.booking.bookingDate), 'MMM dd, yyyy')}
+                        </span>
+                      </td>
+                      <td className="px-4 py-4 text-sm text-gray-900 text-right font-medium">
+                        ${Number(invoiceData.baseAmount).toFixed(2)}
+                      </td>
+                    </tr>
+                    
+                    {/* Line Items */}
+                    {invoiceData.booking?.lineItems && invoiceData.booking.lineItems.length > 0 && 
+                      invoiceData.booking.lineItems.map((item: any) => (
+                        <tr key={item.id}>
+                          <td className="px-4 py-4 text-sm text-gray-900">
+                            {item.description}
+                            <br />
+                            <span className="text-gray-600 text-xs">
+                              {item.category} - Qty: {item.quantity}
+                            </span>
+                          </td>
+                          <td className="px-4 py-4 text-sm text-gray-900 text-right font-medium">
+                            ${Number(item.amount).toFixed(2)}
+                          </td>
+                        </tr>
+                      ))
+                    }
+                  </tbody>
+                </table>
+              </div>
+            </div>
+
+            {/* Total Section */}
+            <div className="flex justify-end">
+              <div className="w-64">
+                <div className="bg-gray-50 p-4 rounded-lg">
+                  <div className="flex justify-between py-2">
+                    <span className="text-gray-600">Base Service Rate:</span>
+                    <span className="font-medium">${Number(invoiceData.baseAmount).toFixed(2)}</span>
+                  </div>
+                  {Number(invoiceData.lineItemsAmount) > 0 && (
+                    <div className="flex justify-between py-2">
+                      <span className="text-gray-600">Additional Payments:</span>
+                      <span className="font-medium">${Number(invoiceData.lineItemsAmount).toFixed(2)}</span>
+                    </div>
+                  )}
+                  <div className="border-t pt-2 mt-2">
+                    <div className="flex justify-between">
+                      <span className="text-lg font-semibold">Total Payment Due:</span>
+                      <span className="text-lg font-bold text-green-600">
+                        ${Number(invoiceData.amount).toFixed(2)}
+                      </span>
+                    </div>
+                  </div>
+                </div>
+              </div>
+            </div>
+
+            {/* Payment Terms */}
+            <div className="mt-8 pt-8 border-t border-gray-200">
+              <div className="grid grid-cols-1 md:grid-cols-2 gap-8">
+                <div>
+                  <h4 className="font-semibold text-gray-900 mb-2">Payment Terms:</h4>
+                  <p className="text-sm text-gray-600">Net 30 days from invoice date</p>
+                  <p className="text-sm text-gray-600">Payment due: {format(new Date(new Date(invoiceData.createdAt).getTime() + 30 * 24 * 60 * 60 * 1000), 'MMM dd, yyyy')}</p>
+                  <p className="text-sm text-gray-600 mt-2">Payment will be processed to carrier via ACH or check</p>
+                </div>
+                <div>
+                  <h4 className="font-semibold text-gray-900 mb-2">Invoice Questions:</h4>
+                  <p className="text-sm text-gray-600">CrossCountry Freight Solutions, Inc.</p>
+                  <p className="text-sm text-gray-600">Linehaul Department</p>
+                  <p className="text-sm text-gray-600">accounts@ccfs.com</p>
+                  <p className="text-sm text-gray-600">Phone: (701) 555-0123</p>
+                </div>
+              </div>
+            </div>
+
+            {/* Notes */}
+            {invoiceData.notes && (
+              <div className="mt-6">
+                <h4 className="font-semibold text-gray-900 mb-2">Notes:</h4>
+                <p className="text-sm text-gray-600">{invoiceData.notes}</p>
+              </div>
+            )}
+          </div>
+        </div>
+
+        {/* Footer Actions */}
+        <div className="flex justify-end gap-3 p-6 border-t bg-gray-50">
+          <button
+            onClick={onClose}
+            className="px-4 py-2 bg-gray-500 text-white rounded hover:bg-gray-600"
+          >
+            Close
+          </button>
+          {invoiceData.status === 'PENDING' && (
+            <button
+              onClick={() => onSendToAP(invoiceData.id)}
+              className="px-4 py-2 bg-blue-600 text-white rounded hover:bg-blue-700 flex items-center gap-2"
+            >
+              <Mail className="w-4 h-4" />
+              Send to AP
+            </button>
+          )}
+        </div>
+      </div>
+    </div>
+  );
+};
+
+// Helper function for status badge (reused from main component)
+const getStatusBadge = (status: string) => {
+  switch (status) {
+    case 'PENDING':
+      return 'bg-yellow-100 text-yellow-800';
+    case 'SENT_TO_AP':
+      return 'bg-blue-100 text-blue-800';
+    case 'PAID':
+      return 'bg-green-100 text-green-800';
+    case 'OVERDUE':
+      return 'bg-red-100 text-red-800';
+    case 'CANCELLED':
+      return 'bg-gray-100 text-gray-800';
+    default:
+      return 'bg-gray-100 text-gray-800';
+  }
+};
+
+export default Invoices;

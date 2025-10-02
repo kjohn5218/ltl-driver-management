@@ -13,6 +13,17 @@ export const Carriers: React.FC = () => {
   const [editingCarrier, setEditingCarrier] = useState<Carrier | null>(null);
   const [deletingCarrier, setDeletingCarrier] = useState<Carrier | null>(null);
   const [showAddCarrierModal, setShowAddCarrierModal] = useState(false);
+  const [showInviteModal, setShowInviteModal] = useState(false);
+  const [showResendModal, setShowResendModal] = useState(false);
+
+  // Fetch invitations data
+  const { data: invitationsData } = useQuery({
+    queryKey: ['carrier-invitations'],
+    queryFn: async () => {
+      const response = await api.get('/carriers/invitations?limit=10&status=PENDING');
+      return response.data;
+    }
+  });
 
   const { data: carriersData, isLoading } = useQuery({
     queryKey: ['carriers'],
@@ -83,6 +94,13 @@ export const Carriers: React.FC = () => {
             <Download className="w-3 h-3 ml-1" />
           </a>
           <button 
+            className="inline-flex items-center px-4 py-2 bg-blue-100 text-blue-700 rounded-md hover:bg-blue-200 transition-colors border border-blue-300"
+            onClick={() => setShowInviteModal(true)}
+          >
+            <Send className="w-4 h-4 mr-2" />
+            Send Invitation
+          </button>
+          <button 
             className="btn-primary flex items-center gap-2"
             onClick={() => setShowAddCarrierModal(true)}
           >
@@ -112,6 +130,43 @@ export const Carriers: React.FC = () => {
             >
               Review Now
             </button>
+          </div>
+        </div>
+      )}
+
+      {/* Pending Invitations */}
+      {invitationsData?.invitations?.length > 0 && (
+        <div className="bg-blue-50 border border-blue-200 rounded-lg p-4">
+          <div className="flex items-center justify-between">
+            <div className="flex items-center">
+              <Send className="w-5 h-5 text-blue-600 mr-3" />
+              <div className="flex-1">
+                <h3 className="text-sm font-medium text-blue-800">
+                  {invitationsData.invitations.length} Pending Invitation{invitationsData.invitations.length > 1 ? 's' : ''}
+                </h3>
+                <p className="text-sm text-blue-700 mt-1">
+                  Carrier invitations have been sent and are awaiting registration.
+                </p>
+              </div>
+            </div>
+            <button 
+              className="ml-4 px-3 py-1 bg-blue-600 text-white text-sm rounded hover:bg-blue-700 transition-colors"
+              onClick={() => setShowResendModal(true)}
+            >
+              Resend Invite
+            </button>
+          </div>
+          <div className="mt-3 space-y-1">
+            {invitationsData.invitations.slice(0, 3).map((invitation: any) => (
+              <div key={invitation.id} className="text-xs text-blue-600 bg-blue-100 px-2 py-1 rounded">
+                {invitation.email} • Sent {new Date(invitation.sentAt).toLocaleDateString()}
+              </div>
+            ))}
+            {invitationsData.invitations.length > 3 && (
+              <div className="text-xs text-blue-500">
+                +{invitationsData.invitations.length - 3} more...
+              </div>
+            )}
           </div>
         </div>
       )}
@@ -293,6 +348,29 @@ export const Carriers: React.FC = () => {
             queryClient.invalidateQueries({ queryKey: ['carriers'] });
             setShowAddCarrierModal(false);
           }}
+        />
+      )}
+
+      {/* Send Invitation Modal */}
+      {showInviteModal && (
+        <InviteCarrierModal
+          onClose={() => setShowInviteModal(false)}
+          onSave={() => {
+            queryClient.invalidateQueries({ queryKey: ['carrier-invitations'] });
+            setShowInviteModal(false);
+          }}
+        />
+      )}
+
+      {/* Resend Invitations Modal */}
+      {showResendModal && (
+        <ResendInvitationsModal
+          onClose={() => setShowResendModal(false)}
+          onSave={() => {
+            queryClient.invalidateQueries({ queryKey: ['carrier-invitations'] });
+            setShowResendModal(false);
+          }}
+          invitations={invitationsData?.invitations || []}
         />
       )}
     </div>
@@ -1609,6 +1687,362 @@ const CarrierDeleteModal: React.FC<CarrierDeleteModalProps> = ({ carrier, onClos
             disabled={isDeleting}
           >
             {isDeleting ? 'Deleting...' : 'Delete Carrier'}
+          </button>
+        </div>
+      </div>
+    </div>
+  );
+};
+
+// Invite Carrier Modal Component
+interface InviteCarrierModalProps {
+  onClose: () => void;
+  onSave: () => void;
+}
+
+const InviteCarrierModal: React.FC<InviteCarrierModalProps> = ({ onClose, onSave }) => {
+  const [email, setEmail] = useState('');
+  const [isSubmitting, setIsSubmitting] = useState(false);
+  const [error, setError] = useState('');
+  const [success, setSuccess] = useState(false);
+
+  const handleSubmit = async (e: React.FormEvent) => {
+    e.preventDefault();
+    setError('');
+    
+    if (!email.trim()) {
+      setError('Email is required');
+      return;
+    }
+    
+    if (!/\S+@\S+\.\S+/.test(email)) {
+      setError('Please enter a valid email address');
+      return;
+    }
+    
+    setIsSubmitting(true);
+    
+    try {
+      await api.post('/carriers/invite', { email: email.trim() });
+      setSuccess(true);
+      setTimeout(() => {
+        onSave();
+      }, 2000);
+    } catch (error: any) {
+      setError(
+        error.response?.data?.message || 'Failed to send invitation. Please try again.'
+      );
+    } finally {
+      setIsSubmitting(false);
+    }
+  };
+
+  if (success) {
+    return (
+      <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50">
+        <div className="bg-white rounded-lg p-6 w-full max-w-md">
+          <div className="text-center">
+            <div className="mx-auto flex items-center justify-center h-12 w-12 rounded-full bg-green-100 mb-4">
+              <Send className="h-6 w-6 text-green-600" />
+            </div>
+            <h3 className="text-lg font-medium text-gray-900 mb-2">Invitation Sent!</h3>
+            <p className="text-sm text-gray-600 mb-4">
+              The carrier registration invitation has been sent to {email}
+            </p>
+            <button
+              onClick={onSave}
+              className="w-full bg-green-600 text-white px-4 py-2 rounded-md hover:bg-green-700"
+            >
+              Close
+            </button>
+          </div>
+        </div>
+      </div>
+    );
+  }
+
+  return (
+    <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50">
+      <div className="bg-white rounded-lg p-6 w-full max-w-md">
+        <div className="flex justify-between items-center mb-4">
+          <h2 className="text-lg font-bold text-gray-900">Send Carrier Invitation</h2>
+          <button 
+            onClick={onClose}
+            className="text-gray-400 hover:text-gray-600"
+          >
+            <X className="w-5 h-5" />
+          </button>
+        </div>
+        
+        <form onSubmit={handleSubmit}>
+          <div className="mb-4">
+            <label htmlFor="email" className="block text-sm font-medium text-gray-700 mb-2">
+              Email Address
+            </label>
+            <input
+              type="email"
+              id="email"
+              value={email}
+              onChange={(e) => setEmail(e.target.value)}
+              className="w-full px-3 py-2 border border-gray-300 rounded-md focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
+              placeholder="carrier@example.com"
+              required
+            />
+          </div>
+          
+          {error && (
+            <div className="mb-4 p-3 bg-red-50 border border-red-200 rounded-md">
+              <p className="text-sm text-red-700">{error}</p>
+            </div>
+          )}
+          
+          <div className="bg-blue-50 border border-blue-200 rounded-md p-3 mb-4">
+            <p className="text-sm text-blue-800">
+              The carrier will receive an email with a registration link that expires in 7 days.
+            </p>
+          </div>
+          
+          <div className="flex justify-end gap-3">
+            <button 
+              type="button"
+              onClick={onClose}
+              className="px-4 py-2 bg-gray-500 text-white rounded hover:bg-gray-600"
+              disabled={isSubmitting}
+            >
+              Cancel
+            </button>
+            <button 
+              type="submit"
+              className="px-4 py-2 bg-blue-600 text-white rounded hover:bg-blue-700 disabled:bg-gray-300 flex items-center gap-2"
+              disabled={isSubmitting}
+            >
+              {isSubmitting ? (
+                <>
+                  <div className="animate-spin rounded-full h-4 w-4 border-b-2 border-white"></div>
+                  Sending...
+                </>
+              ) : (
+                <>
+                  <Send className="w-4 h-4" />
+                  Send Invitation
+                </>
+              )}
+            </button>
+          </div>
+        </form>
+      </div>
+    </div>
+  );
+};
+
+// Resend Invitations Modal Component
+interface ResendInvitationsModalProps {
+  onClose: () => void;
+  onSave: () => void;
+  invitations: any[];
+}
+
+const ResendInvitationsModal: React.FC<ResendInvitationsModalProps> = ({ onClose, onSave, invitations }) => {
+  const [selectedInvitations, setSelectedInvitations] = useState<string[]>([]);
+  const [isSubmitting, setIsSubmitting] = useState(false);
+  const [error, setError] = useState('');
+  const [success, setSuccess] = useState(false);
+  const [resendResults, setResendResults] = useState<{success: number, failed: number}>({success: 0, failed: 0});
+
+  const handleToggleInvitation = (invitationId: string) => {
+    setSelectedInvitations(prev => 
+      prev.includes(invitationId) 
+        ? prev.filter(id => id !== invitationId)
+        : [...prev, invitationId]
+    );
+  };
+
+  const handleSelectAll = () => {
+    if (selectedInvitations.length === invitations.length) {
+      setSelectedInvitations([]);
+    } else {
+      setSelectedInvitations(invitations.map(inv => inv.id.toString()));
+    }
+  };
+
+  const handleResend = async () => {
+    if (selectedInvitations.length === 0) {
+      setError('Please select at least one invitation to resend');
+      return;
+    }
+
+    setIsSubmitting(true);
+    setError('');
+    
+    let successCount = 0;
+    let failCount = 0;
+
+    try {
+      // Process each selected invitation
+      for (const invitationId of selectedInvitations) {
+        const invitation = invitations.find(inv => inv.id.toString() === invitationId);
+        if (invitation) {
+          try {
+            // First cancel the existing invitation
+            await api.put(`/carriers/invitations/${invitation.id}/cancel`);
+            
+            // Then send new invitation to the same email
+            await api.post('/carriers/invite', { email: invitation.email });
+            successCount++;
+          } catch (error) {
+            console.error(`Failed to resend invitation to ${invitation.email}:`, error);
+            failCount++;
+          }
+        }
+      }
+
+      setResendResults({ success: successCount, failed: failCount });
+      setSuccess(true);
+      
+      if (successCount > 0) {
+        setTimeout(() => {
+          onSave();
+        }, 2000);
+      }
+    } catch (error: any) {
+      setError('Failed to resend invitations. Please try again.');
+    } finally {
+      setIsSubmitting(false);
+    }
+  };
+
+  if (success) {
+    return (
+      <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50">
+        <div className="bg-white rounded-lg p-6 w-full max-w-md">
+          <div className="text-center">
+            <div className="mx-auto flex items-center justify-center h-12 w-12 rounded-full bg-green-100 mb-4">
+              <Send className="h-6 w-6 text-green-600" />
+            </div>
+            <h3 className="text-lg font-medium text-gray-900 mb-2">Invitations Resent!</h3>
+            <div className="text-sm text-gray-600 mb-4">
+              <p className="text-green-600 font-medium">{resendResults.success} invitation(s) sent successfully</p>
+              {resendResults.failed > 0 && (
+                <p className="text-red-600 font-medium">{resendResults.failed} invitation(s) failed</p>
+              )}
+              <p className="mt-2">New registration links have been sent with updated expiration dates.</p>
+            </div>
+            <button
+              onClick={onSave}
+              className="w-full bg-green-600 text-white px-4 py-2 rounded-md hover:bg-green-700"
+            >
+              Close
+            </button>
+          </div>
+        </div>
+      </div>
+    );
+  }
+
+  return (
+    <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50">
+      <div className="bg-white rounded-lg p-6 w-full max-w-2xl max-h-[80vh] overflow-y-auto">
+        <div className="flex justify-between items-center mb-4">
+          <h2 className="text-lg font-bold text-gray-900">Resend Carrier Invitations</h2>
+          <button 
+            onClick={onClose}
+            className="text-gray-400 hover:text-gray-600"
+          >
+            <X className="w-5 h-5" />
+          </button>
+        </div>
+        
+        <div className="mb-4">
+          <p className="text-sm text-gray-600 mb-3">
+            Select which pending invitations to resend. New tokens will be generated with updated expiration dates.
+          </p>
+          
+          <div className="flex items-center justify-between mb-3">
+            <span className="text-sm font-medium text-gray-700">
+              {invitations.length} pending invitation(s)
+            </span>
+            <button
+              onClick={handleSelectAll}
+              className="text-sm text-blue-600 hover:text-blue-800"
+            >
+              {selectedInvitations.length === invitations.length ? 'Deselect All' : 'Select All'}
+            </button>
+          </div>
+        </div>
+
+        <div className="space-y-2 mb-6 max-h-60 overflow-y-auto">
+          {invitations.map((invitation) => (
+            <div
+              key={invitation.id}
+              className={`p-3 border rounded-lg cursor-pointer transition-colors ${
+                selectedInvitations.includes(invitation.id.toString())
+                  ? 'bg-blue-50 border-blue-200'
+                  : 'bg-gray-50 border-gray-200 hover:bg-gray-100'
+              }`}
+              onClick={() => handleToggleInvitation(invitation.id.toString())}
+            >
+              <div className="flex items-center justify-between">
+                <div className="flex items-center space-x-3">
+                  <input
+                    type="checkbox"
+                    checked={selectedInvitations.includes(invitation.id.toString())}
+                    onChange={() => handleToggleInvitation(invitation.id.toString())}
+                    className="h-4 w-4 text-blue-600 focus:ring-blue-500 border-gray-300 rounded"
+                  />
+                  <div>
+                    <div className="font-medium text-gray-900">{invitation.email}</div>
+                    <div className="text-xs text-gray-500">
+                      Sent: {new Date(invitation.sentAt).toLocaleDateString()} • 
+                      Expires: {new Date(invitation.expiresAt).toLocaleDateString()}
+                      {invitation.createdByUser && ` • Sent by: ${invitation.createdByUser.name}`}
+                    </div>
+                  </div>
+                </div>
+                <div className="text-xs text-gray-400">
+                  {Math.ceil((new Date(invitation.expiresAt).getTime() - Date.now()) / (1000 * 60 * 60 * 24))} days left
+                </div>
+              </div>
+            </div>
+          ))}
+        </div>
+
+        {error && (
+          <div className="mb-4 p-3 bg-red-50 border border-red-200 rounded-md">
+            <p className="text-sm text-red-700">{error}</p>
+          </div>
+        )}
+
+        <div className="bg-amber-50 border border-amber-200 rounded-md p-3 mb-4">
+          <p className="text-sm text-amber-800">
+            <strong>Note:</strong> Resending will cancel the current invitations and create new invitation tokens with fresh 7-day expiration dates. The old links will no longer be valid.
+          </p>
+        </div>
+
+        <div className="flex justify-end gap-3">
+          <button 
+            type="button"
+            onClick={onClose}
+            className="px-4 py-2 bg-gray-500 text-white rounded hover:bg-gray-600"
+            disabled={isSubmitting}
+          >
+            Cancel
+          </button>
+          <button 
+            onClick={handleResend}
+            className="px-4 py-2 bg-blue-600 text-white rounded hover:bg-blue-700 disabled:bg-gray-300 flex items-center gap-2"
+            disabled={isSubmitting || selectedInvitations.length === 0}
+          >
+            {isSubmitting ? (
+              <>
+                <div className="animate-spin rounded-full h-4 w-4 border-b-2 border-white"></div>
+                Resending...
+              </>
+            ) : (
+              <>
+                <Send className="w-4 h-4" />
+                Resend {selectedInvitations.length > 0 && `(${selectedInvitations.length})`}
+              </>
+            )}
           </button>
         </div>
       </div>
