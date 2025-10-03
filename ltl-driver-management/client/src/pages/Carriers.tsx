@@ -1,8 +1,24 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import { useQuery, useQueryClient, useMutation } from '@tanstack/react-query';
 import { api } from '../services/api';
 import { Carrier } from '../types';
 import { Plus, Search, Edit, Eye, Trash2, MapPin, Phone, Mail, ExternalLink, X, Send, FileText, Download, Bell } from 'lucide-react';
+
+interface CarrierAgreement {
+  id: number;
+  agreementVersion: string;
+  agreementTitle: string;
+  signedAt: string;
+  signedBy: string;
+  signedByTitle: string;
+  ipAddress: string;
+  userAgent?: string;
+  geolocation?: string;
+  username: string;
+  affidavitPdfPath?: string;
+  agreementPdfPath?: string;
+  agreementHash?: string;
+}
 
 export const Carriers: React.FC = () => {
   const queryClient = useQueryClient();
@@ -853,6 +869,7 @@ const AddCarrierModal: React.FC<AddCarrierModalProps> = ({ onClose, onSave }) =>
                   <option value="SUSPENDED">Suspended</option>
                   <option value="ONBOARDED">Onboarded</option>
                   <option value="NOT_ONBOARDED">Not Onboarded</option>
+                  <option value="REJECTED">Rejected</option>
                 </select>
               </div>
               <div>
@@ -1010,6 +1027,9 @@ interface CarrierDetailsModalProps {
 }
 
 const CarrierDetailsModal: React.FC<CarrierDetailsModalProps> = ({ carrier, onClose }) => {
+  const [agreements, setAgreements] = useState<CarrierAgreement[]>([]);
+  const [loadingAgreements, setLoadingAgreements] = useState(true);
+
   const getStatusBadge = (status: string) => {
     const statusColors = {
       ACTIVE: 'bg-green-100 text-green-800',
@@ -1017,9 +1037,54 @@ const CarrierDetailsModal: React.FC<CarrierDetailsModalProps> = ({ carrier, onCl
       INACTIVE: 'bg-gray-100 text-gray-800',
       SUSPENDED: 'bg-red-100 text-red-800',
       ONBOARDED: 'bg-blue-100 text-blue-800',
-      NOT_ONBOARDED: 'bg-orange-100 text-orange-800'
+      NOT_ONBOARDED: 'bg-orange-100 text-orange-800',
+      REJECTED: 'bg-red-100 text-red-800'
     };
     return statusColors[status as keyof typeof statusColors] || 'bg-gray-100 text-gray-800';
+  };
+
+  // Fetch carrier agreements
+  useEffect(() => {
+    const fetchAgreements = async () => {
+      try {
+        setLoadingAgreements(true);
+        const response = await api.get(`/carriers/${carrier.id}/agreements`);
+        setAgreements(response.data);
+      } catch (error) {
+        console.error('Failed to fetch agreements:', error);
+        setAgreements([]);
+      } finally {
+        setLoadingAgreements(false);
+      }
+    };
+
+    fetchAgreements();
+  }, [carrier.id]);
+
+  const downloadAgreementDocument = async (agreementId: number, type: 'affidavit' | 'full') => {
+    try {
+      const endpoint = type === 'affidavit' 
+        ? `/carriers/${carrier.id}/agreements/${agreementId}/affidavit`
+        : `/carriers/${carrier.id}/agreements/${agreementId}/full`;
+      
+      const response = await api.get(endpoint, { responseType: 'blob' });
+      
+      const url = window.URL.createObjectURL(new Blob([response.data]));
+      const link = document.createElement('a');
+      link.href = url;
+      link.setAttribute('download', 
+        type === 'affidavit' 
+          ? `affidavit_${carrier.name}_${agreementId}.pdf`
+          : `agreement_${carrier.name}_${agreementId}.pdf`
+      );
+      document.body.appendChild(link);
+      link.click();
+      link.remove();
+      window.URL.revokeObjectURL(url);
+    } catch (error) {
+      console.error('Failed to download document:', error);
+      alert('Failed to download document. Please try again.');
+    }
   };
 
   return (
@@ -1196,6 +1261,77 @@ const CarrierDetailsModal: React.FC<CarrierDetailsModalProps> = ({ carrier, onCl
                 <p className="text-sm text-gray-900">
                   {new Date(carrier.insuranceExpiration).toLocaleDateString()}
                 </p>
+              </div>
+            )}
+          </div>
+        </div>
+
+        {/* Signed Agreements Section */}
+        <div className="mt-6 pt-6 border-t">
+          <div className="mb-4">
+            <h3 className="text-lg font-medium text-gray-900 mb-3">Signed Agreements</h3>
+            {loadingAgreements ? (
+              <div className="flex items-center justify-center py-4">
+                <div className="animate-spin rounded-full h-6 w-6 border-b-2 border-blue-600"></div>
+                <span className="ml-2 text-sm text-gray-500">Loading agreements...</span>
+              </div>
+            ) : agreements.length === 0 ? (
+              <div className="bg-gray-50 border border-gray-200 rounded-lg p-4">
+                <p className="text-sm text-gray-500 text-center">No signed agreements found</p>
+              </div>
+            ) : (
+              <div className="space-y-3">
+                {agreements.map((agreement) => (
+                  <div key={agreement.id} className="bg-gray-50 border border-gray-200 rounded-lg p-4">
+                    <div className="flex justify-between items-start">
+                      <div className="flex-1">
+                        <div className="flex items-center gap-2 mb-2">
+                          <FileText className="w-4 h-4 text-blue-600" />
+                          <h4 className="font-medium text-gray-900">{agreement.agreementTitle}</h4>
+                        </div>
+                        <div className="grid grid-cols-2 gap-4 text-xs text-gray-600">
+                          <div>
+                            <span className="font-medium">Signed By:</span> {agreement.signedBy}
+                          </div>
+                          <div>
+                            <span className="font-medium">Title:</span> {agreement.signedByTitle}
+                          </div>
+                          <div>
+                            <span className="font-medium">Date:</span> {new Date(agreement.signedAt).toLocaleDateString()}
+                          </div>
+                          <div>
+                            <span className="font-medium">Version:</span> {agreement.agreementVersion}
+                          </div>
+                          <div className="col-span-2">
+                            <span className="font-medium">IP Address:</span> {agreement.ipAddress}
+                          </div>
+                        </div>
+                      </div>
+                      <div className="flex flex-col gap-1 ml-4">
+                        {agreement.affidavitPdfPath && (
+                          <button
+                            onClick={() => downloadAgreementDocument(agreement.id, 'affidavit')}
+                            className="flex items-center gap-1 px-3 py-1 text-xs bg-blue-600 text-white rounded hover:bg-blue-700"
+                            title="Download Affidavit"
+                          >
+                            <Download className="w-3 h-3" />
+                            Affidavit
+                          </button>
+                        )}
+                        {agreement.agreementPdfPath && (
+                          <button
+                            onClick={() => downloadAgreementDocument(agreement.id, 'full')}
+                            className="flex items-center gap-1 px-3 py-1 text-xs bg-green-600 text-white rounded hover:bg-green-700"
+                            title="Download Full Agreement"
+                          >
+                            <Download className="w-3 h-3" />
+                            Agreement
+                          </button>
+                        )}
+                      </div>
+                    </div>
+                  </div>
+                ))}
               </div>
             )}
           </div>
@@ -1505,6 +1641,7 @@ const CarrierEditModal: React.FC<CarrierEditModalProps> = ({ carrier, onClose, o
                   <option value="ACTIVE">Active</option>
                   <option value="INACTIVE">Inactive</option>
                   <option value="SUSPENDED">Suspended</option>
+                  <option value="REJECTED">Rejected</option>
                 </select>
               </div>
               <div>

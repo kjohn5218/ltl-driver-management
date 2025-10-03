@@ -52,6 +52,7 @@ model Carrier {
   documents           CarrierDocument[]
   drivers             CarrierDriver[]
   preferredRoutes     CarrierPreferredRoute[]
+  agreements          CarrierAgreement[]
 
   @@map("carriers")
 }
@@ -334,6 +335,28 @@ model CarrierInvitation {
   @@map("carrier_invitations")
 }
 
+model CarrierAgreement {
+  id                  Int      @id @default(autoincrement())
+  carrierId           Int      @map("carrier_id")
+  agreementVersion    String   @map("agreement_version")
+  agreementTitle      String   @map("agreement_title")
+  signedAt            DateTime @default(now()) @map("signed_at")
+  signedBy            String   @map("signed_by")
+  signedByTitle       String   @map("signed_by_title")
+  ipAddress           String   @map("ip_address")
+  userAgent           String?  @map("user_agent")
+  geolocation         String?
+  username            String
+  affidavitPdfPath    String?  @map("affidavit_pdf_path")
+  agreementPdfPath    String?  @map("agreement_pdf_path")
+  agreementHash       String?  @map("agreement_hash")
+  createdAt           DateTime @default(now()) @map("created_at")
+  carrier             Carrier  @relation(fields: [carrierId], references: [id], onDelete: Cascade)
+  
+  @@index([carrierId])
+  @@map("carrier_agreements")
+}
+
 enum UserRole {
   ADMIN
   DISPATCHER
@@ -348,6 +371,7 @@ enum CarrierStatus {
   SUSPENDED
   NOT_ONBOARDED
   ONBOARDED
+  REJECTED
 }
 
 enum BookingStatus {

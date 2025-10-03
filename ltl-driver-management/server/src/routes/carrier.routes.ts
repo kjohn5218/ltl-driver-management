@@ -16,7 +16,10 @@ import {
   deleteCarrierDriver,
   getCarrierDrivers,
   getCarrierInvitations,
-  cancelCarrierInvitation
+  cancelCarrierInvitation,
+  getCarrierAgreements,
+  downloadAgreementAffidavit,
+  downloadAgreementWithAffidavit
 } from '../controllers/carrier.controller';
 import { authenticate, authorize } from '../middleware/auth.middleware';
 import { validateRequest } from '../middleware/validation.middleware';
@@ -36,7 +39,7 @@ router.use(authenticate);
 router.get(
   '/',
   [
-    query('status').optional().isIn(['PENDING', 'ACTIVE', 'INACTIVE', 'SUSPENDED', 'NOT_ONBOARDED', 'ONBOARDED']),
+    query('status').optional().isIn(['PENDING', 'ACTIVE', 'INACTIVE', 'SUSPENDED', 'NOT_ONBOARDED', 'ONBOARDED', 'REJECTED']),
     query('onboardingComplete').optional().isBoolean(),
     query('search').optional().trim(),
     query('page').optional().isInt({ min: 1 }),
@@ -102,7 +105,7 @@ router.put(
     body('mcNumber').optional().trim(),
     body('dotNumber').optional().trim(),
     body('insuranceExpiration').optional().isISO8601(),
-    body('status').optional().isIn(['PENDING', 'ACTIVE', 'INACTIVE', 'SUSPENDED']),
+    body('status').optional().isIn(['PENDING', 'ACTIVE', 'INACTIVE', 'SUSPENDED', 'REJECTED']),
     body('rating').optional().isDecimal({ decimal_digits: '0,1' }),
     body('ratePerMile').optional().isDecimal(),
     body('onboardingComplete').optional().isBoolean()
@@ -150,11 +153,11 @@ router.put(
 
 // Driver management routes
 // Get carrier drivers
-router.get('/:id/drivers', getCarrierDrivers);
+router.get('/:carrierId/drivers', getCarrierDrivers);
 
 // Add driver to carrier (Admin/Dispatcher only)
 router.post(
-  '/:id/drivers',
+  '/:carrierId/drivers',
   authorize(UserRole.ADMIN, UserRole.DISPATCHER),
   [
     body('name').notEmpty().trim(),
@@ -168,7 +171,7 @@ router.post(
 
 // Update carrier driver (Admin/Dispatcher only)
 router.put(
-  '/:id/drivers/:driverId',
+  '/:carrierId/drivers/:driverId',
   authorize(UserRole.ADMIN, UserRole.DISPATCHER),
   [
     body('name').optional().notEmpty().trim(),
@@ -183,9 +186,19 @@ router.put(
 
 // Delete carrier driver (Admin/Dispatcher only)
 router.delete(
-  '/:id/drivers/:driverId',
+  '/:carrierId/drivers/:driverId',
   authorize(UserRole.ADMIN, UserRole.DISPATCHER),
   deleteCarrierDriver
 );
+
+// Agreement management routes
+// Get carrier agreements
+router.get('/:id/agreements', getCarrierAgreements);
+
+// Download agreement affidavit
+router.get('/:id/agreements/:agreementId/affidavit', downloadAgreementAffidavit);
+
+// Download full agreement with affidavit
+router.get('/:id/agreements/:agreementId/full', downloadAgreementWithAffidavit);
 
 export default router;

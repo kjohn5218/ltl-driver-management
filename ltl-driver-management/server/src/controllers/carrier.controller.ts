@@ -2,6 +2,10 @@ import { Request, Response } from 'express';
 import { prisma } from '../index';
 import { Prisma } from '@prisma/client';
 import fs from 'fs/promises';
+import { createReadStream, existsSync } from 'fs';
+import { AgreementService } from '../services/agreement.service';
+import path from 'path';
+import { format } from 'date-fns';
 
 export const getCarriers = async (req: Request, res: Response) => {
   try {
@@ -190,6 +194,15 @@ export const updateCarrier = async (req: Request, res: Response) => {
   try {
     const { id } = req.params;
     const updateData = req.body;
+    
+    // Get the current carrier state to check for onboarding completion
+    const currentCarrier = await prisma.carrier.findUnique({
+      where: { id: parseInt(id) }
+    });
+    
+    if (!currentCarrier) {
+      return res.status(404).json({ message: 'Carrier not found' });
+    }
 
     // Check for duplicate MC/DOT numbers
     if (updateData.mcNumber) {
@@ -229,8 +242,31 @@ export const updateCarrier = async (req: Request, res: Response) => {
         rating: updateData.rating 
           ? parseFloat(updateData.rating) 
           : undefined
+      },
+      include: {
+        agreements: {
+          orderBy: { signedAt: 'desc' },
+          take: 1
+        }
       }
     });
+    
+    // Check if onboarding just completed (status is ACTIVE and onboardingComplete is true)
+    // and this is a change from the previous state
+    const justCompletedOnboarding = 
+      carrier.status === 'ACTIVE' && 
+      carrier.onboardingComplete === true &&
+      (currentCarrier.status !== 'ACTIVE' || currentCarrier.onboardingComplete !== true);
+    
+    if (justCompletedOnboarding) {
+      // Send onboarding completion email
+      try {
+        await sendOnboardingCompletionEmail(carrier);
+      } catch (emailError) {
+        console.error('Failed to send onboarding completion email:', emailError);
+        // Don't fail the update if email fails
+      }
+    }
 
     return res.json(carrier);
   } catch (error) {
@@ -299,8 +335,14 @@ export const inviteCarrier = async (req: Request, res: Response) => {
       where: { email }
     });
     
+    // Allow re-invitation but warn if carrier already exists
     if (existingCarrier) {
-      return res.status(400).json({ message: 'A carrier with this email already exists' });
+      console.log(`Re-inviting existing carrier email: ${email}`);
+      // Optionally, you can include a warning in the response
+      // return res.status(200).json({ 
+      //   message: 'Invitation sent successfully',
+      //   warning: 'A carrier with this email already exists. They can use the invitation to update their information.'
+      // });
     }
     
     // Check if there's already a pending invitation
@@ -423,8 +465,14 @@ export const validateInvitation = async (req: Request, res: Response) => {
         where: { email }
       });
       
+      // Allow re-registration but include warning in response
       if (existingCarrier) {
-        return res.status(400).json({ message: 'Carrier with this email already registered' });
+        return res.status(200).json({ 
+          message: 'Token is valid',
+          email,
+          existingCarrier: true,
+          warning: 'A carrier with this email already exists. Continuing will update their information.'
+        });
       }
       
       return res.status(200).json({ 
@@ -445,12 +493,15 @@ export const registerCarrier = async (req: Request, res: Response) => {
     console.log('=== Carrier Registration Request ===');
     console.log('Request body:', req.body);
     console.log('Request file:', req.file ? { filename: req.file.filename, originalname: req.file.originalname, size: req.file.size } : 'No file');
+    console.log('Request IP:', req.ip || req.connection.remoteAddress);
+    console.log('User Agent:', req.headers['user-agent']);
     console.log('======================================');
     
     const {
       token,
       name,
       contactPerson,
+      contactPersonTitle,
       phone,
       email,
       mcNumber,
@@ -581,12 +632,7 @@ export const registerCarrier = async (req: Request, res: Response) => {
       }
     });
     
-    if (existingCarrier) {
-      console.log('❌ Registration failed: Carrier with this email already exists');
-      return res.status(409).json({ message: 'Carrier with this email already exists' });
-    }
-    
-    // Create the carrier with status PENDING and onboardingComplete false
+    // Prepare carrier data
     const carrierData = {
       name: name.trim(),
       contactPerson: contactPerson.trim(),
@@ -612,9 +658,20 @@ export const registerCarrier = async (req: Request, res: Response) => {
       insuranceExpiration: insuranceExpiration ? new Date(insuranceExpiration) : undefined
     };
     
-    const carrier = await prisma.carrier.create({
-      data: carrierData
-    });
+    // Either update existing carrier or create new one
+    let carrier;
+    if (existingCarrier) {
+      console.log('✅ Updating existing carrier with email:', email);
+      carrier = await prisma.carrier.update({
+        where: { id: existingCarrier.id },
+        data: carrierData
+      });
+    } else {
+      console.log('✅ Creating new carrier with email:', email);
+      carrier = await prisma.carrier.create({
+        data: carrierData
+      });
+    }
     
     // Save the insurance document
     if (insuranceFile) {
@@ -668,6 +725,121 @@ export const registerCarrier = async (req: Request, res: Response) => {
       subject: `New Carrier Registration - ${carrier.name}`,
       html: adminEmailContent
     });
+    
+    // Generate the Signed Agreement Affidavit
+    try {
+      const ipAddress = req.ip || req.connection.remoteAddress || 'Unknown';
+      const userAgent = req.headers['user-agent'] || 'Unknown';
+      
+      // Get geolocation from IP if available (you can integrate with a geolocation service)
+      // For now, we'll use placeholder data
+      const geolocation = {
+        city: 'Oregon',
+        state: 'Ohio',
+        country: 'United States of America',
+        latitude: 42.291038514157,
+        longitude: -84.20307850939
+      };
+      
+      // Path to the agreement document
+      const agreementFilePath = path.join(process.cwd(), 'client', 'public', 'CCFS_CarrierBroker_Agreement.docx');
+      
+      const agreementData = {
+        carrierId: carrier.id,
+        carrierName: carrier.name,
+        carrierDOT: carrier.dotNumber || 'N/A',
+        carrierAddress: {
+          street1: carrier.streetAddress1 || '',
+          street2: carrier.streetAddress2 || undefined,
+          city: carrier.city || '',
+          state: carrier.state || '',
+          zipCode: carrier.zipCode || ''
+        },
+        signerName: carrier.contactPerson || carrier.name,
+        signerTitle: contactPersonTitle || 'Officer',
+        signerEmail: carrier.email || '',
+        ipAddress,
+        userAgent,
+        geolocation,
+        username: email.split('@')[0], // Or use a proper username if available
+        agreementVersion: 'eAgreement V1 CrossCountry Freight Solutions, Inc.pdf 2023.04.10.09.56.17',
+        agreementTitle: 'CrossCountry Freight Solutions, Inc. Carrier Agreement',
+        agreementFilePath,
+        timestamp: new Date()
+      };
+      
+      const { affidavitPath, agreementRecord } = 
+        await AgreementService.generateAgreementAffidavit(agreementData);
+      
+      console.log('Agreement affidavit generated:', {
+        affidavitPath,
+        agreementId: agreementRecord.id
+      });
+      
+      // Update carrier status to indicate agreement signed
+      await prisma.carrier.update({
+        where: { id: carrier.id },
+        data: {
+          onboardingComplete: true,
+          status: 'ACTIVE'
+        }
+      });
+      
+      // Send email receipt of signed agreement
+      const { sendEmail } = await import('../services/notification.service');
+      const emailContent = `
+        <div style="font-family: Arial, sans-serif; max-width: 600px; margin: 0 auto;">
+          <h2 style="color: #333;">Agreement Successfully Signed</h2>
+          
+          <p>Dear ${carrier.contactPerson || carrier.name},</p>
+          
+          <p>Thank you for signing the CrossCountry Freight Solutions, Inc. Carrier Agreement.</p>
+          
+          <div style="background-color: #f8f9fa; padding: 20px; border-radius: 5px; margin: 20px 0;">
+            <h3 style="margin-top: 0; color: #495057;">Agreement Details:</h3>
+            <ul style="list-style: none; padding: 0;">
+              <li><strong>Carrier:</strong> ${carrier.name}</li>
+              <li><strong>DOT#:</strong> ${carrier.dotNumber}</li>
+              <li><strong>Signed By:</strong> ${carrier.contactPerson}</li>
+              <li><strong>Title:</strong> ${contactPersonTitle || 'Officer'}</li>
+              <li><strong>Date:</strong> ${format(new Date(), 'MMMM d, yyyy')}</li>
+              <li><strong>Agreement Version:</strong> ${agreementData.agreementVersion}</li>
+            </ul>
+          </div>
+          
+          <p>A copy of your signed agreement affidavit is attached to this email for your records.</p>
+          
+          <p>Your carrier account is now active and you can begin accepting loads.</p>
+          
+          <hr style="border: none; border-top: 1px solid #eee; margin: 30px 0;">
+          
+          <p style="color: #999; font-size: 12px;">
+            If you have any questions, please contact us at (800) 521-0287.
+          </p>
+        </div>
+      `;
+      
+      // Read affidavit file for email attachment
+      const attachments = [];
+      if (affidavitPath && existsSync(affidavitPath)) {
+        const affidavitBuffer = await fs.readFile(affidavitPath);
+        attachments.push({
+          filename: `CrossCountry_Agreement_Affidavit_${carrier.id}.pdf`,
+          content: affidavitBuffer,
+          contentType: 'application/pdf'
+        });
+      }
+      
+      await sendEmail({
+        to: carrier.email || '',
+        subject: 'CrossCountry Freight Solutions - Agreement Confirmation',
+        html: emailContent,
+        attachments
+      });
+    } catch (agreementError) {
+      console.error('Failed to generate agreement affidavit:', agreementError);
+      // Don't fail registration, but log the error
+    }
     
     // Mark invitation as registered if it exists
     try {
@@ -925,4 +1097,174 @@ export const getCarrierDrivers = async (req: Request, res: Response) => {
     console.error('Get carrier drivers error:', error);
     return res.status(500).json({ message: 'Failed to get drivers' });
   }
+};
+
+// Get carrier agreements
+export const getCarrierAgreements = async (req: Request, res: Response) => {
+  try {
+    const { id } = req.params;
+    const agreements = await AgreementService.getCarrierAgreements(parseInt(id));
+    return res.json(agreements);
+  } catch (error) {
+    console.error('Get carrier agreements error:', error);
+    return res.status(500).json({ message: 'Failed to get carrier agreements' });
+  }
+};
+
+// Download agreement affidavit
+export const downloadAgreementAffidavit = async (req: Request, res: Response) => {
+  try {
+    const { id, agreementId } = req.params;
+    
+    const agreement = await prisma.carrierAgreement.findFirst({
+      where: {
+        id: parseInt(agreementId),
+        carrierId: parseInt(id)
+      }
+    });
+    
+    if (!agreement) {
+      return res.status(404).json({ message: 'Agreement not found' });
+    }
+    
+    if (!agreement.affidavitPdfPath || !existsSync(agreement.affidavitPdfPath)) {
+      return res.status(404).json({ message: 'Affidavit PDF not found' });
+    }
+    
+    const filename = `affidavit_${agreement.carrierId}_${agreement.id}.pdf`;
+    res.setHeader('Content-Type', 'application/pdf');
+    res.setHeader('Content-Disposition', `attachment; filename="${filename}"`);
+    
+    const stream = createReadStream(agreement.affidavitPdfPath);
+    stream.pipe(res);
+    return;
+  } catch (error) {
+    console.error('Download agreement affidavit error:', error);
+    return res.status(500).json({ message: 'Failed to download affidavit' });
+  }
+};
+
+// Download full agreement with affidavit
+export const downloadAgreementWithAffidavit = async (req: Request, res: Response) => {
+  try {
+    const { id, agreementId } = req.params;
+    
+    const agreement = await prisma.carrierAgreement.findFirst({
+      where: {
+        id: parseInt(agreementId),
+        carrierId: parseInt(id)
+      }
+    });
+    
+    if (!agreement) {
+      return res.status(404).json({ message: 'Agreement not found' });
+    }
+    
+    if (!agreement.agreementPdfPath || !existsSync(agreement.agreementPdfPath)) {
+      return res.status(404).json({ message: 'Agreement PDF not found' });
+    }
+    
+    const filename = `agreement_${agreement.carrierId}_${agreement.id}.pdf`;
+    res.setHeader('Content-Type', 'application/pdf');
+    res.setHeader('Content-Disposition', `attachment; filename="${filename}"`);
+    
+    const stream = createReadStream(agreement.agreementPdfPath);
+    stream.pipe(res);
+    return;
+  } catch (error) {
+    console.error('Download agreement with affidavit error:', error);
+    return res.status(500).json({ message: 'Failed to download agreement' });
+  }
+};
+
+// Send onboarding completion email
+const sendOnboardingCompletionEmail = async (carrier: any) => {
+  const { sendEmail } = await import('../services/notification.service');
+  
+  const latestAgreement = carrier.agreements?.[0];
+  
+  const emailContent = `
+    <div style="font-family: Arial, sans-serif; max-width: 600px; margin: 0 auto;">
+      <div style="background-color: #f8f9fa; padding: 20px; text-align: center; border-radius: 8px 8px 0 0;">
+        <h1 style="color: #28a745; margin: 0; font-size: 24px;">🎉 Welcome to CrossCountry Freight Solutions!</h1>
+      </div>
+      
+      <div style="padding: 30px; background-color: white; border-radius: 0 0 8px 8px; border: 1px solid #e9ecef;">
+        <p style="font-size: 16px; color: #333;">Dear ${carrier.contactPerson || carrier.name},</p>
+        
+        <p style="font-size: 16px; color: #333; line-height: 1.6;">
+          Congratulations! Your carrier application has been <strong>approved</strong> and your onboarding with 
+          CrossCountry Freight Solutions is now <strong>complete</strong>.
+        </p>
+        
+        <div style="background-color: #e8f5e8; padding: 20px; border-radius: 5px; margin: 20px 0;">
+          <h3 style="margin-top: 0; color: #155724;">✅ Your Account Status</h3>
+          <ul style="list-style: none; padding: 0; margin: 0;">
+            <li style="padding: 5px 0;"><strong>Status:</strong> <span style="color: #28a745;">ACTIVE</span></li>
+            <li style="padding: 5px 0;"><strong>Carrier Name:</strong> ${carrier.name}</li>
+            <li style="padding: 5px 0;"><strong>DOT Number:</strong> ${carrier.dotNumber}</li>
+            <li style="padding: 5px 0;"><strong>MC Number:</strong> ${carrier.mcNumber}</li>
+            <li style="padding: 5px 0;"><strong>Onboarding Completed:</strong> ${format(new Date(), 'MMMM d, yyyy')}</li>
+          </ul>
+        </div>
+        
+        <h3 style="color: #333;">🚛 What's Next?</h3>
+        <ul style="color: #333; line-height: 1.6;">
+          <li>You can now start accepting load assignments from our dispatch team</li>
+          <li>Our team will contact you with available freight opportunities</li>
+          <li>Make sure to keep your insurance and documentation up to date</li>
+          <li>Contact us immediately if any of your information changes</li>
+        </ul>
+        
+        <div style="background-color: #f8f9fa; padding: 15px; border-radius: 5px; margin: 20px 0;">
+          <h4 style="margin-top: 0; color: #333;">📞 Contact Information</h4>
+          <p style="margin: 5px 0; color: #666;"><strong>Phone:</strong> (800) 521-0287</p>
+          <p style="margin: 5px 0; color: #666;"><strong>Email:</strong> dispatch@ccfs.com</p>
+          <p style="margin: 5px 0; color: #666;"><strong>Hours:</strong> Monday - Friday, 8:00 AM - 6:00 PM EST</p>
+        </div>
+        
+        <p style="color: #333; line-height: 1.6;">
+          Attached to this email, you'll find copies of your completed carrier agreement and affidavit for your records.
+        </p>
+        
+        <p style="color: #333; font-weight: 600;">
+          Thank you for choosing CrossCountry Freight Solutions. We look forward to a successful partnership!
+        </p>
+        
+        <hr style="border: none; border-top: 1px solid #eee; margin: 30px 0;">
+        
+        <p style="color: #999; font-size: 12px; text-align: center;">
+          This is an automated notification. Please do not reply to this email.
+        </p>
+      </div>
+    </div>
+  `;
+  
+  // Prepare attachments
+  const attachments = [];
+  
+  if (latestAgreement?.affidavitPdfPath && existsSync(latestAgreement.affidavitPdfPath)) {
+    const affidavitBuffer = await fs.readFile(latestAgreement.affidavitPdfPath);
+    attachments.push({
+      filename: `${carrier.name}_Agreement_Affidavit.pdf`,
+      content: affidavitBuffer,
+      contentType: 'application/pdf'
+    });
+  }
+  
+  if (latestAgreement?.agreementPdfPath && existsSync(latestAgreement.agreementPdfPath)) {
+    const agreementBuffer = await fs.readFile(latestAgreement.agreementPdfPath);
+    attachments.push({
+      filename: `${carrier.name}_Carrier_Agreement.pdf`,
+      content: agreementBuffer,
+      contentType: 'application/pdf'
+    });
+  }
+  
+  await sendEmail({
+    to: carrier.email || '',
+    subject: '🎉 Welcome to CrossCountry Freight Solutions - Onboarding Complete!',
+    html: emailContent,
+    attachments
+  });
 };
