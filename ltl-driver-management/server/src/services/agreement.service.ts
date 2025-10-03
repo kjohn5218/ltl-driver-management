@@ -53,13 +53,23 @@ export class AgreementService {
     }
     
     const parts = [];
-    if (geo.city) parts.push(geo.city);
-    if (geo.state) parts.push(geo.state);
-    if (geo.country) parts.push(geo.country);
+    if (geo.city && geo.city !== 'Unknown') parts.push(geo.city);
+    if (geo.state && geo.state !== 'Unknown') parts.push(geo.state);
+    if (geo.country && geo.country !== 'Unknown') {
+      // Convert country code to full name if needed
+      const countryNames: { [key: string]: string } = {
+        'US': 'United States of America',
+        'CA': 'Canada',
+        'MX': 'Mexico',
+        'GB': 'United Kingdom',
+        'Unknown': 'Unknown'
+      };
+      parts.push(countryNames[geo.country] || geo.country);
+    }
     
-    let location = parts.join(', ');
+    let location = parts.length > 0 ? parts.join(', ') : 'Location not available';
     
-    if (geo.latitude && geo.longitude) {
+    if (geo.latitude && geo.longitude && geo.latitude !== 0 && geo.longitude !== 0) {
       location += ` Lat ${geo.latitude.toFixed(10)}, Long ${geo.longitude.toFixed(10)}`;
     }
     
@@ -175,7 +185,7 @@ export class AgreementService {
           <div class="details-title">Details:</div>
           <div class="details-content">
             On ${signedDate}, ${data.signerName}, ${data.signerTitle}, securely signed in to 
-            <a href="https://www.mycarrierpackets.com">www.mycarrierpackets.com</a> from IP Address 
+            <a href="${process.env.FRONTEND_URL || 'http://localhost:3000'}">${process.env.FRONTEND_URL || 'http://localhost:3000'}</a> from IP Address 
             <strong>${data.ipAddress}</strong> at approximate location: ${geolocation}. 
             Method used: Device/Browser, using the confirmed and password protected username of 
             <strong>${data.username}</strong>. During the carrier's online registration, 

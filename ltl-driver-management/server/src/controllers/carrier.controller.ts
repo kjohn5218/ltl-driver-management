@@ -6,6 +6,7 @@ import { createReadStream, existsSync } from 'fs';
 import { AgreementService } from '../services/agreement.service';
 import path from 'path';
 import { format } from 'date-fns';
+import geoip from 'geoip-lite';
 
 export const getCarriers = async (req: Request, res: Response) => {
   try {
@@ -731,15 +732,33 @@ export const registerCarrier = async (req: Request, res: Response) => {
       const ipAddress = req.ip || req.connection.remoteAddress || 'Unknown';
       const userAgent = req.headers['user-agent'] || 'Unknown';
       
-      // Get geolocation from IP if available (you can integrate with a geolocation service)
-      // For now, we'll use placeholder data
-      const geolocation = {
-        city: 'Oregon',
-        state: 'Ohio',
-        country: 'United States of America',
-        latitude: 42.291038514157,
-        longitude: -84.20307850939
+      // Get geolocation from IP address
+      let geolocation = {
+        city: 'Unknown',
+        state: 'Unknown',
+        country: 'Unknown',
+        latitude: 0,
+        longitude: 0
       };
+      
+      try {
+        // Clean up IP address (remove IPv6 prefix if present)
+        const cleanIp = ipAddress.includes('::ffff:') ? ipAddress.replace('::ffff:', '') : ipAddress;
+        const geo = geoip.lookup(cleanIp);
+        
+        if (geo) {
+          geolocation = {
+            city: geo.city || 'Unknown',
+            state: geo.region || 'Unknown',
+            country: geo.country || 'Unknown',
+            latitude: geo.ll ? geo.ll[0] : 0,
+            longitude: geo.ll ? geo.ll[1] : 0
+          };
+        }
+        console.log('Geolocation for IP', cleanIp, ':', geolocation);
+      } catch (geoError) {
+        console.error('Failed to get geolocation:', geoError);
+      }
       
       // Path to the agreement document
       const agreementFilePath = path.join(process.cwd(), 'client', 'public', 'CCFS_CarrierBroker_Agreement.docx');
@@ -776,14 +795,33 @@ export const registerCarrier = async (req: Request, res: Response) => {
         agreementId: agreementRecord.id
       });
       
-      // Update carrier status to indicate agreement signed
-      await prisma.carrier.update({
-        where: { id: carrier.id },
-        data: {
-          onboardingComplete: true,
-          status: 'ACTIVE'
-        }
-      });
+      // Keep carrier status as PENDING - admin will review and activate
+      // Agreement is signed but onboarding requires admin approval
+      console.log('Agreement signed for carrier:', carrier.id, '- Status remains PENDING for admin review');
+      
+      // Save the carrier agreement as a document
+      if (agreementRecord && agreementRecord.affidavitPdfPath) {
+        await prisma.carrierDocument.create({
+          data: {
+            carrierId: carrier.id,
+            documentType: 'SIGNED_AFFIDAVIT',
+            filename: `Signed_Agreement_Affidavit_${carrier.id}.pdf`,
+            filePath: agreementRecord.affidavitPdfPath
+          }
+        });
+      }
+      
+      // Also save the agreement document reference
+      if (agreementFilePath && existsSync(agreementFilePath)) {
+        await prisma.carrierDocument.create({
+          data: {
+            carrierId: carrier.id,
+            documentType: 'CARRIER_AGREEMENT',
+            filename: 'CCFS_CarrierBroker_Agreement.docx',
+            filePath: agreementFilePath
+          }
+        });
+      }
       
       // Send email receipt of signed agreement
       const { sendEmail } = await import('../services/notification.service');
@@ -1174,6 +1212,55 @@ export const downloadAgreementWithAffidavit = async (req: Request, res: Response
   } catch (error) {
     console.error('Download agreement with affidavit error:', error);
     return res.status(500).json({ message: 'Failed to download agreement' });
+  }
+};
+
+// Get carrier documents
+export const getCarrierDocuments = async (req: Request, res: Response) => {
+  try {
+    const { id } = req.params;
+    
+    const documents = await prisma.carrierDocument.findMany({
+      where: { carrierId: parseInt(id) },
+      orderBy: { uploadedAt: 'desc' }
+    });
+    
+    return res.json(documents);
+  } catch (error) {
+    console.error('Get carrier documents error:', error);
+    return res.status(500).json({ message: 'Failed to get carrier documents' });
+  }
+};
+
+// Download carrier document
+export const downloadCarrierDocument = async (req: Request, res: Response) => {
+  try {
+    const { id, documentId } = req.params;
+    
+    const document = await prisma.carrierDocument.findFirst({
+      where: {
+        id: parseInt(documentId),
+        carrierId: parseInt(id)
+      }
+    });
+    
+    if (!document) {
+      return res.status(404).json({ message: 'Document not found' });
+    }
+    
+    if (!document.filePath || !existsSync(document.filePath)) {
+      return res.status(404).json({ message: 'Document file not found' });
+    }
+    
+    res.setHeader('Content-Type', 'application/octet-stream');
+    res.setHeader('Content-Disposition', `attachment; filename="${document.filename}"`);
+    
+    const stream = createReadStream(document.filePath);
+    stream.pipe(res);
+    return;
+  } catch (error) {
+    console.error('Download carrier document error:', error);
+    return res.status(500).json({ message: 'Failed to download document' });
   }
 };
 

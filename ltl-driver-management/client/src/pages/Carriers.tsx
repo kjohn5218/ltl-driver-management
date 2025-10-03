@@ -1029,6 +1029,8 @@ interface CarrierDetailsModalProps {
 const CarrierDetailsModal: React.FC<CarrierDetailsModalProps> = ({ carrier, onClose }) => {
   const [agreements, setAgreements] = useState<CarrierAgreement[]>([]);
   const [loadingAgreements, setLoadingAgreements] = useState(true);
+  const [documents, setDocuments] = useState<any[]>([]);
+  const [loadingDocuments, setLoadingDocuments] = useState(true);
 
   const getStatusBadge = (status: string) => {
     const statusColors = {
@@ -1060,6 +1062,42 @@ const CarrierDetailsModal: React.FC<CarrierDetailsModalProps> = ({ carrier, onCl
 
     fetchAgreements();
   }, [carrier.id]);
+
+  // Fetch carrier documents
+  useEffect(() => {
+    const fetchDocuments = async () => {
+      try {
+        setLoadingDocuments(true);
+        const response = await api.get(`/carriers/${carrier.id}/documents`);
+        setDocuments(response.data);
+      } catch (error) {
+        console.error('Failed to fetch documents:', error);
+        setDocuments([]);
+      } finally {
+        setLoadingDocuments(false);
+      }
+    };
+
+    fetchDocuments();
+  }, [carrier.id]);
+
+  const downloadDocument = async (documentId: number, filename: string) => {
+    try {
+      const response = await api.get(`/carriers/${carrier.id}/documents/${documentId}`, { responseType: 'blob' });
+      
+      const url = window.URL.createObjectURL(new Blob([response.data]));
+      const link = document.createElement('a');
+      link.href = url;
+      link.setAttribute('download', filename);
+      document.body.appendChild(link);
+      link.click();
+      link.remove();
+      window.URL.revokeObjectURL(url);
+    } catch (error) {
+      console.error('Failed to download document:', error);
+      alert('Failed to download document. Please try again.');
+    }
+  };
 
   const downloadAgreementDocument = async (agreementId: number, type: 'affidavit' | 'full') => {
     try {
@@ -1329,6 +1367,54 @@ const CarrierDetailsModal: React.FC<CarrierDetailsModalProps> = ({ carrier, onCl
                           </button>
                         )}
                       </div>
+                    </div>
+                  </div>
+                ))}
+              </div>
+            )}
+          </div>
+        </div>
+
+        {/* Uploaded Documents Section */}
+        <div className="mt-6 pt-6 border-t">
+          <div className="mb-4">
+            <h3 className="text-lg font-medium text-gray-900 mb-3">Uploaded Documents</h3>
+            {loadingDocuments ? (
+              <div className="flex items-center justify-center py-4">
+                <div className="animate-spin rounded-full h-6 w-6 border-b-2 border-blue-600"></div>
+                <span className="ml-2 text-sm text-gray-500">Loading documents...</span>
+              </div>
+            ) : documents.length === 0 ? (
+              <div className="bg-gray-50 border border-gray-200 rounded-lg p-4">
+                <p className="text-sm text-gray-500 text-center">No documents uploaded</p>
+              </div>
+            ) : (
+              <div className="space-y-3">
+                {documents.map((doc) => (
+                  <div key={doc.id} className="bg-gray-50 border border-gray-200 rounded-lg p-4">
+                    <div className="flex justify-between items-start">
+                      <div className="flex-1">
+                        <div className="flex items-center gap-2 mb-2">
+                          <FileText className="w-4 h-4 text-blue-600" />
+                          <h4 className="font-medium text-gray-900">{doc.filename}</h4>
+                        </div>
+                        <div className="flex flex-wrap gap-4 text-xs text-gray-600">
+                          <div>
+                            <span className="font-medium">Type:</span> {doc.documentType.replace(/_/g, ' ')}
+                          </div>
+                          <div>
+                            <span className="font-medium">Uploaded:</span> {new Date(doc.uploadedAt).toLocaleDateString()}
+                          </div>
+                        </div>
+                      </div>
+                      <button
+                        onClick={() => downloadDocument(doc.id, doc.filename)}
+                        className="flex items-center gap-1 px-3 py-1 text-xs bg-blue-600 text-white rounded hover:bg-blue-700 ml-4"
+                        title="Download Document"
+                      >
+                        <Download className="w-3 h-3" />
+                        Download
+                      </button>
                     </div>
                   </div>
                 ))}

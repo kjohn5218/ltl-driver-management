@@ -19,7 +19,9 @@ import {
   cancelCarrierInvitation,
   getCarrierAgreements,
   downloadAgreementAffidavit,
-  downloadAgreementWithAffidavit
+  downloadAgreementWithAffidavit,
+  getCarrierDocuments,
+  downloadCarrierDocument
 } from '../controllers/carrier.controller';
 import { authenticate, authorize } from '../middleware/auth.middleware';
 import { validateRequest } from '../middleware/validation.middleware';
@@ -200,5 +202,12 @@ router.get('/:id/agreements/:agreementId/affidavit', downloadAgreementAffidavit)
 
 // Download full agreement with affidavit
 router.get('/:id/agreements/:agreementId/full', downloadAgreementWithAffidavit);
+
+// Document management routes
+// Get carrier documents
+router.get('/:id/documents', getCarrierDocuments);
+
+// Download carrier document
+router.get('/:id/documents/:documentId', downloadCarrierDocument);
 
 export default router;
