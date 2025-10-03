@@ -845,7 +845,12 @@ export const registerCarrier = async (req: Request, res: Response) => {
             </ul>
           </div>
           
-          <p>A copy of your signed agreement affidavit is attached to this email for your records.</p>
+          <p>Attached to this email you will find:</p>
+          <ul style="margin: 10px 0; padding-left: 20px;">
+            <li>Your signed agreement affidavit (PDF)</li>
+            <li>The carrier agreement document (DOCX)</li>
+          </ul>
+          <p>Please keep these documents for your records.</p>
           
           <p>Your carrier account is now active and you can begin accepting loads.</p>
           
@@ -857,14 +862,26 @@ export const registerCarrier = async (req: Request, res: Response) => {
         </div>
       `;
       
-      // Read affidavit file for email attachment
+      // Read affidavit and agreement files for email attachments
       const attachments = [];
+      
+      // Attach affidavit
       if (affidavitPath && existsSync(affidavitPath)) {
         const affidavitBuffer = await fs.readFile(affidavitPath);
         attachments.push({
           filename: `CrossCountry_Agreement_Affidavit_${carrier.id}.pdf`,
           content: affidavitBuffer,
           contentType: 'application/pdf'
+        });
+      }
+      
+      // Attach carrier agreement document
+      if (agreementFilePath && existsSync(agreementFilePath)) {
+        const agreementBuffer = await fs.readFile(agreementFilePath);
+        attachments.push({
+          filename: 'CrossCountry_Carrier_Agreement.docx',
+          content: agreementBuffer,
+          contentType: 'application/vnd.openxmlformats-officedocument.wordprocessingml.document'
         });
       }
       
@@ -1330,6 +1347,7 @@ const sendOnboardingCompletionEmail = async (carrier: any) => {
   // Prepare attachments
   const attachments = [];
   
+  // Attach affidavit
   if (latestAgreement?.affidavitPdfPath && existsSync(latestAgreement.affidavitPdfPath)) {
     const affidavitBuffer = await fs.readFile(latestAgreement.affidavitPdfPath);
     attachments.push({
@@ -1339,12 +1357,21 @@ const sendOnboardingCompletionEmail = async (carrier: any) => {
     });
   }
   
-  if (latestAgreement?.agreementPdfPath && existsSync(latestAgreement.agreementPdfPath)) {
-    const agreementBuffer = await fs.readFile(latestAgreement.agreementPdfPath);
+  // Get carrier agreement document from carrier documents
+  const agreementDoc = await prisma.carrierDocument.findFirst({
+    where: {
+      carrierId: carrier.id,
+      documentType: 'CARRIER_AGREEMENT'
+    },
+    orderBy: { uploadedAt: 'desc' }
+  });
+  
+  if (agreementDoc?.filePath && existsSync(agreementDoc.filePath)) {
+    const agreementBuffer = await fs.readFile(agreementDoc.filePath);
     attachments.push({
-      filename: `${carrier.name}_Carrier_Agreement.pdf`,
+      filename: 'CrossCountry_Carrier_Agreement.docx',
       content: agreementBuffer,
-      contentType: 'application/pdf'
+      contentType: 'application/vnd.openxmlformats-officedocument.wordprocessingml.document'
     });
   }
   
