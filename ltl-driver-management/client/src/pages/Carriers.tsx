@@ -26,7 +26,6 @@ export const Carriers: React.FC = () => {
   const [statusFilter, setStatusFilter] = useState('');
   const [stateFilter, setStateFilter] = useState('');
   const [viewingCarrier, setViewingCarrier] = useState<Carrier | null>(null);
-  const [editingCarrier, setEditingCarrier] = useState<Carrier | null>(null);
   const [deletingCarrier, setDeletingCarrier] = useState<Carrier | null>(null);
   const [showAddCarrierModal, setShowAddCarrierModal] = useState(false);
   const [showInviteModal, setShowInviteModal] = useState(false);
@@ -244,13 +243,6 @@ export const Carriers: React.FC = () => {
                   <Eye className="w-4 h-4" />
                 </button>
                 <button 
-                  className="p-1 text-gray-500 hover:text-blue-600"
-                  onClick={() => setEditingCarrier(carrier)}
-                  title="Edit Carrier"
-                >
-                  <Edit className="w-4 h-4" />
-                </button>
-                <button 
                   className="p-1 text-gray-500 hover:text-red-600"
                   onClick={() => setDeletingCarrier(carrier)}
                   title="Delete Carrier"
@@ -332,17 +324,6 @@ export const Carriers: React.FC = () => {
         />
       )}
 
-      {/* Carrier Edit Modal */}
-      {editingCarrier && (
-        <CarrierEditModal
-          carrier={editingCarrier}
-          onClose={() => setEditingCarrier(null)}
-          onSave={(_updatedCarrier) => {
-            queryClient.invalidateQueries({ queryKey: ['carriers'] });
-            setEditingCarrier(null);
-          }}
-        />
-      )}
 
       {/* Carrier Delete Modal */}
       {deletingCarrier && (
@@ -1027,6 +1008,7 @@ interface CarrierDetailsModalProps {
 }
 
 const CarrierDetailsModal: React.FC<CarrierDetailsModalProps> = ({ carrier, onClose }) => {
+  const queryClient = useQueryClient();
   const [agreements, setAgreements] = useState<CarrierAgreement[]>([]);
   const [loadingAgreements, setLoadingAgreements] = useState(true);
   const [documents, setDocuments] = useState<any[]>([]);
@@ -1035,6 +1017,34 @@ const CarrierDetailsModal: React.FC<CarrierDetailsModalProps> = ({ carrier, onCl
   const [uploadFile, setUploadFile] = useState<File | null>(null);
   const [documentType, setDocumentType] = useState('');
   const [uploading, setUploading] = useState(false);
+  const [isEditMode, setIsEditMode] = useState(false);
+  const [isSubmitting, setIsSubmitting] = useState(false);
+  const [formData, setFormData] = useState({
+    name: carrier.name,
+    contactPerson: carrier.contactPerson || '',
+    phone: carrier.phone || '',
+    email: carrier.email || '',
+    mcNumber: carrier.mcNumber || '',
+    dotNumber: carrier.dotNumber || '',
+    streetAddress1: carrier.streetAddress1 || '',
+    streetAddress2: carrier.streetAddress2 || '',
+    city: carrier.city || '',
+    state: carrier.state || '',
+    zipCode: carrier.zipCode || '',
+    status: ['PENDING', 'ACTIVE', 'INACTIVE', 'SUSPENDED'].includes(carrier.status) 
+      ? carrier.status 
+      : carrier.status === 'ONBOARDED' ? 'ACTIVE' : 'PENDING',
+    carrierType: carrier.carrierType || '',
+    safetyRating: carrier.safetyRating || '',
+    taxId: carrier.taxId || '',
+    ratePerMile: carrier.ratePerMile?.toString() || '',
+    rating: carrier.rating?.toString() || '',
+    remittanceContact: carrier.remittanceContact || '',
+    remittanceEmail: carrier.remittanceEmail || '',
+    factoringCompany: carrier.factoringCompany || '',
+    onboardingComplete: carrier.onboardingComplete,
+    insuranceExpiration: carrier.insuranceExpiration ? new Date(carrier.insuranceExpiration).toISOString().split('T')[0] : ''
+  });
 
   const getStatusBadge = (status: string) => {
     const statusColors = {
@@ -1184,17 +1194,121 @@ const CarrierDetailsModal: React.FC<CarrierDetailsModalProps> = ({ carrier, onCl
     }
   };
 
+  const handleSave = async () => {
+    setIsSubmitting(true);
+    
+    try {
+      // Build payload with proper validation
+      const payload: any = {};
+      
+      // Only include fields that have values
+      if (formData.name.trim()) payload.name = formData.name.trim();
+      if (formData.contactPerson.trim()) payload.contactPerson = formData.contactPerson.trim();
+      if (formData.phone.trim()) payload.phone = formData.phone.trim();
+      if (formData.email.trim()) payload.email = formData.email.trim();
+      if (formData.mcNumber.trim()) payload.mcNumber = formData.mcNumber.trim();
+      if (formData.dotNumber.trim()) payload.dotNumber = formData.dotNumber.trim();
+      if (formData.streetAddress1.trim()) payload.streetAddress1 = formData.streetAddress1.trim();
+      if (formData.streetAddress2.trim()) payload.streetAddress2 = formData.streetAddress2.trim();
+      if (formData.city.trim()) payload.city = formData.city.trim();
+      if (formData.state.trim()) payload.state = formData.state.trim();
+      if (formData.zipCode.trim()) payload.zipCode = formData.zipCode.trim();
+      
+      payload.status = formData.status;
+      payload.onboardingComplete = formData.onboardingComplete;
+      
+      if (formData.carrierType.trim()) payload.carrierType = formData.carrierType.trim();
+      if (formData.safetyRating) payload.safetyRating = formData.safetyRating;
+      if (formData.taxId.trim()) payload.taxId = formData.taxId.trim();
+      
+      // Convert numeric fields
+      if (formData.ratePerMile) {
+        const rate = parseFloat(formData.ratePerMile);
+        if (!isNaN(rate)) payload.ratePerMile = rate;
+      }
+      if (formData.rating) {
+        const rating = parseFloat(formData.rating);
+        if (!isNaN(rating)) payload.rating = rating;
+      }
+      
+      if (formData.remittanceContact.trim()) payload.remittanceContact = formData.remittanceContact.trim();
+      if (formData.remittanceEmail.trim()) payload.remittanceEmail = formData.remittanceEmail.trim();
+      if (formData.factoringCompany.trim()) payload.factoringCompany = formData.factoringCompany.trim();
+      
+      if (formData.insuranceExpiration) {
+        payload.insuranceExpiration = new Date(formData.insuranceExpiration).toISOString();
+      }
+      
+      const response = await api.put(`/carriers/${carrier.id}`, payload);
+      
+      // Update the carriers list
+      queryClient.invalidateQueries({ queryKey: ['carriers'] });
+      
+      // Exit edit mode
+      setIsEditMode(false);
+      
+      alert('Carrier updated successfully');
+    } catch (error: any) {
+      console.error('Update failed:', error);
+      alert(error.response?.data?.message || 'Failed to update carrier');
+    } finally {
+      setIsSubmitting(false);
+    }
+  };
+
+  const handleCancel = () => {
+    // Reset form data
+    setFormData({
+      name: carrier.name,
+      contactPerson: carrier.contactPerson || '',
+      phone: carrier.phone || '',
+      email: carrier.email || '',
+      mcNumber: carrier.mcNumber || '',
+      dotNumber: carrier.dotNumber || '',
+      streetAddress1: carrier.streetAddress1 || '',
+      streetAddress2: carrier.streetAddress2 || '',
+      city: carrier.city || '',
+      state: carrier.state || '',
+      zipCode: carrier.zipCode || '',
+      status: ['PENDING', 'ACTIVE', 'INACTIVE', 'SUSPENDED'].includes(carrier.status) 
+        ? carrier.status 
+        : carrier.status === 'ONBOARDED' ? 'ACTIVE' : 'PENDING',
+      carrierType: carrier.carrierType || '',
+      safetyRating: carrier.safetyRating || '',
+      taxId: carrier.taxId || '',
+      ratePerMile: carrier.ratePerMile?.toString() || '',
+      rating: carrier.rating?.toString() || '',
+      remittanceContact: carrier.remittanceContact || '',
+      remittanceEmail: carrier.remittanceEmail || '',
+      factoringCompany: carrier.factoringCompany || '',
+      onboardingComplete: carrier.onboardingComplete,
+      insuranceExpiration: carrier.insuranceExpiration ? new Date(carrier.insuranceExpiration).toISOString().split('T')[0] : ''
+    });
+    setIsEditMode(false);
+  };
+
   return (
     <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50">
       <div className="bg-white rounded-lg p-6 w-full max-w-3xl max-h-[90vh] overflow-y-auto">
         <div className="flex justify-between items-center mb-6">
           <h2 className="text-xl font-bold text-gray-900">Carrier Details - {carrier.name}</h2>
-          <button 
-            onClick={onClose}
-            className="text-gray-400 hover:text-gray-600"
-          >
-            <X className="w-5 h-5" />
-          </button>
+          <div className="flex items-center gap-2">
+            {!isEditMode && (
+              <button
+                onClick={() => setIsEditMode(true)}
+                className="flex items-center gap-1 px-3 py-1 text-sm bg-blue-600 text-white rounded hover:bg-blue-700"
+              >
+                <Edit className="w-4 h-4" />
+                Edit
+              </button>
+            )}
+            <button 
+              onClick={onClose}
+              className="text-gray-400 hover:text-gray-600"
+            >
+              <X className="w-5 h-5" />
+            </button>
+          </div>
         </div>
         
         <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
@@ -1202,164 +1316,362 @@ const CarrierDetailsModal: React.FC<CarrierDetailsModalProps> = ({ carrier, onCl
           <div className="space-y-4">
             <div>
               <label className="block text-sm font-medium text-gray-700 mb-1">Carrier Name</label>
-              <p className="text-sm text-gray-900">{carrier.name}</p>
+              {isEditMode ? (
+                <input
+                  type="text"
+                  value={formData.name}
+                  onChange={(e) => setFormData({...formData, name: e.target.value})}
+                  className="w-full p-2 border rounded focus:ring-blue-500 focus:border-blue-500"
+                />
+              ) : (
+                <p className="text-sm text-gray-900">{carrier.name}</p>
+              )}
             </div>
             
             <div>
               <label className="block text-sm font-medium text-gray-700 mb-1">Status</label>
-              <span className={`inline-flex px-2 py-1 rounded-full text-xs font-medium ${getStatusBadge(carrier.status)}`}>
-                {carrier.status}
-              </span>
+              {isEditMode ? (
+                <select
+                  value={formData.status}
+                  onChange={(e) => setFormData({...formData, status: e.target.value})}
+                  className="w-full p-2 border rounded focus:ring-blue-500 focus:border-blue-500"
+                >
+                  <option value="PENDING">PENDING</option>
+                  <option value="ACTIVE">ACTIVE</option>
+                  <option value="INACTIVE">INACTIVE</option>
+                  <option value="SUSPENDED">SUSPENDED</option>
+                </select>
+              ) : (
+                <span className={`inline-flex px-2 py-1 rounded-full text-xs font-medium ${getStatusBadge(carrier.status)}`}>
+                  {carrier.status}
+                </span>
+              )}
             </div>
 
-            {carrier.contactPerson && (
-              <div>
-                <label className="block text-sm font-medium text-gray-700 mb-1">Contact Person</label>
-                <p className="text-sm text-gray-900">{carrier.contactPerson}</p>
-              </div>
-            )}
+            <div>
+              <label className="block text-sm font-medium text-gray-700 mb-1">Contact Person</label>
+              {isEditMode ? (
+                <input
+                  type="text"
+                  value={formData.contactPerson}
+                  onChange={(e) => setFormData({...formData, contactPerson: e.target.value})}
+                  className="w-full p-2 border rounded focus:ring-blue-500 focus:border-blue-500"
+                  placeholder="Enter contact person"
+                />
+              ) : (
+                <p className="text-sm text-gray-900">{carrier.contactPerson || 'N/A'}</p>
+              )}
+            </div>
 
-            {carrier.phone && (
-              <div>
-                <label className="block text-sm font-medium text-gray-700 mb-1">Phone</label>
-                <p className="text-sm text-gray-900">{carrier.phone}</p>
-              </div>
-            )}
+            <div>
+              <label className="block text-sm font-medium text-gray-700 mb-1">Phone</label>
+              {isEditMode ? (
+                <input
+                  type="text"
+                  value={formData.phone}
+                  onChange={(e) => setFormData({...formData, phone: e.target.value})}
+                  className="w-full p-2 border rounded focus:ring-blue-500 focus:border-blue-500"
+                  placeholder="Enter phone number"
+                />
+              ) : (
+                <p className="text-sm text-gray-900">{carrier.phone || 'N/A'}</p>
+              )}
+            </div>
 
-            {carrier.email && (
-              <div>
-                <label className="block text-sm font-medium text-gray-700 mb-1">Email</label>
-                <p className="text-sm text-gray-900">{carrier.email}</p>
-              </div>
-            )}
+            <div>
+              <label className="block text-sm font-medium text-gray-700 mb-1">Email</label>
+              {isEditMode ? (
+                <input
+                  type="email"
+                  value={formData.email}
+                  onChange={(e) => setFormData({...formData, email: e.target.value})}
+                  className="w-full p-2 border rounded focus:ring-blue-500 focus:border-blue-500"
+                  placeholder="Enter email address"
+                />
+              ) : (
+                <p className="text-sm text-gray-900">{carrier.email || 'N/A'}</p>
+              )}
+            </div>
           </div>
 
           {/* Address & Details */}
           <div className="space-y-4">
-            {(carrier.streetAddress1 || carrier.city || carrier.state || carrier.zipCode) && (
-              <div>
-                <label className="block text-sm font-medium text-gray-700 mb-1">Address</label>
+            <div>
+              <label className="block text-sm font-medium text-gray-700 mb-1">Address</label>
+              {isEditMode ? (
+                <div className="space-y-2">
+                  <input
+                    type="text"
+                    value={formData.streetAddress1}
+                    onChange={(e) => setFormData({...formData, streetAddress1: e.target.value})}
+                    className="w-full p-2 border rounded focus:ring-blue-500 focus:border-blue-500"
+                    placeholder="Street Address 1"
+                  />
+                  <input
+                    type="text"
+                    value={formData.streetAddress2}
+                    onChange={(e) => setFormData({...formData, streetAddress2: e.target.value})}
+                    className="w-full p-2 border rounded focus:ring-blue-500 focus:border-blue-500"
+                    placeholder="Street Address 2 (Optional)"
+                  />
+                  <div className="grid grid-cols-3 gap-2">
+                    <input
+                      type="text"
+                      value={formData.city}
+                      onChange={(e) => setFormData({...formData, city: e.target.value})}
+                      className="p-2 border rounded focus:ring-blue-500 focus:border-blue-500"
+                      placeholder="City"
+                    />
+                    <input
+                      type="text"
+                      value={formData.state}
+                      onChange={(e) => setFormData({...formData, state: e.target.value})}
+                      className="p-2 border rounded focus:ring-blue-500 focus:border-blue-500"
+                      placeholder="State"
+                      maxLength={2}
+                    />
+                    <input
+                      type="text"
+                      value={formData.zipCode}
+                      onChange={(e) => setFormData({...formData, zipCode: e.target.value})}
+                      className="p-2 border rounded focus:ring-blue-500 focus:border-blue-500"
+                      placeholder="ZIP Code"
+                    />
+                  </div>
+                </div>
+              ) : (
                 <div className="text-sm text-gray-900 space-y-1">
-                  {carrier.streetAddress1 && <p>{carrier.streetAddress1}</p>}
-                  {carrier.streetAddress2 && <p>{carrier.streetAddress2}</p>}
-                  {(carrier.city || carrier.state || carrier.zipCode) && (
-                    <p>
-                      {carrier.city}{carrier.city && (carrier.state || carrier.zipCode) ? ', ' : ''}
-                      {carrier.state} {carrier.zipCode}
-                    </p>
+                  {(carrier.streetAddress1 || carrier.city || carrier.state || carrier.zipCode) ? (
+                    <>
+                      {carrier.streetAddress1 && <p>{carrier.streetAddress1}</p>}
+                      {carrier.streetAddress2 && <p>{carrier.streetAddress2}</p>}
+                      {(carrier.city || carrier.state || carrier.zipCode) && (
+                        <p>
+                          {carrier.city}{carrier.city && (carrier.state || carrier.zipCode) ? ', ' : ''}
+                          {carrier.state} {carrier.zipCode}
+                        </p>
+                      )}
+                    </>
+                  ) : (
+                    <p>N/A</p>
                   )}
                 </div>
-              </div>
-            )}
+              )}
+            </div>
 
             <div className="grid grid-cols-2 gap-4">
               <div>
                 <label className="block text-sm font-medium text-gray-700 mb-1">MC Number</label>
-                <p className="text-sm text-gray-900">{carrier.mcNumber || 'N/A'}</p>
+                {isEditMode ? (
+                  <input
+                    type="text"
+                    value={formData.mcNumber}
+                    onChange={(e) => setFormData({...formData, mcNumber: e.target.value})}
+                    className="w-full p-2 border rounded focus:ring-blue-500 focus:border-blue-500"
+                    placeholder="MC Number"
+                  />
+                ) : (
+                  <p className="text-sm text-gray-900">{carrier.mcNumber || 'N/A'}</p>
+                )}
               </div>
               <div>
                 <label className="block text-sm font-medium text-gray-700 mb-1">DOT Number</label>
-                <p className="text-sm text-gray-900">{carrier.dotNumber || 'N/A'}</p>
+                {isEditMode ? (
+                  <input
+                    type="text"
+                    value={formData.dotNumber}
+                    onChange={(e) => setFormData({...formData, dotNumber: e.target.value})}
+                    className="w-full p-2 border rounded focus:ring-blue-500 focus:border-blue-500"
+                    placeholder="DOT Number"
+                  />
+                ) : (
+                  <p className="text-sm text-gray-900">{carrier.dotNumber || 'N/A'}</p>
+                )}
               </div>
             </div>
 
-            {carrier.safetyRating && (
-              <div>
-                <label className="block text-sm font-medium text-gray-700 mb-1">Safety Rating</label>
+            <div>
+              <label className="block text-sm font-medium text-gray-700 mb-1">Safety Rating</label>
+              {isEditMode ? (
+                <select
+                  value={formData.safetyRating}
+                  onChange={(e) => setFormData({...formData, safetyRating: e.target.value})}
+                  className="w-full p-2 border rounded focus:ring-blue-500 focus:border-blue-500"
+                >
+                  <option value="">Select rating</option>
+                  <option value="Acceptable">Acceptable</option>
+                  <option value="Conditional">Conditional</option>
+                  <option value="Unacceptable">Unacceptable</option>
+                </select>
+              ) : (
                 <p className={`text-sm font-medium ${
                   carrier.safetyRating === 'Acceptable' ? 'text-green-600' : 
                   carrier.safetyRating === 'Unacceptable' ? 'text-red-600' : 
                   'text-yellow-600'
                 }`}>
-                  {carrier.safetyRating}
+                  {carrier.safetyRating || 'N/A'}
                 </p>
-              </div>
-            )}
+              )}
+            </div>
 
-            {carrier.carrierType && (
-              <div>
-                <label className="block text-sm font-medium text-gray-700 mb-1">Carrier Type</label>
-                <p className="text-sm text-gray-900">{carrier.carrierType}</p>
-              </div>
-            )}
+            <div>
+              <label className="block text-sm font-medium text-gray-700 mb-1">Carrier Type</label>
+              {isEditMode ? (
+                <input
+                  type="text"
+                  value={formData.carrierType}
+                  onChange={(e) => setFormData({...formData, carrierType: e.target.value})}
+                  className="w-full p-2 border rounded focus:ring-blue-500 focus:border-blue-500"
+                  placeholder="Enter carrier type"
+                />
+              ) : (
+                <p className="text-sm text-gray-900">{carrier.carrierType || 'N/A'}</p>
+              )}
+            </div>
           </div>
         </div>
 
         {/* Financial Information */}
-        {(carrier.ratePerMile || carrier.rating || carrier.taxId || carrier.factoringCompany) && (
-          <div className="mt-6 pt-6 border-t">
-            <h3 className="text-lg font-medium text-gray-900 mb-4">Financial Information</h3>
-            <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-              {carrier.ratePerMile && (
-                <div>
-                  <label className="block text-sm font-medium text-gray-700 mb-1">Rate per Mile</label>
-                  <p className="text-sm text-gray-900">${carrier.ratePerMile}</p>
-                </div>
+        <div className="mt-6 pt-6 border-t">
+          <h3 className="text-lg font-medium text-gray-900 mb-4">Financial Information</h3>
+          <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+            <div>
+              <label className="block text-sm font-medium text-gray-700 mb-1">Rate per Mile</label>
+              {isEditMode ? (
+                <input
+                  type="number"
+                  step="0.01"
+                  value={formData.ratePerMile}
+                  onChange={(e) => setFormData({...formData, ratePerMile: e.target.value})}
+                  className="w-full p-2 border rounded focus:ring-blue-500 focus:border-blue-500"
+                  placeholder="0.00"
+                />
+              ) : (
+                <p className="text-sm text-gray-900">{carrier.ratePerMile ? `$${carrier.ratePerMile}` : 'N/A'}</p>
               )}
-              {carrier.rating && (
-                <div>
-                  <label className="block text-sm font-medium text-gray-700 mb-1">Rating</label>
-                  <p className="text-sm text-gray-900">{carrier.rating}</p>
-                </div>
+            </div>
+            <div>
+              <label className="block text-sm font-medium text-gray-700 mb-1">Rating</label>
+              {isEditMode ? (
+                <input
+                  type="number"
+                  step="0.1"
+                  min="0"
+                  max="5"
+                  value={formData.rating}
+                  onChange={(e) => setFormData({...formData, rating: e.target.value})}
+                  className="w-full p-2 border rounded focus:ring-blue-500 focus:border-blue-500"
+                  placeholder="0.0"
+                />
+              ) : (
+                <p className="text-sm text-gray-900">{carrier.rating || 'N/A'}</p>
               )}
-              {carrier.taxId && (
-                <div>
-                  <label className="block text-sm font-medium text-gray-700 mb-1">Tax ID</label>
-                  <p className="text-sm text-gray-900">{carrier.taxId}</p>
-                </div>
+            </div>
+            <div>
+              <label className="block text-sm font-medium text-gray-700 mb-1">Tax ID</label>
+              {isEditMode ? (
+                <input
+                  type="text"
+                  value={formData.taxId}
+                  onChange={(e) => setFormData({...formData, taxId: e.target.value})}
+                  className="w-full p-2 border rounded focus:ring-blue-500 focus:border-blue-500"
+                  placeholder="Tax ID"
+                />
+              ) : (
+                <p className="text-sm text-gray-900">{carrier.taxId || 'N/A'}</p>
               )}
-              {carrier.factoringCompany && (
-                <div>
-                  <label className="block text-sm font-medium text-gray-700 mb-1">Factoring Company</label>
-                  <p className="text-sm text-gray-900">{carrier.factoringCompany}</p>
-                </div>
+            </div>
+            <div>
+              <label className="block text-sm font-medium text-gray-700 mb-1">Factoring Company</label>
+              {isEditMode ? (
+                <input
+                  type="text"
+                  value={formData.factoringCompany}
+                  onChange={(e) => setFormData({...formData, factoringCompany: e.target.value})}
+                  className="w-full p-2 border rounded focus:ring-blue-500 focus:border-blue-500"
+                  placeholder="Factoring company"
+                />
+              ) : (
+                <p className="text-sm text-gray-900">{carrier.factoringCompany || 'N/A'}</p>
               )}
             </div>
           </div>
-        )}
+        </div>
 
         {/* Remittance Information */}
-        {(carrier.remittanceContact || carrier.remittanceEmail) && (
-          <div className="mt-6 pt-6 border-t">
-            <h3 className="text-lg font-medium text-gray-900 mb-4">Remittance Information</h3>
-            <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-              {carrier.remittanceContact && (
-                <div>
-                  <label className="block text-sm font-medium text-gray-700 mb-1">Remittance Contact</label>
-                  <p className="text-sm text-gray-900">{carrier.remittanceContact}</p>
-                </div>
+        <div className="mt-6 pt-6 border-t">
+          <h3 className="text-lg font-medium text-gray-900 mb-4">Remittance Information</h3>
+          <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+            <div>
+              <label className="block text-sm font-medium text-gray-700 mb-1">Remittance Contact</label>
+              {isEditMode ? (
+                <input
+                  type="text"
+                  value={formData.remittanceContact}
+                  onChange={(e) => setFormData({...formData, remittanceContact: e.target.value})}
+                  className="w-full p-2 border rounded focus:ring-blue-500 focus:border-blue-500"
+                  placeholder="Remittance contact"
+                />
+              ) : (
+                <p className="text-sm text-gray-900">{carrier.remittanceContact || 'N/A'}</p>
               )}
-              {carrier.remittanceEmail && (
-                <div>
-                  <label className="block text-sm font-medium text-gray-700 mb-1">Remittance Email</label>
-                  <p className="text-sm text-gray-900">{carrier.remittanceEmail}</p>
-                </div>
+            </div>
+            <div>
+              <label className="block text-sm font-medium text-gray-700 mb-1">Remittance Email</label>
+              {isEditMode ? (
+                <input
+                  type="email"
+                  value={formData.remittanceEmail}
+                  onChange={(e) => setFormData({...formData, remittanceEmail: e.target.value})}
+                  className="w-full p-2 border rounded focus:ring-blue-500 focus:border-blue-500"
+                  placeholder="remittance@example.com"
+                />
+              ) : (
+                <p className="text-sm text-gray-900">{carrier.remittanceEmail || 'N/A'}</p>
               )}
             </div>
           </div>
-        )}
+        </div>
 
         {/* Additional Information */}
         <div className="mt-6 pt-6 border-t">
           <div className="grid grid-cols-2 gap-4">
             <div>
               <label className="block text-sm font-medium text-gray-700 mb-1">Onboarding Complete</label>
-              <span className={`inline-flex px-2 py-1 rounded-full text-xs font-medium ${
-                carrier.onboardingComplete 
-                  ? 'bg-green-100 text-green-800' 
-                  : 'bg-red-100 text-red-800'
-              }`}>
-                {carrier.onboardingComplete ? 'Yes' : 'No'}
-              </span>
+              {isEditMode ? (
+                <select
+                  value={formData.onboardingComplete ? 'true' : 'false'}
+                  onChange={(e) => setFormData({...formData, onboardingComplete: e.target.value === 'true'})}
+                  className="w-full p-2 border rounded focus:ring-blue-500 focus:border-blue-500"
+                >
+                  <option value="false">No</option>
+                  <option value="true">Yes</option>
+                </select>
+              ) : (
+                <span className={`inline-flex px-2 py-1 rounded-full text-xs font-medium ${
+                  carrier.onboardingComplete 
+                    ? 'bg-green-100 text-green-800' 
+                    : 'bg-red-100 text-red-800'
+                }`}>
+                  {carrier.onboardingComplete ? 'Yes' : 'No'}
+                </span>
+              )}
             </div>
-            {carrier.insuranceExpiration && (
-              <div>
-                <label className="block text-sm font-medium text-gray-700 mb-1">Insurance Expiration</label>
+            <div>
+              <label className="block text-sm font-medium text-gray-700 mb-1">Insurance Expiration</label>
+              {isEditMode ? (
+                <input
+                  type="date"
+                  value={formData.insuranceExpiration}
+                  onChange={(e) => setFormData({...formData, insuranceExpiration: e.target.value})}
+                  className="w-full p-2 border rounded focus:ring-blue-500 focus:border-blue-500"
+                />
+              ) : (
                 <p className="text-sm text-gray-900">
-                  {new Date(carrier.insuranceExpiration).toLocaleDateString()}
+                  {carrier.insuranceExpiration ? new Date(carrier.insuranceExpiration).toLocaleDateString() : 'N/A'}
                 </p>
-              </div>
-            )}
+              )}
+            </div>
           </div>
         </div>
 
@@ -1571,414 +1883,38 @@ const CarrierDetailsModal: React.FC<CarrierDetailsModalProps> = ({ carrier, onCl
           </div>
         </div>
         
-        <div className="flex justify-end mt-6 pt-4 border-t">
-          <button 
-            onClick={onClose}
-            className="px-4 py-2 bg-gray-500 text-white rounded hover:bg-gray-600"
-          >
-            Close
-          </button>
-        </div>
-      </div>
-    </div>
-  );
-};
-
-// Carrier Edit Modal Component
-interface CarrierEditModalProps {
-  carrier: Carrier;
-  onClose: () => void;
-  onSave: (updatedCarrier: Carrier) => void;
-}
-
-const CarrierEditModal: React.FC<CarrierEditModalProps> = ({ carrier, onClose, onSave }) => {
-  const [formData, setFormData] = useState({
-    name: carrier.name,
-    contactPerson: carrier.contactPerson || '',
-    phone: carrier.phone || '',
-    email: carrier.email || '',
-    mcNumber: carrier.mcNumber || '',
-    dotNumber: carrier.dotNumber || '',
-    streetAddress1: carrier.streetAddress1 || '',
-    streetAddress2: carrier.streetAddress2 || '',
-    city: carrier.city || '',
-    state: carrier.state || '',
-    zipCode: carrier.zipCode || '',
-    // Map invalid status values to valid ones for server compatibility
-    status: ['PENDING', 'ACTIVE', 'INACTIVE', 'SUSPENDED'].includes(carrier.status) 
-      ? carrier.status 
-      : carrier.status === 'ONBOARDED' ? 'ACTIVE' : 'PENDING',
-    carrierType: carrier.carrierType || '',
-    safetyRating: carrier.safetyRating || '',
-    taxId: carrier.taxId || '',
-    ratePerMile: carrier.ratePerMile?.toString() || '',
-    rating: carrier.rating?.toString() || '',
-    remittanceContact: carrier.remittanceContact || '',
-    remittanceEmail: carrier.remittanceEmail || '',
-    factoringCompany: carrier.factoringCompany || '',
-    onboardingComplete: carrier.onboardingComplete,
-    insuranceExpiration: carrier.insuranceExpiration ? new Date(carrier.insuranceExpiration).toISOString().split('T')[0] : ''
-  });
-  
-  const [isSubmitting, setIsSubmitting] = useState(false);
-
-  const handleSubmit = async (e: React.FormEvent) => {
-    e.preventDefault();
-    setIsSubmitting(true);
-    
-    try {
-      // Build payload with proper validation for server
-      const payload: any = {};
-      
-      // Only include fields that have values to avoid validation issues
-      if (formData.name.trim()) payload.name = formData.name.trim();
-      if (formData.contactPerson.trim()) payload.contactPerson = formData.contactPerson.trim();
-      if (formData.phone.trim()) payload.phone = formData.phone.trim();
-      if (formData.email.trim()) payload.email = formData.email.trim();
-      if (formData.mcNumber.trim()) payload.mcNumber = formData.mcNumber.trim();
-      if (formData.dotNumber.trim()) payload.dotNumber = formData.dotNumber.trim();
-      if (formData.streetAddress1.trim()) payload.streetAddress1 = formData.streetAddress1.trim();
-      if (formData.streetAddress2.trim()) payload.streetAddress2 = formData.streetAddress2.trim();
-      if (formData.city.trim()) payload.city = formData.city.trim();
-      if (formData.state.trim()) payload.state = formData.state.trim();
-      if (formData.zipCode.trim()) payload.zipCode = formData.zipCode.trim();
-      if (formData.carrierType.trim()) payload.carrierType = formData.carrierType.trim();
-      if (formData.safetyRating.trim()) payload.safetyRating = formData.safetyRating.trim();
-      if (formData.taxId.trim()) payload.taxId = formData.taxId.trim();
-      if (formData.remittanceContact.trim()) payload.remittanceContact = formData.remittanceContact.trim();
-      if (formData.remittanceEmail.trim()) payload.remittanceEmail = formData.remittanceEmail.trim();
-      if (formData.factoringCompany.trim()) payload.factoringCompany = formData.factoringCompany.trim();
-      if (formData.insuranceExpiration) payload.insuranceExpiration = formData.insuranceExpiration;
-      
-      // Handle numeric fields
-      if (formData.ratePerMile && !isNaN(parseFloat(formData.ratePerMile))) {
-        payload.ratePerMile = parseFloat(formData.ratePerMile);
-      }
-      if (formData.rating && !isNaN(parseFloat(formData.rating))) {
-        payload.rating = parseFloat(formData.rating);
-      }
-      
-      // Always include status and onboardingComplete
-      payload.status = formData.status;
-      payload.onboardingComplete = formData.onboardingComplete;
-      
-      const response = await api.put(`/carriers/${carrier.id}`, payload);
-      onSave(response.data);
-    } catch (error) {
-      console.error('Error updating carrier:', error);
-      
-      // Enhanced error handling
-      let errorMessage = 'Failed to update carrier. Please try again.';
-      if (error.response?.data?.message) {
-        errorMessage = error.response.data.message;
-      } else if (error.response?.data?.errors && Array.isArray(error.response.data.errors)) {
-        const validationErrors = error.response.data.errors
-          .map((err: any) => `${err.path || err.param}: ${err.msg}`)
-          .join('\n');
-        errorMessage = 'Validation Errors:\n' + validationErrors;
-      }
-      alert(errorMessage);
-    } finally {
-      setIsSubmitting(false);
-    }
-  };
-
-  return (
-    <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50">
-      <div className="bg-white rounded-lg p-6 w-full max-w-4xl max-h-[90vh] overflow-y-auto">
-        <div className="flex justify-between items-center mb-6">
-          <h2 className="text-xl font-bold text-gray-900">Edit Carrier - {carrier.name}</h2>
-          <button 
-            onClick={onClose}
-            className="text-gray-400 hover:text-gray-600"
-          >
-            <X className="w-5 h-5" />
-          </button>
-        </div>
-        
-        <form onSubmit={handleSubmit} className="space-y-6">
-          {/* Basic Information */}
-          <div>
-            <h3 className="text-lg font-medium text-gray-900 mb-4">Basic Information</h3>
-            <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-              <div>
-                <label className="block text-sm font-medium text-gray-700 mb-1">Carrier Name *</label>
-                <input
-                  type="text"
-                  required
-                  value={formData.name}
-                  onChange={(e) => setFormData({ ...formData, name: e.target.value })}
-                  className="w-full px-3 py-2 border border-gray-300 rounded-md focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
-                />
-              </div>
-              <div>
-                <label className="block text-sm font-medium text-gray-700 mb-1">Contact Person</label>
-                <input
-                  type="text"
-                  value={formData.contactPerson}
-                  onChange={(e) => setFormData({ ...formData, contactPerson: e.target.value })}
-                  className="w-full px-3 py-2 border border-gray-300 rounded-md focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
-                />
-              </div>
-              <div>
-                <label className="block text-sm font-medium text-gray-700 mb-1">Phone</label>
-                <input
-                  type="tel"
-                  value={formData.phone}
-                  onChange={(e) => setFormData({ ...formData, phone: e.target.value })}
-                  className="w-full px-3 py-2 border border-gray-300 rounded-md focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
-                />
-              </div>
-              <div>
-                <label className="block text-sm font-medium text-gray-700 mb-1">Email</label>
-                <input
-                  type="email"
-                  value={formData.email}
-                  onChange={(e) => setFormData({ ...formData, email: e.target.value })}
-                  className="w-full px-3 py-2 border border-gray-300 rounded-md focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
-                />
-              </div>
-            </div>
-          </div>
-
-          {/* Address Information */}
-          <div>
-            <h3 className="text-lg font-medium text-gray-900 mb-4">Address Information</h3>
-            <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-              <div className="md:col-span-2">
-                <label className="block text-sm font-medium text-gray-700 mb-1">Street Address 1 <span className="text-red-500">*</span></label>
-                <input
-                  type="text"
-                  required
-                  value={formData.streetAddress1}
-                  onChange={(e) => setFormData({ ...formData, streetAddress1: e.target.value })}
-                  className="w-full px-3 py-2 border border-gray-300 rounded-md focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
-                />
-              </div>
-              <div className="md:col-span-2">
-                <label className="block text-sm font-medium text-gray-700 mb-1">Street Address 2</label>
-                <input
-                  type="text"
-                  value={formData.streetAddress2}
-                  onChange={(e) => setFormData({ ...formData, streetAddress2: e.target.value })}
-                  className="w-full px-3 py-2 border border-gray-300 rounded-md focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
-                />
-              </div>
-              <div>
-                <label className="block text-sm font-medium text-gray-700 mb-1">City <span className="text-red-500">*</span></label>
-                <input
-                  type="text"
-                  required
-                  value={formData.city}
-                  onChange={(e) => setFormData({ ...formData, city: e.target.value })}
-                  className="w-full px-3 py-2 border border-gray-300 rounded-md focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
-                />
-              </div>
-              <div>
-                <label className="block text-sm font-medium text-gray-700 mb-1">State <span className="text-red-500">*</span></label>
-                <input
-                  type="text"
-                  required
-                  value={formData.state}
-                  onChange={(e) => setFormData({ ...formData, state: e.target.value })}
-                  className="w-full px-3 py-2 border border-gray-300 rounded-md focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
-                />
-              </div>
-              <div>
-                <label className="block text-sm font-medium text-gray-700 mb-1">Zip Code <span className="text-red-500">*</span></label>
-                <input
-                  type="text"
-                  required
-                  value={formData.zipCode}
-                  onChange={(e) => setFormData({ ...formData, zipCode: e.target.value })}
-                  className="w-full px-3 py-2 border border-gray-300 rounded-md focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
-                />
-              </div>
-            </div>
-          </div>
-
-          {/* Regulatory Information */}
-          <div>
-            <h3 className="text-lg font-medium text-gray-900 mb-4">Regulatory Information</h3>
-            <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-              <div>
-                <label className="block text-sm font-medium text-gray-700 mb-1">MC Number <span className="text-red-500">*</span></label>
-                <input
-                  type="text"
-                  required
-                  value={formData.mcNumber}
-                  onChange={(e) => setFormData({ ...formData, mcNumber: e.target.value })}
-                  className="w-full px-3 py-2 border border-gray-300 rounded-md focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
-                />
-              </div>
-              <div>
-                <label className="block text-sm font-medium text-gray-700 mb-1">DOT Number <span className="text-red-500">*</span></label>
-                <input
-                  type="text"
-                  required
-                  value={formData.dotNumber}
-                  onChange={(e) => setFormData({ ...formData, dotNumber: e.target.value })}
-                  className="w-full px-3 py-2 border border-gray-300 rounded-md focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
-                />
-              </div>
-              <div>
-                <label className="block text-sm font-medium text-gray-700 mb-1">Safety Rating</label>
-                <select
-                  value={formData.safetyRating}
-                  onChange={(e) => setFormData({ ...formData, safetyRating: e.target.value })}
-                  className="w-full px-3 py-2 border border-gray-300 rounded-md focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
-                >
-                  <option value="">Select Rating</option>
-                  <option value="Acceptable">Acceptable</option>
-                  <option value="Conditional">Conditional</option>
-                  <option value="Unacceptable">Unacceptable</option>
-                </select>
-              </div>
-              <div>
-                <label className="block text-sm font-medium text-gray-700 mb-1">Insurance Expiration</label>
-                <input
-                  type="date"
-                  value={formData.insuranceExpiration}
-                  onChange={(e) => setFormData({ ...formData, insuranceExpiration: e.target.value })}
-                  className="w-full px-3 py-2 border border-gray-300 rounded-md focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
-                />
-              </div>
-            </div>
-          </div>
-
-          {/* Status and Type */}
-          <div>
-            <h3 className="text-lg font-medium text-gray-900 mb-4">Status and Type</h3>
-            <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-              <div>
-                <label className="block text-sm font-medium text-gray-700 mb-1">Status</label>
-                <select
-                  value={formData.status}
-                  onChange={(e) => setFormData({ ...formData, status: e.target.value as any })}
-                  className="w-full px-3 py-2 border border-gray-300 rounded-md focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
-                >
-                  <option value="PENDING">Pending</option>
-                  <option value="ACTIVE">Active</option>
-                  <option value="INACTIVE">Inactive</option>
-                  <option value="SUSPENDED">Suspended</option>
-                  <option value="REJECTED">Rejected</option>
-                </select>
-              </div>
-              <div>
-                <label className="block text-sm font-medium text-gray-700 mb-1">Carrier Type</label>
-                <input
-                  type="text"
-                  value={formData.carrierType}
-                  onChange={(e) => setFormData({ ...formData, carrierType: e.target.value })}
-                  className="w-full px-3 py-2 border border-gray-300 rounded-md focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
-                />
-              </div>
-              <div>
-                <label className="flex items-center">
-                  <input
-                    type="checkbox"
-                    checked={formData.onboardingComplete}
-                    onChange={(e) => setFormData({ ...formData, onboardingComplete: e.target.checked })}
-                    className="mr-2"
-                  />
-                  <span className="text-sm font-medium text-gray-700">Onboarding Complete</span>
-                </label>
-              </div>
-            </div>
-          </div>
-
-          {/* Financial Information */}
-          <div>
-            <h3 className="text-lg font-medium text-gray-900 mb-4">Financial Information</h3>
-            <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-              <div>
-                <label className="block text-sm font-medium text-gray-700 mb-1">Rate per Mile</label>
-                <input
-                  type="number"
-                  step="0.01"
-                  value={formData.ratePerMile}
-                  onChange={(e) => setFormData({ ...formData, ratePerMile: e.target.value })}
-                  className="w-full px-3 py-2 border border-gray-300 rounded-md focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
-                />
-              </div>
-              <div>
-                <label className="block text-sm font-medium text-gray-700 mb-1">Rating</label>
-                <input
-                  type="number"
-                  step="0.1"
-                  value={formData.rating}
-                  onChange={(e) => setFormData({ ...formData, rating: e.target.value })}
-                  className="w-full px-3 py-2 border border-gray-300 rounded-md focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
-                />
-              </div>
-              <div>
-                <label className="block text-sm font-medium text-gray-700 mb-1">Tax ID</label>
-                <input
-                  type="text"
-                  value={formData.taxId}
-                  onChange={(e) => setFormData({ ...formData, taxId: e.target.value })}
-                  className="w-full px-3 py-2 border border-gray-300 rounded-md focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
-                />
-              </div>
-              <div>
-                <label className="block text-sm font-medium text-gray-700 mb-1">Factoring Company</label>
-                <input
-                  type="text"
-                  value={formData.factoringCompany}
-                  onChange={(e) => setFormData({ ...formData, factoringCompany: e.target.value })}
-                  className="w-full px-3 py-2 border border-gray-300 rounded-md focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
-                />
-              </div>
-            </div>
-          </div>
-
-          {/* Remittance Information */}
-          <div>
-            <h3 className="text-lg font-medium text-gray-900 mb-4">Remittance Information</h3>
-            <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-              <div>
-                <label className="block text-sm font-medium text-gray-700 mb-1">Remittance Contact</label>
-                <input
-                  type="text"
-                  value={formData.remittanceContact}
-                  onChange={(e) => setFormData({ ...formData, remittanceContact: e.target.value })}
-                  className="w-full px-3 py-2 border border-gray-300 rounded-md focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
-                />
-              </div>
-              <div>
-                <label className="block text-sm font-medium text-gray-700 mb-1">Remittance Email</label>
-                <input
-                  type="email"
-                  value={formData.remittanceEmail}
-                  onChange={(e) => setFormData({ ...formData, remittanceEmail: e.target.value })}
-                  className="w-full px-3 py-2 border border-gray-300 rounded-md focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
-                />
-              </div>
-            </div>
-          </div>
-          
-          <div className="flex justify-end gap-3 mt-6 pt-4 border-t">
+        <div className="flex justify-end gap-2 mt-6 pt-4 border-t">
+          {isEditMode ? (
+            <>
+              <button
+                onClick={handleCancel}
+                disabled={isSubmitting}
+                className="px-4 py-2 bg-gray-500 text-white rounded hover:bg-gray-600 disabled:bg-gray-400"
+              >
+                Cancel
+              </button>
+              <button
+                onClick={handleSave}
+                disabled={isSubmitting || !formData.name.trim()}
+                className="px-4 py-2 bg-blue-600 text-white rounded hover:bg-blue-700 disabled:bg-blue-400"
+              >
+                {isSubmitting ? 'Saving...' : 'Save Changes'}
+              </button>
+            </>
+          ) : (
             <button 
-              type="button"
               onClick={onClose}
               className="px-4 py-2 bg-gray-500 text-white rounded hover:bg-gray-600"
-              disabled={isSubmitting}
             >
-              Cancel
+              Close
             </button>
-            <button 
-              type="submit"
-              className="px-4 py-2 bg-blue-600 text-white rounded hover:bg-blue-700 disabled:bg-gray-300"
-              disabled={isSubmitting}
-            >
-              {isSubmitting ? 'Saving...' : 'Save Changes'}
-            </button>
-          </div>
-        </form>
+          )}
+        </div>
       </div>
     </div>
   );
 };
+
 
 // Carrier Delete Modal Component
 interface CarrierDeleteModalProps {
