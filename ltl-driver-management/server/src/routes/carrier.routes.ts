@@ -21,7 +21,8 @@ import {
   downloadAgreementAffidavit,
   downloadAgreementWithAffidavit,
   getCarrierDocuments,
-  downloadCarrierDocument
+  downloadCarrierDocument,
+  deleteCarrierDocument
 } from '../controllers/carrier.controller';
 import { authenticate, authorize } from '../middleware/auth.middleware';
 import { validateRequest } from '../middleware/validation.middleware';
@@ -209,5 +210,12 @@ router.get('/:id/documents', getCarrierDocuments);
 
 // Download carrier document
 router.get('/:id/documents/:documentId', downloadCarrierDocument);
+
+// Delete carrier document (Admin/Dispatcher only)
+router.delete(
+  '/:id/documents/:documentId',
+  authorize(UserRole.ADMIN, UserRole.DISPATCHER),
+  deleteCarrierDocument
+);
 
 export default router;

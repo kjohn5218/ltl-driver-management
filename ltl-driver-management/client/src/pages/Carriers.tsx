@@ -2,7 +2,7 @@ import React, { useState, useEffect } from 'react';
 import { useQuery, useQueryClient, useMutation } from '@tanstack/react-query';
 import { api } from '../services/api';
 import { Carrier } from '../types';
-import { Plus, Search, Edit, Eye, Trash2, MapPin, Phone, Mail, ExternalLink, X, Send, FileText, Download, Bell } from 'lucide-react';
+import { Plus, Search, Edit, Eye, Trash2, MapPin, Phone, Mail, ExternalLink, X, Send, FileText, Download, Bell, Upload } from 'lucide-react';
 
 interface CarrierAgreement {
   id: number;
@@ -1031,6 +1031,10 @@ const CarrierDetailsModal: React.FC<CarrierDetailsModalProps> = ({ carrier, onCl
   const [loadingAgreements, setLoadingAgreements] = useState(true);
   const [documents, setDocuments] = useState<any[]>([]);
   const [loadingDocuments, setLoadingDocuments] = useState(true);
+  const [showUploadForm, setShowUploadForm] = useState(false);
+  const [uploadFile, setUploadFile] = useState<File | null>(null);
+  const [documentType, setDocumentType] = useState('');
+  const [uploading, setUploading] = useState(false);
 
   const getStatusBadge = (status: string) => {
     const statusColors = {
@@ -1096,6 +1100,61 @@ const CarrierDetailsModal: React.FC<CarrierDetailsModalProps> = ({ carrier, onCl
     } catch (error) {
       console.error('Failed to download document:', error);
       alert('Failed to download document. Please try again.');
+    }
+  };
+
+  const handleDeleteDocument = async (documentId: number) => {
+    if (!window.confirm('Are you sure you want to delete this document?')) {
+      return;
+    }
+
+    try {
+      await api.delete(`/carriers/${carrier.id}/documents/${documentId}`);
+      
+      // Refresh documents list
+      const response = await api.get(`/carriers/${carrier.id}/documents`);
+      setDocuments(response.data);
+      
+      alert('Document deleted successfully');
+    } catch (error) {
+      console.error('Failed to delete document:', error);
+      alert('Failed to delete document. Please try again.');
+    }
+  };
+
+  const handleUploadDocument = async () => {
+    if (!uploadFile || !documentType) {
+      alert('Please select a file and document type');
+      return;
+    }
+
+    setUploading(true);
+    const formData = new FormData();
+    formData.append('document', uploadFile);
+    formData.append('documentType', documentType);
+
+    try {
+      await api.post(`/carriers/${carrier.id}/documents`, formData, {
+        headers: {
+          'Content-Type': 'multipart/form-data',
+        },
+      });
+
+      // Refresh documents list
+      const response = await api.get(`/carriers/${carrier.id}/documents`);
+      setDocuments(response.data);
+      
+      // Reset form
+      setShowUploadForm(false);
+      setUploadFile(null);
+      setDocumentType('');
+      
+      alert('Document uploaded successfully');
+    } catch (error) {
+      console.error('Failed to upload document:', error);
+      alert('Failed to upload document. Please try again.');
+    } finally {
+      setUploading(false);
     }
   };
 
@@ -1378,7 +1437,16 @@ const CarrierDetailsModal: React.FC<CarrierDetailsModalProps> = ({ carrier, onCl
         {/* Uploaded Documents Section */}
         <div className="mt-6 pt-6 border-t">
           <div className="mb-4">
-            <h3 className="text-lg font-medium text-gray-900 mb-3">Uploaded Documents</h3>
+            <div className="flex justify-between items-center mb-3">
+              <h3 className="text-lg font-medium text-gray-900">Uploaded Documents</h3>
+              <button
+                onClick={() => setShowUploadForm(true)}
+                className="flex items-center gap-1 px-3 py-1 text-sm bg-blue-600 text-white rounded hover:bg-blue-700"
+              >
+                <Upload className="w-4 h-4" />
+                Upload Document
+              </button>
+            </div>
             {loadingDocuments ? (
               <div className="flex items-center justify-center py-4">
                 <div className="animate-spin rounded-full h-6 w-6 border-b-2 border-blue-600"></div>
@@ -1407,20 +1475,86 @@ const CarrierDetailsModal: React.FC<CarrierDetailsModalProps> = ({ carrier, onCl
                           </div>
                         </div>
                       </div>
-                      <button
-                        onClick={() => downloadDocument(doc.id, doc.filename)}
-                        className="flex items-center gap-1 px-3 py-1 text-xs bg-blue-600 text-white rounded hover:bg-blue-700 ml-4"
-                        title="Download Document"
-                      >
-                        <Download className="w-3 h-3" />
-                        Download
-                      </button>
+                      <div className="flex gap-1 ml-4">
+                        <button
+                          onClick={() => downloadDocument(doc.id, doc.filename)}
+                          className="flex items-center gap-1 px-3 py-1 text-xs bg-blue-600 text-white rounded hover:bg-blue-700"
+                          title="Download Document"
+                        >
+                          <Download className="w-3 h-3" />
+                          Download
+                        </button>
+                        <button
+                          onClick={() => handleDeleteDocument(doc.id)}
+                          className="flex items-center gap-1 px-3 py-1 text-xs bg-red-600 text-white rounded hover:bg-red-700"
+                          title="Delete Document"
+                        >
+                          <Trash2 className="w-3 h-3" />
+                          Delete
+                        </button>
+                      </div>
                     </div>
                   </div>
                 ))}
               </div>
             )}
           </div>
+
+          {/* Upload Form */}
+          {showUploadForm && (
+            <div className="mt-4 p-4 bg-gray-50 border border-gray-200 rounded-lg">
+              <h4 className="font-medium text-gray-900 mb-3">Upload New Document</h4>
+              <div className="space-y-3">
+                <div>
+                  <label className="block text-sm font-medium text-gray-700 mb-1">Document Type</label>
+                  <select
+                    value={documentType}
+                    onChange={(e) => setDocumentType(e.target.value)}
+                    className="w-full p-2 border rounded focus:ring-blue-500 focus:border-blue-500"
+                  >
+                    <option value="">Select document type</option>
+                    <option value="INSURANCE_CERTIFICATE">Insurance Certificate</option>
+                    <option value="CARRIER_AGREEMENT">Carrier Agreement</option>
+                    <option value="W9_FORM">W9 Form</option>
+                    <option value="OPERATING_AUTHORITY">Operating Authority</option>
+                    <option value="SAFETY_RATING">Safety Rating</option>
+                    <option value="OTHER">Other</option>
+                  </select>
+                </div>
+                <div>
+                  <label className="block text-sm font-medium text-gray-700 mb-1">Select File</label>
+                  <input
+                    type="file"
+                    onChange={(e) => setUploadFile(e.target.files?.[0] || null)}
+                    className="w-full p-2 border rounded"
+                    accept=".pdf,.doc,.docx,.jpg,.jpeg,.png"
+                  />
+                  <p className="mt-1 text-xs text-gray-500">
+                    Accepted formats: PDF, DOC, DOCX, JPG, JPEG, PNG (Max 10MB)
+                  </p>
+                </div>
+                <div className="flex gap-2">
+                  <button
+                    onClick={handleUploadDocument}
+                    disabled={uploading || !uploadFile || !documentType}
+                    className="px-4 py-2 bg-blue-600 text-white rounded hover:bg-blue-700 disabled:bg-gray-400 disabled:cursor-not-allowed"
+                  >
+                    {uploading ? 'Uploading...' : 'Upload'}
+                  </button>
+                  <button
+                    onClick={() => {
+                      setShowUploadForm(false);
+                      setUploadFile(null);
+                      setDocumentType('');
+                    }}
+                    className="px-4 py-2 bg-gray-500 text-white rounded hover:bg-gray-600"
+                  >
+                    Cancel
+                  </button>
+                </div>
+              </div>
+            </div>
+          )}
         </div>
 
         {/* Timestamps */}

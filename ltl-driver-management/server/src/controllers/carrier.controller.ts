@@ -1281,6 +1281,44 @@ export const downloadCarrierDocument = async (req: Request, res: Response) => {
   }
 };
 
+// Delete carrier document
+export const deleteCarrierDocument = async (req: Request, res: Response) => {
+  try {
+    const { id, documentId } = req.params;
+    
+    // Find the document
+    const document = await prisma.carrierDocument.findFirst({
+      where: {
+        id: parseInt(documentId),
+        carrierId: parseInt(id)
+      }
+    });
+    
+    if (!document) {
+      return res.status(404).json({ message: 'Document not found' });
+    }
+    
+    // Delete the file from filesystem
+    if (document.filePath && existsSync(document.filePath)) {
+      try {
+        await fs.unlink(document.filePath);
+      } catch (error) {
+        console.error('Failed to delete file:', error);
+      }
+    }
+    
+    // Delete the database record
+    await prisma.carrierDocument.delete({
+      where: { id: parseInt(documentId) }
+    });
+    
+    return res.json({ message: 'Document deleted successfully' });
+  } catch (error) {
+    console.error('Delete carrier document error:', error);
+    return res.status(500).json({ message: 'Failed to delete document' });
+  }
+};
+
 // Send onboarding completion email
 const sendOnboardingCompletionEmail = async (carrier: any) => {
   const { sendEmail } = await import('../services/notification.service');
