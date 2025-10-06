@@ -1,11 +1,10 @@
-import React, { useState, useMemo, useEffect, useCallback } from 'react';
+import React, { useState, useMemo, useEffect } from 'react';
 import { useNavigate, useSearchParams } from 'react-router-dom';
 import { useQuery, useQueryClient, useMutation } from '@tanstack/react-query';
 import { api, sendRateConfirmationEmail } from '../services/api';
 import { Booking } from '../types';
 import { Plus, Search, Edit, Eye, Calendar, MapPin, User, DollarSign, X, ChevronUp, ChevronDown, Trash2, FileText, CheckCircle, Clock, Send, Truck, Upload } from 'lucide-react';
 import { format, isAfter, isBefore, isSameDay, parseISO } from 'date-fns';
-import { RouteDetails } from '../components/LocationDisplay';
 import { RateConfirmationModal } from '../components/RateConfirmation';
 import { BookingLineItems } from '../components/BookingLineItems';
 
@@ -22,15 +21,17 @@ const parseMultiLegBooking = (notes: string | null) => {
   const legs = [];
   
   for (const line of lines) {
-    // Updated regex to handle optional date information: "Leg 1: A → B (May 15) ($100.00)"
-    const legMatch = line.match(/^Leg (\d+): (.+) → (.+?)(?:\s*\([^$)]+\))?\s*\(\$(.+)\)$/);
+    // Handle both formats:
+    // Standard: "Leg 1: A → B ($100.00)"
+    // With manifest: "Leg 1: A → B ($100.00) [Manifest: ABC123]"
+    const legMatch = line.match(/^Leg (\d+): (.+) → (.+?)(?:\s*\([^$)]+\))?\s*\(\$(.+)\)(?:\s*\[Manifest:\s*([^\]]*)\])?$/);
     if (legMatch) {
       legs.push({
         legNumber: parseInt(legMatch[1]),
         origin: legMatch[2],
         destination: legMatch[3],
         rate: legMatch[4],
-        manifestNumber: '' // Initialize empty, will be set from booking data if available
+        manifestNumber: legMatch[5] || '' // Extract manifest number if present
       });
     }
   }
@@ -50,7 +51,6 @@ export const Bookings: React.FC = () => {
   const [sortField, setSortField] = useState<SortField>('bookingDate');
   const [sortDirection, setSortDirection] = useState<SortDirection>('desc');
   const [viewingBooking, setViewingBooking] = useState<Booking | null>(null);
-  const [editingBooking, setEditingBooking] = useState<Booking | null>(null);
   const [deletingBooking, setDeletingBooking] = useState<Booking | null>(null);
   const [rateConfirmationBooking, setRateConfirmationBooking] = useState<Booking | null>(null);
   const [rateConfirmationFilter, setRateConfirmationFilter] = useState('');
@@ -258,12 +258,8 @@ export const Bookings: React.FC = () => {
     setViewingBooking(booking);
   };
 
-  const handleEditBooking = (booking: Booking) => {
-    setEditingBooking(booking);
-  };
 
   const handlePostLoad = (booking: Booking) => {
-    setEditingBooking(booking);
     window.open('https://login.dat.com/u/login/identifier?state=hKFo2SBDSFJ0QlU5bGxpbEJaaEZGZFJfenh4cGpJcFRaOFdnOaFur3VuaXZlcnNhbC1sb2dpbqN0aWTZIGw1TnA3UnVtR2UwVGNucnZfU3N0V2xtRTdmUURhc3Zno2NpZNkgZTlsek1YYm5XTkowRDUwQzJoYWFkbzdEaVcxYWt3YUM', '_blank');
   };
 
@@ -293,9 +289,6 @@ export const Bookings: React.FC = () => {
     setViewingBooking(null);
   };
 
-  const handleCloseEdit = () => {
-    setEditingBooking(null);
-  };
 
   const handleCloseDelete = () => {
     setDeletingBooking(null);
@@ -615,13 +608,6 @@ export const Bookings: React.FC = () => {
                     >
                       <Eye className="w-4 h-4" />
                     </button>
-                    <button 
-                      onClick={() => handleEditBooking(booking)}
-                      className="text-gray-500 hover:text-blue-600 transition-colors"
-                      title="Edit booking"
-                    >
-                      <Edit className="w-4 h-4" />
-                    </button>
                     <div className="flex items-center gap-1">
                       {getConfirmationStatusIcon(booking)}
                       <button 
@@ -672,20 +658,6 @@ export const Bookings: React.FC = () => {
         />
       )}
 
-      {/* Edit Booking Modal */}
-      {editingBooking && (
-        <BookingEditModal 
-          booking={editingBooking} 
-          onClose={handleCloseEdit} 
-          onSave={(updatedBooking) => {
-            setEditingBooking(null);
-            // Invalidate and refetch bookings data
-            queryClient.invalidateQueries({ queryKey: ['bookings'] });
-            // Also invalidate individual booking data for booking details modal
-            queryClient.invalidateQueries({ queryKey: ['booking', updatedBooking.id] });
-          }}
-        />
-      )}
 
       {/* Delete Booking Confirmation Modal */}
       {deletingBooking && (
@@ -757,6 +729,19 @@ interface BookingViewModalProps {
 }
 
 const BookingViewModal: React.FC<BookingViewModalProps> = ({ booking, onClose, getStatusBadge, onRateConfirmation, settingsData }) => {
+  const queryClient = useQueryClient();
+  const [isEditMode, setIsEditMode] = useState(false);
+  const [isSubmitting, setIsSubmitting] = useState(false);
+  
+  // State for managing leg manifest numbers in notes-based multi-leg bookings
+  const [legManifestNumbers, setLegManifestNumbers] = useState<Record<number, string>>({});
+  
+  // State for document management
+  const [uploadingDocument, setUploadingDocument] = useState(false);
+  const [selectedFile, setSelectedFile] = useState<File | null>(null);
+  const [documentType, setDocumentType] = useState('');
+  const [deletingDocumentId, setDeletingDocumentId] = useState<number | null>(null);
+  
   // Fetch complete booking details with child bookings
   const { data: fullBookingData } = useQuery({
     queryKey: ['booking', booking.id],
@@ -768,6 +753,41 @@ const BookingViewModal: React.FC<BookingViewModalProps> = ({ booking, onClose, g
 
   // Use full booking data if available, otherwise fall back to passed booking
   const bookingToDisplay = fullBookingData || booking;
+  
+  // Initialize leg manifest numbers from notes when booking data changes
+  useEffect(() => {
+    if (bookingToDisplay?.notes && bookingToDisplay.notes.includes('--- Multi-Leg Booking ---')) {
+      const manifestNumbers: Record<number, string> = {};
+      const multiLegInfo = parseMultiLegBooking(bookingToDisplay.notes);
+      
+      if (multiLegInfo) {
+        multiLegInfo.forEach((leg: any) => {
+          manifestNumbers[leg.legNumber] = leg.manifestNumber || '';
+        });
+        setLegManifestNumbers(manifestNumbers);
+      }
+    }
+  }, [bookingToDisplay]);
+  
+  // Form data for edit mode
+  const [formData, setFormData] = useState({
+    carrierId: bookingToDisplay.carrierId || '',
+    rate: Number(bookingToDisplay.rate) || 0,
+    status: bookingToDisplay.status || 'PENDING',
+    notes: bookingToDisplay.notes || '',
+    driverName: bookingToDisplay.driverName || '',
+    phoneNumber: bookingToDisplay.phoneNumber || '',
+    carrierEmail: bookingToDisplay.carrierEmail || '',
+    carrierReportTime: bookingToDisplay.carrierReportTime || '',
+    type: bookingToDisplay.type || 'POWER_ONLY',
+    trailerLength: bookingToDisplay.trailerLength ? bookingToDisplay.trailerLength.toString() : '',
+    bookingDate: bookingToDisplay.bookingDate ? new Date(bookingToDisplay.bookingDate).toISOString().split('T')[0] : '',
+    rateType: bookingToDisplay.rateType || 'FLAT_RATE',
+    baseRate: Number(bookingToDisplay.baseRate) || 0,
+    fscRate: Number(bookingToDisplay.fscRate) || 0,
+    routeId: bookingToDisplay.routeId || null,
+    manifestNumber: bookingToDisplay.manifestNumber || ''
+  });
 
   // Fetch routes for distance lookup
   const { data: routesData } = useQuery({
@@ -776,6 +796,16 @@ const BookingViewModal: React.FC<BookingViewModalProps> = ({ booking, onClose, g
       const response = await api.get('/routes?limit=2000'); // Fetch all routes (max allowed)
       return response.data;
     }
+  });
+
+  // Fetch carriers for edit mode
+  const { data: carriersData } = useQuery({
+    queryKey: ['carriers'],
+    queryFn: async () => {
+      const response = await api.get('/carriers?limit=1000');
+      return response.data;
+    },
+    enabled: isEditMode
   });
 
   // Helper function to get distance for a leg by looking up route in database
@@ -827,73 +857,430 @@ const BookingViewModal: React.FC<BookingViewModalProps> = ({ booking, onClose, g
     return 258; // Default distance based on your example
   };
 
+  const handleSave = async () => {
+    setIsSubmitting(true);
+    
+    try {
+      const payload = {
+        carrierId: formData.carrierId || null,
+        rate: Number(formData.rate),
+        status: formData.status,
+        notes: formData.notes.trim() || null,
+        driverName: formData.driverName.trim() || null,
+        phoneNumber: formData.phoneNumber.trim() || null,
+        carrierEmail: formData.carrierEmail.trim() || null,
+        carrierReportTime: formData.carrierReportTime.trim() || null,
+        type: formData.type,
+        trailerLength: formData.trailerLength ? Number(formData.trailerLength) : null,
+        bookingDate: formData.bookingDate || null,
+        rateType: formData.rateType,
+        baseRate: Number(formData.baseRate),
+        fscRate: Number(formData.fscRate),
+        routeId: formData.routeId || null,
+        manifestNumber: formData.manifestNumber.trim() || null
+      };
+      
+      await api.put(`/bookings/${bookingToDisplay.id}`, payload);
+      
+      // Update the bookings cache
+      queryClient.invalidateQueries({ queryKey: ['bookings'] });
+      queryClient.invalidateQueries({ queryKey: ['booking', bookingToDisplay.id] });
+      
+      // Exit edit mode
+      setIsEditMode(false);
+      
+      alert('Booking updated successfully');
+    } catch (error: any) {
+      console.error('Update failed:', error);
+      alert(error.response?.data?.message || 'Failed to update booking');
+    } finally {
+      setIsSubmitting(false);
+    }
+  };
+
+  // Function to update notes with manifest numbers for multi-leg bookings
+  const updateNotesWithManifestNumbers = (originalNotes: string, manifestNumbers: Record<number, string>): string => {
+    if (!originalNotes || !originalNotes.includes('--- Multi-Leg Booking ---')) {
+      return originalNotes;
+    }
+    
+    const lines = originalNotes.split('\n');
+    const updatedLines = lines.map(line => {
+      const legMatch = line.match(/^Leg (\d+): (.+) → (.+?)(?:\s*\([^$)]+\))?\s*\(\$(.+)\)(?:\s*\[Manifest:\s*([^\]]*)\])?$/);
+      if (legMatch) {
+        const legNumber = parseInt(legMatch[1]);
+        const origin = legMatch[2];
+        const destination = legMatch[3];
+        const rate = legMatch[4];
+        const manifestNumber = manifestNumbers[legNumber] || '';
+        
+        if (manifestNumber) {
+          return `Leg ${legNumber}: ${origin} → ${destination} ($${rate}) [Manifest: ${manifestNumber}]`;
+        } else {
+          return `Leg ${legNumber}: ${origin} → ${destination} ($${rate})`;
+        }
+      }
+      return line;
+    });
+    
+    return updatedLines.join('\n');
+  };
+
+  // Function to update leg manifest number
+  const updateLegManifestNumber = async (legNumber: number, manifestNumber: string) => {
+    try {
+      // Update local state
+      const updatedManifestNumbers = {
+        ...legManifestNumbers,
+        [legNumber]: manifestNumber
+      };
+      setLegManifestNumbers(updatedManifestNumbers);
+      
+      // Update the notes with the new manifest numbers
+      const updatedNotes = updateNotesWithManifestNumbers(bookingToDisplay.notes || '', updatedManifestNumbers);
+      
+      // Save to backend
+      await api.put(`/bookings/${bookingToDisplay.id}`, { notes: updatedNotes });
+      
+      // Invalidate queries to refresh data
+      queryClient.invalidateQueries({ queryKey: ['booking', bookingToDisplay.id] });
+      queryClient.invalidateQueries({ queryKey: ['bookings'] });
+    } catch (error: any) {
+      console.error('Failed to update manifest number:', error);
+      alert(error.response?.data?.message || 'Failed to update manifest number');
+    }
+  };
+
+  // Function to generate upload token
+  const generateUploadToken = async () => {
+    try {
+      const response = await api.post(`/bookings/${bookingToDisplay.id}/generate-upload-token`);
+      return response.data.documentUploadToken;
+    } catch (error: any) {
+      console.error('Failed to generate upload token:', error);
+      throw error;
+    }
+  };
+
+  // Document upload function
+  const handleDocumentUpload = async () => {
+    if (!selectedFile || !documentType) {
+      alert('Please select a file and document type');
+      return;
+    }
+
+    setUploadingDocument(true);
+    try {
+      let uploadToken = bookingToDisplay.documentUploadToken;
+
+      // If no token exists, generate one
+      if (!uploadToken) {
+        try {
+          uploadToken = await generateUploadToken();
+          // Refresh booking data to get the new token
+          queryClient.invalidateQueries({ queryKey: ['booking', bookingToDisplay.id] });
+        } catch (tokenError: any) {
+          alert('Failed to generate upload token. Please try again.');
+          return;
+        }
+      }
+
+      const formData = new FormData();
+      formData.append('documents', selectedFile);
+      formData.append('documentType', documentType);
+
+      await api.post(`/documents/upload/${uploadToken}`, formData, {
+        headers: {
+          'Content-Type': 'multipart/form-data',
+        },
+      });
+
+      // Reset form
+      setSelectedFile(null);
+      setDocumentType('');
+      
+      // Refresh booking data
+      queryClient.invalidateQueries({ queryKey: ['booking', bookingToDisplay.id] });
+      queryClient.invalidateQueries({ queryKey: ['bookings'] });
+      
+      alert('Document uploaded successfully');
+    } catch (error: any) {
+      console.error('Upload failed:', error);
+      const errorMessage = error.response?.data?.message || 'Failed to upload document';
+      alert(`Upload failed: ${errorMessage}`);
+    } finally {
+      setUploadingDocument(false);
+    }
+  };
+
+  // Document delete function
+  const handleDocumentDelete = async (documentId: number) => {
+    setDeletingDocumentId(documentId);
+    try {
+      // Use the correct booking documents API endpoint
+      await api.delete(`/documents/${documentId}`);
+      
+      // Refresh booking data
+      queryClient.invalidateQueries({ queryKey: ['booking', bookingToDisplay.id] });
+      queryClient.invalidateQueries({ queryKey: ['bookings'] });
+      
+      alert('Document deleted successfully');
+    } catch (error: any) {
+      console.error('Delete failed:', error);
+      alert(error.response?.data?.message || 'Failed to delete document');
+    } finally {
+      setDeletingDocumentId(null);
+    }
+  };
+
+  const handleCancel = () => {
+    // Reset form data
+    setFormData({
+      carrierId: bookingToDisplay.carrierId || '',
+      rate: Number(bookingToDisplay.rate) || 0,
+      status: bookingToDisplay.status || 'PENDING',
+      notes: bookingToDisplay.notes || '',
+      driverName: bookingToDisplay.driverName || '',
+      phoneNumber: bookingToDisplay.phoneNumber || '',
+      carrierEmail: bookingToDisplay.carrierEmail || '',
+      carrierReportTime: bookingToDisplay.carrierReportTime || '',
+      type: bookingToDisplay.type || 'POWER_ONLY',
+      trailerLength: bookingToDisplay.trailerLength ? bookingToDisplay.trailerLength.toString() : '',
+      bookingDate: bookingToDisplay.bookingDate ? new Date(bookingToDisplay.bookingDate).toISOString().split('T')[0] : '',
+      rateType: bookingToDisplay.rateType || 'FLAT_RATE',
+      baseRate: Number(bookingToDisplay.baseRate) || 0,
+      fscRate: Number(bookingToDisplay.fscRate) || 0,
+      routeId: bookingToDisplay.routeId || null,
+      manifestNumber: bookingToDisplay.manifestNumber || ''
+    });
+    
+    // Reset leg manifest numbers for notes-based multi-leg bookings
+    if (bookingToDisplay?.notes && bookingToDisplay.notes.includes('--- Multi-Leg Booking ---')) {
+      const manifestNumbers: Record<number, string> = {};
+      const multiLegInfo = parseMultiLegBooking(bookingToDisplay.notes);
+      
+      if (multiLegInfo) {
+        multiLegInfo.forEach((leg: any) => {
+          manifestNumbers[leg.legNumber] = leg.manifestNumber || '';
+        });
+        setLegManifestNumbers(manifestNumbers);
+      }
+    }
+    
+    // Reset document upload form
+    setSelectedFile(null);
+    setDocumentType('');
+    setUploadingDocument(false);
+    setDeletingDocumentId(null);
+    
+    setIsEditMode(false);
+  };
+
   return (
     <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50">
       <div className="bg-white rounded-lg p-6 w-full max-w-2xl max-h-[90vh] overflow-y-auto">
         <div className="flex justify-between items-center mb-6">
           <h2 className="text-xl font-bold text-gray-900">Booking Details #{bookingToDisplay.id}</h2>
-          <button 
-            onClick={onClose}
-            className="text-gray-400 hover:text-gray-600"
-          >
-            <X className="w-5 h-5" />
-          </button>
+          <div className="flex items-center gap-2">
+            {!isEditMode && (
+              <button
+                onClick={() => setIsEditMode(true)}
+                className="flex items-center gap-1 px-3 py-1 text-sm bg-blue-600 text-white rounded hover:bg-blue-700"
+              >
+                <Edit className="w-4 h-4" />
+                Edit
+              </button>
+            )}
+            <button 
+              onClick={onClose}
+              className="text-gray-400 hover:text-gray-600"
+            >
+              <X className="w-5 h-5" />
+            </button>
+          </div>
         </div>
         
         <div className="space-y-4">
           <div className="grid grid-cols-2 gap-4">
             <div>
               <label className="block text-sm font-medium text-gray-700 mb-1">Carrier</label>
-              <p className="text-sm text-gray-900">{bookingToDisplay.carrier?.name || 'N/A'}</p>
+              {isEditMode ? (
+                <select
+                  value={formData.carrierId}
+                  onChange={(e) => setFormData({...formData, carrierId: e.target.value})}
+                  className="w-full p-2 border rounded focus:ring-blue-500 focus:border-blue-500"
+                >
+                  <option value="">Select Carrier</option>
+                  {carriersData?.carriers?.map((carrier: any) => (
+                    <option key={carrier.id} value={carrier.id}>
+                      {carrier.name}
+                    </option>
+                  ))}
+                </select>
+              ) : (
+                <p className="text-sm text-gray-900">{bookingToDisplay.carrier?.name || 'N/A'}</p>
+              )}
             </div>
             <div>
               <label className="block text-sm font-medium text-gray-700 mb-1">Status</label>
-              <span className={`inline-flex px-2 py-1 rounded-full text-xs font-medium ${getStatusBadge(bookingToDisplay.status)}`}>
-                {bookingToDisplay.status === 'PENDING' ? 'UNBOOKED' : bookingToDisplay.status === 'CONFIRMED' ? 'BOOKED' : bookingToDisplay.status.replace('_', ' ')}
-              </span>
+              {isEditMode ? (
+                <select
+                  value={formData.status}
+                  onChange={(e) => setFormData({...formData, status: e.target.value})}
+                  className="w-full p-2 border rounded focus:ring-blue-500 focus:border-blue-500"
+                >
+                  <option value="PENDING">UNBOOKED</option>
+                  <option value="CONFIRMED">BOOKED</option>
+                  <option value="IN_TRANSIT">IN TRANSIT</option>
+                  <option value="DELIVERED">DELIVERED</option>
+                  <option value="CANCELLED">CANCELLED</option>
+                </select>
+              ) : (
+                <span className={`inline-flex px-2 py-1 rounded-full text-xs font-medium ${getStatusBadge(bookingToDisplay.status)}`}>
+                  {bookingToDisplay.status === 'PENDING' ? 'UNBOOKED' : bookingToDisplay.status === 'CONFIRMED' ? 'BOOKED' : bookingToDisplay.status.replace('_', ' ')}
+                </span>
+              )}
             </div>
           </div>
           
           <div className="grid grid-cols-2 gap-4">
             <div>
               <label className="block text-sm font-medium text-gray-700 mb-1">Driver Name</label>
-              <p className="text-sm text-gray-900">{bookingToDisplay.driverName || 'N/A'}</p>
+              {isEditMode ? (
+                <input
+                  type="text"
+                  value={formData.driverName}
+                  onChange={(e) => setFormData({...formData, driverName: e.target.value})}
+                  className="w-full p-2 border rounded focus:ring-blue-500 focus:border-blue-500"
+                  placeholder="Enter driver name"
+                />
+              ) : (
+                <p className="text-sm text-gray-900">{bookingToDisplay.driverName || 'N/A'}</p>
+              )}
             </div>
             <div>
               <label className="block text-sm font-medium text-gray-700 mb-1">Phone Number</label>
-              <p className="text-sm text-gray-900">{bookingToDisplay.phoneNumber || 'N/A'}</p>
+              {isEditMode ? (
+                <input
+                  type="tel"
+                  value={formData.phoneNumber}
+                  onChange={(e) => setFormData({...formData, phoneNumber: e.target.value})}
+                  className="w-full p-2 border rounded focus:ring-blue-500 focus:border-blue-500"
+                  placeholder="Enter phone number"
+                />
+              ) : (
+                <p className="text-sm text-gray-900">{bookingToDisplay.phoneNumber || 'N/A'}</p>
+              )}
             </div>
           </div>
 
           <div className="grid grid-cols-2 gap-4">
             <div>
               <label className="block text-sm font-medium text-gray-700 mb-1">Carrier Email</label>
-              <p className="text-sm text-gray-900">{bookingToDisplay.carrierEmail || 'N/A'}</p>
+              {isEditMode ? (
+                <input
+                  type="email"
+                  value={formData.carrierEmail}
+                  onChange={(e) => setFormData({...formData, carrierEmail: e.target.value})}
+                  className="w-full p-2 border rounded focus:ring-blue-500 focus:border-blue-500"
+                  placeholder="Enter carrier email"
+                />
+              ) : (
+                <p className="text-sm text-gray-900">{bookingToDisplay.carrierEmail || 'N/A'}</p>
+              )}
             </div>
             <div>
               <label className="block text-sm font-medium text-gray-700 mb-1">Carrier Report Time</label>
-              <p className="text-sm text-gray-900">{bookingToDisplay.carrierReportTime || 'N/A'}</p>
+              {isEditMode ? (
+                <input
+                  type="text"
+                  value={formData.carrierReportTime}
+                  onChange={(e) => setFormData({...formData, carrierReportTime: e.target.value})}
+                  className="w-full p-2 border rounded focus:ring-blue-500 focus:border-blue-500"
+                  placeholder="Enter report time"
+                />
+              ) : (
+                <p className="text-sm text-gray-900">{bookingToDisplay.carrierReportTime || 'N/A'}</p>
+              )}
             </div>
           </div>
           
           <div className="grid grid-cols-2 gap-4">
             <div>
               <label className="block text-sm font-medium text-gray-700 mb-1">Type</label>
-              <p className="text-sm text-gray-900">
-                {bookingToDisplay.type === 'POWER_ONLY' ? 'Power Only' : 'Power and Trailer'}
-              </p>
+              {isEditMode ? (
+                <select
+                  value={formData.type}
+                  onChange={(e) => setFormData({...formData, type: e.target.value})}
+                  className="w-full p-2 border rounded focus:ring-blue-500 focus:border-blue-500"
+                >
+                  <option value="POWER_ONLY">Power Only</option>
+                  <option value="POWER_AND_TRAILER">Power and Trailer</option>
+                </select>
+              ) : (
+                <p className="text-sm text-gray-900">
+                  {bookingToDisplay.type === 'POWER_ONLY' ? 'Power Only' : 'Power and Trailer'}
+                </p>
+              )}
             </div>
-            {bookingToDisplay.type === 'POWER_AND_TRAILER' && bookingToDisplay.trailerLength && (
+            {(isEditMode ? formData.type === 'POWER_AND_TRAILER' : bookingToDisplay.type === 'POWER_AND_TRAILER') && (
               <div>
                 <label className="block text-sm font-medium text-gray-700 mb-1">Trailer Length</label>
-                <p className="text-sm text-gray-900">{bookingToDisplay.trailerLength} feet</p>
+                {isEditMode ? (
+                  <input
+                    type="number"
+                    value={formData.trailerLength}
+                    onChange={(e) => setFormData({...formData, trailerLength: e.target.value})}
+                    className="w-full p-2 border rounded focus:ring-blue-500 focus:border-blue-500"
+                    placeholder="Enter trailer length in feet"
+                  />
+                ) : (
+                  <p className="text-sm text-gray-900">{bookingToDisplay.trailerLength} feet</p>
+                )}
               </div>
+            )}
+          </div>
+
+          {/* Booking Date */}
+          <div>
+            <label className="block text-sm font-medium text-gray-700 mb-1">Booking Date</label>
+            {isEditMode ? (
+              <input
+                type="date"
+                value={formData.bookingDate}
+                onChange={(e) => setFormData({...formData, bookingDate: e.target.value})}
+                className="w-full p-2 border rounded focus:ring-blue-500 focus:border-blue-500"
+              />
+            ) : (
+              <p className="text-sm text-gray-900">
+                {bookingToDisplay.bookingDate ? new Date(bookingToDisplay.bookingDate).toLocaleDateString() : 'N/A'}
+              </p>
             )}
           </div>
           
           {/* Route Information - Multi-leg vs Single-leg display */}
           <div>
             <label className="block text-sm font-medium text-gray-700 mb-2">Route Information</label>
+            
+            {/* Route Selection in Edit Mode */}
+            {isEditMode && (
+              <div className="mb-4">
+                <label className="block text-sm font-medium text-gray-700 mb-1">Select Route</label>
+                <select
+                  value={formData.routeId || ''}
+                  onChange={(e) => setFormData({...formData, routeId: e.target.value ? parseInt(e.target.value) : null})}
+                  className="w-full p-2 border rounded focus:ring-blue-500 focus:border-blue-500"
+                >
+                  <option value="">Select a route</option>
+                  {routesData?.routes?.map((route: any) => (
+                    <option key={route.id} value={route.id}>
+                      {route.origin} → {route.destination} ({route.distance} miles)
+                    </option>
+                  ))}
+                </select>
+              </div>
+            )}
+            
             <div className="bg-gray-50 p-4 rounded-lg space-y-3">
               {(() => {
                 // Prefer child bookings data over notes parsing
@@ -916,11 +1303,6 @@ const BookingViewModal: React.FC<BookingViewModalProps> = ({ booking, onClose, g
                             <div className="flex justify-between items-center mb-3">
                               <div className="font-medium text-sm text-gray-900">
                                 Leg {childBooking.legNumber}: {childBooking.route?.origin} → {childBooking.route?.destination}
-                                {childBooking.manifestNumber && (
-                                  <div className="text-xs text-gray-600 font-normal mt-1">
-                                    Manifest #: {childBooking.manifestNumber}
-                                  </div>
-                                )}
                               </div>
                               <div className="text-right">
                                 <div className="text-xs text-gray-500">
@@ -930,6 +1312,29 @@ const BookingViewModal: React.FC<BookingViewModalProps> = ({ booking, onClose, g
                                   ${childBooking.rate}
                                 </div>
                               </div>
+                            </div>
+                            
+                            {/* Manifest Number field for each leg */}
+                            <div className="mb-3">
+                              <label className="block text-xs font-medium text-gray-700 mb-1">Manifest Number</label>
+                              {isEditMode ? (
+                                <input
+                                  type="text"
+                                  value={childBooking.manifestNumber || ''}
+                                  onChange={(e) => {
+                                    // For actual child bookings, we'd need a different update function
+                                    // This would require individual API calls to update each child booking
+                                  }}
+                                  className="w-full p-2 text-sm border rounded focus:ring-blue-500 focus:border-blue-500 bg-gray-100"
+                                  placeholder="Enter manifest number"
+                                  readOnly
+                                  title="Child booking manifest editing not yet implemented"
+                                />
+                              ) : (
+                                <p className="text-xs text-gray-600">
+                                  {childBooking.manifestNumber || 'No manifest number set'}
+                                </p>
+                              )}
                             </div>
                             
                             {/* Detailed address information */}
@@ -1028,6 +1433,28 @@ const BookingViewModal: React.FC<BookingViewModalProps> = ({ booking, onClose, g
                               </div>
                             </div>
                             
+                            {/* Manifest Number field for each leg */}
+                            <div className="mb-3">
+                              <label className="block text-xs font-medium text-gray-700 mb-1">Manifest Number</label>
+                              {isEditMode ? (
+                                <input
+                                  type="text"
+                                  value={legManifestNumbers[leg.legNumber] || ''}
+                                  onChange={(e) => setLegManifestNumbers(prev => ({
+                                    ...prev,
+                                    [leg.legNumber]: e.target.value
+                                  }))}
+                                  onBlur={(e) => updateLegManifestNumber(leg.legNumber, e.target.value)}
+                                  className="w-full p-2 text-sm border rounded focus:ring-blue-500 focus:border-blue-500"
+                                  placeholder="Enter manifest number"
+                                />
+                              ) : (
+                                <p className="text-xs text-gray-600">
+                                  {leg.manifestNumber || 'No manifest number set'}
+                                </p>
+                              )}
+                            </div>
+                            
                             {/* Detailed address information if available */}
                             {legRoute && (
                               <div className="grid grid-cols-1 md:grid-cols-2 gap-4 text-xs">
@@ -1093,11 +1520,24 @@ const BookingViewModal: React.FC<BookingViewModalProps> = ({ booking, onClose, g
                       <MapPin className="w-4 h-4 text-blue-500" />
                       {bookingToDisplay.route.name}
                     </div>
-                    {bookingToDisplay.manifestNumber && (
-                      <div className="text-xs text-gray-600 mt-1">
-                        Manifest #: {bookingToDisplay.manifestNumber}
-                      </div>
-                    )}
+                    
+                    {/* Manifest Number field */}
+                    <div className="mt-2">
+                      <label className="block text-xs font-medium text-gray-700 mb-1">Manifest Number</label>
+                      {isEditMode ? (
+                        <input
+                          type="text"
+                          value={formData.manifestNumber}
+                          onChange={(e) => setFormData({...formData, manifestNumber: e.target.value})}
+                          className="w-full p-2 text-sm border rounded focus:ring-blue-500 focus:border-blue-500"
+                          placeholder="Enter manifest number"
+                        />
+                      ) : (
+                        <p className="text-xs text-gray-600">
+                          {bookingToDisplay.manifestNumber || 'No manifest number set'}
+                        </p>
+                      )}
+                    </div>
                     
                     <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
                       {/* Origin Information */}
@@ -1231,35 +1671,80 @@ const BookingViewModal: React.FC<BookingViewModalProps> = ({ booking, onClose, g
             </div>
             <div>
               <label className="block text-sm font-medium text-gray-700 mb-1">Rate Type</label>
-              <p className="text-sm text-gray-900">
-                {bookingToDisplay.rateType === 'MILE' ? 'Per Mile' : 
-                 bookingToDisplay.rateType === 'MILE_FSC' ? 'Per Mile + FSC' :
-                 bookingToDisplay.rateType === 'FLAT_RATE' ? 'Flat Rate' : 'Unknown'}
-              </p>
+              {isEditMode ? (
+                <select
+                  value={formData.rateType}
+                  onChange={(e) => setFormData({...formData, rateType: e.target.value})}
+                  className="w-full p-2 border rounded focus:ring-blue-500 focus:border-blue-500"
+                >
+                  <option value="FLAT_RATE">Flat Rate</option>
+                  <option value="MILE">Per Mile</option>
+                  <option value="MILE_FSC">Per Mile + FSC</option>
+                </select>
+              ) : (
+                <p className="text-sm text-gray-900">
+                  {bookingToDisplay.rateType === 'MILE' ? 'Per Mile' : 
+                   bookingToDisplay.rateType === 'MILE_FSC' ? 'Per Mile + FSC' :
+                   bookingToDisplay.rateType === 'FLAT_RATE' ? 'Flat Rate' : 'Unknown'}
+                </p>
+              )}
             </div>
           </div>
           
           <div className="grid grid-cols-3 gap-4">
-            {bookingToDisplay.rateType !== 'FLAT_RATE' && bookingToDisplay.baseRate && (
+            {((isEditMode ? formData.rateType !== 'FLAT_RATE' : bookingToDisplay.rateType !== 'FLAT_RATE') || (isEditMode && formData.rateType !== 'FLAT_RATE')) && (
               <div>
                 <label className="block text-sm font-medium text-gray-700 mb-1">Base Rate</label>
-                <p className="text-sm text-gray-900">${bookingToDisplay.baseRate}</p>
+                {isEditMode ? (
+                  <input
+                    type="number"
+                    step="0.01"
+                    value={formData.baseRate}
+                    onChange={(e) => setFormData({...formData, baseRate: parseFloat(e.target.value) || 0})}
+                    className="w-full p-2 border rounded focus:ring-blue-500 focus:border-blue-500"
+                    placeholder="0.00"
+                  />
+                ) : (
+                  <p className="text-sm text-gray-900">${bookingToDisplay.baseRate}</p>
+                )}
               </div>
             )}
-            {bookingToDisplay.rateType === 'MILE_FSC' && (
+            {((isEditMode ? formData.rateType === 'MILE_FSC' : bookingToDisplay.rateType === 'MILE_FSC')) && (
               <div>
-                <label className="block text-sm font-medium text-gray-700 mb-1">FSC Rate</label>
-                <p className="text-sm text-gray-900">
-                  {bookingToDisplay.fscRate || settingsData?.fuelSurchargeRate || 0}%
-                  {(!bookingToDisplay.fscRate && settingsData?.fuelSurchargeRate) && (
-                    <span className="text-xs text-gray-500 ml-1">(current system rate)</span>
-                  )}
-                </p>
+                <label className="block text-sm font-medium text-gray-700 mb-1">FSC Rate (%)</label>
+                {isEditMode ? (
+                  <input
+                    type="number"
+                    step="0.01"
+                    value={formData.fscRate}
+                    onChange={(e) => setFormData({...formData, fscRate: parseFloat(e.target.value) || 0})}
+                    className="w-full p-2 border rounded focus:ring-blue-500 focus:border-blue-500"
+                    placeholder="0.00"
+                  />
+                ) : (
+                  <p className="text-sm text-gray-900">
+                    {bookingToDisplay.fscRate || settingsData?.fuelSurchargeRate || 0}%
+                    {(!bookingToDisplay.fscRate && settingsData?.fuelSurchargeRate) && (
+                      <span className="text-xs text-gray-500 ml-1">(current system rate)</span>
+                    )}
+                  </p>
+                )}
               </div>
             )}
             <div>
               <label className="block text-sm font-medium text-gray-700 mb-1">Total Rate</label>
-              <p className="text-sm text-gray-900 font-medium text-green-600">${bookingToDisplay.rate}</p>
+              {isEditMode ? (
+                <input
+                  type="number"
+                  step="0.01"
+                  value={formData.rate}
+                  onChange={(e) => setFormData({...formData, rate: parseFloat(e.target.value) || 0})}
+                  className="w-full p-2 border rounded focus:ring-blue-500 focus:border-blue-500"
+                  placeholder="0.00"
+                />
+              ) : (
+                <p className="text-sm text-gray-900 font-medium text-green-600">${bookingToDisplay.rate}</p>
+              )}
             </div>
           </div>
 
@@ -1269,12 +1754,24 @@ const BookingViewModal: React.FC<BookingViewModalProps> = ({ booking, onClose, g
             isReadOnly={!!bookingToDisplay.confirmationSignedAt}
           />
           
-          {bookingToDisplay.notes && (
-            <div>
-              <label className="block text-sm font-medium text-gray-700 mb-1">Notes</label>
-              <p className="text-sm text-gray-900 bg-gray-50 p-3 rounded">{bookingToDisplay.notes}</p>
-            </div>
-          )}
+          <div>
+            <label className="block text-sm font-medium text-gray-700 mb-1">Notes</label>
+            {isEditMode ? (
+              <textarea
+                value={formData.notes}
+                onChange={(e) => setFormData({...formData, notes: e.target.value})}
+                rows={3}
+                className="w-full p-2 border rounded focus:ring-blue-500 focus:border-blue-500"
+                placeholder="Enter booking notes"
+              />
+            ) : (
+              bookingToDisplay.notes ? (
+                <p className="text-sm text-gray-900 bg-gray-50 p-3 rounded">{bookingToDisplay.notes}</p>
+              ) : (
+                <p className="text-sm text-gray-500">No notes</p>
+              )
+            )}
+          </div>
           
           {/* Rate Confirmation Status */}
           {(bookingToDisplay.confirmationSentAt || bookingToDisplay.confirmationSignedAt || bookingToDisplay.signedPdfPath) && (
@@ -1334,10 +1831,55 @@ const BookingViewModal: React.FC<BookingViewModalProps> = ({ booking, onClose, g
           )}
           
           {/* Documents Section */}
-          {bookingToDisplay.documents && bookingToDisplay.documents.length > 0 && (
-            <div>
-              <label className="block text-sm font-medium text-gray-700 mb-2">Uploaded Documents</label>
+          <div>
+            <label className="block text-sm font-medium text-gray-700 mb-2">Documents</label>
+            
+            {/* Document Upload Form */}
+            <div className="bg-gray-50 p-4 rounded-lg mb-4">
+              <h4 className="text-sm font-medium text-gray-700 mb-3">Upload New Document</h4>
+              <div className="space-y-3">
+                <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
+                  <div>
+                    <label className="block text-xs font-medium text-gray-700 mb-1">Document Type</label>
+                    <select
+                      value={documentType}
+                      onChange={(e) => setDocumentType(e.target.value)}
+                      className="w-full p-2 text-sm border rounded focus:ring-blue-500 focus:border-blue-500"
+                    >
+                      <option value="">Select document type</option>
+                      <option value="POD">Proof of Delivery</option>
+                      <option value="BOL">Bill of Lading</option>
+                      <option value="INVOICE">Invoice</option>
+                      <option value="RECEIPT">Receipt</option>
+                      <option value="MANIFEST">Manifest</option>
+                      <option value="OTHER">Other</option>
+                    </select>
+                  </div>
+                  <div>
+                    <label className="block text-xs font-medium text-gray-700 mb-1">File</label>
+                    <input
+                      type="file"
+                      onChange={(e) => setSelectedFile(e.target.files?.[0] || null)}
+                      className="w-full p-2 text-sm border rounded focus:ring-blue-500 focus:border-blue-500"
+                      accept=".pdf,.jpg,.jpeg,.png,.doc,.docx"
+                    />
+                  </div>
+                </div>
+                <button
+                  onClick={handleDocumentUpload}
+                  disabled={!selectedFile || !documentType || uploadingDocument}
+                  className="flex items-center gap-2 px-4 py-2 bg-blue-600 text-white text-sm rounded hover:bg-blue-700 disabled:bg-gray-400 disabled:cursor-not-allowed"
+                >
+                  <Upload className="w-4 h-4" />
+                  {uploadingDocument ? 'Uploading...' : 'Upload Document'}
+                </button>
+              </div>
+            </div>
+
+            {/* Existing Documents */}
+            {bookingToDisplay.documents && bookingToDisplay.documents.length > 0 ? (
               <div className="bg-gray-50 p-4 rounded-lg space-y-2">
+                <h4 className="text-sm font-medium text-gray-700 mb-3">Uploaded Documents</h4>
                 {bookingToDisplay.documents.map((document: any) => (
                   <div key={document.id} className="flex items-center justify-between bg-white p-3 rounded border border-gray-200">
                     <div className="flex items-center gap-3">
@@ -1350,30 +1892,40 @@ const BookingViewModal: React.FC<BookingViewModalProps> = ({ booking, onClose, g
                         </div>
                       </div>
                     </div>
-                    <button
-                      onClick={() => {
-                        // Open document in new tab for viewing/download
-                        window.open(`/api/bookings/documents/${document.id}/download`, '_blank');
-                      }}
-                      className="text-blue-600 hover:text-blue-800 text-sm font-medium"
-                    >
-                      View
-                    </button>
+                    <div className="flex items-center gap-2">
+                      <button
+                        onClick={() => {
+                          // Open document in new tab for viewing/download using correct endpoint
+                          window.open(`/api/documents/download/${document.id}`, '_blank');
+                        }}
+                        className="text-blue-600 hover:text-blue-800 text-sm font-medium"
+                      >
+                        View
+                      </button>
+                      <button
+                        onClick={() => {
+                          if (confirm('Are you sure you want to delete this document?')) {
+                            handleDocumentDelete(document.id);
+                          }
+                        }}
+                        disabled={deletingDocumentId === document.id}
+                        className="text-red-600 hover:text-red-800 text-sm font-medium disabled:opacity-50"
+                      >
+                        {deletingDocumentId === document.id ? 'Deleting...' : 'Delete'}
+                      </button>
+                    </div>
                   </div>
                 ))}
               </div>
-            </div>
-          )}
-          
-          {/* Documents Section - Debug/Empty State */}
-          {(!bookingToDisplay.documents || bookingToDisplay.documents.length === 0) && (
-            <div>
-              <label className="block text-sm font-medium text-gray-700 mb-2">Uploaded Documents</label>
-              <div className="bg-gray-50 p-4 rounded-lg text-center text-gray-500 text-sm">
-                No documents uploaded yet
+            ) : (
+              <div className="bg-gray-50 p-4 rounded-lg">
+                <h4 className="text-sm font-medium text-gray-700 mb-2">Uploaded Documents</h4>
+                <div className="text-center text-gray-500 text-sm">
+                  No documents uploaded yet
+                </div>
               </div>
-            </div>
-          )}
+            )}
+          </div>
           
           <div className="grid grid-cols-2 gap-4 text-xs text-gray-500 mt-4 pt-4 border-t">
             <div>
@@ -1436,1495 +1988,34 @@ const BookingViewModal: React.FC<BookingViewModalProps> = ({ booking, onClose, g
               </button>
             )}
           </div>
-          <button 
-            onClick={onClose}
-            className="px-4 py-2 bg-gray-500 text-white rounded hover:bg-gray-600"
-          >
-            Close
-          </button>
-        </div>
-      </div>
-    </div>
-  );
-};
-
-// Booking Edit Modal Component
-interface BookingEditModalProps {
-  booking: Booking;
-  onClose: () => void;
-  onSave: (updatedBooking: Booking) => void;
-}
-
-const BookingEditModal: React.FC<BookingEditModalProps> = ({ booking, onClose, onSave }) => {
-  console.log('BookingEditModal - full booking data:', booking);
-  console.log('BookingEditModal - rate fields:', {
-    rateType: booking.rateType,
-    baseRate: booking.baseRate,
-    fscRate: booking.fscRate,
-    rate: booking.rate
-  });
-  
-  // Initialize form data with better handling of rate type
-  const initializeFormData = useCallback(() => {
-    const initialRateType = booking.rateType; // Don't default to FLAT_RATE
-    console.log('=== BOOKING INITIALIZATION DEBUG ===');
-    console.log('Full booking object:', booking);
-    console.log('Rate type from booking.rateType:', booking.rateType);
-    console.log('Base rate from booking.baseRate:', booking.baseRate);
-    console.log('FSC rate from booking.fscRate:', booking.fscRate);
-    console.log('Final rate from booking.rate:', booking.rate);
-    console.log('Calculated baseRate fallback:', Number(booking.baseRate) || Number(booking.rate) || 0);
-    console.log('========================================');
-    
-    return {
-      carrierId: booking.carrierId,
-      rate: Number(booking.rate) || 0,
-      status: booking.status,
-      billable: booking.billable,
-      notes: booking.notes || '',
-      driverName: booking.driverName || '',
-      phoneNumber: booking.phoneNumber || '',
-      carrierEmail: booking.carrierEmail || '',
-      carrierReportTime: booking.carrierReportTime || '',
-      type: booking.type || 'POWER_ONLY',
-      trailerLength: booking.trailerLength ? booking.trailerLength.toString() : '',
-      bookingDate: booking.bookingDate.split('T')[0], // Format for date input
-      rateType: initialRateType,
-      baseRate: Number(booking.baseRate) || Number(booking.rate) || 0,
-      fscRate: Number(booking.fscRate) || 0,
-      // Route information fields for custom bookings
-      origin: booking.origin || '',
-      destination: booking.destination || '',
-      estimatedMiles: booking.estimatedMiles ? booking.estimatedMiles.toString() : '',
-      manifestNumber: booking.manifestNumber || '',
-      routeName: booking.routeName || '',
-      routeFrequency: booking.routeFrequency || '',
-      routeStandardRate: booking.routeStandardRate ? booking.routeStandardRate.toString() : '',
-      routeRunTime: booking.routeRunTime ? booking.routeRunTime.toString() : '',
-      // Origin details
-      originAddress: booking.originAddress || '',
-      originCity: booking.originCity || '',
-      originState: booking.originState || '',
-      originZipCode: booking.originZipCode || '',
-      originContact: booking.originContact || '',
-      originTimeZone: booking.originTimeZone || '',
-      // Destination details
-      destinationAddress: booking.destinationAddress || '',
-      destinationCity: booking.destinationCity || '',
-      destinationState: booking.destinationState || '',
-      destinationZipCode: booking.destinationZipCode || '',
-      destinationContact: booking.destinationContact || '',
-      destinationTimeZone: booking.destinationTimeZone || '',
-      // Time fields
-      departureTime: booking.departureTime || '',
-      arrivalTime: booking.arrivalTime || ''
-    };
-  }, [booking]);
-  
-  const [formData, setFormData] = useState(() => initializeFormData());
-  
-  // Update form data if booking changes (shouldn't happen in modal, but good practice)
-  useEffect(() => {
-    console.log('Booking changed, reinitializing form data');
-    setFormData(initializeFormData());
-  }, [initializeFormData]);
-  
-  const [isSubmitting, setIsSubmitting] = useState(false);
-  const [carrierSearchTerm, setCarrierSearchTerm] = useState('');
-  const [showCarrierDropdown, setShowCarrierDropdown] = useState(false);
-  const [selectedCarrierName, setSelectedCarrierName] = useState(
-    booking.carrier?.name || ''
-  );
-
-  // Document upload states
-  const [selectedFiles, setSelectedFiles] = useState<FileList | null>(null);
-  const [documentType, setDocumentType] = useState('other');
-  const [isUploading, setIsUploading] = useState(false);
-  const [uploadedDocuments, setUploadedDocuments] = useState(booking.documents || []);
-
-  // Multi-leg booking support
-  const [multiLegInfo, setMultiLegInfo] = useState(() => {
-    const legs = parseMultiLegBooking(booking.notes || null);
-    console.log('MultiLeg detection for booking', booking.id, ':', legs);
-    return legs;
-  });
-  
-  const [editableLegs, setEditableLegs] = useState(() => {
-    const legs = parseMultiLegBooking(booking.notes || null);
-    console.log('Editable legs initialized:', legs);
-    return legs || [];
-  });
-
-  // Fetch carriers for carrier selection
-  const { data: carriersData } = useQuery({
-    queryKey: ['carriers'],
-    queryFn: async () => {
-      const response = await api.get('/carriers?limit=5000'); // Fetch all carriers
-      return response.data;
-    }
-  });
-
-  // Fetch system settings for fuel surcharge
-  const { data: settingsData } = useQuery({
-    queryKey: ['settings'],
-    queryFn: async () => {
-      const response = await api.get('/settings');
-      return response.data;
-    }
-  });
-
-  // Fetch routes for distance lookup
-  const { data: routesData } = useQuery({
-    queryKey: ['routes'],
-    queryFn: async () => {
-      const response = await api.get('/routes?limit=2000'); // Fetch all routes (max allowed)
-      return response.data;
-    }
-  });
-
-  // Calculate total rate based on rate type and values
-  const calculateTotalRate = (rateType: string, baseRate: number, fscRate: number) => {
-    const validBaseRate = Number(baseRate) || 0;
-    const validFscRate = Number(fscRate) || Number(settingsData?.fuelSurchargeRate) || 0;
-    const distance = Number(booking.route?.distance) || 1;
-    
-    switch (rateType) {
-      case 'MILE':
-        return validBaseRate * distance;
-      case 'MILE_FSC':
-        const mileRate = validBaseRate * distance;
-        return mileRate + (mileRate * (validFscRate / 100));
-      case 'FLAT_RATE':
-      default:
-        return validBaseRate;
-    }
-  };
-
-  // Update total rate when rate type or values change (only for non-multi-leg bookings)
-  useEffect(() => {
-    // Don't auto-calculate for multi-leg bookings since they have manual leg rates
-    if (!multiLegInfo || editableLegs.length === 0) {
-      const totalRate = calculateTotalRate(formData.rateType, formData.baseRate, formData.fscRate);
-      const validTotalRate = Number(totalRate) || 0;
-      setFormData(prev => ({ ...prev, rate: Number(validTotalRate.toFixed(2)) }));
-    }
-  }, [formData.rateType, formData.baseRate, formData.fscRate, multiLegInfo, editableLegs.length]);
-
-  // Set FSC rate from system settings when available
-  useEffect(() => {
-    if (settingsData?.fuelSurchargeRate && formData.rateType === 'MILE_FSC' && !formData.fscRate) {
-      setFormData(prev => ({ ...prev, fscRate: Number(settingsData.fuelSurchargeRate) }));
-    }
-  }, [settingsData?.fuelSurchargeRate, formData.rateType]);
-
-  // Helper function to calculate leg rate based on rate type
-  const calculateLegRate = (rateType: string, baseRate: number, fscRate: number, distance: number = 100): number => {
-    const validBaseRate = Number(baseRate) || 0;
-    const validFscRate = Number(fscRate) || Number(settingsData?.fuelSurchargeRate) || 0;
-    const validDistance = Number(distance) || 100; // Default distance if not available
-    
-    switch (rateType) {
-      case 'MILE':
-        return validBaseRate * validDistance;
-      case 'MILE_FSC':
-        const mileRate = validBaseRate * validDistance;
-        return mileRate + (mileRate * (validFscRate / 100));
-      case 'FLAT_RATE':
-      default:
-        return validBaseRate;
-    }
-  };
-
-  // Helper function to get distance for a leg by looking up route in database
-  const getDistanceForLeg = (origin: string, destination: string): number => {
-    if (!routesData?.routes) {
-      console.warn('Routes data not available for distance lookup');
-      return 258; // Default fallback based on your example
-    }
-    
-    // Clean up location codes (remove any extra info like state codes)
-    const cleanLocation = (loc: string) => {
-      // Extract just the location code (e.g., "FAR" from "FAR - Fargo" or just "FAR")
-      const match = loc.match(/^([A-Z]{3,4})\b/);
-      return match ? match[1] : loc.toUpperCase().trim();
-    };
-    
-    const legOriginClean = cleanLocation(origin);
-    const legDestinationClean = cleanLocation(destination);
-    
-    console.log(`Looking for route: ${origin} → ${destination} (cleaned: ${legOriginClean} → ${legDestinationClean})`);
-    
-    // Find matching route by origin and destination
-    const matchingRoute = routesData.routes.find((route: any) => {
-      const routeOrigin = cleanLocation(route.origin || '');
-      const routeDestination = cleanLocation(route.destination || '');
-      
-      return routeOrigin === legOriginClean && routeDestination === legDestinationClean;
-    });
-    
-    if (matchingRoute && matchingRoute.distance) {
-      const distance = Number(matchingRoute.distance);
-      console.log(`✓ Found route distance for ${origin} → ${destination}: ${distance} miles`);
-      return distance;
-    }
-    
-    // Try reverse direction
-    const reverseRoute = routesData.routes.find((route: any) => {
-      const routeOrigin = cleanLocation(route.origin || '');
-      const routeDestination = cleanLocation(route.destination || '');
-      
-      return routeOrigin === legDestinationClean && routeDestination === legOriginClean;
-    });
-    
-    if (reverseRoute && reverseRoute.distance) {
-      const distance = Number(reverseRoute.distance);
-      console.log(`✓ Found reverse route distance for ${destination} → ${origin}: ${distance} miles`);
-      return distance;
-    }
-    
-    // For multi-leg bookings, if this is a round trip and we know the total distance,
-    // try to calculate proportional distances
-    if (booking.route?.distance && multiLegInfo && multiLegInfo.length === 2) {
-      const totalDistance = Number(booking.route.distance);
-      // If it's a round trip (same origin/destination reversed), split distance equally
-      if (multiLegInfo.length === 2 && 
-          multiLegInfo[0].origin === multiLegInfo[1].destination && 
-          multiLegInfo[0].destination === multiLegInfo[1].origin) {
-        const legDistance = totalDistance / 2;
-        console.log(`✓ Round trip detected, splitting ${totalDistance} miles equally: ${legDistance} miles per leg`);
-        return legDistance;
-      }
-    }
-    
-    // Try fuzzy matching if exact match fails
-    const fuzzyMatch = routesData.routes.find((route: any) => {
-      const routeOrigin = route.origin?.toLowerCase();
-      const routeDestination = route.destination?.toLowerCase();
-      const legOrigin = origin.toLowerCase();
-      const legDestination = destination.toLowerCase();
-      
-      // Fixed fuzzy matching logic
-      return (routeOrigin?.includes(legOrigin) || legOrigin?.includes(routeOrigin)) &&
-             (routeDestination?.includes(legDestination) || legDestination?.includes(routeDestination));
-    });
-    
-    if (fuzzyMatch && fuzzyMatch.distance) {
-      const distance = Number(fuzzyMatch.distance);
-      console.log(`⚠️ Found fuzzy match for ${origin} → ${destination}: ${fuzzyMatch.origin} → ${fuzzyMatch.destination} (${distance} miles)`);
-      return distance;
-    }
-    
-    console.warn(`❌ No route found for ${origin} → ${destination}, using default distance`);
-    console.log(`Debug info: Total routes available: ${routesData.routes.length}`);
-    if (routesData.routes.length > 0) {
-      console.log(`Sample routes:`, routesData.routes.slice(0, 3).map((r: any) => `${r.origin} → ${r.destination} (${r.distance} miles)`));
-    }
-    return 100; // Default distance if route not found
-  };
-
-  // Recalculate multi-leg rates when rate type or base rate changes
-  useEffect(() => {
-    if (multiLegInfo && editableLegs.length > 0 && formData.rateType !== 'FLAT_RATE' && routesData?.routes) {
-      console.log('Recalculating multi-leg rates preserving original booking structure...');
-      
-      // Calculate total distance for the entire multi-leg journey
-      let totalDistance = 0;
-      const legsWithDistances = editableLegs.map(leg => {
-        const distance = getDistanceForLeg(leg.origin, leg.destination);
-        totalDistance += distance;
-        return { ...leg, distance };
-      });
-      
-      console.log(`Total multi-leg journey distance: ${totalDistance} miles`);
-      
-      // Calculate the total rate based on the entire journey distance
-      const totalRate = calculateLegRate(formData.rateType, formData.baseRate, formData.fscRate, totalDistance);
-      console.log(`Total rate for ${totalDistance} miles at $${formData.baseRate}/mile: $${totalRate.toFixed(2)}`);
-      
-      // Proportionally distribute the total rate among legs based on their distance
-      const updatedLegs = legsWithDistances.map(leg => {
-        const legProportion = leg.distance / totalDistance;
-        const legRate = totalRate * legProportion;
-        console.log(`Leg ${leg.legNumber} (${leg.origin} → ${leg.destination}): ${leg.distance} miles (${(legProportion * 100).toFixed(1)}% of journey) = $${legRate.toFixed(2)}`);
-        return {
-          legNumber: leg.legNumber,
-          origin: leg.origin,
-          destination: leg.destination,
-          rate: legRate.toFixed(2),
-          manifestNumber: leg.manifestNumber || ''
-        };
-      });
-      
-      setEditableLegs(updatedLegs);
-      
-      console.log(`Multi-leg total rate: $${totalRate.toFixed(2)}`);
-      setFormData(prev => ({ ...prev, rate: Number(totalRate.toFixed(2)) }));
-      
-      // Update notes with new leg information
-      updateMultiLegNotes(updatedLegs);
-    }
-  }, [formData.rateType, formData.baseRate, formData.fscRate, multiLegInfo, routesData]);
-
-  // Update leg rate
-  const updateLegRate = (legIndex: number, newRate: string) => {
-    const updatedLegs = editableLegs.map((leg, index) => 
-      index === legIndex ? { ...leg, rate: newRate } : leg
-    );
-    setEditableLegs(updatedLegs);
-    
-    // Update total rate and notes
-    const totalRate = updatedLegs.reduce((sum, leg) => {
-      const legRate = parseFloat(leg.rate) || 0;
-      return sum + legRate;
-    }, 0);
-    setFormData(prev => ({ ...prev, rate: Number(totalRate.toFixed(2)) }));
-    
-    // Update notes with new leg information
-    updateMultiLegNotes(updatedLegs);
-  };
-
-  // Update leg addresses
-  const updateLegAddress = (legIndex: number, field: 'origin' | 'destination', newValue: string) => {
-    const updatedLegs = editableLegs.map((leg, index) => 
-      index === legIndex ? { ...leg, [field]: newValue } : leg
-    );
-    setEditableLegs(updatedLegs);
-    
-    // Update notes with new leg information
-    updateMultiLegNotes(updatedLegs);
-  };
-
-  // Update leg manifest number
-  const updateLegManifestNumber = (legIndex: number, manifestNumber: string) => {
-    const updatedLegs = editableLegs.map((leg, index) => 
-      index === legIndex ? { ...leg, manifestNumber } : leg
-    );
-    setEditableLegs(updatedLegs);
-    
-    // Update notes with new leg information
-    updateMultiLegNotes(updatedLegs);
-  };
-  
-  // Update notes with multi-leg information
-  const updateMultiLegNotes = (legs: any[]) => {
-    const notes = formData.notes || '';
-    const nonLegLines = notes.split('\n').filter(line => 
-      !line.startsWith('--- Multi-Leg Booking') && 
-      !line.match(/^Leg \d+:/)
-    );
-    
-    const legLines = legs.map(leg => 
-      `Leg ${leg.legNumber}: ${leg.origin} → ${leg.destination} ($${leg.rate})`
-    );
-    
-    const updatedNotes = [
-      '--- Multi-Leg Booking ---',
-      ...legLines,
-      ...nonLegLines
-    ].join('\n');
-    
-    setFormData(prev => ({ ...prev, notes: updatedNotes }));
-  };
-
-  const carriers = carriersData?.carriers || [];
-  const canChangeCarrier = formData.status === 'PENDING' || formData.status === 'CONFIRMED';
-
-  // Filter carriers based on search term
-  const filteredCarriers = useMemo(() => {
-    if (!carriers.length) return [];
-    
-    return carriers.filter((carrier: any) =>
-      carrier.name.toLowerCase().includes(carrierSearchTerm.toLowerCase()) ||
-      carrier.mcNumber?.toLowerCase().includes(carrierSearchTerm.toLowerCase())
-    ).slice(0, 10); // Limit to first 10 results
-  }, [carriers, carrierSearchTerm]);
-
-  // Handle carrier selection
-  const handleCarrierSelect = (carrier: any) => {
-    setFormData(prev => ({ ...prev, carrierId: carrier.id }));
-    setSelectedCarrierName(carrier.name);
-    setCarrierSearchTerm('');
-    setShowCarrierDropdown(false);
-  };
-
-  // Handle carrier search input
-  const handleCarrierSearch = (value: string) => {
-    setCarrierSearchTerm(value);
-    setShowCarrierDropdown(value.length > 0);
-    if (value.length === 0) {
-      setSelectedCarrierName('');
-      setFormData(prev => ({ ...prev, carrierId: null }));
-    }
-  };
-
-  // Handle document upload
-  const handleDocumentUpload = async () => {
-    if (!selectedFiles || selectedFiles.length === 0) {
-      alert('Please select files to upload');
-      return;
-    }
-
-    setIsUploading(true);
-    try {
-      const formData = new FormData();
-      
-      // Add all selected files
-      for (let i = 0; i < selectedFiles.length; i++) {
-        formData.append('documents', selectedFiles[i]);
-      }
-      
-      // Add metadata
-      formData.append('documentType', documentType);
-      formData.append('uploadedBy', 'Admin User'); // You might want to get this from user context
-
-      const response = await api.post(`/bookings/${booking.id}/documents`, formData, {
-        headers: {
-          'Content-Type': 'multipart/form-data',
-        },
-      });
-
-      if (response.data.documents) {
-        // Add new documents to the uploaded documents list
-        setUploadedDocuments(prev => [...prev, ...response.data.documents]);
-        
-        // Clear file selection
-        setSelectedFiles(null);
-        const fileInput = document.querySelector('#document-upload') as HTMLInputElement;
-        if (fileInput) {
-          fileInput.value = '';
-        }
-        
-        alert(`Successfully uploaded ${response.data.documents.length} document(s)`);
-        
-        // Refresh the booking data by fetching updated booking info
-        try {
-          const updatedBookingResponse = await api.get(`/bookings/${booking.id}`);
-          if (updatedBookingResponse.data) {
-            // Call onSave to update the booking in the parent component
-            onSave(updatedBookingResponse.data);
-          }
-        } catch (refreshError) {
-          console.error('Failed to refresh booking data:', refreshError);
-        }
-        
-        // Note: queryClient invalidation will be handled by the parent component through onSave
-      }
-    } catch (error) {
-      console.error('Document upload error:', error);
-      alert('Failed to upload documents. Please try again.');
-    } finally {
-      setIsUploading(false);
-    }
-  };
-
-  // Handle file selection
-  const handleFileSelect = (e: React.ChangeEvent<HTMLInputElement>) => {
-    const files = e.target.files;
-    setSelectedFiles(files);
-  };
-
-  const handleSubmit = async (e: React.FormEvent) => {
-    e.preventDefault();
-    setIsSubmitting(true);
-    
-    try {
-      const updateData = {
-        ...formData,
-        bookingDate: new Date(formData.bookingDate).toISOString(),
-        carrierId: formData.carrierId || null,
-        trailerLength: formData.type === 'POWER_AND_TRAILER' && formData.trailerLength 
-          ? parseInt(formData.trailerLength) 
-          : null
-      };
-      
-      console.log('Sending booking update data:', JSON.stringify(updateData, null, 2));
-      const response = await api.put(`/bookings/${booking.id}`, updateData);
-      
-      onSave(response.data);
-    } catch (error) {
-      console.error('Error updating booking:', error);
-      // Handle error (show notification, etc.)
-    } finally {
-      setIsSubmitting(false);
-    }
-  };
-
-  return (
-    <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50">
-      <div className="bg-white rounded-lg p-6 w-full max-w-2xl max-h-[90vh] overflow-y-auto">
-        <div className="flex justify-between items-center mb-6">
-          <h2 className="text-xl font-bold text-gray-900">Edit Booking #{booking.id}</h2>
-          <button 
-            onClick={onClose}
-            className="text-gray-400 hover:text-gray-600"
-          >
-            <X className="w-5 h-5" />
-          </button>
-        </div>
-        
-        <form onSubmit={handleSubmit} className="space-y-4">
-          <div className="grid grid-cols-2 gap-4">
-            <div>
-              <label className="block text-sm font-medium text-gray-700 mb-1">Carrier</label>
-              {canChangeCarrier ? (
-                <div className="relative">
-                  {/* Display selected carrier or search input */}
-                  {selectedCarrierName && !showCarrierDropdown ? (
-                    <div className="w-full px-3 py-2 border border-gray-300 rounded-md bg-blue-50 border-blue-200 flex items-center justify-between">
-                      <span className="text-blue-900 font-medium">{selectedCarrierName}</span>
-                      <button
-                        type="button"
-                        onClick={() => {
-                          setSelectedCarrierName('');
-                          setFormData(prev => ({ ...prev, carrierId: null }));
-                        }}
-                        className="text-blue-600 hover:text-blue-800 ml-2"
-                        title="Clear selection"
-                      >
-                        <X className="w-4 h-4" />
-                      </button>
-                    </div>
-                  ) : (
-                    <div>
-                      <input
-                        type="text"
-                        value={carrierSearchTerm}
-                        onChange={(e) => handleCarrierSearch(e.target.value)}
-                        onFocus={() => carrierSearchTerm.length > 0 && setShowCarrierDropdown(true)}
-                        onBlur={() => setTimeout(() => setShowCarrierDropdown(false), 200)}
-                        className="w-full px-3 py-2 border border-gray-300 rounded-md focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
-                        placeholder="Search carriers by name or MC number..."
-                      />
-                      {/* Dropdown with filtered carriers */}
-                      {showCarrierDropdown && filteredCarriers.length > 0 && (
-                        <div className="absolute z-50 w-full mt-1 bg-white border border-gray-300 rounded-md shadow-lg max-h-60 overflow-y-auto">
-                          {filteredCarriers.map((carrier: any) => (
-                            <button
-                              key={carrier.id}
-                              type="button"
-                              onClick={() => handleCarrierSelect(carrier)}
-                              className="w-full px-3 py-2 text-left hover:bg-blue-50 border-b border-gray-100 last:border-b-0"
-                            >
-                              <div className="font-medium text-gray-900">{carrier.name}</div>
-                              {carrier.mcNumber && (
-                                <div className="text-xs text-gray-500">MC: {carrier.mcNumber}</div>
-                              )}
-                            </button>
-                          ))}
-                          {carrierSearchTerm.length > 0 && filteredCarriers.length === 0 && (
-                            <div className="px-3 py-2 text-gray-500 text-sm">
-                              No carriers found matching "{carrierSearchTerm}"
-                            </div>
-                          )}
-                        </div>
-                      )}
-                    </div>
-                  )}
-                </div>
-              ) : (
-                <p className="text-sm text-gray-500 bg-gray-50 p-2 rounded">
-                  {booking.carrier?.name || 'N/A'}
-                  <span className="text-xs text-gray-400 ml-2">
-                    (Cannot change carrier for {formData.status.toLowerCase().replace('_', ' ')} bookings)
-                  </span>
-                </p>
-              )}
-            </div>
-            <div>
-              <label className="block text-sm font-medium text-gray-700 mb-1">Status</label>
-              <select
-                value={formData.status}
-                onChange={(e) => setFormData({ ...formData, status: e.target.value as any })}
-                className="w-full px-3 py-2 border border-gray-300 rounded-md focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
+          {isEditMode ? (
+            <div className="flex gap-2">
+              <button 
+                onClick={handleCancel}
+                disabled={isSubmitting}
+                className="px-4 py-2 bg-gray-500 text-white rounded hover:bg-gray-600 disabled:bg-gray-400"
               >
-                <option value="PENDING">Pending (Unbooked)</option>
-                <option value="CONFIRMED">Confirmed (Booked)</option>
-                <option value="IN_PROGRESS">In Progress</option>
-                <option value="COMPLETED">Completed</option>
-                <option value="CANCELLED">Cancelled</option>
-              </select>
-            </div>
-          </div>
-          
-          {/* Route Information - Multi-leg vs Single-leg display */}
-          <div>
-            <label className="block text-sm font-medium text-gray-700 mb-2">Route Information</label>
-            <div className="bg-gray-50 p-4 rounded-lg space-y-3">
-              {multiLegInfo ? (
-                // Multi-leg booking display
-                <div className="space-y-3">
-                  <div className="flex items-center gap-2 text-sm font-medium text-gray-900">
-                    <MapPin className="w-4 h-4 text-blue-500" />
-                    Multi-Leg Journey ({multiLegInfo.length} legs)
-                  </div>
-                  
-                  {/* Show all legs */}
-                  <div className="space-y-3">
-                    {multiLegInfo.map((leg: any, index: number) => {
-                      const legDistance = getDistanceForLeg(leg.origin, leg.destination);
-                      
-                      // Find route details for this leg
-                      const legRoute = routesData?.routes.find((route: any) => {
-                        const routeOrigin = route.origin?.toLowerCase().trim();
-                        const routeDestination = route.destination?.toLowerCase().trim();
-                        const legOrigin = leg.origin.toLowerCase().trim();
-                        const legDestination = leg.destination.toLowerCase().trim();
-                        return routeOrigin === legOrigin && routeDestination === legDestination;
-                      });
-                      
-                      return (
-                        <div key={index} className="bg-white p-4 rounded border border-gray-200">
-                          <div className="flex justify-between items-center mb-3">
-                            <div className="font-medium text-sm text-gray-900">
-                              Leg {leg.legNumber}: {leg.origin} → {leg.destination}
-                            </div>
-                            <div className="text-right">
-                              <div className="text-xs text-gray-500">
-                                {legDistance} miles
-                              </div>
-                              <div className="text-xs text-gray-500">
-                                ${leg.rate}
-                              </div>
-                            </div>
-                          </div>
-                          
-                          {/* Detailed address information if available */}
-                          {legRoute && (
-                            <div className="grid grid-cols-1 md:grid-cols-2 gap-4 text-xs">
-                              {/* Origin Information */}
-                              <div className="space-y-1">
-                                <h5 className="font-medium text-gray-700">Origin</h5>
-                                <div className="text-gray-600 space-y-1">
-                                  <div className="font-medium">{legRoute.origin}</div>
-                                  {legRoute.originAddress && (
-                                    <div>{legRoute.originAddress}</div>
-                                  )}
-                                  {(legRoute.originCity || legRoute.originState || legRoute.originZipCode) && (
-                                    <div>
-                                      {legRoute.originCity && `${legRoute.originCity}, `}
-                                      {legRoute.originState && `${legRoute.originState} `}
-                                      {legRoute.originZipCode}
-                                    </div>
-                                  )}
-                                  {legRoute.originContact && (
-                                    <div className="text-xs text-gray-500">Contact: {legRoute.originContact}</div>
-                                  )}
-                                </div>
-                              </div>
-                              
-                              {/* Destination Information */}
-                              <div className="space-y-1">
-                                <h5 className="font-medium text-gray-700">Destination</h5>
-                                <div className="text-gray-600 space-y-1">
-                                  <div className="font-medium">{legRoute.destination}</div>
-                                  {legRoute.destinationAddress && (
-                                    <div>{legRoute.destinationAddress}</div>
-                                  )}
-                                  {(legRoute.destinationCity || legRoute.destinationState || legRoute.destinationZipCode) && (
-                                    <div>
-                                      {legRoute.destinationCity && `${legRoute.destinationCity}, `}
-                                      {legRoute.destinationState && `${legRoute.destinationState} `}
-                                      {legRoute.destinationZipCode}
-                                    </div>
-                                  )}
-                                  {legRoute.destinationContact && (
-                                    <div className="text-xs text-gray-500">Contact: {legRoute.destinationContact}</div>
-                                  )}
-                                </div>
-                              </div>
-                            </div>
-                          )}
-                        </div>
-                      );
-                    })}
-                  </div>
-                  
-                  {/* Total distance */}
-                  <div className="text-xs text-gray-500 pt-2 border-t border-gray-200">
-                    Total Distance: {multiLegInfo.reduce((total: number, leg: any) => {
-                      return total + getDistanceForLeg(leg.origin, leg.destination);
-                    }, 0)} miles
-                  </div>
-                </div>
-              ) : booking.route ? (
-                // Single-leg booking display (existing behavior)
-                <div>
-                  <div className="flex items-center gap-2 text-sm font-medium text-gray-900">
-                    <MapPin className="w-4 h-4 text-blue-500" />
-                    {booking.route.name}
-                  </div>
-                  
-                  <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                    {/* Origin Information */}
-                    <div className="space-y-2">
-                      <h4 className="font-medium text-gray-800 text-sm">Origin</h4>
-                      <div className="text-sm text-gray-600 space-y-1">
-                        <div className="font-medium">{booking.route.origin}</div>
-                        {booking.route.originAddress && (
-                          <div>{booking.route.originAddress}</div>
-                        )}
-                        {(booking.route.originCity || booking.route.originState || booking.route.originZipCode) && (
-                          <div>
-                            {booking.route.originCity && `${booking.route.originCity}, `}
-                            {booking.route.originState && `${booking.route.originState} `}
-                            {booking.route.originZipCode}
-                          </div>
-                        )}
-                        {booking.route.originContact && (
-                          <div className="text-xs text-gray-500">Contact: {booking.route.originContact}</div>
-                        )}
-                      </div>
-                    </div>
-                    
-                    {/* Destination Information */}
-                    <div className="space-y-2">
-                      <h4 className="font-medium text-gray-800 text-sm">Destination</h4>
-                      <div className="text-sm text-gray-600 space-y-1">
-                        <div className="font-medium">{booking.route.destination}</div>
-                        {booking.route.destinationAddress && (
-                          <div>{booking.route.destinationAddress}</div>
-                        )}
-                        {(booking.route.destinationCity || booking.route.destinationState || booking.route.destinationZipCode) && (
-                          <div>
-                            {booking.route.destinationCity && `${booking.route.destinationCity}, `}
-                            {booking.route.destinationState && `${booking.route.destinationState} `}
-                            {booking.route.destinationZipCode}
-                          </div>
-                        )}
-                        {booking.route.destinationContact && (
-                          <div className="text-xs text-gray-500">Contact: {booking.route.destinationContact}</div>
-                        )}
-                      </div>
-                    </div>
-                  </div>
-                  
-                  {booking.route.distance && (
-                    <div className="text-xs text-gray-500 pt-2 border-gray-200">
-                      Distance: {booking.route.distance} miles
-                    </div>
-                  )}
-                </div>
-              ) : (booking.origin || booking.destination || formData.origin || formData.destination) ? (
-                // Custom origin/destination booking - editable fields
-                <div className="space-y-4">
-                  <div className="flex items-center gap-2 text-sm font-medium text-gray-900">
-                    <MapPin className="w-4 h-4 text-blue-500" />
-                    Custom Route
-                  </div>
-                  
-                  {/* Route Name */}
-                  <div>
-                    <label className="block text-sm font-medium text-gray-700 mb-1">Route Name</label>
-                    <input
-                      type="text"
-                      value={formData.routeName || ''}
-                      onChange={(e) => setFormData({ ...formData, routeName: e.target.value })}
-                      className="w-full px-3 py-2 border border-gray-300 rounded-md focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
-                      placeholder="Enter route name..."
-                    />
-                  </div>
-
-                  {/* Route Frequency */}
-                  <div>
-                    <label className="block text-sm font-medium text-gray-700 mb-1">Route Frequency</label>
-                    <input
-                      type="text"
-                      value={formData.routeFrequency || ''}
-                      onChange={(e) => setFormData({ ...formData, routeFrequency: e.target.value })}
-                      className="w-full px-3 py-2 border border-gray-300 rounded-md focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
-                      placeholder="e.g., Daily, Weekly, As needed..."
-                    />
-                  </div>
-
-                  {/* Route Standard Rate and Run Time */}
-                  <div className="grid grid-cols-2 gap-4">
-                    <div>
-                      <label className="block text-sm font-medium text-gray-700 mb-1">Standard Rate</label>
-                      <input
-                        type="number"
-                        step="0.01"
-                        value={formData.routeStandardRate || ''}
-                        onChange={(e) => setFormData({ ...formData, routeStandardRate: e.target.value })}
-                        className="w-full px-3 py-2 border border-gray-300 rounded-md focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
-                        placeholder="Standard rate..."
-                      />
-                    </div>
-                    <div>
-                      <label className="block text-sm font-medium text-gray-700 mb-1">Run Time (hours)</label>
-                      <input
-                        type="number"
-                        value={formData.routeRunTime || ''}
-                        onChange={(e) => setFormData({ ...formData, routeRunTime: e.target.value })}
-                        className="w-full px-3 py-2 border border-gray-300 rounded-md focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
-                        placeholder="Runtime in hours..."
-                      />
-                    </div>
-                  </div>
-
-                  {/* Origin and Destination Names */}
-                  <div className="grid grid-cols-2 gap-4">
-                    <div>
-                      <label className="block text-sm font-medium text-gray-700 mb-1">Origin</label>
-                      <input
-                        type="text"
-                        value={formData.origin || ''}
-                        onChange={(e) => setFormData({ ...formData, origin: e.target.value })}
-                        className="w-full px-3 py-2 border border-gray-300 rounded-md focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
-                        placeholder="Origin location name..."
-                      />
-                    </div>
-                    <div>
-                      <label className="block text-sm font-medium text-gray-700 mb-1">Destination</label>
-                      <input
-                        type="text"
-                        value={formData.destination || ''}
-                        onChange={(e) => setFormData({ ...formData, destination: e.target.value })}
-                        className="w-full px-3 py-2 border border-gray-300 rounded-md focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
-                        placeholder="Destination location name..."
-                      />
-                    </div>
-                  </div>
-                  
-                  {/* Manifest Number Field */}
-                  <div>
-                    <label className="block text-sm font-medium text-gray-700 mb-1">Manifest #</label>
-                    <input
-                      type="text"
-                      value={formData.manifestNumber || ''}
-                      onChange={(e) => setFormData({ ...formData, manifestNumber: e.target.value })}
-                      className="w-full px-3 py-2 border border-gray-300 rounded-md focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
-                      placeholder="Enter manifest number..."
-                    />
-                  </div>
-                  
-                  <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
-                    {/* Origin Information */}
-                    <div className="space-y-3">
-                      <h4 className="font-medium text-gray-800 text-sm">Origin Details</h4>
-                      
-                      <div>
-                        <label className="block text-sm font-medium text-gray-700 mb-1">Address</label>
-                        <input
-                          type="text"
-                          value={formData.originAddress || ''}
-                          onChange={(e) => setFormData({ ...formData, originAddress: e.target.value })}
-                          className="w-full px-3 py-2 border border-gray-300 rounded-md focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
-                          placeholder="Street address..."
-                        />
-                      </div>
-
-                      <div className="grid grid-cols-2 gap-2">
-                        <div>
-                          <label className="block text-sm font-medium text-gray-700 mb-1">City</label>
-                          <input
-                            type="text"
-                            value={formData.originCity || ''}
-                            onChange={(e) => setFormData({ ...formData, originCity: e.target.value })}
-                            className="w-full px-3 py-2 border border-gray-300 rounded-md focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
-                            placeholder="City..."
-                          />
-                        </div>
-                        <div>
-                          <label className="block text-sm font-medium text-gray-700 mb-1">State</label>
-                          <input
-                            type="text"
-                            value={formData.originState || ''}
-                            onChange={(e) => setFormData({ ...formData, originState: e.target.value })}
-                            className="w-full px-3 py-2 border border-gray-300 rounded-md focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
-                            placeholder="State..."
-                          />
-                        </div>
-                      </div>
-
-                      <div className="grid grid-cols-2 gap-2">
-                        <div>
-                          <label className="block text-sm font-medium text-gray-700 mb-1">ZIP Code</label>
-                          <input
-                            type="text"
-                            value={formData.originZipCode || ''}
-                            onChange={(e) => setFormData({ ...formData, originZipCode: e.target.value })}
-                            className="w-full px-3 py-2 border border-gray-300 rounded-md focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
-                            placeholder="ZIP..."
-                          />
-                        </div>
-                        <div>
-                          <label className="block text-sm font-medium text-gray-700 mb-1">Time Zone</label>
-                          <input
-                            type="text"
-                            value={formData.originTimeZone || ''}
-                            onChange={(e) => setFormData({ ...formData, originTimeZone: e.target.value })}
-                            className="w-full px-3 py-2 border border-gray-300 rounded-md focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
-                            placeholder="e.g., EST, CST..."
-                          />
-                        </div>
-                      </div>
-
-                      <div>
-                        <label className="block text-sm font-medium text-gray-700 mb-1">Contact</label>
-                        <input
-                          type="text"
-                          value={formData.originContact || ''}
-                          onChange={(e) => setFormData({ ...formData, originContact: e.target.value })}
-                          className="w-full px-3 py-2 border border-gray-300 rounded-md focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
-                          placeholder="Contact person/info..."
-                        />
-                      </div>
-                    </div>
-                    
-                    {/* Destination Information */}
-                    <div className="space-y-3">
-                      <h4 className="font-medium text-gray-800 text-sm">Destination Details</h4>
-                      
-                      <div>
-                        <label className="block text-sm font-medium text-gray-700 mb-1">Address</label>
-                        <input
-                          type="text"
-                          value={formData.destinationAddress || ''}
-                          onChange={(e) => setFormData({ ...formData, destinationAddress: e.target.value })}
-                          className="w-full px-3 py-2 border border-gray-300 rounded-md focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
-                          placeholder="Street address..."
-                        />
-                      </div>
-
-                      <div className="grid grid-cols-2 gap-2">
-                        <div>
-                          <label className="block text-sm font-medium text-gray-700 mb-1">City</label>
-                          <input
-                            type="text"
-                            value={formData.destinationCity || ''}
-                            onChange={(e) => setFormData({ ...formData, destinationCity: e.target.value })}
-                            className="w-full px-3 py-2 border border-gray-300 rounded-md focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
-                            placeholder="City..."
-                          />
-                        </div>
-                        <div>
-                          <label className="block text-sm font-medium text-gray-700 mb-1">State</label>
-                          <input
-                            type="text"
-                            value={formData.destinationState || ''}
-                            onChange={(e) => setFormData({ ...formData, destinationState: e.target.value })}
-                            className="w-full px-3 py-2 border border-gray-300 rounded-md focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
-                            placeholder="State..."
-                          />
-                        </div>
-                      </div>
-
-                      <div className="grid grid-cols-2 gap-2">
-                        <div>
-                          <label className="block text-sm font-medium text-gray-700 mb-1">ZIP Code</label>
-                          <input
-                            type="text"
-                            value={formData.destinationZipCode || ''}
-                            onChange={(e) => setFormData({ ...formData, destinationZipCode: e.target.value })}
-                            className="w-full px-3 py-2 border border-gray-300 rounded-md focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
-                            placeholder="ZIP..."
-                          />
-                        </div>
-                        <div>
-                          <label className="block text-sm font-medium text-gray-700 mb-1">Time Zone</label>
-                          <input
-                            type="text"
-                            value={formData.destinationTimeZone || ''}
-                            onChange={(e) => setFormData({ ...formData, destinationTimeZone: e.target.value })}
-                            className="w-full px-3 py-2 border border-gray-300 rounded-md focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
-                            placeholder="e.g., EST, CST..."
-                          />
-                        </div>
-                      </div>
-
-                      <div>
-                        <label className="block text-sm font-medium text-gray-700 mb-1">Contact</label>
-                        <input
-                          type="text"
-                          value={formData.destinationContact || ''}
-                          onChange={(e) => setFormData({ ...formData, destinationContact: e.target.value })}
-                          className="w-full px-3 py-2 border border-gray-300 rounded-md focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
-                          placeholder="Contact person/info..."
-                        />
-                      </div>
-                    </div>
-                  </div>
-
-                  {/* Time Fields */}
-                  <div className="grid grid-cols-2 gap-4">
-                    <div>
-                      <label className="block text-sm font-medium text-gray-700 mb-1">Departure Time</label>
-                      <input
-                        type="time"
-                        value={formData.departureTime || ''}
-                        onChange={(e) => setFormData({ ...formData, departureTime: e.target.value })}
-                        className="w-full px-3 py-2 border border-gray-300 rounded-md focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
-                      />
-                    </div>
-                    <div>
-                      <label className="block text-sm font-medium text-gray-700 mb-1">Arrival Time</label>
-                      <input
-                        type="time"
-                        value={formData.arrivalTime || ''}
-                        onChange={(e) => setFormData({ ...formData, arrivalTime: e.target.value })}
-                        className="w-full px-3 py-2 border border-gray-300 rounded-md focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
-                      />
-                    </div>
-                  </div>
-
-                  {/* Estimated Miles */}
-                  <div>
-                    <label className="block text-sm font-medium text-gray-700 mb-1">Estimated Miles</label>
-                    <input
-                      type="number"
-                      value={formData.estimatedMiles || ''}
-                      onChange={(e) => setFormData({ ...formData, estimatedMiles: e.target.value })}
-                      className="w-full px-3 py-2 border border-gray-300 rounded-md focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
-                      placeholder="Estimated distance in miles..."
-                    />
-                  </div>
-                </div>
-              ) : null}
-            </div>
-          </div>
-          
-          <div className="grid grid-cols-2 gap-4">
-            <div>
-              <label className="block text-sm font-medium text-gray-700 mb-1">Driver Name</label>
-              <input
-                type="text"
-                value={formData.driverName}
-                onChange={(e) => setFormData({ ...formData, driverName: e.target.value })}
-                className="w-full px-3 py-2 border border-gray-300 rounded-md focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
-                placeholder="Enter driver name..."
-              />
-            </div>
-            <div>
-              <label className="block text-sm font-medium text-gray-700 mb-1">Phone Number</label>
-              <input
-                type="tel"
-                value={formData.phoneNumber}
-                onChange={(e) => setFormData({ ...formData, phoneNumber: e.target.value })}
-                className="w-full px-3 py-2 border border-gray-300 rounded-md focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
-                placeholder="Enter phone number..."
-              />
-            </div>
-          </div>
-
-          {/* Carrier Email and Report Time */}
-          <div className="grid grid-cols-2 gap-4">
-            <div>
-              <label className="block text-sm font-medium text-gray-700 mb-1">Carrier Email</label>
-              <input
-                type="email"
-                value={formData.carrierEmail}
-                onChange={(e) => setFormData({ ...formData, carrierEmail: e.target.value })}
-                className="w-full px-3 py-2 border border-gray-300 rounded-md focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
-              placeholder="Enter carrier email for rate confirmation..."
-            />
-            </div>
-            <div>
-              <label className="block text-sm font-medium text-gray-700 mb-1">Carrier Report Time</label>
-              <input
-                type="time"
-                value={formData.carrierReportTime}
-                onChange={(e) => setFormData({ ...formData, carrierReportTime: e.target.value })}
-                className="w-full px-3 py-2 border border-gray-300 rounded-md focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
-                placeholder="Time when carrier should report"
-              />
-            </div>
-          </div>
-          
-          {/* Booking Type */}
-          <div>
-            <label className="block text-sm font-medium text-gray-700 mb-2">Type</label>
-            <div className="space-y-2">
-              <label className="flex items-center gap-2">
-                <input
-                  type="radio"
-                  name="editBookingType"
-                  value="POWER_ONLY"
-                  checked={formData.type === 'POWER_ONLY'}
-                  onChange={(e) => setFormData({ ...formData, type: e.target.value as any })}
-                  className="w-4 h-4 text-blue-600 border-gray-300 focus:ring-blue-500"
-                />
-                <span className="text-sm text-gray-700">Power Only</span>
-              </label>
-              <label className="flex items-center gap-2">
-                <input
-                  type="radio"
-                  name="editBookingType"
-                  value="POWER_AND_TRAILER"
-                  checked={formData.type === 'POWER_AND_TRAILER'}
-                  onChange={(e) => setFormData({ ...formData, type: e.target.value as any })}
-                  className="w-4 h-4 text-blue-600 border-gray-300 focus:ring-blue-500"
-                />
-                <span className="text-sm text-gray-700">Power and Trailer</span>
-              </label>
-            </div>
-            
-            {/* Trailer Length - only show when Power and Trailer is selected */}
-            {formData.type === 'POWER_AND_TRAILER' && (
-              <div className="mt-3">
-                <label className="block text-sm font-medium text-gray-700 mb-1">
-                  Trailer Length (feet)
-                </label>
-                <input
-                  type="number"
-                  value={formData.trailerLength}
-                  onChange={(e) => setFormData({ ...formData, trailerLength: e.target.value })}
-                  className="w-full px-3 py-2 border border-gray-300 rounded-md focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
-                  placeholder="Enter trailer length..."
-                  min="1"
-                  step="1"
-                />
-              </div>
-            )}
-          </div>
-          
-          <div className="grid grid-cols-2 gap-4">
-            <div>
-              <label className="block text-sm font-medium text-gray-700 mb-1">Booking Date</label>
-              <input
-                type="date"
-                value={formData.bookingDate}
-                onChange={(e) => setFormData({ ...formData, bookingDate: e.target.value })}
-                className="w-full px-3 py-2 border border-gray-300 rounded-md focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
-              />
-            </div>
-            <div>
-              <label className="block text-sm font-medium text-gray-700 mb-1">Rate Type</label>
-              <div className="flex gap-2">
-                <label className="flex items-center gap-1.5 text-sm">
-                  <input
-                    type="radio"
-                    name="editRateType"
-                    value="FLAT_RATE"
-                    checked={formData.rateType === 'FLAT_RATE'}
-                    onChange={(e) => setFormData({ ...formData, rateType: e.target.value as any })}
-                    className="text-blue-600"
-                  />
-                  <span>Flat Rate</span>
-                </label>
-                <label className="flex items-center gap-1.5 text-sm">
-                  <input
-                    type="radio"
-                    name="editRateType"
-                    value="MILE"
-                    checked={formData.rateType === 'MILE'}
-                    onChange={(e) => setFormData({ ...formData, rateType: e.target.value as any })}
-                    className="text-blue-600"
-                  />
-                  <span>Per Mile</span>
-                </label>
-                <label className="flex items-center gap-1.5 text-sm">
-                  <input
-                    type="radio"
-                    name="editRateType"
-                    value="MILE_FSC"
-                    checked={formData.rateType === 'MILE_FSC'}
-                    onChange={(e) => setFormData({ ...formData, rateType: e.target.value as any })}
-                    className="text-blue-600"
-                  />
-                  <span>Mile + FSC ({Number(settingsData?.fuelSurchargeRate || 0).toFixed(1)}%)</span>
-                </label>
-              </div>
-            </div>
-          </div>
-
-          {/* Rate calculation fields */}
-          <div className="grid grid-cols-3 gap-4">
-            <div>
-              <label className="block text-sm font-medium text-gray-700 mb-1">
-                {formData.rateType === 'FLAT_RATE' ? 'Flat Rate ($)' : 'Base Rate ($/mile)'}
-              </label>
-              <input
-                type="number"
-                step="0.01"
-                value={formData.baseRate}
-                onChange={(e) => setFormData({ ...formData, baseRate: parseFloat(e.target.value) || 0 })}
-                className="w-full px-3 py-2 border border-gray-300 rounded-md focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
-                placeholder="0.00"
-              />
-            </div>
-            {formData.rateType === 'MILE_FSC' && (
-              <div>
-                <label className="block text-sm font-medium text-gray-700 mb-1">FSC Rate (%)</label>
-                <input
-                  type="number"
-                  step="0.01"
-                  value={formData.fscRate}
-                  onChange={(e) => setFormData({ ...formData, fscRate: parseFloat(e.target.value) || 0 })}
-                  className="w-full px-3 py-2 border border-gray-300 rounded-md focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
-                  placeholder="0.00"
-                />
-              </div>
-            )}
-            <div>
-              <label className="block text-sm font-medium text-gray-700 mb-1">Total Rate</label>
-              <div className="w-full px-3 py-2 bg-green-50 border border-green-200 rounded-md text-green-800 font-medium">
-                ${(Number(formData.rate) || 0).toFixed(2)}
-              </div>
-            </div>
-          </div>
-
-          {/* Multi-leg booking editor */}
-          {multiLegInfo && editableLegs.length > 0 && (
-            <div className="border-2 border-blue-200 rounded-lg p-4 bg-blue-50">
-              <h4 className="text-sm font-medium text-gray-700 mb-3">Multi-Leg Booking - Edit Individual Leg Rates:</h4>
-              
-              {/* Global rate type controls for multi-leg */}
-              <div className="bg-white p-3 rounded border mb-3">
-                <div className="text-xs font-medium text-gray-600 mb-2">Global Rate Settings (applies to all legs):</div>
-                <div className="grid grid-cols-3 gap-3">
-                  <div>
-                    <label className="block text-xs font-medium text-gray-600 mb-1">Rate Type</label>
-                    <div className="flex gap-2 text-xs">
-                      <label className="flex items-center gap-1">
-                        <input
-                          type="radio"
-                          name="multiLegRateType"
-                          value="MILE"
-                          checked={formData.rateType === 'MILE'}
-                          onChange={(e) => setFormData({ ...formData, rateType: e.target.value as any })}
-                          className="text-blue-600"
-                        />
-                        <span>Per Mile</span>
-                      </label>
-                      <label className="flex items-center gap-1">
-                        <input
-                          type="radio"
-                          name="multiLegRateType"
-                          value="MILE_FSC"
-                          checked={formData.rateType === 'MILE_FSC'}
-                          onChange={(e) => setFormData({ ...formData, rateType: e.target.value as any })}
-                          className="text-blue-600"
-                        />
-                        <span>Mile + FSC</span>
-                      </label>
-                      <label className="flex items-center gap-1">
-                        <input
-                          type="radio"
-                          name="multiLegRateType"
-                          value="FLAT_RATE"
-                          checked={formData.rateType === 'FLAT_RATE'}
-                          onChange={(e) => setFormData({ ...formData, rateType: e.target.value as any })}
-                          className="text-blue-600"
-                        />
-                        <span>Manual</span>
-                      </label>
-                    </div>
-                  </div>
-                  {(formData.rateType === 'MILE' || formData.rateType === 'MILE_FSC') && (
-                    <div>
-                      <label className="block text-xs font-medium text-gray-600 mb-1">Base Rate ($/mile)</label>
-                      <input
-                        type="number"
-                        step="0.01"
-                        value={formData.baseRate}
-                        onChange={(e) => setFormData({ ...formData, baseRate: parseFloat(e.target.value) || 0 })}
-                        className="w-full px-2 py-1 border border-gray-300 rounded text-sm focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
-                        placeholder="0.00"
-                      />
-                    </div>
-                  )}
-                  {formData.rateType === 'MILE_FSC' && (
-                    <div>
-                      <label className="block text-xs font-medium text-gray-600 mb-1">FSC Rate (%)</label>
-                      <input
-                        type="number"
-                        step="0.01"
-                        value={formData.fscRate}
-                        onChange={(e) => setFormData({ ...formData, fscRate: parseFloat(e.target.value) || 0 })}
-                        className="w-full px-2 py-1 border border-gray-300 rounded text-sm focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
-                        placeholder="0.00"
-                      />
-                    </div>
-                  )}
-                </div>
-              </div>
-
-              {/* Individual leg rates */}
-              {editableLegs.map((leg, index) => {
-                const distance = getDistanceForLeg(leg.origin, leg.destination);
-                return (
-                  <div key={index} className="bg-white p-4 rounded border mb-3">
-                    <div className="mb-3">
-                      <div className="text-sm font-medium text-gray-800 mb-2">
-                        Leg {leg.legNumber}
-                      </div>
-                      
-                      {/* Origin and Destination Address Fields */}
-                      <div className="grid grid-cols-2 gap-4 mb-3">
-                        <div>
-                          <label className="block text-xs font-medium text-gray-600 mb-1">Origin</label>
-                          <input
-                            type="text"
-                            value={leg.origin}
-                            onChange={(e) => updateLegAddress(index, 'origin', e.target.value)}
-                            className="w-full px-2 py-1 border border-gray-300 rounded text-sm focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
-                            placeholder="Enter origin address..."
-                          />
-                        </div>
-                        <div>
-                          <label className="block text-xs font-medium text-gray-600 mb-1">Destination</label>
-                          <input
-                            type="text"
-                            value={leg.destination}
-                            onChange={(e) => updateLegAddress(index, 'destination', e.target.value)}
-                            className="w-full px-2 py-1 border border-gray-300 rounded text-sm focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
-                            placeholder="Enter destination address..."
-                          />
-                        </div>
-                      </div>
-
-                      {/* Manifest Number Field */}
-                      <div className="mb-3">
-                        <label className="block text-xs font-medium text-gray-600 mb-1">Manifest #</label>
-                        <input
-                          type="text"
-                          value={leg.manifestNumber || ''}
-                          onChange={(e) => updateLegManifestNumber(index, e.target.value)}
-                          className="w-full px-2 py-1 border border-gray-300 rounded text-sm focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
-                          placeholder="Enter manifest number..."
-                        />
-                      </div>
-                    </div>
-                    
-                    <div className="flex items-center justify-between">
-                      <div className="flex-1">
-                        <div className="text-xs text-gray-500">
-                          Distance: {distance} miles
-                          {formData.rateType !== 'FLAT_RATE' && (
-                            <span className="ml-2">
-                              ({distance} miles × ${formData.baseRate}/mile
-                              {formData.rateType === 'MILE_FSC' && ` + ${formData.fscRate}% FSC`} 
-                              = ${leg.rate})
-                            </span>
-                          )}
-                        </div>
-                      </div>
-                      <div className="ml-4">
-                        <label className="block text-xs font-medium text-gray-600 mb-1">Rate ($)</label>
-                        <input
-                          type="number"
-                          step="0.01"
-                          value={leg.rate}
-                          onChange={(e) => updateLegRate(index, e.target.value)}
-                          className="w-24 px-2 py-1 border border-gray-300 rounded text-sm focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
-                          placeholder="0.00"
-                          readOnly={formData.rateType !== 'FLAT_RATE'}
-                        />
-                      </div>
-                    </div>
-                  </div>
-                );
-              })}
-              <div className="text-xs text-blue-600 mt-2">
-                Total Rate: ${editableLegs.reduce((sum, leg) => sum + parseFloat(leg.rate || '0'), 0).toFixed(2)}
-                {formData.rateType !== 'FLAT_RATE' && <span className="ml-2 text-gray-500">(Auto-calculated based on rate type)</span>}
-              </div>
-            </div>
-          )}
-          
-          
-          <div>
-            <label className="block text-sm font-medium text-gray-700 mb-1">Notes</label>
-            <textarea
-              value={formData.notes}
-              onChange={(e) => setFormData({ ...formData, notes: e.target.value })}
-              rows={3}
-              className="w-full px-3 py-2 border border-gray-300 rounded-md focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
-              placeholder="Additional notes..."
-            />
-          </div>
-
-          {/* Document Upload Section */}
-          <div className="border-t pt-4">
-            <h3 className="text-lg font-semibold text-gray-900 mb-4">Documents</h3>
-            
-            {/* Current Documents */}
-            {uploadedDocuments.length > 0 && (
-              <div className="mb-4">
-                <label className="block text-sm font-medium text-gray-700 mb-2">Current Documents</label>
-                <div className="space-y-2">
-                  {uploadedDocuments.map((doc: any) => (
-                    <div key={doc.id} className="flex items-center justify-between p-2 bg-gray-50 rounded border">
-                      <div className="flex items-center gap-2">
-                        <FileText className="w-4 h-4 text-blue-500" />
-                        <div>
-                          <div className="text-sm font-medium">{doc.filename}</div>
-                          <div className="text-xs text-gray-500">{doc.documentType}</div>
-                        </div>
-                      </div>
-                      <button
-                        onClick={() => window.open(`/api/bookings/documents/${doc.id}/download`, '_blank')}
-                        className="text-blue-600 hover:text-blue-800 text-sm"
-                        type="button"
-                      >
-                        View
-                      </button>
-                    </div>
-                  ))}
-                </div>
-              </div>
-            )}
-
-            {/* Upload New Documents */}
-            <div className="space-y-4">
-
-              <div>
-                <label className="block text-sm font-medium text-gray-700 mb-1">Select Files</label>
-                <input
-                  id="document-upload"
-                  type="file"
-                  multiple
-                  onChange={handleFileSelect}
-                  className="w-full px-3 py-2 border border-gray-300 rounded-md focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
-                  accept=".pdf,.jpg,.jpeg,.png,.doc,.docx"
-                />
-                {selectedFiles && selectedFiles.length > 0 && (
-                  <p className="text-xs text-gray-500 mt-1">
-                    {selectedFiles.length} file(s) selected
-                  </p>
-                )}
-              </div>
-
-              <button
-                type="button"
-                onClick={handleDocumentUpload}
-                disabled={!selectedFiles || selectedFiles.length === 0 || isUploading}
-                className="px-4 py-2 bg-green-600 text-white rounded hover:bg-green-700 disabled:bg-gray-400 disabled:cursor-not-allowed flex items-center gap-2"
+                Cancel
+              </button>
+              <button 
+                onClick={handleSave}
+                disabled={isSubmitting}
+                className="px-4 py-2 bg-blue-600 text-white rounded hover:bg-blue-700 disabled:bg-blue-400"
               >
-                {isUploading ? (
-                  <>
-                    <div className="animate-spin rounded-full h-4 w-4 border-b-2 border-white"></div>
-                    Uploading...
-                  </>
-                ) : (
-                  <>
-                    <FileText className="w-4 h-4" />
-                    Upload Documents
-                  </>
-                )}
+                {isSubmitting ? 'Saving...' : 'Save Changes'}
               </button>
             </div>
-          </div>
-          
-          <div className="flex justify-end gap-3 mt-6 pt-4 border-t">
+          ) : (
             <button 
-              type="button"
               onClick={onClose}
               className="px-4 py-2 bg-gray-500 text-white rounded hover:bg-gray-600"
-              disabled={isSubmitting}
             >
-              Cancel
+              Close
             </button>
-            <button 
-              type="submit"
-              className="px-4 py-2 bg-blue-600 text-white rounded hover:bg-blue-700 disabled:bg-blue-400"
-              disabled={isSubmitting}
-            >
-              {isSubmitting ? 'Saving...' : 'Save Changes'}
-            </button>
-          </div>
-        </form>
+          )}
+        </div>
       </div>
     </div>
   );
 };
+

@@ -1102,3 +1102,49 @@ export const uploadDocumentsToBooking = async (req: Request, res: Response) => {
     return res.status(500).json({ message: 'Failed to upload documents' });
   }
 };
+
+// Generate or regenerate document upload token for a booking
+export const generateDocumentUploadToken = async (req: Request, res: Response) => {
+  try {
+    const { id } = req.params;
+    const bookingId = parseInt(id);
+
+    if (isNaN(bookingId)) {
+      return res.status(400).json({ message: 'Invalid booking ID' });
+    }
+
+    // Check if booking exists
+    const booking = await prisma.booking.findUnique({
+      where: { id: bookingId }
+    });
+
+    if (!booking) {
+      return res.status(404).json({ message: 'Booking not found' });
+    }
+
+    // Generate new token
+    const documentUploadToken = uuidv4();
+    const documentUploadTokenCreatedAt = new Date();
+
+    // Update booking with new token
+    await prisma.booking.update({
+      where: { id: bookingId },
+      data: {
+        documentUploadToken,
+        documentUploadTokenCreatedAt
+      }
+    });
+
+    console.log(`Generated document upload token for booking ${bookingId}: ${documentUploadToken}`);
+    
+    return res.json({
+      message: 'Document upload token generated successfully',
+      documentUploadToken,
+      tokenCreatedAt: documentUploadTokenCreatedAt,
+      tokenExpiresAt: new Date(documentUploadTokenCreatedAt.getTime() + 24 * 60 * 60 * 1000) // 24 hours
+    });
+  } catch (error) {
+    console.error('Generate document upload token error:', error);
+    return res.status(500).json({ message: 'Failed to generate document upload token' });
+  }
+};

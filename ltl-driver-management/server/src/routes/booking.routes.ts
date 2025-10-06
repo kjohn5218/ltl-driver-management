@@ -17,7 +17,8 @@ import {
   getDocumentUploadPage,
   uploadBookingDocuments,
   downloadBookingDocument,
-  uploadDocumentsToBooking
+  uploadDocumentsToBooking,
+  generateDocumentUploadToken
 } from '../controllers/booking.controller';
 import { authenticate, authorize } from '../middleware/auth.middleware';
 import { validateRequest } from '../middleware/validation.middleware';
@@ -194,6 +195,13 @@ router.get(
   '/:id/signed-pdf',
   authorize(UserRole.ADMIN, UserRole.DISPATCHER),
   getSignedPDF
+);
+
+// Generate document upload token for booking (Admin/Dispatcher only)
+router.post(
+  '/:id/generate-upload-token',
+  authorize(UserRole.ADMIN, UserRole.DISPATCHER),
+  generateDocumentUploadToken
 );
 
 // Test email configuration (Admin/Dispatcher only)
