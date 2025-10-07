@@ -77,12 +77,12 @@ export const getDashboardMetrics = async (req: Request, res: Response) => {
           status: { notIn: ['COMPLETED', 'CANCELLED'] }
         } 
       }),
-      // Count outstanding rate confirmations (signed but not uploaded to bookings not in completed/cancelled)
+      // Count outstanding rate confirmations (sent but not yet signed for open bookings)
       prisma.booking.count({ 
         where: { 
           status: { notIn: ['COMPLETED', 'CANCELLED'] },
-          confirmationSignedAt: { not: null },
-          confirmationSentAt: { not: null }
+          confirmationSentAt: { not: null },
+          confirmationSignedAt: null
         } 
       }),
       // Count rate confirmations not sent (bookings without confirmation sent)
