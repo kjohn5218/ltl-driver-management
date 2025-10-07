@@ -36,6 +36,9 @@ interface DashboardMetrics {
   unbookedRoutes: number;
   bookedRoutes: number;
   pendingRateConfirmations: number;
+  openBookings: number;
+  outstandingRateConfirmations: number;
+  rateConfirmationsNotSent: number;
 }
 
 interface DashboardData {
@@ -85,40 +88,38 @@ export const Dashboard: React.FC = () => {
 
   const operationalMetrics = [
     {
-      name: 'Active Carriers',
-      value: data.metrics.activeCarriers || 0,
-      total: data.metrics.totalCarriers || 0,
-      icon: Truck,
+      name: 'Open Bookings',
+      value: data.metrics.openBookings || 0,
+      icon: Calendar,
       color: 'bg-blue-600',
-      percentage: carriersOnboardingRate,
-      trend: 'up',
-      onClick: () => navigate('/carriers?status=ACTIVE')
+      description: 'Bookings not completed or cancelled',
+      onClick: () => navigate('/bookings?status=PENDING,CONFIRMED')
     },
     {
-      name: 'Route Coverage',
-      value: data.metrics.bookedRoutes || 0,
-      total: data.metrics.totalRoutes || 0,
-      icon: MapPin,
-      color: 'bg-green-600',
-      percentage: routeCoverageRate,
-      trend: 'up',
-      onClick: () => navigate('/bookings')
+      name: 'Outstanding Rate Confirmations',
+      value: data.metrics.outstandingRateConfirmations || 0,
+      icon: Shield,
+      color: 'bg-orange-600',
+      description: 'Signed confirmations for open bookings',
+      urgent: data.metrics.outstandingRateConfirmations > 5,
+      onClick: () => navigate('/bookings?rateConfirmation=signed')
+    },
+    {
+      name: 'Rate Confirmations not Sent',
+      value: data.metrics.rateConfirmationsNotSent || 0,
+      icon: FileText,
+      color: 'bg-red-600',
+      description: 'Bookings without confirmations sent',
+      urgent: data.metrics.rateConfirmationsNotSent > 3,
+      onClick: () => navigate('/bookings?rateConfirmation=notSent')
     },
     {
       name: 'Pending Invoices',
       value: data.metrics.pendingInvoices || 0,
-      icon: FileText,
-      color: 'bg-orange-600',
+      icon: DollarSign,
+      color: 'bg-green-600',
       urgent: data.metrics.pendingInvoices > 10,
       onClick: () => navigate('/invoices?status=PENDING')
-    },
-    {
-      name: 'Rate Confirmations',
-      value: data.metrics.pendingRateConfirmations || 0,
-      icon: Shield,
-      color: 'bg-red-600',
-      urgent: data.metrics.pendingRateConfirmations > 5,
-      onClick: () => navigate('/bookings?rateConfirmation=pending')
     }
   ];
 
@@ -186,6 +187,9 @@ export const Dashboard: React.FC = () => {
                         <TrendingUp className="h-4 w-4 text-green-500 mr-1" />
                         <span className="text-sm font-medium text-green-600">{metric.percentage}%</span>
                       </div>
+                    )}
+                    {metric.description && (
+                      <p className="text-xs text-gray-500 mt-1">{metric.description}</p>
                     )}
                   </div>
                 </div>

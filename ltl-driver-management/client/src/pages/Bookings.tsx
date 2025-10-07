@@ -113,8 +113,9 @@ export const Bookings: React.FC = () => {
         (booking.carrier?.name.toLowerCase().includes(searchTerm.toLowerCase()) ||
          booking.route?.name.toLowerCase().includes(searchTerm.toLowerCase()));
       
-      // Status filter
-      const matchesStatus = statusFilter === '' || booking.status === statusFilter;
+      // Status filter (supports comma-separated values)
+      const matchesStatus = statusFilter === '' || 
+        statusFilter.split(',').map(s => s.trim()).includes(booking.status);
       
       // Date filter
       let matchesDate = true;
@@ -140,6 +141,19 @@ export const Bookings: React.FC = () => {
           booking.status !== 'CANCELLED' && 
           booking.status !== 'COMPLETED' &&
           (!booking.confirmationSentAt || !booking.confirmationSignedAt);
+      } else if (rateConfirmationFilter === 'signed') {
+        // Show open bookings with signed rate confirmations
+        matchesRateConfirmation = 
+          booking.status !== 'CANCELLED' && 
+          booking.status !== 'COMPLETED' &&
+          booking.confirmationSentAt !== null &&
+          booking.confirmationSignedAt !== null;
+      } else if (rateConfirmationFilter === 'notSent') {
+        // Show open bookings where rate confirmation has not been sent
+        matchesRateConfirmation = 
+          booking.status !== 'CANCELLED' && 
+          booking.status !== 'COMPLETED' &&
+          booking.confirmationSentAt === null;
       }
       
       // Documents filter
@@ -443,13 +457,22 @@ export const Bookings: React.FC = () => {
         </div>
         
         {/* Rate Confirmation Filter Indicator */}
-        {rateConfirmationFilter === 'pending' && (
-          <div className="flex items-center gap-2 text-sm text-orange-600 bg-orange-50 px-3 py-1 rounded-md">
+        {rateConfirmationFilter && (
+          <div className={`flex items-center gap-2 text-sm px-3 py-1 rounded-md ${
+            rateConfirmationFilter === 'pending' ? 'text-orange-600 bg-orange-50' :
+            rateConfirmationFilter === 'signed' ? 'text-blue-600 bg-blue-50' :
+            rateConfirmationFilter === 'notSent' ? 'text-red-600 bg-red-50' :
+            'text-gray-600 bg-gray-50'
+          }`}>
             <Clock className="w-4 h-4" />
-            <span className="font-medium">Showing: Pending Rate Confirmations</span>
+            <span className="font-medium">
+              {rateConfirmationFilter === 'pending' && 'Showing: Pending Rate Confirmations'}
+              {rateConfirmationFilter === 'signed' && 'Showing: Outstanding Rate Confirmations (Signed)'}
+              {rateConfirmationFilter === 'notSent' && 'Showing: Rate Confirmations not Sent'}
+            </span>
             <button
               onClick={() => setRateConfirmationFilter('')}
-              className="ml-2 text-orange-600 hover:text-orange-800"
+              className="ml-2 hover:opacity-80"
               title="Clear filter"
             >
               <X className="w-4 h-4" />
