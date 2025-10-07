@@ -3,6 +3,7 @@ import invoiceService from '../services/invoice.service';
 import { InvoiceStatus } from '@prisma/client';
 import { parseISO } from 'date-fns';
 import { sendInvoicesToAP as emailInvoicesToAP } from '../services/notification.service';
+import { PDFService } from '../services/pdf.service';
 
 export class InvoiceController {
   // Generate invoice from completed booking
@@ -211,6 +212,32 @@ export class InvoiceController {
       return res.status(500).json({ error: error.message || 'Failed to get invoice summary' });
     }
   }
+
+  // Download invoice as PDF
+  async downloadInvoicePDF(req: Request, res: Response) {
+    try {
+      const id = parseInt(req.params.id);
+      
+      const invoice = await invoiceService.getInvoice(id);
+      
+      if (!invoice) {
+        return res.status(404).json({ error: 'Invoice not found' });
+      }
+      
+      // Generate PDF
+      const pdfBuffer = await PDFService.generateInvoicePDF(invoice);
+      
+      // Set headers for PDF download
+      res.setHeader('Content-Type', 'application/pdf');
+      res.setHeader('Content-Disposition', `inline; filename="Invoice-${invoice.invoiceNumber}.pdf"`);
+      res.setHeader('Content-Length', pdfBuffer.length);
+      
+      return res.send(pdfBuffer);
+    } catch (error: any) {
+      console.error('Download invoice PDF error:', error);
+      return res.status(500).json({ error: error.message || 'Failed to generate invoice PDF' });
+    }
+  }
 }
 
 const invoiceController = new InvoiceController();
@@ -223,6 +250,7 @@ export const updateInvoiceStatus = invoiceController.updateInvoiceStatus.bind(in
 export const sendInvoicesToAP = invoiceController.sendInvoicesToAP.bind(invoiceController);
 export const deleteInvoice = invoiceController.deleteInvoice.bind(invoiceController);
 export const getInvoiceSummary = invoiceController.getInvoiceSummary.bind(invoiceController);
+export const downloadInvoicePDF = invoiceController.downloadInvoicePDF.bind(invoiceController);
 
 // Legacy exports for backward compatibility
 export const getInvoices = listInvoices;

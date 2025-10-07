@@ -7,7 +7,8 @@ import {
   updateInvoiceStatus,
   sendInvoicesToAP,
   deleteInvoice,
-  getInvoiceSummary
+  getInvoiceSummary,
+  downloadInvoicePDF
 } from '../controllers/invoice.controller';
 import { authenticate, authorize } from '../middleware/auth.middleware';
 import { validateRequest } from '../middleware/validation.middleware';
@@ -47,6 +48,9 @@ router.get(
 
 // Get specific invoice
 router.get('/:id', getInvoice);
+
+// Download invoice as PDF
+router.get('/:id/pdf', downloadInvoicePDF);
 
 // Generate invoice for completed booking (Admin/Dispatcher only)
 router.post(

@@ -137,6 +137,7 @@ export class InvoiceService {
             documents: true,
             childBookings: {
               include: {
+                route: true,
                 lineItems: {
                   include: {
                     creator: true
