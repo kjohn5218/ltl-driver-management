@@ -337,6 +337,13 @@ const LocationViewModal: React.FC<LocationViewModalProps> = ({ location, onClose
             </div>
           )}
           
+          {location.notes && (
+            <div className="md:col-span-2">
+              <label className="block text-sm font-medium text-gray-700">Notes</label>
+              <p className="mt-1 text-sm text-gray-900 whitespace-pre-wrap">{location.notes}</p>
+            </div>
+          )}
+          
           <div>
             <label className="block text-sm font-medium text-gray-700">Status</label>
             <span className={`mt-1 inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium ${
@@ -392,6 +399,7 @@ const LocationEditModal: React.FC<LocationEditModalProps> = ({ location, onClose
     timeZone: location?.timeZone || '',
     latitude: location?.latitude?.toString() || '',
     longitude: location?.longitude?.toString() || '',
+    notes: location?.notes || '',
     active: location?.active ?? true
   });
   const [isSubmitting, setIsSubmitting] = useState(false);
@@ -416,6 +424,7 @@ const LocationEditModal: React.FC<LocationEditModalProps> = ({ location, onClose
         timeZone: cleanValue(formData.timeZone),
         latitude: formData.latitude ? parseFloat(formData.latitude) : undefined,
         longitude: formData.longitude ? parseFloat(formData.longitude) : undefined,
+        notes: cleanValue(formData.notes),
         active: formData.active
       };
 
@@ -618,6 +627,19 @@ const LocationEditModal: React.FC<LocationEditModalProps> = ({ location, onClose
                 placeholder="Longitude"
               />
             </div>
+          </div>
+          
+          <div>
+            <label className="block text-sm font-medium text-gray-700 mb-1">
+              Notes
+            </label>
+            <textarea
+              value={formData.notes}
+              onChange={(e) => setFormData({ ...formData, notes: e.target.value })}
+              rows={3}
+              className="w-full px-3 py-2 border border-gray-300 rounded-md focus:ring-2 focus:ring-primary-500 focus:border-primary-500"
+              placeholder="Additional notes about this location..."
+            />
           </div>
           
           <div className="flex items-center">

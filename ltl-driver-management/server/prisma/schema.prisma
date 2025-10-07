@@ -313,6 +313,7 @@ model Location {
   updatedAt DateTime @updatedAt
   hours     String?
   phone     String?
+  notes     String?
 
   @@map("locations")
 }

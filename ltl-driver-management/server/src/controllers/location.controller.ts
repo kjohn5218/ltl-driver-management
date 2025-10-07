@@ -136,6 +136,7 @@ export const createLocation = async (req: Request, res: Response) => {
         timeZone: locationData.timeZone || undefined,
         latitude: locationData.latitude ? parseFloat(locationData.latitude) : undefined,
         longitude: locationData.longitude ? parseFloat(locationData.longitude) : undefined,
+        notes: locationData.notes || undefined,
         active: locationData.active !== undefined ? locationData.active : true
       }
     });
@@ -192,6 +193,7 @@ export const updateLocation = async (req: Request, res: Response) => {
         timeZone: updateData.timeZone || undefined,
         latitude: updateData.latitude ? parseFloat(updateData.latitude) : undefined,
         longitude: updateData.longitude ? parseFloat(updateData.longitude) : undefined,
+        notes: updateData.notes || undefined,
         active: updateData.active
       }
     });

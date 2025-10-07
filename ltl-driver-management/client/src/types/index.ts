@@ -269,6 +269,7 @@ export interface Location {
   timeZone?: string;
   latitude?: number;
   longitude?: number;
+  notes?: string;
   active: boolean;
   createdAt: string;
   updatedAt: string;
