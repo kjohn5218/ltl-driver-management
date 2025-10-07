@@ -2,6 +2,7 @@ import puppeteer from 'puppeteer';
 import fs from 'fs';
 import path from 'path';
 import { format } from 'date-fns';
+import { prisma } from '../index';
 
 interface BookingData {
   id: number;
@@ -98,7 +99,24 @@ export class PDFService {
     `;
   }
 
-  private static generateRouteItemsHTML(booking: BookingData): string {
+  // Helper function to fetch location notes by code
+  private static async getLocationNotes(locationCode: string): Promise<string | null> {
+    try {
+      if (!locationCode || locationCode === 'N/A') return null;
+      
+      const location = await prisma.location.findUnique({
+        where: { code: locationCode.toUpperCase() },
+        select: { notes: true }
+      });
+      
+      return location?.notes || null;
+    } catch (error) {
+      console.error(`Error fetching location notes for ${locationCode}:`, error);
+      return null;
+    }
+  }
+
+  private static async generateRouteItemsHTML(booking: BookingData): Promise<string> {
     // Parse multi-leg booking from notes if present
     const notes = booking.notes || '';
     const hasMultiLeg = notes.includes('--- Multi-Leg Booking ---');
@@ -176,6 +194,12 @@ export class PDFService {
     const routeOrigin = booking.route?.origin || booking.origin || 'N/A';
     const routeDestination = booking.route?.destination || booking.destination || 'N/A';
     
+    // Fetch location notes for origin and destination
+    const [originNotes, destinationNotes] = await Promise.all([
+      this.getLocationNotes(routeOrigin),
+      this.getLocationNotes(routeDestination)
+    ]);
+    
     let singleRouteHTML = `
     <div class="route-item">
       <div class="route-header">
@@ -189,6 +213,21 @@ export class PDFService {
           <span><strong>Departure Time:</strong> ${booking.route?.departureTime || 'TBD'}</span>
         </div>
       </div>
+      ${originNotes || destinationNotes ? `
+      <div style="margin-top: 15px; padding-top: 10px; border-top: 1px solid #ddd;">
+        <div style="font-weight: bold; margin-bottom: 8px; color: #0066cc;">Location Notes:</div>
+        ${originNotes ? `
+        <div style="margin-bottom: 8px;">
+          <strong>${routeOrigin}:</strong> <span style="color: #555;">${originNotes}</span>
+        </div>
+        ` : ''}
+        ${destinationNotes ? `
+        <div>
+          <strong>${routeDestination}:</strong> <span style="color: #555;">${destinationNotes}</span>
+        </div>
+        ` : ''}
+      </div>
+      ` : ''}
     </div>
     `;
     
@@ -236,6 +275,9 @@ export class PDFService {
         : 0;
       
       const totalRate = baseRate + lineItemsTotal;
+      
+      // Generate route HTML with location notes
+      const routeHTML = await this.generateRouteItemsHTML(booking);
 
       // HTML template for the signed rate confirmation
       const html = `
@@ -428,7 +470,7 @@ export class PDFService {
             <div class="section">
               <div class="section-title">Route Information</div>
               <div class="route-section">
-                ${this.generateRouteItemsHTML(booking)}
+                ${routeHTML}
                 
                 ${lineItemsTotal > 0 ? `
                 <div style="margin-top: 20px;">

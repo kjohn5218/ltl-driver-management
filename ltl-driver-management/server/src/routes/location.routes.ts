@@ -2,6 +2,7 @@ import { Router } from 'express';
 import {
   getLocations,
   getLocationById,
+  getLocationByCode,
   searchLocations,
   createLocation,
   updateLocation,
@@ -19,6 +20,9 @@ router.get('/', getLocations);
 
 // GET /api/locations/search - Search locations for autocomplete
 router.get('/search', searchLocations);
+
+// GET /api/locations/code/:code - Get location by code
+router.get('/code/:code', getLocationByCode);
 
 // GET /api/locations/:id - Get location by ID
 router.get('/:id', getLocationById);

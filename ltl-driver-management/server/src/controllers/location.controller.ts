@@ -72,6 +72,25 @@ export const getLocationById = async (req: Request, res: Response) => {
   }
 };
 
+export const getLocationByCode = async (req: Request, res: Response) => {
+  try {
+    const { code } = req.params;
+    
+    const location = await prisma.location.findUnique({
+      where: { code: code.toUpperCase() }
+    });
+
+    if (!location) {
+      return res.status(404).json({ message: 'Location not found' });
+    }
+
+    return res.json(location);
+  } catch (error) {
+    console.error('Get location by code error:', error);
+    return res.status(500).json({ message: 'Failed to fetch location' });
+  }
+};
+
 export const searchLocations = async (req: Request, res: Response) => {
   try {
     const { q } = req.query;
