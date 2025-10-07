@@ -100,9 +100,9 @@ export const Dashboard: React.FC = () => {
       value: data.metrics.outstandingRateConfirmations || 0,
       icon: Shield,
       color: 'bg-orange-600',
-      description: 'Unsigned confirmations for open bookings',
+      description: 'Sent confirmations awaiting signatures',
       urgent: data.metrics.outstandingRateConfirmations > 5,
-      onClick: () => navigate('/bookings?rateConfirmation=signed')
+      onClick: () => navigate('/bookings?rateConfirmation=outstanding')
     },
     {
       name: 'Rate Confirmations not Sent',

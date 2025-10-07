@@ -141,6 +141,13 @@ export const Bookings: React.FC = () => {
           booking.status !== 'CANCELLED' && 
           booking.status !== 'COMPLETED' &&
           (!booking.confirmationSentAt || !booking.confirmationSignedAt);
+      } else if (rateConfirmationFilter === 'outstanding') {
+        // Show open bookings with sent but unsigned rate confirmations
+        matchesRateConfirmation = 
+          booking.status !== 'CANCELLED' && 
+          booking.status !== 'COMPLETED' &&
+          booking.confirmationSentAt !== null &&
+          booking.confirmationSignedAt === null;
       } else if (rateConfirmationFilter === 'signed') {
         // Show open bookings with signed rate confirmations
         matchesRateConfirmation = 
@@ -460,14 +467,16 @@ export const Bookings: React.FC = () => {
         {rateConfirmationFilter && (
           <div className={`flex items-center gap-2 text-sm px-3 py-1 rounded-md ${
             rateConfirmationFilter === 'pending' ? 'text-orange-600 bg-orange-50' :
-            rateConfirmationFilter === 'signed' ? 'text-blue-600 bg-blue-50' :
+            rateConfirmationFilter === 'outstanding' ? 'text-blue-600 bg-blue-50' :
+            rateConfirmationFilter === 'signed' ? 'text-green-600 bg-green-50' :
             rateConfirmationFilter === 'notSent' ? 'text-red-600 bg-red-50' :
             'text-gray-600 bg-gray-50'
           }`}>
             <Clock className="w-4 h-4" />
             <span className="font-medium">
               {rateConfirmationFilter === 'pending' && 'Showing: Pending Rate Confirmations'}
-              {rateConfirmationFilter === 'signed' && 'Showing: Outstanding Rate Confirmations (Signed)'}
+              {rateConfirmationFilter === 'outstanding' && 'Showing: Outstanding Rate Confirmations (Sent, Awaiting Signature)'}
+              {rateConfirmationFilter === 'signed' && 'Showing: Signed Rate Confirmations'}
               {rateConfirmationFilter === 'notSent' && 'Showing: Rate Confirmations not Sent'}
             </span>
             <button
