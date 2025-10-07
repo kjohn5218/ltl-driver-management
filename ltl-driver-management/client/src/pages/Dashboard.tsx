@@ -100,7 +100,7 @@ export const Dashboard: React.FC = () => {
       value: data.metrics.outstandingRateConfirmations || 0,
       icon: Shield,
       color: 'bg-orange-600',
-      description: 'Signed confirmations for open bookings',
+      description: 'Unsigned confirmations for open bookings',
       urgent: data.metrics.outstandingRateConfirmations > 5,
       onClick: () => navigate('/bookings?rateConfirmation=signed')
     },
