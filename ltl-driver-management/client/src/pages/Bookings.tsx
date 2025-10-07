@@ -789,6 +789,28 @@ const BookingViewModal: React.FC<BookingViewModalProps> = ({ booking, onClose, g
     manifestNumber: bookingToDisplay.manifestNumber || ''
   });
 
+  // Update form data when booking data changes
+  useEffect(() => {
+    setFormData({
+      carrierId: bookingToDisplay.carrierId || '',
+      rate: Number(bookingToDisplay.rate) || 0,
+      status: bookingToDisplay.status || 'PENDING',
+      notes: bookingToDisplay.notes || '',
+      driverName: bookingToDisplay.driverName || '',
+      phoneNumber: bookingToDisplay.phoneNumber || '',
+      carrierEmail: bookingToDisplay.carrierEmail || '',
+      carrierReportTime: bookingToDisplay.carrierReportTime || '',
+      type: bookingToDisplay.type || 'POWER_ONLY',
+      trailerLength: bookingToDisplay.trailerLength ? bookingToDisplay.trailerLength.toString() : '',
+      bookingDate: bookingToDisplay.bookingDate ? new Date(bookingToDisplay.bookingDate).toISOString().split('T')[0] : '',
+      rateType: bookingToDisplay.rateType || 'FLAT_RATE',
+      baseRate: Number(bookingToDisplay.baseRate) || 0,
+      fscRate: Number(bookingToDisplay.fscRate) || 0,
+      routeId: bookingToDisplay.routeId || null,
+      manifestNumber: bookingToDisplay.manifestNumber || ''
+    });
+  }, [bookingToDisplay]);
+
   // Fetch routes for distance lookup
   const { data: routesData } = useQuery({
     queryKey: ['routes'],
@@ -880,7 +902,11 @@ const BookingViewModal: React.FC<BookingViewModalProps> = ({ booking, onClose, g
         manifestNumber: formData.manifestNumber.trim() || null
       };
       
-      await api.put(`/bookings/${bookingToDisplay.id}`, payload);
+      console.log('Sending payload:', payload);
+      console.log('Manifest number being sent:', payload.manifestNumber);
+      
+      const response = await api.put(`/bookings/${bookingToDisplay.id}`, payload);
+      console.log('Update response:', response.data);
       
       // Update the bookings cache
       queryClient.invalidateQueries({ queryKey: ['bookings'] });
