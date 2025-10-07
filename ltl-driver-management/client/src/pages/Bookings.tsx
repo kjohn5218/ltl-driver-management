@@ -1751,7 +1751,7 @@ const BookingViewModal: React.FC<BookingViewModalProps> = ({ booking, onClose, g
           {/* Line Items Section */}
           <BookingLineItems 
             bookingId={bookingToDisplay.id} 
-            isReadOnly={!!bookingToDisplay.confirmationSignedAt}
+            isReadOnly={false}
           />
           
           <div>
