@@ -414,6 +414,11 @@ const AddCarrierModal: React.FC<AddCarrierModalProps> = ({ onClose, onSave }) =>
   
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [errors, setErrors] = useState<string[]>([]);
+  
+  // Document upload state
+  const [documents, setDocuments] = useState<{ file: File; documentType: string }[]>([]);
+  const [currentDocumentType, setCurrentDocumentType] = useState('');
+  const [isUploadingDocuments, setIsUploadingDocuments] = useState(false);
 
   // Create carrier mutation
   const createCarrierMutation = useMutation({
@@ -421,8 +426,14 @@ const AddCarrierModal: React.FC<AddCarrierModalProps> = ({ onClose, onSave }) =>
       const response = await api.post('/carriers', carrierData);
       return response.data;
     },
-    onSuccess: () => {
+    onSuccess: async (createdCarrier) => {
       setErrors([]);
+      
+      // Upload documents if any were selected
+      if (documents.length > 0) {
+        await uploadDocuments(createdCarrier.id);
+      }
+      
       onSave();
     },
     onError: (error: any) => {
@@ -536,6 +547,71 @@ const AddCarrierModal: React.FC<AddCarrierModalProps> = ({ onClose, onSave }) =>
       await createCarrierMutation.mutateAsync(payload);
     } finally {
       setIsSubmitting(false);
+    }
+  };
+
+  // Handle document file selection
+  const handleFileChange = (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0];
+    if (file && currentDocumentType) {
+      // Validate file type
+      const allowedTypes = [
+        'application/pdf',
+        'application/msword',
+        'application/vnd.openxmlformats-officedocument.wordprocessingml.document',
+        'image/jpeg',
+        'image/png'
+      ];
+      
+      if (!allowedTypes.includes(file.type)) {
+        setErrors(['Please upload a PDF, DOC, DOCX, JPG, or PNG file']);
+        return;
+      }
+      
+      // Validate file size (max 10MB)
+      if (file.size > 10 * 1024 * 1024) {
+        setErrors(['File size must be less than 10MB']);
+        return;
+      }
+      
+      // Add document to list
+      setDocuments([...documents, { file, documentType: currentDocumentType }]);
+      setCurrentDocumentType('');
+      setErrors([]);
+      
+      // Reset file input
+      if (e.target) {
+        e.target.value = '';
+      }
+    }
+  };
+
+  // Remove document from list
+  const removeDocument = (index: number) => {
+    setDocuments(documents.filter((_, i) => i !== index));
+  };
+
+  // Upload documents after carrier creation
+  const uploadDocuments = async (carrierId: number) => {
+    setIsUploadingDocuments(true);
+    
+    try {
+      for (const doc of documents) {
+        const formData = new FormData();
+        formData.append('document', doc.file);
+        formData.append('documentType', doc.documentType);
+        
+        await api.post(`/carriers/${carrierId}/documents`, formData, {
+          headers: {
+            'Content-Type': 'multipart/form-data',
+          },
+        });
+      }
+    } catch (error) {
+      console.error('Error uploading documents:', error);
+      // Don't fail the entire operation for document upload errors
+    } finally {
+      setIsUploadingDocuments(false);
     }
   };
 
@@ -875,22 +951,97 @@ const AddCarrierModal: React.FC<AddCarrierModalProps> = ({ onClose, onSave }) =>
               </div>
             </div>
           </div>
+
+          {/* Document Upload Section */}
+          <div>
+            <h3 className="text-lg font-medium text-gray-900 mb-4">Documents</h3>
+            
+            {/* Document Upload */}
+            <div className="space-y-4">
+              <div className="flex gap-2">
+                <select
+                  value={currentDocumentType}
+                  onChange={(e) => setCurrentDocumentType(e.target.value)}
+                  className="px-3 py-2 border border-gray-300 rounded-md focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
+                >
+                  <option value="">Select document type...</option>
+                  <option value="INSURANCE">Insurance Certificate</option>
+                  <option value="W9">W-9 Form</option>
+                  <option value="CARRIER_AGREEMENT">Carrier Agreement</option>
+                  <option value="SAFETY_CERTIFICATE">Safety Certificate</option>
+                  <option value="OPERATING_AUTHORITY">Operating Authority</option>
+                  <option value="OTHER">Other</option>
+                </select>
+                
+                <div className="relative">
+                  <input
+                    type="file"
+                    onChange={handleFileChange}
+                    accept=".pdf,.doc,.docx,.jpg,.jpeg,.png"
+                    disabled={!currentDocumentType}
+                    className="absolute inset-0 w-full h-full opacity-0 cursor-pointer disabled:cursor-not-allowed"
+                  />
+                  <button
+                    type="button"
+                    disabled={!currentDocumentType}
+                    className="px-4 py-2 bg-gray-600 text-white rounded hover:bg-gray-700 disabled:bg-gray-300 disabled:cursor-not-allowed flex items-center gap-2"
+                  >
+                    <Upload className="w-4 h-4" />
+                    Choose File
+                  </button>
+                </div>
+              </div>
+              
+              {/* Document List */}
+              {documents.length > 0 && (
+                <div className="border border-gray-200 rounded-md p-4">
+                  <h4 className="text-sm font-medium text-gray-700 mb-2">Selected Documents:</h4>
+                  <div className="space-y-2">
+                    {documents.map((doc, index) => (
+                      <div key={index} className="flex items-center justify-between bg-gray-50 p-2 rounded">
+                        <div className="flex items-center gap-2">
+                          <FileText className="w-4 h-4 text-gray-400" />
+                          <span className="text-sm text-gray-700">{doc.file.name}</span>
+                          <span className="text-xs text-gray-500 bg-gray-200 px-2 py-1 rounded">
+                            {doc.documentType}
+                          </span>
+                        </div>
+                        <button
+                          type="button"
+                          onClick={() => removeDocument(index)}
+                          className="text-red-600 hover:text-red-800"
+                        >
+                          <X className="w-4 h-4" />
+                        </button>
+                      </div>
+                    ))}
+                  </div>
+                </div>
+              )}
+              
+              <p className="text-xs text-gray-500">
+                Accepted formats: PDF, DOC, DOCX, JPG, PNG (max 10MB each)
+              </p>
+            </div>
+          </div>
           
           <div className="flex justify-end gap-3 mt-6 pt-4 border-t">
             <button 
               type="button"
               onClick={onClose}
               className="px-4 py-2 bg-gray-500 text-white rounded hover:bg-gray-600"
-              disabled={isSubmitting}
+              disabled={isSubmitting || isUploadingDocuments}
             >
               Cancel
             </button>
             <button 
               type="submit"
               className="px-4 py-2 bg-blue-600 text-white rounded hover:bg-blue-700 disabled:bg-gray-300"
-              disabled={isSubmitting}
+              disabled={isSubmitting || isUploadingDocuments}
             >
-              {isSubmitting ? 'Creating...' : 'Create Carrier'}
+              {isSubmitting && !isUploadingDocuments && 'Creating Carrier...'}
+              {isUploadingDocuments && 'Uploading Documents...'}
+              {!isSubmitting && !isUploadingDocuments && 'Create Carrier'}
             </button>
           </div>
         </form>
