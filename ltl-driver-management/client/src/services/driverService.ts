@@ -54,8 +54,23 @@ export const driverService = {
 
   // Get all drivers (no filtering)
   getAllDrivers: async (): Promise<CarrierDriver[]> => {
-    const response = await driverService.getDrivers({ active: true, limit: 5000 });
-    return response.drivers;
+    const allDrivers: CarrierDriver[] = [];
+    let page = 1;
+    let hasMore = true;
+    
+    while (hasMore) {
+      const response = await driverService.getDrivers({ 
+        active: true, 
+        limit: 100, 
+        page 
+      });
+      
+      allDrivers.push(...response.drivers);
+      hasMore = page < response.pagination.pages;
+      page++;
+    }
+    
+    return allDrivers;
   },
 
   // Get drivers by carrier

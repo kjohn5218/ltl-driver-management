@@ -830,9 +830,18 @@ const BookingViewModal: React.FC<BookingViewModalProps> = ({ booking, onClose, g
     enabled: isEditMode
   });
 
+  // Memoized distance lookup cache
+  const distanceCache = useMemo(() => new Map<string, number>(), []);
+
   // Helper function to get distance for a leg by looking up route in database
   const getDistanceForLeg = (origin: string, destination: string): number => {
-    if (!routesData?.routes) {
+    const cacheKey = `${origin}-${destination}`;
+    
+    // Check cache first
+    if (distanceCache.has(cacheKey)) {
+      return distanceCache.get(cacheKey)!;
+    }
+    if (!routesData?.routes && !routesData) {
       console.warn('Routes data not available for distance lookup');
       return 258; // Default fallback based on your example
     }
@@ -848,7 +857,8 @@ const BookingViewModal: React.FC<BookingViewModalProps> = ({ booking, onClose, g
     const legDestinationClean = cleanLocation(destination);
     
     // Find matching route by origin and destination
-    const matchingRoute = routesData.routes.find((route: any) => {
+    const routes = routesData?.routes || routesData || [];
+    const matchingRoute = routes.find((route: any) => {
       const routeOrigin = cleanLocation(route.origin || '');
       const routeDestination = cleanLocation(route.destination || '');
       
@@ -858,11 +868,12 @@ const BookingViewModal: React.FC<BookingViewModalProps> = ({ booking, onClose, g
     if (matchingRoute && matchingRoute.distance) {
       const distance = Number(matchingRoute.distance);
       console.log(`Found route distance for ${origin} → ${destination}: ${distance} miles`);
+      distanceCache.set(cacheKey, distance);
       return distance;
     }
     
     // Try reverse direction
-    const reverseRoute = routesData.routes.find((route: any) => {
+    const reverseRoute = routes.find((route: any) => {
       const routeOrigin = cleanLocation(route.origin || '');
       const routeDestination = cleanLocation(route.destination || '');
       
@@ -872,11 +883,14 @@ const BookingViewModal: React.FC<BookingViewModalProps> = ({ booking, onClose, g
     if (reverseRoute && reverseRoute.distance) {
       const distance = Number(reverseRoute.distance);
       console.log(`Found reverse route distance for ${destination} → ${origin}: ${distance} miles`);
+      distanceCache.set(cacheKey, distance);
       return distance;
     }
     
     console.warn(`No route found for ${origin} → ${destination}, using default distance`);
-    return 258; // Default distance based on your example
+    const defaultDistance = 258; // Default distance based on your example
+    distanceCache.set(cacheKey, defaultDistance);
+    return defaultDistance;
   };
 
   const handleSave = async () => {

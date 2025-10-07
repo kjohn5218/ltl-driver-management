@@ -693,7 +693,7 @@ export const RateConfirmation: React.FC<RateConfirmationProps> = ({ booking, shi
 
       {/* Email Instructions */}
       <div className="mb-2 text-center">
-        <div className="font-bold text-xs">Please email a copy of the rate confirmation, load manifest and invoice to: linehaulmanagement@ccfs.com.</div>
+        <div className="font-bold text-xs">Please email a copy of the rate confirmation, load manifest and invoice to: aplinehaul@ccfs.com.</div>
       </div>
 
     </div>
