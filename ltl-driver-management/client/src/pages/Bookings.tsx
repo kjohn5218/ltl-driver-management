@@ -1129,15 +1129,20 @@ const BookingViewModal: React.FC<BookingViewModalProps> = ({ booking, onClose, g
                   onChange={(e) => setFormData({...formData, status: e.target.value})}
                   className="w-full p-2 border rounded focus:ring-blue-500 focus:border-blue-500"
                 >
-                  <option value="PENDING">UNBOOKED</option>
-                  <option value="CONFIRMED">BOOKED</option>
-                  <option value="IN_TRANSIT">IN TRANSIT</option>
-                  <option value="DELIVERED">DELIVERED</option>
-                  <option value="CANCELLED">CANCELLED</option>
+                  <option value="PENDING">Pending (Unbooked)</option>
+                  <option value="CONFIRMED">Confirmed (Booked)</option>
+                  <option value="IN_PROGRESS">In Progress</option>
+                  <option value="COMPLETED">Completed</option>
+                  <option value="CANCELLED">Cancelled</option>
                 </select>
               ) : (
                 <span className={`inline-flex px-2 py-1 rounded-full text-xs font-medium ${getStatusBadge(bookingToDisplay.status)}`}>
-                  {bookingToDisplay.status === 'PENDING' ? 'UNBOOKED' : bookingToDisplay.status === 'CONFIRMED' ? 'BOOKED' : bookingToDisplay.status.replace('_', ' ')}
+                  {bookingToDisplay.status === 'PENDING' ? 'Pending (Unbooked)' : 
+                   bookingToDisplay.status === 'CONFIRMED' ? 'Confirmed (Booked)' :
+                   bookingToDisplay.status === 'IN_PROGRESS' ? 'In Progress' :
+                   bookingToDisplay.status === 'COMPLETED' ? 'Completed' :
+                   bookingToDisplay.status === 'CANCELLED' ? 'Cancelled' : 
+                   bookingToDisplay.status.replace('_', ' ')}
                 </span>
               )}
             </div>
