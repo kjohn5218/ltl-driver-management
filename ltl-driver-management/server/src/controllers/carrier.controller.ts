@@ -1420,3 +1420,174 @@ const sendOnboardingCompletionEmail = async (carrier: any) => {
     attachments
   });
 };
+
+// Lookup carrier data from external API
+export const lookupCarrierData = async (req: Request, res: Response): Promise<void> => {
+  try {
+    const { dotNumber, mcNumber } = req.body;
+
+    if (!dotNumber && !mcNumber) {
+      res.status(400).json({ message: 'DOT Number or MC Number is required' });
+      return;
+    }
+
+    // Prepare request body for external API
+    const requestBody: any = {};
+    if (dotNumber) requestBody.DOTNumber = parseInt(dotNumber);
+    if (mcNumber) requestBody.MCNumber = mcNumber;
+
+    // Make request to external API
+    // TODO: Add your MyCarrierPackets API key here
+    const apiKey = process.env.MYCARRIERPACKETS_API_KEY || '';
+    
+    if (!apiKey) {
+      throw new Error('MyCarrierPackets API key not configured. Please add MYCARRIERPACKETS_API_KEY to your environment variables.');
+    }
+
+    const response = await fetch('https://api.mycarrierpackets.com/api/v1/Carrier/GetCarrierData', {
+      method: 'POST',
+      headers: {
+        'Accept': 'application/json',
+        'Content-Type': 'application/json',
+        'Authorization': `Bearer ${apiKey}` // or whatever auth format they use
+      },
+      body: JSON.stringify(requestBody)
+    });
+
+    if (!response.ok) {
+      throw new Error(`API request failed: ${response.status}`);
+    }
+
+    const carrierData: any = await response.json();
+
+    // Extract and map relevant fields from the response
+    const mappedData = {
+      name: carrierData.LegalName || carrierData.DBAName || '',
+      dbaName: carrierData.DBAName || '',
+      dotNumber: carrierData.DOTNumber?.toString() || '',
+      mcNumber: carrierData.MCNumber || '',
+      scac: carrierData.SCAC || '',
+      address: carrierData.Address1 || '',
+      address2: carrierData.Address2 || '',
+      city: carrierData.City || '',
+      state: carrierData.State || '',
+      zipCode: carrierData.Zipcode || '',
+      country: carrierData.Country || 'US',
+      phone: carrierData.Phone || carrierData.CellPhone || '',
+      cellPhone: carrierData.CellPhone || '',
+      fax: carrierData.Fax || '',
+      email: carrierData.Email || '',
+      website: carrierData.Website || '',
+      emergencyPhone: carrierData.EmergencyPhone || '',
+      // Mailing address
+      mailingAddress: carrierData.MailingAddress1 || '',
+      mailingAddress2: carrierData.MailingAddress2 || '',
+      mailingCity: carrierData.MailingCity || '',
+      mailingState: carrierData.MailingState || '',
+      mailingZipCode: carrierData.MailingZipcode || '',
+      mailingCountry: carrierData.MailingCountry || '',
+      // Equipment info
+      fleetSize: carrierData.CarrierOperationalDetail?.FleetSize || 0,
+      totalPowerUnits: carrierData.CarrierOperationalDetail?.TotalPowerUnits || 0,
+      // Safety rating from AssureAdvantage if available
+      safetyRating: carrierData.AssureAdvantage?.[0]?.CarrierDetails?.Safety?.rating || ''
+    };
+
+    res.json({
+      success: true,
+      data: mappedData,
+      rawData: carrierData // Include raw data for debugging
+    });
+
+  } catch (error) {
+    console.error('Carrier lookup error:', error);
+    res.status(500).json({ 
+      success: false,
+      message: 'Failed to lookup carrier data',
+      error: error instanceof Error ? error.message : 'Unknown error'
+    });
+  }
+};
+
+// Send MyCarrierPackets intellivite invitation
+export const sendIntellIviteInvitation = async (req: Request, res: Response): Promise<void> => {
+  try {
+    const { dotNumber, mcNumber, email, username } = req.body;
+
+    if (!dotNumber && !mcNumber) {
+      res.status(400).json({ message: 'DOT Number or MC Number is required' });
+      return;
+    }
+
+    if (!email) {
+      res.status(400).json({ message: 'Email is required' });
+      return;
+    }
+
+    // Get API key from environment
+    const apiKey = process.env.MYCARRIERPACKETS_API_KEY || '';
+    
+    if (!apiKey) {
+      throw new Error('MyCarrierPackets API key not configured. Please add MYCARRIERPACKETS_API_KEY to your environment variables.');
+    }
+
+    // Construct the API URL with query parameters
+    const baseUrl = 'https://api.mycarrierpackets.com/api/v1/Carrier/EmailPacketInvitation';
+    const params = new URLSearchParams();
+    
+    if (dotNumber) params.append('dotNumber', dotNumber);
+    if (mcNumber) params.append('docketNumber', mcNumber);
+    params.append('carrierEmail', email);
+    params.append('username', username || 'CrossCountryFreight');
+
+    const apiUrl = `${baseUrl}?${params.toString()}`;
+
+    // Make POST request to MyCarrierPackets API
+    const response = await fetch(apiUrl, {
+      method: 'POST',
+      headers: {
+        'Accept': 'application/json',
+        'Content-Type': 'application/json',
+        'Authorization': `Bearer ${apiKey}` // Adjust auth format as needed
+      }
+    });
+
+    if (!response.ok) {
+      const errorText = await response.text();
+      throw new Error(`MyCarrierPackets API request failed (${response.status}): ${errorText}`);
+    }
+
+    const result = await response.json();
+
+    // Log the invitation in our database (optional)
+    try {
+      await prisma.carrierInvitation.create({
+        data: {
+          email,
+          dotNumber: dotNumber || null,
+          mcNumber: mcNumber || null,
+          status: 'SENT_INTELLIVITE',
+          expiresAt: new Date(Date.now() + 7 * 24 * 60 * 60 * 1000), // 7 days
+          invitedBy: (req as any).user?.id || 1 // Use authenticated user ID
+        }
+      });
+    } catch (dbError) {
+      console.error('Failed to log invitation in database:', dbError);
+      // Continue - don't fail the request if DB logging fails
+    }
+
+    res.json({
+      success: true,
+      message: 'MyCarrierPackets invitation sent successfully',
+      data: result
+    });
+
+  } catch (error) {
+    console.error('IntellIvite invitation error:', error);
+    res.status(500).json({ 
+      success: false,
+      message: 'Failed to send MyCarrierPackets invitation',
+      error: error instanceof Error ? error.message : 'Unknown error'
+    });
+  }
+};

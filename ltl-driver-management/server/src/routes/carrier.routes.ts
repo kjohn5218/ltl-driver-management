@@ -22,7 +22,9 @@ import {
   downloadAgreementWithAffidavit,
   getCarrierDocuments,
   downloadCarrierDocument,
-  deleteCarrierDocument
+  deleteCarrierDocument,
+  lookupCarrierData,
+  sendIntellIviteInvitation
 } from '../controllers/carrier.controller';
 import { authenticate, authorize } from '../middleware/auth.middleware';
 import { validateRequest } from '../middleware/validation.middleware';
@@ -60,6 +62,32 @@ router.get(
   ],
   validateRequest,
   searchCarriers
+);
+
+// Lookup carrier data from external API (Admin/Dispatcher only)
+router.post(
+  '/lookup',
+  authorize(UserRole.ADMIN, UserRole.DISPATCHER),
+  [
+    body('dotNumber').optional().trim(),
+    body('mcNumber').optional().trim()
+  ],
+  validateRequest,
+  lookupCarrierData
+);
+
+// Send MyCarrierPackets intellivite invitation (Admin/Dispatcher only)
+router.post(
+  '/invite-intellivite',
+  authorize(UserRole.ADMIN, UserRole.DISPATCHER),
+  [
+    body('dotNumber').optional().trim(),
+    body('mcNumber').optional().trim(),
+    body('email').notEmpty().isEmail().normalizeEmail(),
+    body('username').optional().trim()
+  ],
+  validateRequest,
+  sendIntellIviteInvitation
 );
 
 // Get carrier invitations (Admin/Dispatcher only) - Must come before /:id route

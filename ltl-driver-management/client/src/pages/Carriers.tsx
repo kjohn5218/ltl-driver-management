@@ -122,6 +122,15 @@ export const Carriers: React.FC = () => {
             <Plus className="w-4 h-4" />
             Add Carrier
           </button>
+          <a
+            href="https://mycarrierpackets.com/"
+            target="_blank"
+            rel="noopener noreferrer"
+            className="inline-flex items-center px-4 py-2 bg-purple-600 text-white rounded-md hover:bg-purple-700 transition-colors"
+          >
+            <ExternalLink className="w-4 h-4 mr-2" />
+            My Carrier Packet
+          </a>
         </div>
       </div>
 
@@ -415,6 +424,10 @@ const AddCarrierModal: React.FC<AddCarrierModalProps> = ({ onClose, onSave }) =>
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [errors, setErrors] = useState<string[]>([]);
   
+  // Carrier lookup state
+  const [isLookingUp, setIsLookingUp] = useState(false);
+  const [lookupSuccess, setLookupSuccess] = useState(false);
+  
   // Document upload state
   const [documents, setDocuments] = useState<{ file: File; documentType: string }[]>([]);
   const [currentDocumentType, setCurrentDocumentType] = useState('');
@@ -453,6 +466,55 @@ const AddCarrierModal: React.FC<AddCarrierModalProps> = ({ onClose, onSave }) =>
       setErrors(errorMessages);
     }
   });
+
+  // Carrier lookup function
+  const handleCarrierLookup = async () => {
+    if (!formData.dotNumber && !formData.mcNumber) {
+      setErrors(['Please enter either a DOT Number or MC Number to lookup carrier data']);
+      return;
+    }
+
+    setIsLookingUp(true);
+    setErrors([]);
+    setLookupSuccess(false);
+
+    try {
+      const response = await api.post('/carriers/lookup', {
+        dotNumber: formData.dotNumber || undefined,
+        mcNumber: formData.mcNumber || undefined
+      });
+
+      if (response.data.success && response.data.data) {
+        const carrierData = response.data.data;
+        
+        // Populate form with looked up data
+        setFormData(prev => ({
+          ...prev,
+          name: carrierData.name || prev.name,
+          email: carrierData.email || prev.email,
+          phone: carrierData.phone || prev.phone,
+          streetAddress1: carrierData.address || prev.streetAddress1,
+          streetAddress2: carrierData.address2 || prev.streetAddress2,
+          city: carrierData.city || prev.city,
+          state: carrierData.state || prev.state,
+          zipCode: carrierData.zipCode || prev.zipCode,
+          dotNumber: carrierData.dotNumber || prev.dotNumber,
+          mcNumber: carrierData.mcNumber || prev.mcNumber,
+          safetyRating: carrierData.safetyRating || prev.safetyRating
+        }));
+
+        setLookupSuccess(true);
+        setTimeout(() => setLookupSuccess(false), 3000);
+      } else {
+        setErrors(['No carrier data found for the provided DOT/MC number']);
+      }
+    } catch (error: any) {
+      console.error('Lookup error:', error);
+      setErrors([error.response?.data?.message || 'Failed to lookup carrier data. Please try again.']);
+    } finally {
+      setIsLookingUp(false);
+    }
+  };
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -806,13 +868,41 @@ const AddCarrierModal: React.FC<AddCarrierModalProps> = ({ onClose, onSave }) =>
               </div>
               <div>
                 <label className="block text-sm font-medium text-gray-700 mb-1">DOT Number <span className="text-red-500">*</span></label>
-                <input
-                  type="text"
-                  required
-                  value={formData.dotNumber}
-                  onChange={(e) => setFormData({ ...formData, dotNumber: e.target.value })}
-                  className="w-full px-3 py-2 border border-gray-300 rounded-md focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
-                />
+                <div className="flex gap-2">
+                  <input
+                    type="text"
+                    required
+                    value={formData.dotNumber}
+                    onChange={(e) => setFormData({ ...formData, dotNumber: e.target.value })}
+                    className="flex-1 px-3 py-2 border border-gray-300 rounded-md focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
+                  />
+                  <button
+                    type="button"
+                    onClick={handleCarrierLookup}
+                    disabled={isLookingUp || (!formData.dotNumber && !formData.mcNumber)}
+                    className="px-4 py-2 bg-purple-600 text-white rounded-md hover:bg-purple-700 disabled:bg-gray-400 disabled:cursor-not-allowed flex items-center gap-2 whitespace-nowrap"
+                  >
+                    {isLookingUp ? (
+                      <>
+                        <div className="animate-spin rounded-full h-4 w-4 border-b-2 border-white"></div>
+                        Looking up...
+                      </>
+                    ) : (
+                      <>
+                        <Search className="w-4 h-4" />
+                        Lookup Data
+                      </>
+                    )}
+                  </button>
+                </div>
+                {lookupSuccess && (
+                  <p className="text-sm text-green-600 mt-1 flex items-center gap-1">
+                    <svg className="w-4 h-4" fill="currentColor" viewBox="0 0 20 20">
+                      <path fillRule="evenodd" d="M10 18a8 8 0 100-16 8 8 0 000 16zm3.707-9.293a1 1 0 00-1.414-1.414L9 10.586 7.707 9.293a1 1 0 00-1.414 1.414l2 2a1 1 0 001.414 0l4-4z" clipRule="evenodd" />
+                    </svg>
+                    Carrier data loaded successfully!
+                  </p>
+                )}
               </div>
               <div>
                 <label className="block text-sm font-medium text-gray-700 mb-1">Safety Rating</label>
@@ -2145,14 +2235,63 @@ interface InviteCarrierModalProps {
 }
 
 const InviteCarrierModal: React.FC<InviteCarrierModalProps> = ({ onClose, onSave }) => {
+  const [dotNumber, setDotNumber] = useState('');
+  const [mcNumber, setMcNumber] = useState('');
   const [email, setEmail] = useState('');
   const [isSubmitting, setIsSubmitting] = useState(false);
+  const [isLookingUp, setIsLookingUp] = useState(false);
   const [error, setError] = useState('');
   const [success, setSuccess] = useState(false);
+  const [carrierData, setCarrierData] = useState<any>(null);
+  const [lookupSuccess, setLookupSuccess] = useState(false);
+
+  // Lookup carrier data to preload information
+  const handleCarrierLookup = async () => {
+    if (!dotNumber && !mcNumber) {
+      setError('Please enter either a DOT Number or MC Number to lookup carrier data');
+      return;
+    }
+
+    setIsLookingUp(true);
+    setError('');
+    setLookupSuccess(false);
+
+    try {
+      const response = await api.post('/carriers/lookup', {
+        dotNumber: dotNumber || undefined,
+        mcNumber: mcNumber || undefined
+      });
+
+      if (response.data.success && response.data.data) {
+        const data = response.data.data;
+        setCarrierData(data);
+        
+        // Pre-populate email if found
+        if (data.email) {
+          setEmail(data.email);
+        }
+        
+        setLookupSuccess(true);
+        setTimeout(() => setLookupSuccess(false), 3000);
+      } else {
+        setError('No carrier data found for the provided DOT/MC number');
+      }
+    } catch (error: any) {
+      console.error('Lookup error:', error);
+      setError(error.response?.data?.message || 'Failed to lookup carrier data. Please try again.');
+    } finally {
+      setIsLookingUp(false);
+    }
+  };
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     setError('');
+    
+    if (!dotNumber && !mcNumber) {
+      setError('DOT Number or MC Number is required');
+      return;
+    }
     
     if (!email.trim()) {
       setError('Email is required');
@@ -2167,7 +2306,13 @@ const InviteCarrierModal: React.FC<InviteCarrierModalProps> = ({ onClose, onSave
     setIsSubmitting(true);
     
     try {
-      await api.post('/carriers/invite', { email: email.trim() });
+      // Use the MyCarrierPackets invite API
+      await api.post('/carriers/invite-intellivite', { 
+        dotNumber: dotNumber || undefined,
+        mcNumber: mcNumber || undefined,
+        email: email.trim(),
+        username: 'CrossCountryFreight' // Your MCP username
+      });
       setSuccess(true);
       setTimeout(() => {
         onSave();
@@ -2191,7 +2336,7 @@ const InviteCarrierModal: React.FC<InviteCarrierModalProps> = ({ onClose, onSave
             </div>
             <h3 className="text-lg font-medium text-gray-900 mb-2">Invitation Sent!</h3>
             <p className="text-sm text-gray-600 mb-4">
-              The carrier registration invitation has been sent to {email}
+              The MyCarrierPackets invitation has been sent to {email} for DOT {dotNumber || mcNumber}
             </p>
             <button
               onClick={onSave}
@@ -2207,9 +2352,12 @@ const InviteCarrierModal: React.FC<InviteCarrierModalProps> = ({ onClose, onSave
 
   return (
     <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50">
-      <div className="bg-white rounded-lg p-6 w-full max-w-md">
-        <div className="flex justify-between items-center mb-4">
-          <h2 className="text-lg font-bold text-gray-900">Send Carrier Invitation</h2>
+      <div className="bg-white rounded-lg p-6 w-full max-w-lg">
+        <div className="flex justify-between items-center mb-6">
+          <div>
+            <h2 className="text-xl font-bold text-gray-900">Search & Intellivite</h2>
+            <p className="text-sm text-gray-600">Invite carriers to complete packets</p>
+          </div>
           <button 
             onClick={onClose}
             className="text-gray-400 hover:text-gray-600"
@@ -2219,9 +2367,91 @@ const InviteCarrierModal: React.FC<InviteCarrierModalProps> = ({ onClose, onSave
         </div>
         
         <form onSubmit={handleSubmit}>
+          {/* DOT Number Section */}
+          <div className="mb-6">
+            <label className="block text-sm font-medium text-gray-700 mb-2">
+              Enter a DOT Number
+            </label>
+            <div className="flex gap-2">
+              <input
+                type="text"
+                value={dotNumber}
+                onChange={(e) => setDotNumber(e.target.value)}
+                className="flex-1 px-3 py-2 border border-gray-300 rounded-md focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
+                placeholder="DOT Number"
+              />
+              <button
+                type="button"
+                onClick={handleCarrierLookup}
+                disabled={isLookingUp || (!dotNumber && !mcNumber)}
+                className="px-4 py-2 bg-blue-600 text-white rounded-md hover:bg-blue-700 disabled:bg-gray-400 disabled:cursor-not-allowed"
+              >
+                {isLookingUp ? 'Searching...' : 'Search'}
+              </button>
+            </div>
+          </div>
+
+          {/* OR Separator */}
+          <div className="flex items-center mb-6">
+            <div className="flex-1 border-t border-gray-300"></div>
+            <span className="px-3 text-sm text-red-500 font-medium">OR</span>
+            <div className="flex-1 border-t border-gray-300"></div>
+          </div>
+
+          {/* MC Number Section */}
+          <div className="mb-6">
+            <label className="block text-sm font-medium text-gray-700 mb-2">
+              Enter a Docket Number
+            </label>
+            <div className="flex gap-2">
+              <select className="px-3 py-2 border border-gray-300 rounded-l-md bg-gray-50">
+                <option>MC</option>
+              </select>
+              <input
+                type="text"
+                value={mcNumber}
+                onChange={(e) => setMcNumber(e.target.value)}
+                className="flex-1 px-3 py-2 border border-gray-300 rounded-r-md focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
+                placeholder="Docket Number"
+              />
+              <button
+                type="button"
+                onClick={handleCarrierLookup}
+                disabled={isLookingUp || (!dotNumber && !mcNumber)}
+                className="px-4 py-2 bg-blue-600 text-white rounded-md hover:bg-blue-700 disabled:bg-gray-400 disabled:cursor-not-allowed"
+              >
+                {isLookingUp ? 'Searching...' : 'Search'}
+              </button>
+            </div>
+          </div>
+
+          {/* Lookup Success Message */}
+          {lookupSuccess && (
+            <div className="mb-4 p-3 bg-green-50 border border-green-200 rounded-md">
+              <p className="text-sm text-green-700 flex items-center gap-1">
+                <svg className="w-4 h-4" fill="currentColor" viewBox="0 0 20 20">
+                  <path fillRule="evenodd" d="M10 18a8 8 0 100-16 8 8 0 000 16zm3.707-9.293a1 1 0 00-1.414-1.414L9 10.586 7.707 9.293a1 1 0 00-1.414 1.414l2 2a1 1 0 001.414 0l4-4z" clipRule="evenodd" />
+                </svg>
+                Carrier data loaded successfully!
+              </p>
+            </div>
+          )}
+
+          {/* Carrier Info Display */}
+          {carrierData && (
+            <div className="mb-4 p-3 bg-blue-50 border border-blue-200 rounded-md">
+              <h4 className="font-medium text-blue-900 mb-2">Found Carrier:</h4>
+              <p className="text-sm text-blue-800">{carrierData.name}</p>
+              {carrierData.city && carrierData.state && (
+                <p className="text-sm text-blue-700">{carrierData.city}, {carrierData.state}</p>
+              )}
+            </div>
+          )}
+
+          {/* Email Input */}
           <div className="mb-4">
             <label htmlFor="email" className="block text-sm font-medium text-gray-700 mb-2">
-              Email Address
+              Enter a Carrier's Email
             </label>
             <input
               type="email"
@@ -2242,7 +2472,7 @@ const InviteCarrierModal: React.FC<InviteCarrierModalProps> = ({ onClose, onSave
           
           <div className="bg-blue-50 border border-blue-200 rounded-md p-3 mb-4">
             <p className="text-sm text-blue-800">
-              The carrier will receive an email with a registration link that expires in 7 days.
+              The carrier will receive an intellivite invitation to complete their MyCarrierPackets profile.
             </p>
           </div>
           
@@ -2257,8 +2487,8 @@ const InviteCarrierModal: React.FC<InviteCarrierModalProps> = ({ onClose, onSave
             </button>
             <button 
               type="submit"
-              className="px-4 py-2 bg-blue-600 text-white rounded hover:bg-blue-700 disabled:bg-gray-300 flex items-center gap-2"
-              disabled={isSubmitting}
+              className="px-6 py-2 bg-blue-600 text-white rounded hover:bg-blue-700 disabled:bg-gray-300 flex items-center gap-2"
+              disabled={isSubmitting || (!dotNumber && !mcNumber) || !email}
             >
               {isSubmitting ? (
                 <>
@@ -2268,7 +2498,7 @@ const InviteCarrierModal: React.FC<InviteCarrierModalProps> = ({ onClose, onSave
               ) : (
                 <>
                   <Send className="w-4 h-4" />
-                  Send Invitation
+                  Search
                 </>
               )}
             </button>
