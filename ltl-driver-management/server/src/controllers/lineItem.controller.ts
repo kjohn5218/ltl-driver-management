@@ -70,12 +70,7 @@ export const addBookingLineItem = async (req: Request, res: Response) => {
       return res.status(404).json({ message: 'Booking not found' });
     }
 
-    // Check if booking is already signed (prevent modifications after signing)
-    if (booking.confirmationSignedAt) {
-      return res.status(400).json({ 
-        message: 'Cannot modify line items for a signed rate confirmation' 
-      });
-    }
+    // Allow adding line items even after booking is signed
 
     const lineItem = await prisma.bookingLineItem.create({
       data: {
@@ -115,11 +110,7 @@ export const updateBookingLineItem = async (req: Request, res: Response) => {
       return res.status(404).json({ message: 'Booking not found' });
     }
 
-    if (booking.confirmationSignedAt) {
-      return res.status(400).json({ 
-        message: 'Cannot modify line items for a signed rate confirmation' 
-      });
-    }
+    // Allow updating line items even after booking is signed
 
     const lineItem = await prisma.bookingLineItem.update({
       where: { 
@@ -160,11 +151,7 @@ export const deleteBookingLineItem = async (req: Request, res: Response) => {
       return res.status(404).json({ message: 'Booking not found' });
     }
 
-    if (booking.confirmationSignedAt) {
-      return res.status(400).json({ 
-        message: 'Cannot modify line items for a signed rate confirmation' 
-      });
-    }
+    // Allow deleting line items even after booking is signed
 
     // Get line item to check for receipt file
     const lineItem = await prisma.bookingLineItem.findUnique({
@@ -230,13 +217,7 @@ export const uploadLineItemReceipt = async (req: Request, res: Response) => {
         return res.status(404).json({ message: 'Line item not found' });
       }
 
-      if (lineItem.booking.confirmationSignedAt) {
-        // Clean up uploaded file
-        fs.unlinkSync(file.path);
-        return res.status(400).json({ 
-          message: 'Cannot modify line items for a signed rate confirmation' 
-        });
-      }
+      // Allow uploading receipts even after booking is signed
 
       // Delete old receipt if it exists
       if (lineItem.receiptPath) {

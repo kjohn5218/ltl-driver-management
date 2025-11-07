@@ -72,6 +72,25 @@ export const getLocationById = async (req: Request, res: Response) => {
   }
 };
 
+export const getLocationByCode = async (req: Request, res: Response) => {
+  try {
+    const { code } = req.params;
+    
+    const location = await prisma.location.findUnique({
+      where: { code: code.toUpperCase() }
+    });
+
+    if (!location) {
+      return res.status(404).json({ message: 'Location not found' });
+    }
+
+    return res.json(location);
+  } catch (error) {
+    console.error('Get location by code error:', error);
+    return res.status(500).json({ message: 'Failed to fetch location' });
+  }
+};
+
 export const searchLocations = async (req: Request, res: Response) => {
   try {
     const { q } = req.query;
@@ -136,6 +155,7 @@ export const createLocation = async (req: Request, res: Response) => {
         timeZone: locationData.timeZone || undefined,
         latitude: locationData.latitude ? parseFloat(locationData.latitude) : undefined,
         longitude: locationData.longitude ? parseFloat(locationData.longitude) : undefined,
+        notes: locationData.notes || undefined,
         active: locationData.active !== undefined ? locationData.active : true
       }
     });
@@ -192,6 +212,7 @@ export const updateLocation = async (req: Request, res: Response) => {
         timeZone: updateData.timeZone || undefined,
         latitude: updateData.latitude ? parseFloat(updateData.latitude) : undefined,
         longitude: updateData.longitude ? parseFloat(updateData.longitude) : undefined,
+        notes: updateData.notes || undefined,
         active: updateData.active
       }
     });

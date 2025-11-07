@@ -48,8 +48,13 @@ export const getBookingByToken = async (req: Request, res: Response) => {
     
     const booking = await prisma.booking.findFirst({
       where: { 
+<<<<<<< HEAD
         documentUploadToken: token,
         status: { in: ['CONFIRMED', 'IN_PROGRESS', 'COMPLETED'] }
+=======
+        documentUploadToken: token
+        // Allow document uploads for any booking status
+>>>>>>> ca61f3ad1c8501e12d62e957e30c0b8a190b6fa1
       },
       include: {
         carrier: true,
@@ -89,7 +94,13 @@ export const getBookingByToken = async (req: Request, res: Response) => {
 export const uploadBookingDocuments = async (req: Request, res: Response) => {
   try {
     const { token } = req.params;
+<<<<<<< HEAD
     const { documentType, legNumber, notes } = req.body;
+=======
+    const { documentType, notes } = req.body;
+    
+    console.log(`Document upload attempt with token: ${token}`);
+>>>>>>> ca61f3ad1c8501e12d62e957e30c0b8a190b6fa1
     
     if (!req.files || !Array.isArray(req.files) || req.files.length === 0) {
       return res.status(400).json({ message: 'No files uploaded' });
@@ -98,8 +109,13 @@ export const uploadBookingDocuments = async (req: Request, res: Response) => {
     // Find booking by token
     const booking = await prisma.booking.findFirst({
       where: { 
+<<<<<<< HEAD
         documentUploadToken: token,
         status: { in: ['CONFIRMED', 'IN_PROGRESS', 'COMPLETED'] }
+=======
+        documentUploadToken: token
+        // Allow document uploads for any booking status
+>>>>>>> ca61f3ad1c8501e12d62e957e30c0b8a190b6fa1
       }
     });
 
@@ -133,18 +149,26 @@ export const uploadBookingDocuments = async (req: Request, res: Response) => {
             documentType: documentType || 'manifest',
             filename: file.originalname,
             filePath: file.path,
+<<<<<<< HEAD
             legNumber: legNumber ? parseInt(legNumber) : undefined,
+=======
+>>>>>>> ca61f3ad1c8501e12d62e957e30c0b8a190b6fa1
             notes: notes
           }
         })
       )
     );
 
+<<<<<<< HEAD
     // Update booking to indicate documents have been uploaded
     await prisma.booking.update({
       where: { id: booking.id },
       data: { hasUploadedDocuments: true }
     });
+=======
+    // Note: hasUploadedDocuments field may not exist in current schema
+    // Skip booking update for now
+>>>>>>> ca61f3ad1c8501e12d62e957e30c0b8a190b6fa1
 
     return res.json({
       message: 'Documents uploaded successfully',
@@ -234,6 +258,7 @@ export const deleteDocument = async (req: Request, res: Response) => {
       where: { id: parseInt(documentId) }
     });
 
+<<<<<<< HEAD
     // Check if this was the last document
     const remainingDocs = await prisma.bookingDocument.count({
       where: { bookingId: document.bookingId }
@@ -245,6 +270,10 @@ export const deleteDocument = async (req: Request, res: Response) => {
         data: { hasUploadedDocuments: false }
       });
     }
+=======
+    // Note: hasUploadedDocuments field may not exist in current schema
+    // Skip booking update for now
+>>>>>>> ca61f3ad1c8501e12d62e957e30c0b8a190b6fa1
 
     return res.json({ message: 'Document deleted successfully' });
   } catch (error) {

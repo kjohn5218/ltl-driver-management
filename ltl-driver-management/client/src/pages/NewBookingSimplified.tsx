@@ -147,7 +147,12 @@ export const NewBookingSimplified: React.FC<NewBookingSimplifiedProps> = () => {
         // Try the getAllDrivers approach first
         const drivers = await driverService.getAllDrivers();
         setAllDrivers(drivers);
+        // If no carrier is selected, show all drivers
+        if (!carrierId) {
+          setAvailableDrivers(drivers);
+        }
       } catch (error) {
+<<<<<<< HEAD
         console.error('Failed to fetch all drivers, trying fallback approach:', error);
         try {
           // Fallback: use the regular getDrivers method with high limit
@@ -157,25 +162,44 @@ export const NewBookingSimplified: React.FC<NewBookingSimplifiedProps> = () => {
           console.error('Fallback approach also failed:', fallbackError);
           setAllDrivers([]);
         }
+=======
+        console.error('Failed to fetch all drivers:', error);
+        setAllDrivers([]);
+        setAvailableDrivers([]);
+>>>>>>> ca61f3ad1c8501e12d62e957e30c0b8a190b6fa1
       }
     };
     fetchAllDrivers();
   }, [isAuthenticated]);
 
-  // Filter drivers based on selected carrier
+  // Fetch drivers for selected carrier
   useEffect(() => {
-    if (carrierId) {
-      const carrierDrivers = allDrivers.filter(driver => driver.carrierId === parseInt(carrierId));
-      setAvailableDrivers(carrierDrivers);
-    } else {
-      setAvailableDrivers(allDrivers);
-    }
-    // Reset driver selection when carrier changes
-    setSelectedDriverId('');
-    setDriverName('');
-    setPhoneNumber('');
-    setDriverSearch('');
-    setPhoneSearch('');
+    const fetchCarrierDrivers = async () => {
+      
+      if (carrierId) {
+        try {
+          const carrierDrivers = await driverService.getDriversByCarrier(parseInt(carrierId));
+          setAvailableDrivers(carrierDrivers);
+        } catch (error) {
+          // Fallback to filtering from all drivers
+          const carrierIdNum = parseInt(carrierId);
+          const filteredDrivers = allDrivers.filter(driver => driver.carrierId === carrierIdNum);
+          setAvailableDrivers(filteredDrivers);
+        }
+      } else {
+        // No carrier selected, show all drivers
+        setAvailableDrivers(allDrivers);
+      }
+      
+      // Reset driver selection when carrier changes
+      setSelectedDriverId('');
+      setDriverName('');
+      setPhoneNumber('');
+      setDriverSearch('');
+      setPhoneSearch('');
+    };
+
+    fetchCarrierDrivers();
   }, [carrierId, allDrivers]);
 
   // Filtered carriers
@@ -319,7 +343,6 @@ export const NewBookingSimplified: React.FC<NewBookingSimplifiedProps> = () => {
     const keepBaseRate = keepRateSettings ? legBaseRate : '';
     
     if (keepRateSettings) {
-      console.log('Keeping rate settings for next leg:', { rateType: keepRateType, baseRate: keepBaseRate });
     }
     
     setLegType('route');
@@ -364,7 +387,7 @@ export const NewBookingSimplified: React.FC<NewBookingSimplifiedProps> = () => {
         routeName: route.name,
         origin: route.origin,
         destination: route.destination,
-        miles: route.distance || 0,
+        miles: Number(route.distance) || 0,
         rateType: legRateType,
         baseRate: legBaseRate,
         totalRate: calculateLegRate(),
@@ -403,7 +426,6 @@ export const NewBookingSimplified: React.FC<NewBookingSimplifiedProps> = () => {
       };
       
       setLegs([...legs, newLeg]);
-      console.log('Added leg, total legs now:', legs.length + 1);
       
       // If round trip is checked, populate form fields for return leg
       if (isRoundTrip) {
@@ -420,7 +442,6 @@ export const NewBookingSimplified: React.FC<NewBookingSimplifiedProps> = () => {
         // Uncheck round trip since we're now setting up the return leg
         setIsRoundTrip(false);
         
-        console.log('Populated form for return trip leg');
         return; // Don't call clearLegBuilder, keep the populated form
       }
     }
@@ -438,7 +459,7 @@ export const NewBookingSimplified: React.FC<NewBookingSimplifiedProps> = () => {
   };
 
   // Total calculations
-  const totalMiles = legs.reduce((sum, leg) => sum + leg.miles, 0);
+  const totalMiles = legs.reduce((sum, leg) => sum + Number(leg.miles), 0);
   const totalRate = legs.reduce((sum, leg) => sum + parseFloat(leg.totalRate), 0);
 
   // Auto-calculate carrier report time based on first leg departure time
@@ -463,7 +484,6 @@ export const NewBookingSimplified: React.FC<NewBookingSimplifiedProps> = () => {
         
         // Add new bookings to the beginning of the array (newest first)
         const updatedBookings = [...createdBookings, ...oldBookings];
-        console.log('Added new bookings to cache:', createdBookings.length, 'bookings');
         return updatedBookings;
       });
       
@@ -471,8 +491,6 @@ export const NewBookingSimplified: React.FC<NewBookingSimplifiedProps> = () => {
       navigate('/bookings');
     },
     onError: (error: any) => {
-      console.error('Booking creation error:', error);
-      console.error('Error response:', error.response?.data);
       alert(error.response?.data?.message || error.response?.data?.error || 'Failed to create booking');
     }
   });
@@ -575,22 +593,15 @@ export const NewBookingSimplified: React.FC<NewBookingSimplifiedProps> = () => {
         arrivalTime: legs[legs.length - 1].arrivalTime || undefined, // Use last leg's arrival time
         // Store individual leg departure and arrival times as JSON arrays
         legDepartureTimes: legs.length > 1 ? (() => {
-          console.log('DEBUG: Full legs array:', legs);
           const departureTimes = legs.map((leg, index) => {
-            console.log(`Leg ${index + 1} data:`, leg);
-            console.log(`Leg ${index + 1} departureTime:`, leg.departureTime);
-            console.log(`Leg ${index + 1} arrivalTime:`, leg.arrivalTime);
             return leg.departureTime || '';
           });
-          console.log('Final departure times array:', departureTimes);
           return JSON.stringify(departureTimes);
         })() : undefined,
         legArrivalTimes: legs.length > 1 ? (() => {
           const arrivalTimes = legs.map((leg, index) => {
-            console.log(`Leg ${index + 1} arrival time being stored:`, leg.arrivalTime);
             return leg.arrivalTime || '';
           });
-          console.log('Final arrival times array:', arrivalTimes);
           return JSON.stringify(arrivalTimes);
         })() : undefined,
         notes: bookingNotes
@@ -604,7 +615,7 @@ export const NewBookingSimplified: React.FC<NewBookingSimplifiedProps> = () => {
         bookingData.routeId = null;
         bookingData.origin = firstLeg.origin;
         bookingData.destination = legs[legs.length - 1].destination; // Final destination
-        bookingData.estimatedMiles = legs.reduce((sum, leg) => sum + leg.miles, 0); // Total miles
+        bookingData.estimatedMiles = legs.reduce((sum, leg) => sum + Number(leg.miles), 0); // Total miles
         
         // For custom bookings, use location data or try route information fallback
         if (firstLeg.type === 'custom') {
@@ -678,7 +689,6 @@ export const NewBookingSimplified: React.FC<NewBookingSimplifiedProps> = () => {
       bookingsToCreate.push(bookingData);
     });
 
-    console.log('Creating bookings with data:', JSON.stringify(bookingsToCreate, null, 2));
     createBookingMutation.mutate(bookingsToCreate);
   };
 

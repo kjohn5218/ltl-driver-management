@@ -1,11 +1,14 @@
 import { Router } from 'express';
 import { body, query } from 'express-validator';
-import { 
-  getInvoices, 
-  getInvoiceById, 
-  generateInvoice, 
-  markInvoiceAsPaid,
-  downloadInvoice
+import {
+  createInvoice,
+  getInvoice,
+  listInvoices,
+  updateInvoiceStatus,
+  sendInvoicesToAP,
+  deleteInvoice,
+  getInvoiceSummary,
+  downloadInvoicePDF
 } from '../controllers/invoice.controller';
 import { authenticate, authorize } from '../middleware/auth.middleware';
 import { validateRequest } from '../middleware/validation.middleware';
@@ -20,21 +23,34 @@ router.use(authenticate);
 router.get(
   '/',
   [
-    query('status').optional().isIn(['PENDING', 'SENT', 'PAID', 'OVERDUE', 'CANCELLED']),
-    query('startDate').optional().isISO8601(),
-    query('endDate').optional().isISO8601(),
-    query('page').optional().isInt({ min: 1 }),
-    query('limit').optional().isInt({ min: 1, max: 100 })
+    query('status').optional().isIn(['PENDING', 'SENT_TO_AP', 'PAID', 'OVERDUE', 'CANCELLED']),
+    query('fromDate').optional().isISO8601(),
+    query('toDate').optional().isISO8601(),
+    query('carrierId').optional().isInt(),
+    query('limit').optional().isInt({ min: 1, max: 1000 }),
+    query('offset').optional().isInt({ min: 0 })
   ],
   validateRequest,
-  getInvoices
+  listInvoices
+);
+
+// Get invoice summary/report
+router.get(
+  '/summary',
+  [
+    query('fromDate').optional().isISO8601(),
+    query('toDate').optional().isISO8601(),
+    query('carrierId').optional().isInt()
+  ],
+  validateRequest,
+  getInvoiceSummary
 );
 
 // Get specific invoice
-router.get('/:id', getInvoiceById);
+router.get('/:id', getInvoice);
 
 // Download invoice as PDF
-router.get('/:id/download', downloadInvoice);
+router.get('/:id/pdf', downloadInvoicePDF);
 
 // Generate invoice for completed booking (Admin/Dispatcher only)
 router.post(
@@ -44,18 +60,38 @@ router.post(
     body('bookingId').isInt()
   ],
   validateRequest,
-  generateInvoice
+  createInvoice
 );
 
-// Mark invoice as paid (Admin only)
+// Update invoice status (Admin/Dispatcher only)
 router.put(
-  '/:id/pay',
-  authorize(UserRole.ADMIN),
+  '/:id/status',
+  authorize(UserRole.ADMIN, UserRole.DISPATCHER),
   [
-    body('paidAt').optional().isISO8601()
+    body('status').isIn(['PENDING', 'SENT_TO_AP', 'PAID', 'OVERDUE', 'CANCELLED'])
   ],
   validateRequest,
-  markInvoiceAsPaid
+  updateInvoiceStatus
+);
+
+// Send invoices to AP (Admin/Dispatcher only)
+router.post(
+  '/send-to-ap',
+  authorize(UserRole.ADMIN, UserRole.DISPATCHER),
+  [
+    body('invoiceIds').isArray().notEmpty(),
+    body('invoiceIds.*').isInt(),
+    body('includeDocuments').optional().isBoolean()
+  ],
+  validateRequest,
+  sendInvoicesToAP
+);
+
+// Delete invoice (Admin only)
+router.delete(
+  '/:id',
+  authorize(UserRole.ADMIN),
+  deleteInvoice
 );
 
 export default router;

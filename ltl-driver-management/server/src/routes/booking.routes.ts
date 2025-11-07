@@ -13,10 +13,16 @@ import {
   getConfirmationByToken,
   submitSignedConfirmation,
   getSignedPDF,
-  testEmailConfig
+  testEmailConfig,
+  getDocumentUploadPage,
+  uploadBookingDocuments,
+  downloadBookingDocument,
+  uploadDocumentsToBooking,
+  generateDocumentUploadToken
 } from '../controllers/booking.controller';
 import { authenticate, authorize } from '../middleware/auth.middleware';
 import { validateRequest } from '../middleware/validation.middleware';
+import { upload } from '../middleware/upload.middleware';
 import { UserRole } from '@prisma/client';
 
 const router = Router();
@@ -38,6 +44,25 @@ router.post(
   ],
   validateRequest,
   submitSignedConfirmation
+);
+
+// Get document upload page info
+router.get(
+  '/documents/upload/:token',
+  getDocumentUploadPage
+);
+
+// Upload documents for booking
+router.post(
+  '/documents/upload/:token',
+  upload.array('documents', 10), // Allow up to 10 files
+  uploadBookingDocuments
+);
+
+// Download booking document (public access)
+router.get(
+  '/documents/:documentId/download',
+  downloadBookingDocument
 );
 
 // All routes below this line require authentication
@@ -172,11 +197,26 @@ router.get(
   getSignedPDF
 );
 
+// Generate document upload token for booking (Admin/Dispatcher only)
+router.post(
+  '/:id/generate-upload-token',
+  authorize(UserRole.ADMIN, UserRole.DISPATCHER),
+  generateDocumentUploadToken
+);
+
 // Test email configuration (Admin/Dispatcher only)
 router.get(
   '/test-email-config',
   authorize(UserRole.ADMIN, UserRole.DISPATCHER),
   testEmailConfig
+);
+
+// Upload documents to booking (Admin/Dispatcher only)
+router.post(
+  '/:bookingId/documents',
+  authorize(UserRole.ADMIN, UserRole.DISPATCHER),
+  upload.array('documents', 10), // Allow up to 10 files
+  uploadDocumentsToBooking
 );
 
 export default router;

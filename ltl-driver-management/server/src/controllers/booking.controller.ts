@@ -1,10 +1,15 @@
 import { Request, Response } from 'express';
 import { prisma } from '../index';
 import { Prisma, BookingStatus } from '@prisma/client';
+<<<<<<< HEAD
 import { sendBookingCancellation, sendRateConfirmationEmail, sendBookingConfirmationWithUploadLink } from '../services/notification.service';
+=======
+import * as NotificationService from '../services/notification.service';
+>>>>>>> ca61f3ad1c8501e12d62e957e30c0b8a190b6fa1
 import { v4 as uuidv4 } from 'uuid';
 import multer from 'multer';
 import { PDFService } from '../services/pdf.service';
+import invoiceService from '../services/invoice.service';
 
 export const getBookings = async (req: Request, res: Response) => {
   try {
@@ -48,6 +53,7 @@ export const getBookings = async (req: Request, res: Response) => {
         carrier: true,
         route: true,
         invoice: true,
+        documents: true,
         childBookings: {
           include: {
             route: true
@@ -332,6 +338,7 @@ export const updateBooking = async (req: Request, res: Response) => {
       return value;
     };
 
+<<<<<<< HEAD
     // Get the current booking to check status changes
     const currentBooking = await prisma.booking.findUnique({
       where: { id: parseInt(id) },
@@ -356,6 +363,13 @@ export const updateBooking = async (req: Request, res: Response) => {
     // Generate document upload token if confirming the booking
     const documentUploadToken = isStatusChangingToConfirmed ? uuidv4() : undefined;
 
+=======
+    // Get the original booking to check if status is changing to COMPLETED
+    const originalBooking = await prisma.booking.findUnique({
+      where: { id: parseInt(id) }
+    });
+
+>>>>>>> ca61f3ad1c8501e12d62e957e30c0b8a190b6fa1
     const booking = await prisma.booking.update({
       where: { id: parseInt(id) },
       data: {
@@ -384,6 +398,7 @@ export const updateBooking = async (req: Request, res: Response) => {
         origin: sanitizeValue(updateData.origin),
         destination: sanitizeValue(updateData.destination),
         estimatedMiles: updateData.estimatedMiles ? parseFloat(updateData.estimatedMiles) : undefined,
+        manifestNumber: sanitizeValue(updateData.manifestNumber),
         // Route information fields
         routeFrequency: sanitizeValue(updateData.routeFrequency),
         routeStandardRate: updateData.routeStandardRate ? parseFloat(updateData.routeStandardRate) : undefined,
@@ -419,9 +434,26 @@ export const updateBooking = async (req: Request, res: Response) => {
       }
     });
 
+<<<<<<< HEAD
     // If status changed to CONFIRMED, send confirmation email with document upload link
     if (isStatusChangingToConfirmed) {
       await sendBookingConfirmationWithUploadLink(booking);
+=======
+    // Check if status changed to COMPLETED and generate invoice automatically
+    if (originalBooking && 
+        originalBooking.status !== 'COMPLETED' && 
+        updateData.status === 'COMPLETED') {
+      try {
+        const invoice = await invoiceService.createInvoice(booking.id);
+        // Copy booking documents to invoice attachments
+        await invoiceService.copyBookingDocuments(invoice.id);
+        console.log(`Invoice ${invoice.invoiceNumber} generated for completed booking ${booking.id}`);
+      } catch (invoiceError: any) {
+        console.error('Failed to generate invoice for completed booking:', invoiceError);
+        // Don't fail the booking update if invoice generation fails
+        // Just log the error and continue
+      }
+>>>>>>> ca61f3ad1c8501e12d62e957e30c0b8a190b6fa1
     }
 
     return res.json(booking);
@@ -474,8 +506,13 @@ export const confirmBooking = async (req: Request, res: Response) => {
       }
     });
 
+<<<<<<< HEAD
     // Send confirmation notification with document upload link
     await sendBookingConfirmationWithUploadLink(updatedBooking);
+=======
+    // Send confirmation notification
+    await NotificationService.sendBookingConfirmation(updatedBooking);
+>>>>>>> ca61f3ad1c8501e12d62e957e30c0b8a190b6fa1
 
     return res.json(updatedBooking);
   } catch (error) {
@@ -511,6 +548,18 @@ export const completeBooking = async (req: Request, res: Response) => {
         route: true
       }
     });
+
+    // Automatically generate invoice for completed booking
+    try {
+      const invoice = await invoiceService.createInvoice(updatedBooking.id);
+      // Copy booking documents to invoice attachments
+      await invoiceService.copyBookingDocuments(invoice.id);
+      console.log(`Invoice ${invoice.invoiceNumber} generated for completed booking ${updatedBooking.id}`);
+    } catch (invoiceError: any) {
+      console.error('Failed to generate invoice for completed booking:', invoiceError);
+      // Don't fail the booking completion if invoice generation fails
+      // Just log the error and continue
+    }
 
     return res.json(updatedBooking);
   } catch (error) {
@@ -553,7 +602,7 @@ export const cancelBooking = async (req: Request, res: Response) => {
     });
 
     // Send cancellation notification
-    await sendBookingCancellation(updatedBooking, reason);
+    await NotificationService.sendBookingCancellation(updatedBooking, reason);
 
     return res.json(updatedBooking);
   } catch (error) {
@@ -677,7 +726,7 @@ export const sendRateConfirmation = async (req: Request, res: Response) => {
       const confirmationUrl = `${process.env.FRONTEND_URL}/confirm/${confirmationToken}`;
       
       if (sendMethod === 'email') {
-        await sendRateConfirmationEmail(
+        await NotificationService.sendRateConfirmationEmail(
           booking,
           recipientEmail,
           pdfBuffer,
@@ -807,6 +856,12 @@ export const submitSignedConfirmation = async (req: Request, res: Response) => {
       }
     }
 
+    // Generate document upload token for approved confirmations
+    let documentUploadToken = null;
+    if (approved) {
+      documentUploadToken = uuidv4();
+    }
+
     // Update booking with signature details
     const updatedBooking = await prisma.booking.update({
       where: { id: booking.id },
@@ -816,18 +871,43 @@ export const submitSignedConfirmation = async (req: Request, res: Response) => {
         confirmationIpAddress: ipAddress,
         confirmationSignature: approved ? 'APPROVED' : (signature || 'REJECTED'),
         status: approved ? 'CONFIRMED' : booking.status,
-        signedPdfPath: signedPdfPath
+        signedPdfPath: signedPdfPath,
+        documentUploadToken: approved ? documentUploadToken : null,
+        documentUploadTokenCreatedAt: approved ? signedAt : null
       },
       include: {
         carrier: true,
-        route: true
+        route: true,
+        childBookings: {
+          include: {
+            route: true
+          }
+        }
       }
     });
+
+    // Send thank you email if approved
+    if (approved && updatedBooking.carrier) {
+      try {
+        const recipientEmail = booking.carrierEmail || updatedBooking.carrier.email;
+        if (recipientEmail) {
+          await NotificationService.sendRateConfirmationSubmittedEmail(
+            updatedBooking,
+            recipientEmail,
+            documentUploadToken!
+          );
+        }
+      } catch (emailError) {
+        console.error('Failed to send thank you email:', emailError);
+        // Continue even if email fails
+      }
+    }
 
     return res.json({ 
       message: approved ? 'Confirmation approved successfully' : 'Confirmation rejected',
       booking: updatedBooking,
-      signedPdf: signedPdfPath ? true : false
+      signedPdf: signedPdfPath ? true : false,
+      documentUploadUrl: approved ? `${process.env.CLIENT_BASE_URL || 'http://localhost:5174'}/documents/upload/${documentUploadToken}` : null
     });
   } catch (error) {
     console.error('Submit confirmation error:', error);
@@ -892,5 +972,238 @@ export const testEmailConfig = async (_req: Request, res: Response) => {
   } catch (error) {
     console.error('Test email config error:', error);
     return res.status(500).json({ message: 'Failed to test email configuration' });
+  }
+};
+
+// Get document upload page (public endpoint)
+export const getDocumentUploadPage = async (req: Request, res: Response) => {
+  try {
+    const { token } = req.params;
+
+    const booking = await prisma.booking.findFirst({
+      where: { documentUploadToken: token },
+      include: {
+        carrier: true,
+        route: true
+      }
+    });
+
+    if (!booking) {
+      return res.status(404).json({ message: 'Upload link not found or expired' });
+    }
+
+    // Check if token is expired (24 hours)
+    if (booking.documentUploadTokenCreatedAt) {
+      const tokenAge = Date.now() - booking.documentUploadTokenCreatedAt.getTime();
+      const twentyFourHours = 24 * 60 * 60 * 1000;
+      if (tokenAge > twentyFourHours) {
+        return res.status(410).json({ message: 'Upload link has expired' });
+      }
+    }
+
+    const shipmentNumber = `CCFS${booking.id.toString().padStart(5, '0')}`;
+
+    return res.json({
+      shipmentNumber,
+      carrierName: booking.carrier?.name || 'Unknown Carrier',
+      route: booking.route 
+        ? `${booking.route.origin} to ${booking.route.destination}`
+        : `${booking.origin} to ${booking.destination}`,
+      bookingDate: booking.bookingDate,
+      documents: []
+    });
+  } catch (error) {
+    console.error('Document upload page error:', error);
+    return res.status(500).json({ message: 'Failed to load upload page' });
+  }
+};
+
+// Upload documents for booking (public endpoint)
+export const uploadBookingDocuments = async (req: Request, res: Response) => {
+  try {
+    const { token } = req.params;
+    const { documentType, uploadedBy } = req.body;
+
+    if (!req.files || !Array.isArray(req.files) || req.files.length === 0) {
+      return res.status(400).json({ message: 'No files uploaded' });
+    }
+
+    const booking = await prisma.booking.findFirst({
+      where: { documentUploadToken: token }
+    });
+
+    if (!booking) {
+      return res.status(404).json({ message: 'Upload link not found or expired' });
+    }
+
+    // Check if token is expired (24 hours)
+    if (booking.documentUploadTokenCreatedAt) {
+      const tokenAge = Date.now() - booking.documentUploadTokenCreatedAt.getTime();
+      const twentyFourHours = 24 * 60 * 60 * 1000;
+      if (tokenAge > twentyFourHours) {
+        return res.status(410).json({ message: 'Upload link has expired' });
+      }
+    }
+
+    const uploadedDocuments = [];
+
+    for (const file of req.files as Express.Multer.File[]) {
+      const document = await prisma.bookingDocument.create({
+        data: {
+          bookingId: booking.id,
+          documentType: documentType || 'other',
+          filename: file.originalname,
+          filePath: file.path,
+          uploadedBy: uploadedBy || 'Carrier'
+        }
+      });
+      uploadedDocuments.push(document);
+    }
+
+    return res.json({
+      message: `Successfully uploaded ${uploadedDocuments.length} document(s)`,
+      documents: uploadedDocuments.map(doc => ({
+        id: doc.id,
+        filename: doc.filename,
+        documentType: doc.documentType,
+        uploadedAt: doc.uploadedAt
+      }))
+    });
+  } catch (error) {
+    console.error('Document upload error:', error);
+    return res.status(500).json({ message: 'Failed to upload documents' });
+  }
+};
+
+// Download booking document (public endpoint)
+export const downloadBookingDocument = async (req: Request, res: Response) => {
+  try {
+    const { documentId } = req.params;
+
+    const document = await prisma.bookingDocument.findUnique({
+      where: { id: parseInt(documentId) },
+      include: {
+        booking: {
+          select: { id: true }
+        }
+      }
+    });
+
+    if (!document) {
+      return res.status(404).json({ message: 'Document not found' });
+    }
+
+    // Check if file exists
+    const fs = require('fs');
+    const path = require('path');
+    
+    if (!fs.existsSync(document.filePath)) {
+      return res.status(404).json({ message: 'File not found on disk' });
+    }
+
+    // Set headers for file download
+    res.setHeader('Content-Disposition', `attachment; filename="${document.filename}"`);
+    res.setHeader('Content-Type', 'application/octet-stream');
+    
+    // Send file
+    return res.sendFile(path.resolve(document.filePath));
+  } catch (error) {
+    console.error('Download document error:', error);
+    return res.status(500).json({ message: 'Failed to download document' });
+  }
+};
+
+// Upload documents directly to booking (authenticated endpoint)
+export const uploadDocumentsToBooking = async (req: Request, res: Response) => {
+  try {
+    const { bookingId } = req.params;
+    const { documentType, uploadedBy } = req.body;
+
+    if (!req.files || !Array.isArray(req.files) || req.files.length === 0) {
+      return res.status(400).json({ message: 'No files uploaded' });
+    }
+
+    const booking = await prisma.booking.findUnique({
+      where: { id: parseInt(bookingId) }
+    });
+
+    if (!booking) {
+      return res.status(404).json({ message: 'Booking not found' });
+    }
+
+    const uploadedDocuments = [];
+
+    for (const file of req.files as Express.Multer.File[]) {
+      const document = await prisma.bookingDocument.create({
+        data: {
+          bookingId: booking.id,
+          documentType: documentType || 'other',
+          filename: file.originalname,
+          filePath: file.path,
+          uploadedBy: uploadedBy || 'User'
+        }
+      });
+      uploadedDocuments.push(document);
+    }
+
+    return res.json({
+      message: `Successfully uploaded ${uploadedDocuments.length} document(s)`,
+      documents: uploadedDocuments.map(doc => ({
+        id: doc.id,
+        filename: doc.filename,
+        documentType: doc.documentType,
+        uploadedAt: doc.uploadedAt,
+        uploadedBy: doc.uploadedBy
+      }))
+    });
+  } catch (error) {
+    console.error('Document upload to booking error:', error);
+    return res.status(500).json({ message: 'Failed to upload documents' });
+  }
+};
+
+// Generate or regenerate document upload token for a booking
+export const generateDocumentUploadToken = async (req: Request, res: Response) => {
+  try {
+    const { id } = req.params;
+    const bookingId = parseInt(id);
+
+    if (isNaN(bookingId)) {
+      return res.status(400).json({ message: 'Invalid booking ID' });
+    }
+
+    // Check if booking exists
+    const booking = await prisma.booking.findUnique({
+      where: { id: bookingId }
+    });
+
+    if (!booking) {
+      return res.status(404).json({ message: 'Booking not found' });
+    }
+
+    // Generate new token
+    const documentUploadToken = uuidv4();
+    const documentUploadTokenCreatedAt = new Date();
+
+    // Update booking with new token
+    await prisma.booking.update({
+      where: { id: bookingId },
+      data: {
+        documentUploadToken,
+        documentUploadTokenCreatedAt
+      }
+    });
+
+    console.log(`Generated document upload token for booking ${bookingId}: ${documentUploadToken}`);
+    
+    return res.json({
+      message: 'Document upload token generated successfully',
+      documentUploadToken,
+      tokenCreatedAt: documentUploadTokenCreatedAt,
+      tokenExpiresAt: new Date(documentUploadTokenCreatedAt.getTime() + 24 * 60 * 60 * 1000) // 24 hours
+    });
+  } catch (error) {
+    console.error('Generate document upload token error:', error);
+    return res.status(500).json({ message: 'Failed to generate document upload token' });
   }
 };

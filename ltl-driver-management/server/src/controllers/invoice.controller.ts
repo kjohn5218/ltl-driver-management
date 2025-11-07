@@ -1,201 +1,262 @@
 import { Request, Response } from 'express';
-import { prisma } from '../index';
-import { Prisma, InvoiceStatus } from '@prisma/client';
+import invoiceService from '../services/invoice.service';
+import { InvoiceStatus } from '@prisma/client';
+import { parseISO } from 'date-fns';
+import { sendInvoicesToAP as emailInvoicesToAP } from '../services/notification.service';
+import { PDFService } from '../services/pdf.service';
 
-export const getInvoices = async (req: Request, res: Response) => {
-  try {
-    const { status, startDate, endDate, page = 1, limit = 20 } = req.query;
-    const pageNum = parseInt(page as string);
-    const limitNum = parseInt(limit as string);
-    
-    // Build filter
-    const where: Prisma.InvoiceWhereInput = {};
-    if (status) where.status = status as InvoiceStatus;
-    
-    // Date range filter
-    if (startDate || endDate) {
-      where.createdAt = {};
-      if (startDate) where.createdAt.gte = new Date(startDate as string);
-      if (endDate) where.createdAt.lte = new Date(endDate as string);
+export class InvoiceController {
+  // Generate invoice from completed booking
+  async createInvoice(req: Request, res: Response) {
+    try {
+      const { bookingId } = req.body;
+      
+      if (!bookingId) {
+        return res.status(400).json({ error: 'Booking ID is required' });
+      }
+      
+      const invoice = await invoiceService.createInvoice(bookingId);
+      
+      // Copy booking documents to invoice attachments
+      await invoiceService.copyBookingDocuments(invoice.id);
+      
+      // Get full invoice details
+      const fullInvoice = await invoiceService.getInvoice(invoice.id);
+      
+      return res.json(fullInvoice);
+    } catch (error: any) {
+      console.error('Create invoice error:', error);
+      return res.status(500).json({ error: error.message || 'Failed to create invoice' });
     }
-
-    // Get total count
-    const total = await prisma.invoice.count({ where });
-
-    // Get invoices with pagination
-    const invoices = await prisma.invoice.findMany({
-      where,
-      skip: (pageNum - 1) * limitNum,
-      take: limitNum,
-      orderBy: { createdAt: 'desc' },
-      include: {
-        booking: {
-          include: {
-            carrier: true,
-            route: true
-          }
-        }
-      }
-    });
-
-    return res.json({
-      invoices,
-      pagination: {
-        page: pageNum,
-        limit: limitNum,
-        total,
-        pages: Math.ceil(total / limitNum)
-      }
-    });
-  } catch (error) {
-    console.error('Get invoices error:', error);
-    return res.status(500).json({ message: 'Failed to fetch invoices' });
   }
-};
 
-export const getInvoiceById = async (req: Request, res: Response) => {
-  try {
-    const { id } = req.params;
-    
-    const invoice = await prisma.invoice.findUnique({
-      where: { id: parseInt(id) },
-      include: {
-        booking: {
-          include: {
-            carrier: true,
-            route: true
-          }
-        }
+  // Get invoice details
+  async getInvoice(req: Request, res: Response) {
+    try {
+      const id = parseInt(req.params.id);
+      
+      const invoice = await invoiceService.getInvoice(id);
+      
+      if (!invoice) {
+        return res.status(404).json({ error: 'Invoice not found' });
       }
-    });
-
-    if (!invoice) {
-      return res.status(404).json({ message: 'Invoice not found' });
+      
+      return res.json(invoice);
+    } catch (error: any) {
+      console.error('Get invoice error:', error);
+      return res.status(500).json({ error: error.message || 'Failed to get invoice' });
     }
-
-    return res.json(invoice);
-  } catch (error) {
-    console.error('Get invoice by id error:', error);
-    return res.status(500).json({ message: 'Failed to fetch invoice' });
   }
-};
 
-export const generateInvoice = async (req: Request, res: Response) => {
-  try {
-    const { bookingId } = req.body;
-
-    // Check if booking exists and is completed
-    const booking = await prisma.booking.findUnique({
-      where: { id: parseInt(bookingId) },
-      include: {
-        carrier: true,
-        route: true,
-        invoice: true
+  // List invoices with filters
+  async listInvoices(req: Request, res: Response) {
+    try {
+      const filters: any = {};
+      
+      if (req.query.status) {
+        filters.status = req.query.status as InvoiceStatus;
       }
-    });
-
-    if (!booking) {
-      return res.status(404).json({ message: 'Booking not found' });
-    }
-
-    if (booking.status !== 'COMPLETED') {
-      return res.status(400).json({ message: 'Booking must be completed to generate invoice' });
-    }
-
-    if (booking.invoice) {
-      return res.status(409).json({ message: 'Invoice already exists for this booking' });
-    }
-
-    // Generate invoice number
-    const lastInvoice = await prisma.invoice.findFirst({
-      orderBy: { createdAt: 'desc' }
-    });
-
-    const invoiceNumber = lastInvoice 
-      ? `INV-${(parseInt(lastInvoice.invoiceNumber.split('-')[1]) + 1).toString().padStart(6, '0')}`
-      : 'INV-000001';
-
-    // Create invoice
-    const invoice = await prisma.invoice.create({
-      data: {
-        bookingId: parseInt(bookingId),
-        invoiceNumber,
-        amount: booking.rate,
-        status: 'PENDING'
-      },
-      include: {
-        booking: {
-          include: {
-            carrier: true,
-            route: true
-          }
-        }
+      
+      if (req.query.fromDate) {
+        filters.fromDate = parseISO(req.query.fromDate as string);
       }
-    });
-
-    return res.status(201).json(invoice);
-  } catch (error) {
-    console.error('Generate invoice error:', error);
-    return res.status(500).json({ message: 'Failed to generate invoice' });
+      
+      if (req.query.toDate) {
+        filters.toDate = parseISO(req.query.toDate as string);
+      }
+      
+      if (req.query.carrierId) {
+        filters.carrierId = parseInt(req.query.carrierId as string);
+      }
+      
+      if (req.query.limit) {
+        filters.limit = parseInt(req.query.limit as string);
+      }
+      
+      if (req.query.offset) {
+        filters.offset = parseInt(req.query.offset as string);
+      }
+      
+      const result = await invoiceService.listInvoices(filters);
+      
+      return res.json(result);
+    } catch (error: any) {
+      console.error('List invoices error:', error);
+      return res.status(500).json({ error: error.message || 'Failed to list invoices' });
+    }
   }
-};
 
-export const markInvoiceAsPaid = async (req: Request, res: Response) => {
-  try {
-    const { id } = req.params;
-    const { paidAt } = req.body;
-
-    const invoice = await prisma.invoice.update({
-      where: { id: parseInt(id) },
-      data: {
-        status: 'PAID',
-        paidAt: paidAt ? new Date(paidAt) : new Date()
-      },
-      include: {
-        booking: {
-          include: {
-            carrier: true,
-            route: true
-          }
-        }
+  // Update invoice status
+  async updateInvoiceStatus(req: Request, res: Response) {
+    try {
+      const id = parseInt(req.params.id);
+      const { status } = req.body;
+      const userId = (req as any).user?.email || 'System';
+      
+      if (!status || !Object.values(InvoiceStatus).includes(status)) {
+        return res.status(400).json({ error: 'Valid status is required' });
       }
-    });
-
-    return res.json(invoice);
-  } catch (error) {
-    console.error('Mark invoice as paid error:', error);
-    return res.status(500).json({ message: 'Failed to update invoice' });
-  }
-};
-
-export const downloadInvoice = async (req: Request, res: Response) => {
-  try {
-    const { id } = req.params;
-    
-    const invoice = await prisma.invoice.findUnique({
-      where: { id: parseInt(id) },
-      include: {
-        booking: {
-          include: {
-            carrier: true,
-            route: true
-          }
-        }
-      }
-    });
-
-    if (!invoice) {
-      return res.status(404).json({ message: 'Invoice not found' });
+      
+      const invoice = await invoiceService.updateInvoiceStatus(id, status, userId);
+      
+      return res.json(invoice);
+    } catch (error: any) {
+      console.error('Update invoice status error:', error);
+      return res.status(500).json({ error: error.message || 'Failed to update invoice status' });
     }
-
-    // TODO: Implement PDF generation
-    // For now, return invoice data
-    return res.json({
-      message: 'PDF generation not implemented yet',
-      invoice
-    });
-  } catch (error) {
-    console.error('Download invoice error:', error);
-    return res.status(500).json({ message: 'Failed to download invoice' });
   }
-};
+
+  // Send invoices to AP
+  async sendInvoicesToAP(req: Request, res: Response) {
+    try {
+      const { invoiceIds, includeDocuments } = req.body;
+      const userId = (req as any).user?.email || 'System';
+      
+      if (!invoiceIds || !Array.isArray(invoiceIds) || invoiceIds.length === 0) {
+        return res.status(400).json({ error: 'Invoice IDs are required' });
+      }
+      
+      // Get full invoice details for email
+      const invoices = await Promise.all(
+        invoiceIds.map(id => invoiceService.getInvoice(id))
+      );
+      
+      // Filter out null results
+      const validInvoices = invoices.filter(invoice => invoice !== null);
+      
+      if (validInvoices.length === 0) {
+        return res.status(404).json({ error: 'No valid invoices found' });
+      }
+      
+      // Send email to AP
+      await emailInvoicesToAP(validInvoices, includeDocuments);
+      
+      // Update status to SENT_TO_AP
+      await invoiceService.updateInvoicesStatus(invoiceIds, InvoiceStatus.SENT_TO_AP, userId);
+      
+      console.log(`Successfully sent ${validInvoices.length} invoices to AP (includeDocuments: ${includeDocuments})`);
+      
+      return res.json({ 
+        success: true, 
+        message: `${validInvoices.length} invoice(s) sent to AP and marked as sent`
+      });
+    } catch (error: any) {
+      console.error('Send invoices to AP error:', error);
+      return res.status(500).json({ error: error.message || 'Failed to send invoices to AP' });
+    }
+  }
+
+  // Delete invoice
+  async deleteInvoice(req: Request, res: Response) {
+    try {
+      const id = parseInt(req.params.id);
+      
+      await invoiceService.deleteInvoice(id);
+      
+      return res.json({ success: true, message: 'Invoice deleted successfully' });
+    } catch (error: any) {
+      console.error('Delete invoice error:', error);
+      return res.status(500).json({ error: error.message || 'Failed to delete invoice' });
+    }
+  }
+
+  // Get invoice summary/report
+  async getInvoiceSummary(req: Request, res: Response) {
+    try {
+      const filters: any = {};
+      
+      if (req.query.fromDate) {
+        filters.fromDate = parseISO(req.query.fromDate as string);
+      }
+      
+      if (req.query.toDate) {
+        filters.toDate = parseISO(req.query.toDate as string);
+      }
+      
+      if (req.query.carrierId) {
+        filters.carrierId = parseInt(req.query.carrierId as string);
+      }
+      
+      // Get all invoices for summary
+      const { invoices } = await invoiceService.listInvoices({ ...filters, limit: 1000 });
+      
+      // Calculate summary statistics
+      const summary = {
+        totalInvoices: invoices.length,
+        totalAmount: invoices.reduce((sum, inv) => sum + Number(inv.amount), 0),
+        statusBreakdown: {
+          pending: invoices.filter(inv => inv.status === InvoiceStatus.PENDING).length,
+          sentToAP: invoices.filter(inv => inv.status === InvoiceStatus.SENT_TO_AP).length,
+          paid: invoices.filter(inv => inv.status === InvoiceStatus.PAID).length,
+          overdue: invoices.filter(inv => inv.status === InvoiceStatus.OVERDUE).length,
+          cancelled: invoices.filter(inv => inv.status === InvoiceStatus.CANCELLED).length
+        },
+        carrierBreakdown: invoices.reduce((acc: any, inv) => {
+          const carrierName = inv.booking.carrier?.name || 'Unknown';
+          if (!acc[carrierName]) {
+            acc[carrierName] = {
+              count: 0,
+              totalAmount: 0
+            };
+          }
+          acc[carrierName].count++;
+          acc[carrierName].totalAmount += Number(inv.amount);
+          return acc;
+        }, {}),
+        invoices // Include full invoice list for export
+      };
+      
+      return res.json(summary);
+    } catch (error: any) {
+      console.error('Get invoice summary error:', error);
+      return res.status(500).json({ error: error.message || 'Failed to get invoice summary' });
+    }
+  }
+
+  // Download invoice as PDF
+  async downloadInvoicePDF(req: Request, res: Response) {
+    try {
+      const id = parseInt(req.params.id);
+      
+      const invoice = await invoiceService.getInvoice(id);
+      
+      if (!invoice) {
+        return res.status(404).json({ error: 'Invoice not found' });
+      }
+      
+      // Generate PDF
+      const pdfBuffer = await PDFService.generateInvoicePDF(invoice);
+      
+      // Set headers for PDF download
+      res.setHeader('Content-Type', 'application/pdf');
+      res.setHeader('Content-Disposition', `inline; filename="Invoice-${invoice.invoiceNumber}.pdf"`);
+      res.setHeader('Content-Length', pdfBuffer.length);
+      
+      return res.send(pdfBuffer);
+    } catch (error: any) {
+      console.error('Download invoice PDF error:', error);
+      return res.status(500).json({ error: error.message || 'Failed to generate invoice PDF' });
+    }
+  }
+}
+
+const invoiceController = new InvoiceController();
+
+// Export individual methods for compatibility
+export const createInvoice = invoiceController.createInvoice.bind(invoiceController);
+export const getInvoice = invoiceController.getInvoice.bind(invoiceController);
+export const listInvoices = invoiceController.listInvoices.bind(invoiceController);
+export const updateInvoiceStatus = invoiceController.updateInvoiceStatus.bind(invoiceController);
+export const sendInvoicesToAP = invoiceController.sendInvoicesToAP.bind(invoiceController);
+export const deleteInvoice = invoiceController.deleteInvoice.bind(invoiceController);
+export const getInvoiceSummary = invoiceController.getInvoiceSummary.bind(invoiceController);
+export const downloadInvoicePDF = invoiceController.downloadInvoicePDF.bind(invoiceController);
+
+// Legacy exports for backward compatibility
+export const getInvoices = listInvoices;
+export const getInvoiceById = getInvoice;
+export const generateInvoice = createInvoice;
+export const markInvoiceAsPaid = updateInvoiceStatus;
+export const downloadInvoice = getInvoice;
+
+export default invoiceController;

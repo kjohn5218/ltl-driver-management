@@ -1,8 +1,24 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import { useQuery, useQueryClient, useMutation } from '@tanstack/react-query';
 import { api } from '../services/api';
 import { Carrier } from '../types';
-import { Plus, Search, Edit, Eye, Trash2, MapPin, Phone, Mail, ExternalLink, X, Send, FileText, Download, Bell } from 'lucide-react';
+import { Plus, Search, Edit, Eye, Trash2, MapPin, Phone, Mail, ExternalLink, X, Send, FileText, Download, Bell, Upload } from 'lucide-react';
+
+interface CarrierAgreement {
+  id: number;
+  agreementVersion: string;
+  agreementTitle: string;
+  signedAt: string;
+  signedBy: string;
+  signedByTitle: string;
+  ipAddress: string;
+  userAgent?: string;
+  geolocation?: string;
+  username: string;
+  affidavitPdfPath?: string;
+  agreementPdfPath?: string;
+  agreementHash?: string;
+}
 
 export const Carriers: React.FC = () => {
   const queryClient = useQueryClient();
@@ -10,9 +26,19 @@ export const Carriers: React.FC = () => {
   const [statusFilter, setStatusFilter] = useState('');
   const [stateFilter, setStateFilter] = useState('');
   const [viewingCarrier, setViewingCarrier] = useState<Carrier | null>(null);
-  const [editingCarrier, setEditingCarrier] = useState<Carrier | null>(null);
   const [deletingCarrier, setDeletingCarrier] = useState<Carrier | null>(null);
   const [showAddCarrierModal, setShowAddCarrierModal] = useState(false);
+  const [showInviteModal, setShowInviteModal] = useState(false);
+  const [showResendModal, setShowResendModal] = useState(false);
+
+  // Fetch invitations data
+  const { data: invitationsData } = useQuery({
+    queryKey: ['carrier-invitations'],
+    queryFn: async () => {
+      const response = await api.get('/carriers/invitations?limit=10&status=PENDING');
+      return response.data;
+    }
+  });
 
   const { data: carriersData, isLoading } = useQuery({
     queryKey: ['carriers'],
@@ -83,12 +109,28 @@ export const Carriers: React.FC = () => {
             <Download className="w-3 h-3 ml-1" />
           </a>
           <button 
+            className="inline-flex items-center px-4 py-2 bg-blue-100 text-blue-700 rounded-md hover:bg-blue-200 transition-colors border border-blue-300"
+            onClick={() => setShowInviteModal(true)}
+          >
+            <Send className="w-4 h-4 mr-2" />
+            Send Invitation
+          </button>
+          <button 
             className="btn-primary flex items-center gap-2"
             onClick={() => setShowAddCarrierModal(true)}
           >
             <Plus className="w-4 h-4" />
             Add Carrier
           </button>
+          <a
+            href="https://mycarrierpackets.com/"
+            target="_blank"
+            rel="noopener noreferrer"
+            className="inline-flex items-center px-4 py-2 bg-purple-600 text-white rounded-md hover:bg-purple-700 transition-colors"
+          >
+            <ExternalLink className="w-4 h-4 mr-2" />
+            My Carrier Packet
+          </a>
         </div>
       </div>
 
@@ -112,6 +154,43 @@ export const Carriers: React.FC = () => {
             >
               Review Now
             </button>
+          </div>
+        </div>
+      )}
+
+      {/* Pending Invitations */}
+      {invitationsData?.invitations?.length > 0 && (
+        <div className="bg-blue-50 border border-blue-200 rounded-lg p-4">
+          <div className="flex items-center justify-between">
+            <div className="flex items-center">
+              <Send className="w-5 h-5 text-blue-600 mr-3" />
+              <div className="flex-1">
+                <h3 className="text-sm font-medium text-blue-800">
+                  {invitationsData.invitations.length} Pending Invitation{invitationsData.invitations.length > 1 ? 's' : ''}
+                </h3>
+                <p className="text-sm text-blue-700 mt-1">
+                  Carrier invitations have been sent and are awaiting registration.
+                </p>
+              </div>
+            </div>
+            <button 
+              className="ml-4 px-3 py-1 bg-blue-600 text-white text-sm rounded hover:bg-blue-700 transition-colors"
+              onClick={() => setShowResendModal(true)}
+            >
+              Resend Invite
+            </button>
+          </div>
+          <div className="mt-3 space-y-1">
+            {invitationsData.invitations.slice(0, 3).map((invitation: any) => (
+              <div key={invitation.id} className="text-xs text-blue-600 bg-blue-100 px-2 py-1 rounded">
+                {invitation.email} • Sent {new Date(invitation.sentAt).toLocaleDateString()}
+              </div>
+            ))}
+            {invitationsData.invitations.length > 3 && (
+              <div className="text-xs text-blue-500">
+                +{invitationsData.invitations.length - 3} more...
+              </div>
+            )}
           </div>
         </div>
       )}
@@ -171,13 +250,6 @@ export const Carriers: React.FC = () => {
                   title="View Details"
                 >
                   <Eye className="w-4 h-4" />
-                </button>
-                <button 
-                  className="p-1 text-gray-500 hover:text-blue-600"
-                  onClick={() => setEditingCarrier(carrier)}
-                  title="Edit Carrier"
-                >
-                  <Edit className="w-4 h-4" />
                 </button>
                 <button 
                   className="p-1 text-gray-500 hover:text-red-600"
@@ -261,17 +333,6 @@ export const Carriers: React.FC = () => {
         />
       )}
 
-      {/* Carrier Edit Modal */}
-      {editingCarrier && (
-        <CarrierEditModal
-          carrier={editingCarrier}
-          onClose={() => setEditingCarrier(null)}
-          onSave={(_updatedCarrier) => {
-            queryClient.invalidateQueries({ queryKey: ['carriers'] });
-            setEditingCarrier(null);
-          }}
-        />
-      )}
 
       {/* Carrier Delete Modal */}
       {deletingCarrier && (
@@ -293,6 +354,29 @@ export const Carriers: React.FC = () => {
             queryClient.invalidateQueries({ queryKey: ['carriers'] });
             setShowAddCarrierModal(false);
           }}
+        />
+      )}
+
+      {/* Send Invitation Modal */}
+      {showInviteModal && (
+        <InviteCarrierModal
+          onClose={() => setShowInviteModal(false)}
+          onSave={() => {
+            queryClient.invalidateQueries({ queryKey: ['carrier-invitations'] });
+            setShowInviteModal(false);
+          }}
+        />
+      )}
+
+      {/* Resend Invitations Modal */}
+      {showResendModal && (
+        <ResendInvitationsModal
+          onClose={() => setShowResendModal(false)}
+          onSave={() => {
+            queryClient.invalidateQueries({ queryKey: ['carrier-invitations'] });
+            setShowResendModal(false);
+          }}
+          invitations={invitationsData?.invitations || []}
         />
       )}
     </div>
@@ -339,6 +423,15 @@ const AddCarrierModal: React.FC<AddCarrierModalProps> = ({ onClose, onSave }) =>
   
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [errors, setErrors] = useState<string[]>([]);
+  
+  // Carrier lookup state
+  const [isLookingUp, setIsLookingUp] = useState(false);
+  const [lookupSuccess, setLookupSuccess] = useState(false);
+  
+  // Document upload state
+  const [documents, setDocuments] = useState<{ file: File; documentType: string }[]>([]);
+  const [currentDocumentType, setCurrentDocumentType] = useState('');
+  const [isUploadingDocuments, setIsUploadingDocuments] = useState(false);
 
   // Create carrier mutation
   const createCarrierMutation = useMutation({
@@ -346,8 +439,14 @@ const AddCarrierModal: React.FC<AddCarrierModalProps> = ({ onClose, onSave }) =>
       const response = await api.post('/carriers', carrierData);
       return response.data;
     },
-    onSuccess: () => {
+    onSuccess: async (createdCarrier) => {
       setErrors([]);
+      
+      // Upload documents if any were selected
+      if (documents.length > 0) {
+        await uploadDocuments(createdCarrier.id);
+      }
+      
       onSave();
     },
     onError: (error: any) => {
@@ -367,6 +466,55 @@ const AddCarrierModal: React.FC<AddCarrierModalProps> = ({ onClose, onSave }) =>
       setErrors(errorMessages);
     }
   });
+
+  // Carrier lookup function
+  const handleCarrierLookup = async () => {
+    if (!formData.dotNumber && !formData.mcNumber) {
+      setErrors(['Please enter either a DOT Number or MC Number to lookup carrier data']);
+      return;
+    }
+
+    setIsLookingUp(true);
+    setErrors([]);
+    setLookupSuccess(false);
+
+    try {
+      const response = await api.post('/carriers/lookup', {
+        dotNumber: formData.dotNumber || undefined,
+        mcNumber: formData.mcNumber || undefined
+      });
+
+      if (response.data.success && response.data.data) {
+        const carrierData = response.data.data;
+        
+        // Populate form with looked up data
+        setFormData(prev => ({
+          ...prev,
+          name: carrierData.name || prev.name,
+          email: carrierData.email || prev.email,
+          phone: carrierData.phone || prev.phone,
+          streetAddress1: carrierData.address || prev.streetAddress1,
+          streetAddress2: carrierData.address2 || prev.streetAddress2,
+          city: carrierData.city || prev.city,
+          state: carrierData.state || prev.state,
+          zipCode: carrierData.zipCode || prev.zipCode,
+          dotNumber: carrierData.dotNumber || prev.dotNumber,
+          mcNumber: carrierData.mcNumber || prev.mcNumber,
+          safetyRating: carrierData.safetyRating || prev.safetyRating
+        }));
+
+        setLookupSuccess(true);
+        setTimeout(() => setLookupSuccess(false), 3000);
+      } else {
+        setErrors(['No carrier data found for the provided DOT/MC number']);
+      }
+    } catch (error: any) {
+      console.error('Lookup error:', error);
+      setErrors([error.response?.data?.message || 'Failed to lookup carrier data. Please try again.']);
+    } finally {
+      setIsLookingUp(false);
+    }
+  };
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -461,6 +609,71 @@ const AddCarrierModal: React.FC<AddCarrierModalProps> = ({ onClose, onSave }) =>
       await createCarrierMutation.mutateAsync(payload);
     } finally {
       setIsSubmitting(false);
+    }
+  };
+
+  // Handle document file selection
+  const handleFileChange = (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0];
+    if (file && currentDocumentType) {
+      // Validate file type
+      const allowedTypes = [
+        'application/pdf',
+        'application/msword',
+        'application/vnd.openxmlformats-officedocument.wordprocessingml.document',
+        'image/jpeg',
+        'image/png'
+      ];
+      
+      if (!allowedTypes.includes(file.type)) {
+        setErrors(['Please upload a PDF, DOC, DOCX, JPG, or PNG file']);
+        return;
+      }
+      
+      // Validate file size (max 10MB)
+      if (file.size > 10 * 1024 * 1024) {
+        setErrors(['File size must be less than 10MB']);
+        return;
+      }
+      
+      // Add document to list
+      setDocuments([...documents, { file, documentType: currentDocumentType }]);
+      setCurrentDocumentType('');
+      setErrors([]);
+      
+      // Reset file input
+      if (e.target) {
+        e.target.value = '';
+      }
+    }
+  };
+
+  // Remove document from list
+  const removeDocument = (index: number) => {
+    setDocuments(documents.filter((_, i) => i !== index));
+  };
+
+  // Upload documents after carrier creation
+  const uploadDocuments = async (carrierId: number) => {
+    setIsUploadingDocuments(true);
+    
+    try {
+      for (const doc of documents) {
+        const formData = new FormData();
+        formData.append('document', doc.file);
+        formData.append('documentType', doc.documentType);
+        
+        await api.post(`/carriers/${carrierId}/documents`, formData, {
+          headers: {
+            'Content-Type': 'multipart/form-data',
+          },
+        });
+      }
+    } catch (error) {
+      console.error('Error uploading documents:', error);
+      // Don't fail the entire operation for document upload errors
+    } finally {
+      setIsUploadingDocuments(false);
     }
   };
 
@@ -655,13 +868,41 @@ const AddCarrierModal: React.FC<AddCarrierModalProps> = ({ onClose, onSave }) =>
               </div>
               <div>
                 <label className="block text-sm font-medium text-gray-700 mb-1">DOT Number <span className="text-red-500">*</span></label>
-                <input
-                  type="text"
-                  required
-                  value={formData.dotNumber}
-                  onChange={(e) => setFormData({ ...formData, dotNumber: e.target.value })}
-                  className="w-full px-3 py-2 border border-gray-300 rounded-md focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
-                />
+                <div className="flex gap-2">
+                  <input
+                    type="text"
+                    required
+                    value={formData.dotNumber}
+                    onChange={(e) => setFormData({ ...formData, dotNumber: e.target.value })}
+                    className="flex-1 px-3 py-2 border border-gray-300 rounded-md focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
+                  />
+                  <button
+                    type="button"
+                    onClick={handleCarrierLookup}
+                    disabled={isLookingUp || (!formData.dotNumber && !formData.mcNumber)}
+                    className="px-4 py-2 bg-purple-600 text-white rounded-md hover:bg-purple-700 disabled:bg-gray-400 disabled:cursor-not-allowed flex items-center gap-2 whitespace-nowrap"
+                  >
+                    {isLookingUp ? (
+                      <>
+                        <div className="animate-spin rounded-full h-4 w-4 border-b-2 border-white"></div>
+                        Looking up...
+                      </>
+                    ) : (
+                      <>
+                        <Search className="w-4 h-4" />
+                        Lookup Data
+                      </>
+                    )}
+                  </button>
+                </div>
+                {lookupSuccess && (
+                  <p className="text-sm text-green-600 mt-1 flex items-center gap-1">
+                    <svg className="w-4 h-4" fill="currentColor" viewBox="0 0 20 20">
+                      <path fillRule="evenodd" d="M10 18a8 8 0 100-16 8 8 0 000 16zm3.707-9.293a1 1 0 00-1.414-1.414L9 10.586 7.707 9.293a1 1 0 00-1.414 1.414l2 2a1 1 0 001.414 0l4-4z" clipRule="evenodd" />
+                    </svg>
+                    Carrier data loaded successfully!
+                  </p>
+                )}
               </div>
               <div>
                 <label className="block text-sm font-medium text-gray-700 mb-1">Safety Rating</label>
@@ -775,6 +1016,7 @@ const AddCarrierModal: React.FC<AddCarrierModalProps> = ({ onClose, onSave }) =>
                   <option value="SUSPENDED">Suspended</option>
                   <option value="ONBOARDED">Onboarded</option>
                   <option value="NOT_ONBOARDED">Not Onboarded</option>
+                  <option value="REJECTED">Rejected</option>
                 </select>
               </div>
               <div>
@@ -799,22 +1041,97 @@ const AddCarrierModal: React.FC<AddCarrierModalProps> = ({ onClose, onSave }) =>
               </div>
             </div>
           </div>
+
+          {/* Document Upload Section */}
+          <div>
+            <h3 className="text-lg font-medium text-gray-900 mb-4">Documents</h3>
+            
+            {/* Document Upload */}
+            <div className="space-y-4">
+              <div className="flex gap-2">
+                <select
+                  value={currentDocumentType}
+                  onChange={(e) => setCurrentDocumentType(e.target.value)}
+                  className="px-3 py-2 border border-gray-300 rounded-md focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
+                >
+                  <option value="">Select document type...</option>
+                  <option value="INSURANCE">Insurance Certificate</option>
+                  <option value="W9">W-9 Form</option>
+                  <option value="CARRIER_AGREEMENT">Carrier Agreement</option>
+                  <option value="SAFETY_CERTIFICATE">Safety Certificate</option>
+                  <option value="OPERATING_AUTHORITY">Operating Authority</option>
+                  <option value="OTHER">Other</option>
+                </select>
+                
+                <div className="relative">
+                  <input
+                    type="file"
+                    onChange={handleFileChange}
+                    accept=".pdf,.doc,.docx,.jpg,.jpeg,.png"
+                    disabled={!currentDocumentType}
+                    className="absolute inset-0 w-full h-full opacity-0 cursor-pointer disabled:cursor-not-allowed"
+                  />
+                  <button
+                    type="button"
+                    disabled={!currentDocumentType}
+                    className="px-4 py-2 bg-gray-600 text-white rounded hover:bg-gray-700 disabled:bg-gray-300 disabled:cursor-not-allowed flex items-center gap-2"
+                  >
+                    <Upload className="w-4 h-4" />
+                    Choose File
+                  </button>
+                </div>
+              </div>
+              
+              {/* Document List */}
+              {documents.length > 0 && (
+                <div className="border border-gray-200 rounded-md p-4">
+                  <h4 className="text-sm font-medium text-gray-700 mb-2">Selected Documents:</h4>
+                  <div className="space-y-2">
+                    {documents.map((doc, index) => (
+                      <div key={index} className="flex items-center justify-between bg-gray-50 p-2 rounded">
+                        <div className="flex items-center gap-2">
+                          <FileText className="w-4 h-4 text-gray-400" />
+                          <span className="text-sm text-gray-700">{doc.file.name}</span>
+                          <span className="text-xs text-gray-500 bg-gray-200 px-2 py-1 rounded">
+                            {doc.documentType}
+                          </span>
+                        </div>
+                        <button
+                          type="button"
+                          onClick={() => removeDocument(index)}
+                          className="text-red-600 hover:text-red-800"
+                        >
+                          <X className="w-4 h-4" />
+                        </button>
+                      </div>
+                    ))}
+                  </div>
+                </div>
+              )}
+              
+              <p className="text-xs text-gray-500">
+                Accepted formats: PDF, DOC, DOCX, JPG, PNG (max 10MB each)
+              </p>
+            </div>
+          </div>
           
           <div className="flex justify-end gap-3 mt-6 pt-4 border-t">
             <button 
               type="button"
               onClick={onClose}
               className="px-4 py-2 bg-gray-500 text-white rounded hover:bg-gray-600"
-              disabled={isSubmitting}
+              disabled={isSubmitting || isUploadingDocuments}
             >
               Cancel
             </button>
             <button 
               type="submit"
               className="px-4 py-2 bg-blue-600 text-white rounded hover:bg-blue-700 disabled:bg-gray-300"
-              disabled={isSubmitting}
+              disabled={isSubmitting || isUploadingDocuments}
             >
-              {isSubmitting ? 'Creating...' : 'Create Carrier'}
+              {isSubmitting && !isUploadingDocuments && 'Creating Carrier...'}
+              {isUploadingDocuments && 'Uploading Documents...'}
+              {!isSubmitting && !isUploadingDocuments && 'Create Carrier'}
             </button>
           </div>
         </form>
@@ -932,6 +1249,44 @@ interface CarrierDetailsModalProps {
 }
 
 const CarrierDetailsModal: React.FC<CarrierDetailsModalProps> = ({ carrier, onClose }) => {
+  const queryClient = useQueryClient();
+  const [agreements, setAgreements] = useState<CarrierAgreement[]>([]);
+  const [loadingAgreements, setLoadingAgreements] = useState(true);
+  const [documents, setDocuments] = useState<any[]>([]);
+  const [loadingDocuments, setLoadingDocuments] = useState(true);
+  const [showUploadForm, setShowUploadForm] = useState(false);
+  const [uploadFile, setUploadFile] = useState<File | null>(null);
+  const [documentType, setDocumentType] = useState('');
+  const [uploading, setUploading] = useState(false);
+  const [isEditMode, setIsEditMode] = useState(false);
+  const [isSubmitting, setIsSubmitting] = useState(false);
+  const [formData, setFormData] = useState({
+    name: carrier.name,
+    contactPerson: carrier.contactPerson || '',
+    phone: carrier.phone || '',
+    email: carrier.email || '',
+    mcNumber: carrier.mcNumber || '',
+    dotNumber: carrier.dotNumber || '',
+    streetAddress1: carrier.streetAddress1 || '',
+    streetAddress2: carrier.streetAddress2 || '',
+    city: carrier.city || '',
+    state: carrier.state || '',
+    zipCode: carrier.zipCode || '',
+    status: ['PENDING', 'ACTIVE', 'INACTIVE', 'SUSPENDED'].includes(carrier.status) 
+      ? carrier.status 
+      : carrier.status === 'ONBOARDED' ? 'ACTIVE' : 'PENDING',
+    carrierType: carrier.carrierType || '',
+    safetyRating: carrier.safetyRating || '',
+    taxId: carrier.taxId || '',
+    ratePerMile: carrier.ratePerMile?.toString() || '',
+    rating: carrier.rating?.toString() || '',
+    remittanceContact: carrier.remittanceContact || '',
+    remittanceEmail: carrier.remittanceEmail || '',
+    factoringCompany: carrier.factoringCompany || '',
+    onboardingComplete: carrier.onboardingComplete,
+    insuranceExpiration: carrier.insuranceExpiration ? new Date(carrier.insuranceExpiration).toISOString().split('T')[0] : ''
+  });
+
   const getStatusBadge = (status: string) => {
     const statusColors = {
       ACTIVE: 'bg-green-100 text-green-800',
@@ -939,9 +1294,238 @@ const CarrierDetailsModal: React.FC<CarrierDetailsModalProps> = ({ carrier, onCl
       INACTIVE: 'bg-gray-100 text-gray-800',
       SUSPENDED: 'bg-red-100 text-red-800',
       ONBOARDED: 'bg-blue-100 text-blue-800',
-      NOT_ONBOARDED: 'bg-orange-100 text-orange-800'
+      NOT_ONBOARDED: 'bg-orange-100 text-orange-800',
+      REJECTED: 'bg-red-100 text-red-800'
     };
     return statusColors[status as keyof typeof statusColors] || 'bg-gray-100 text-gray-800';
+  };
+
+  // Fetch carrier agreements
+  useEffect(() => {
+    const fetchAgreements = async () => {
+      try {
+        setLoadingAgreements(true);
+        const response = await api.get(`/carriers/${carrier.id}/agreements`);
+        setAgreements(response.data);
+      } catch (error) {
+        console.error('Failed to fetch agreements:', error);
+        setAgreements([]);
+      } finally {
+        setLoadingAgreements(false);
+      }
+    };
+
+    fetchAgreements();
+  }, [carrier.id]);
+
+  // Fetch carrier documents
+  useEffect(() => {
+    const fetchDocuments = async () => {
+      try {
+        setLoadingDocuments(true);
+        const response = await api.get(`/carriers/${carrier.id}/documents`);
+        setDocuments(response.data);
+      } catch (error) {
+        console.error('Failed to fetch documents:', error);
+        setDocuments([]);
+      } finally {
+        setLoadingDocuments(false);
+      }
+    };
+
+    fetchDocuments();
+  }, [carrier.id]);
+
+  const downloadDocument = async (documentId: number, filename: string) => {
+    try {
+      const response = await api.get(`/carriers/${carrier.id}/documents/${documentId}`, { responseType: 'blob' });
+      
+      const url = window.URL.createObjectURL(new Blob([response.data]));
+      const link = document.createElement('a');
+      link.href = url;
+      link.setAttribute('download', filename);
+      document.body.appendChild(link);
+      link.click();
+      link.remove();
+      window.URL.revokeObjectURL(url);
+    } catch (error) {
+      console.error('Failed to download document:', error);
+      alert('Failed to download document. Please try again.');
+    }
+  };
+
+  const handleDeleteDocument = async (documentId: number) => {
+    if (!window.confirm('Are you sure you want to delete this document?')) {
+      return;
+    }
+
+    try {
+      await api.delete(`/carriers/${carrier.id}/documents/${documentId}`);
+      
+      // Refresh documents list
+      const response = await api.get(`/carriers/${carrier.id}/documents`);
+      setDocuments(response.data);
+      
+      alert('Document deleted successfully');
+    } catch (error) {
+      console.error('Failed to delete document:', error);
+      alert('Failed to delete document. Please try again.');
+    }
+  };
+
+  const handleUploadDocument = async () => {
+    if (!uploadFile || !documentType) {
+      alert('Please select a file and document type');
+      return;
+    }
+
+    setUploading(true);
+    const formData = new FormData();
+    formData.append('document', uploadFile);
+    formData.append('documentType', documentType);
+
+    try {
+      await api.post(`/carriers/${carrier.id}/documents`, formData, {
+        headers: {
+          'Content-Type': 'multipart/form-data',
+        },
+      });
+
+      // Refresh documents list
+      const response = await api.get(`/carriers/${carrier.id}/documents`);
+      setDocuments(response.data);
+      
+      // Reset form
+      setShowUploadForm(false);
+      setUploadFile(null);
+      setDocumentType('');
+      
+      alert('Document uploaded successfully');
+    } catch (error) {
+      console.error('Failed to upload document:', error);
+      alert('Failed to upload document. Please try again.');
+    } finally {
+      setUploading(false);
+    }
+  };
+
+  const downloadAgreementDocument = async (agreementId: number, type: 'affidavit' | 'full') => {
+    try {
+      const endpoint = type === 'affidavit' 
+        ? `/carriers/${carrier.id}/agreements/${agreementId}/affidavit`
+        : `/carriers/${carrier.id}/agreements/${agreementId}/full`;
+      
+      const response = await api.get(endpoint, { responseType: 'blob' });
+      
+      const url = window.URL.createObjectURL(new Blob([response.data]));
+      const link = document.createElement('a');
+      link.href = url;
+      link.setAttribute('download', 
+        type === 'affidavit' 
+          ? `affidavit_${carrier.name}_${agreementId}.pdf`
+          : `agreement_${carrier.name}_${agreementId}.pdf`
+      );
+      document.body.appendChild(link);
+      link.click();
+      link.remove();
+      window.URL.revokeObjectURL(url);
+    } catch (error) {
+      console.error('Failed to download document:', error);
+      alert('Failed to download document. Please try again.');
+    }
+  };
+
+  const handleSave = async () => {
+    setIsSubmitting(true);
+    
+    try {
+      // Build payload with proper validation
+      const payload: any = {};
+      
+      // Only include fields that have values
+      if (formData.name.trim()) payload.name = formData.name.trim();
+      if (formData.contactPerson.trim()) payload.contactPerson = formData.contactPerson.trim();
+      if (formData.phone.trim()) payload.phone = formData.phone.trim();
+      if (formData.email.trim()) payload.email = formData.email.trim();
+      if (formData.mcNumber.trim()) payload.mcNumber = formData.mcNumber.trim();
+      if (formData.dotNumber.trim()) payload.dotNumber = formData.dotNumber.trim();
+      if (formData.streetAddress1.trim()) payload.streetAddress1 = formData.streetAddress1.trim();
+      if (formData.streetAddress2.trim()) payload.streetAddress2 = formData.streetAddress2.trim();
+      if (formData.city.trim()) payload.city = formData.city.trim();
+      if (formData.state.trim()) payload.state = formData.state.trim();
+      if (formData.zipCode.trim()) payload.zipCode = formData.zipCode.trim();
+      
+      payload.status = formData.status;
+      payload.onboardingComplete = formData.onboardingComplete;
+      
+      if (formData.carrierType.trim()) payload.carrierType = formData.carrierType.trim();
+      if (formData.safetyRating) payload.safetyRating = formData.safetyRating;
+      if (formData.taxId.trim()) payload.taxId = formData.taxId.trim();
+      
+      // Convert numeric fields
+      if (formData.ratePerMile) {
+        const rate = parseFloat(formData.ratePerMile);
+        if (!isNaN(rate)) payload.ratePerMile = rate;
+      }
+      if (formData.rating) {
+        const rating = parseFloat(formData.rating);
+        if (!isNaN(rating)) payload.rating = rating;
+      }
+      
+      if (formData.remittanceContact.trim()) payload.remittanceContact = formData.remittanceContact.trim();
+      if (formData.remittanceEmail.trim()) payload.remittanceEmail = formData.remittanceEmail.trim();
+      if (formData.factoringCompany.trim()) payload.factoringCompany = formData.factoringCompany.trim();
+      
+      if (formData.insuranceExpiration) {
+        payload.insuranceExpiration = new Date(formData.insuranceExpiration).toISOString();
+      }
+      
+      const response = await api.put(`/carriers/${carrier.id}`, payload);
+      
+      // Update the carriers list
+      queryClient.invalidateQueries({ queryKey: ['carriers'] });
+      
+      // Exit edit mode
+      setIsEditMode(false);
+      
+      alert('Carrier updated successfully');
+    } catch (error: any) {
+      console.error('Update failed:', error);
+      alert(error.response?.data?.message || 'Failed to update carrier');
+    } finally {
+      setIsSubmitting(false);
+    }
+  };
+
+  const handleCancel = () => {
+    // Reset form data
+    setFormData({
+      name: carrier.name,
+      contactPerson: carrier.contactPerson || '',
+      phone: carrier.phone || '',
+      email: carrier.email || '',
+      mcNumber: carrier.mcNumber || '',
+      dotNumber: carrier.dotNumber || '',
+      streetAddress1: carrier.streetAddress1 || '',
+      streetAddress2: carrier.streetAddress2 || '',
+      city: carrier.city || '',
+      state: carrier.state || '',
+      zipCode: carrier.zipCode || '',
+      status: ['PENDING', 'ACTIVE', 'INACTIVE', 'SUSPENDED'].includes(carrier.status) 
+        ? carrier.status 
+        : carrier.status === 'ONBOARDED' ? 'ACTIVE' : 'PENDING',
+      carrierType: carrier.carrierType || '',
+      safetyRating: carrier.safetyRating || '',
+      taxId: carrier.taxId || '',
+      ratePerMile: carrier.ratePerMile?.toString() || '',
+      rating: carrier.rating?.toString() || '',
+      remittanceContact: carrier.remittanceContact || '',
+      remittanceEmail: carrier.remittanceEmail || '',
+      factoringCompany: carrier.factoringCompany || '',
+      onboardingComplete: carrier.onboardingComplete,
+      insuranceExpiration: carrier.insuranceExpiration ? new Date(carrier.insuranceExpiration).toISOString().split('T')[0] : ''
+    });
+    setIsEditMode(false);
   };
 
   return (
@@ -949,12 +1533,23 @@ const CarrierDetailsModal: React.FC<CarrierDetailsModalProps> = ({ carrier, onCl
       <div className="bg-white rounded-lg p-6 w-full max-w-3xl max-h-[90vh] overflow-y-auto">
         <div className="flex justify-between items-center mb-6">
           <h2 className="text-xl font-bold text-gray-900">Carrier Details - {carrier.name}</h2>
-          <button 
-            onClick={onClose}
-            className="text-gray-400 hover:text-gray-600"
-          >
-            <X className="w-5 h-5" />
-          </button>
+          <div className="flex items-center gap-2">
+            {!isEditMode && (
+              <button
+                onClick={() => setIsEditMode(true)}
+                className="flex items-center gap-1 px-3 py-1 text-sm bg-blue-600 text-white rounded hover:bg-blue-700"
+              >
+                <Edit className="w-4 h-4" />
+                Edit
+              </button>
+            )}
+            <button 
+              onClick={onClose}
+              className="text-gray-400 hover:text-gray-600"
+            >
+              <X className="w-5 h-5" />
+            </button>
+          </div>
         </div>
         
         <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
@@ -962,165 +1557,557 @@ const CarrierDetailsModal: React.FC<CarrierDetailsModalProps> = ({ carrier, onCl
           <div className="space-y-4">
             <div>
               <label className="block text-sm font-medium text-gray-700 mb-1">Carrier Name</label>
-              <p className="text-sm text-gray-900">{carrier.name}</p>
+              {isEditMode ? (
+                <input
+                  type="text"
+                  value={formData.name}
+                  onChange={(e) => setFormData({...formData, name: e.target.value})}
+                  className="w-full p-2 border rounded focus:ring-blue-500 focus:border-blue-500"
+                />
+              ) : (
+                <p className="text-sm text-gray-900">{carrier.name}</p>
+              )}
             </div>
             
             <div>
               <label className="block text-sm font-medium text-gray-700 mb-1">Status</label>
-              <span className={`inline-flex px-2 py-1 rounded-full text-xs font-medium ${getStatusBadge(carrier.status)}`}>
-                {carrier.status}
-              </span>
+              {isEditMode ? (
+                <select
+                  value={formData.status}
+                  onChange={(e) => setFormData({...formData, status: e.target.value})}
+                  className="w-full p-2 border rounded focus:ring-blue-500 focus:border-blue-500"
+                >
+                  <option value="PENDING">PENDING</option>
+                  <option value="ACTIVE">ACTIVE</option>
+                  <option value="INACTIVE">INACTIVE</option>
+                  <option value="SUSPENDED">SUSPENDED</option>
+                </select>
+              ) : (
+                <span className={`inline-flex px-2 py-1 rounded-full text-xs font-medium ${getStatusBadge(carrier.status)}`}>
+                  {carrier.status}
+                </span>
+              )}
             </div>
 
-            {carrier.contactPerson && (
-              <div>
-                <label className="block text-sm font-medium text-gray-700 mb-1">Contact Person</label>
-                <p className="text-sm text-gray-900">{carrier.contactPerson}</p>
-              </div>
-            )}
+            <div>
+              <label className="block text-sm font-medium text-gray-700 mb-1">Contact Person</label>
+              {isEditMode ? (
+                <input
+                  type="text"
+                  value={formData.contactPerson}
+                  onChange={(e) => setFormData({...formData, contactPerson: e.target.value})}
+                  className="w-full p-2 border rounded focus:ring-blue-500 focus:border-blue-500"
+                  placeholder="Enter contact person"
+                />
+              ) : (
+                <p className="text-sm text-gray-900">{carrier.contactPerson || 'N/A'}</p>
+              )}
+            </div>
 
-            {carrier.phone && (
-              <div>
-                <label className="block text-sm font-medium text-gray-700 mb-1">Phone</label>
-                <p className="text-sm text-gray-900">{carrier.phone}</p>
-              </div>
-            )}
+            <div>
+              <label className="block text-sm font-medium text-gray-700 mb-1">Phone</label>
+              {isEditMode ? (
+                <input
+                  type="text"
+                  value={formData.phone}
+                  onChange={(e) => setFormData({...formData, phone: e.target.value})}
+                  className="w-full p-2 border rounded focus:ring-blue-500 focus:border-blue-500"
+                  placeholder="Enter phone number"
+                />
+              ) : (
+                <p className="text-sm text-gray-900">{carrier.phone || 'N/A'}</p>
+              )}
+            </div>
 
-            {carrier.email && (
-              <div>
-                <label className="block text-sm font-medium text-gray-700 mb-1">Email</label>
-                <p className="text-sm text-gray-900">{carrier.email}</p>
-              </div>
-            )}
+            <div>
+              <label className="block text-sm font-medium text-gray-700 mb-1">Email</label>
+              {isEditMode ? (
+                <input
+                  type="email"
+                  value={formData.email}
+                  onChange={(e) => setFormData({...formData, email: e.target.value})}
+                  className="w-full p-2 border rounded focus:ring-blue-500 focus:border-blue-500"
+                  placeholder="Enter email address"
+                />
+              ) : (
+                <p className="text-sm text-gray-900">{carrier.email || 'N/A'}</p>
+              )}
+            </div>
           </div>
 
           {/* Address & Details */}
           <div className="space-y-4">
-            {(carrier.streetAddress1 || carrier.city || carrier.state || carrier.zipCode) && (
-              <div>
-                <label className="block text-sm font-medium text-gray-700 mb-1">Address</label>
+            <div>
+              <label className="block text-sm font-medium text-gray-700 mb-1">Address</label>
+              {isEditMode ? (
+                <div className="space-y-2">
+                  <input
+                    type="text"
+                    value={formData.streetAddress1}
+                    onChange={(e) => setFormData({...formData, streetAddress1: e.target.value})}
+                    className="w-full p-2 border rounded focus:ring-blue-500 focus:border-blue-500"
+                    placeholder="Street Address 1"
+                  />
+                  <input
+                    type="text"
+                    value={formData.streetAddress2}
+                    onChange={(e) => setFormData({...formData, streetAddress2: e.target.value})}
+                    className="w-full p-2 border rounded focus:ring-blue-500 focus:border-blue-500"
+                    placeholder="Street Address 2 (Optional)"
+                  />
+                  <div className="grid grid-cols-3 gap-2">
+                    <input
+                      type="text"
+                      value={formData.city}
+                      onChange={(e) => setFormData({...formData, city: e.target.value})}
+                      className="p-2 border rounded focus:ring-blue-500 focus:border-blue-500"
+                      placeholder="City"
+                    />
+                    <input
+                      type="text"
+                      value={formData.state}
+                      onChange={(e) => setFormData({...formData, state: e.target.value})}
+                      className="p-2 border rounded focus:ring-blue-500 focus:border-blue-500"
+                      placeholder="State"
+                      maxLength={2}
+                    />
+                    <input
+                      type="text"
+                      value={formData.zipCode}
+                      onChange={(e) => setFormData({...formData, zipCode: e.target.value})}
+                      className="p-2 border rounded focus:ring-blue-500 focus:border-blue-500"
+                      placeholder="ZIP Code"
+                    />
+                  </div>
+                </div>
+              ) : (
                 <div className="text-sm text-gray-900 space-y-1">
-                  {carrier.streetAddress1 && <p>{carrier.streetAddress1}</p>}
-                  {carrier.streetAddress2 && <p>{carrier.streetAddress2}</p>}
-                  {(carrier.city || carrier.state || carrier.zipCode) && (
-                    <p>
-                      {carrier.city}{carrier.city && (carrier.state || carrier.zipCode) ? ', ' : ''}
-                      {carrier.state} {carrier.zipCode}
-                    </p>
+                  {(carrier.streetAddress1 || carrier.city || carrier.state || carrier.zipCode) ? (
+                    <>
+                      {carrier.streetAddress1 && <p>{carrier.streetAddress1}</p>}
+                      {carrier.streetAddress2 && <p>{carrier.streetAddress2}</p>}
+                      {(carrier.city || carrier.state || carrier.zipCode) && (
+                        <p>
+                          {carrier.city}{carrier.city && (carrier.state || carrier.zipCode) ? ', ' : ''}
+                          {carrier.state} {carrier.zipCode}
+                        </p>
+                      )}
+                    </>
+                  ) : (
+                    <p>N/A</p>
                   )}
                 </div>
-              </div>
-            )}
+              )}
+            </div>
 
             <div className="grid grid-cols-2 gap-4">
               <div>
                 <label className="block text-sm font-medium text-gray-700 mb-1">MC Number</label>
-                <p className="text-sm text-gray-900">{carrier.mcNumber || 'N/A'}</p>
+                {isEditMode ? (
+                  <input
+                    type="text"
+                    value={formData.mcNumber}
+                    onChange={(e) => setFormData({...formData, mcNumber: e.target.value})}
+                    className="w-full p-2 border rounded focus:ring-blue-500 focus:border-blue-500"
+                    placeholder="MC Number"
+                  />
+                ) : (
+                  <p className="text-sm text-gray-900">{carrier.mcNumber || 'N/A'}</p>
+                )}
               </div>
               <div>
                 <label className="block text-sm font-medium text-gray-700 mb-1">DOT Number</label>
-                <p className="text-sm text-gray-900">{carrier.dotNumber || 'N/A'}</p>
+                {isEditMode ? (
+                  <input
+                    type="text"
+                    value={formData.dotNumber}
+                    onChange={(e) => setFormData({...formData, dotNumber: e.target.value})}
+                    className="w-full p-2 border rounded focus:ring-blue-500 focus:border-blue-500"
+                    placeholder="DOT Number"
+                  />
+                ) : (
+                  <p className="text-sm text-gray-900">{carrier.dotNumber || 'N/A'}</p>
+                )}
               </div>
             </div>
 
-            {carrier.safetyRating && (
-              <div>
-                <label className="block text-sm font-medium text-gray-700 mb-1">Safety Rating</label>
+            <div>
+              <label className="block text-sm font-medium text-gray-700 mb-1">Safety Rating</label>
+              {isEditMode ? (
+                <select
+                  value={formData.safetyRating}
+                  onChange={(e) => setFormData({...formData, safetyRating: e.target.value})}
+                  className="w-full p-2 border rounded focus:ring-blue-500 focus:border-blue-500"
+                >
+                  <option value="">Select rating</option>
+                  <option value="Acceptable">Acceptable</option>
+                  <option value="Conditional">Conditional</option>
+                  <option value="Unacceptable">Unacceptable</option>
+                </select>
+              ) : (
                 <p className={`text-sm font-medium ${
                   carrier.safetyRating === 'Acceptable' ? 'text-green-600' : 
                   carrier.safetyRating === 'Unacceptable' ? 'text-red-600' : 
                   'text-yellow-600'
                 }`}>
-                  {carrier.safetyRating}
+                  {carrier.safetyRating || 'N/A'}
                 </p>
-              </div>
-            )}
+              )}
+            </div>
 
-            {carrier.carrierType && (
-              <div>
-                <label className="block text-sm font-medium text-gray-700 mb-1">Carrier Type</label>
-                <p className="text-sm text-gray-900">{carrier.carrierType}</p>
-              </div>
-            )}
+            <div>
+              <label className="block text-sm font-medium text-gray-700 mb-1">Carrier Type</label>
+              {isEditMode ? (
+                <input
+                  type="text"
+                  value={formData.carrierType}
+                  onChange={(e) => setFormData({...formData, carrierType: e.target.value})}
+                  className="w-full p-2 border rounded focus:ring-blue-500 focus:border-blue-500"
+                  placeholder="Enter carrier type"
+                />
+              ) : (
+                <p className="text-sm text-gray-900">{carrier.carrierType || 'N/A'}</p>
+              )}
+            </div>
           </div>
         </div>
 
         {/* Financial Information */}
-        {(carrier.ratePerMile || carrier.rating || carrier.taxId || carrier.factoringCompany) && (
-          <div className="mt-6 pt-6 border-t">
-            <h3 className="text-lg font-medium text-gray-900 mb-4">Financial Information</h3>
-            <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-              {carrier.ratePerMile && (
-                <div>
-                  <label className="block text-sm font-medium text-gray-700 mb-1">Rate per Mile</label>
-                  <p className="text-sm text-gray-900">${carrier.ratePerMile}</p>
-                </div>
+        <div className="mt-6 pt-6 border-t">
+          <h3 className="text-lg font-medium text-gray-900 mb-4">Financial Information</h3>
+          <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+            <div>
+              <label className="block text-sm font-medium text-gray-700 mb-1">Rate per Mile</label>
+              {isEditMode ? (
+                <input
+                  type="number"
+                  step="0.01"
+                  value={formData.ratePerMile}
+                  onChange={(e) => setFormData({...formData, ratePerMile: e.target.value})}
+                  className="w-full p-2 border rounded focus:ring-blue-500 focus:border-blue-500"
+                  placeholder="0.00"
+                />
+              ) : (
+                <p className="text-sm text-gray-900">{carrier.ratePerMile ? `$${carrier.ratePerMile}` : 'N/A'}</p>
               )}
-              {carrier.rating && (
-                <div>
-                  <label className="block text-sm font-medium text-gray-700 mb-1">Rating</label>
-                  <p className="text-sm text-gray-900">{carrier.rating}</p>
-                </div>
+            </div>
+            <div>
+              <label className="block text-sm font-medium text-gray-700 mb-1">Rating</label>
+              {isEditMode ? (
+                <input
+                  type="number"
+                  step="0.1"
+                  min="0"
+                  max="5"
+                  value={formData.rating}
+                  onChange={(e) => setFormData({...formData, rating: e.target.value})}
+                  className="w-full p-2 border rounded focus:ring-blue-500 focus:border-blue-500"
+                  placeholder="0.0"
+                />
+              ) : (
+                <p className="text-sm text-gray-900">{carrier.rating || 'N/A'}</p>
               )}
-              {carrier.taxId && (
-                <div>
-                  <label className="block text-sm font-medium text-gray-700 mb-1">Tax ID</label>
-                  <p className="text-sm text-gray-900">{carrier.taxId}</p>
-                </div>
+            </div>
+            <div>
+              <label className="block text-sm font-medium text-gray-700 mb-1">Tax ID</label>
+              {isEditMode ? (
+                <input
+                  type="text"
+                  value={formData.taxId}
+                  onChange={(e) => setFormData({...formData, taxId: e.target.value})}
+                  className="w-full p-2 border rounded focus:ring-blue-500 focus:border-blue-500"
+                  placeholder="Tax ID"
+                />
+              ) : (
+                <p className="text-sm text-gray-900">{carrier.taxId || 'N/A'}</p>
               )}
-              {carrier.factoringCompany && (
-                <div>
-                  <label className="block text-sm font-medium text-gray-700 mb-1">Factoring Company</label>
-                  <p className="text-sm text-gray-900">{carrier.factoringCompany}</p>
-                </div>
+            </div>
+            <div>
+              <label className="block text-sm font-medium text-gray-700 mb-1">Factoring Company</label>
+              {isEditMode ? (
+                <input
+                  type="text"
+                  value={formData.factoringCompany}
+                  onChange={(e) => setFormData({...formData, factoringCompany: e.target.value})}
+                  className="w-full p-2 border rounded focus:ring-blue-500 focus:border-blue-500"
+                  placeholder="Factoring company"
+                />
+              ) : (
+                <p className="text-sm text-gray-900">{carrier.factoringCompany || 'N/A'}</p>
               )}
             </div>
           </div>
-        )}
+        </div>
 
         {/* Remittance Information */}
-        {(carrier.remittanceContact || carrier.remittanceEmail) && (
-          <div className="mt-6 pt-6 border-t">
-            <h3 className="text-lg font-medium text-gray-900 mb-4">Remittance Information</h3>
-            <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-              {carrier.remittanceContact && (
-                <div>
-                  <label className="block text-sm font-medium text-gray-700 mb-1">Remittance Contact</label>
-                  <p className="text-sm text-gray-900">{carrier.remittanceContact}</p>
-                </div>
+        <div className="mt-6 pt-6 border-t">
+          <h3 className="text-lg font-medium text-gray-900 mb-4">Remittance Information</h3>
+          <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+            <div>
+              <label className="block text-sm font-medium text-gray-700 mb-1">Remittance Contact</label>
+              {isEditMode ? (
+                <input
+                  type="text"
+                  value={formData.remittanceContact}
+                  onChange={(e) => setFormData({...formData, remittanceContact: e.target.value})}
+                  className="w-full p-2 border rounded focus:ring-blue-500 focus:border-blue-500"
+                  placeholder="Remittance contact"
+                />
+              ) : (
+                <p className="text-sm text-gray-900">{carrier.remittanceContact || 'N/A'}</p>
               )}
-              {carrier.remittanceEmail && (
-                <div>
-                  <label className="block text-sm font-medium text-gray-700 mb-1">Remittance Email</label>
-                  <p className="text-sm text-gray-900">{carrier.remittanceEmail}</p>
-                </div>
+            </div>
+            <div>
+              <label className="block text-sm font-medium text-gray-700 mb-1">Remittance Email</label>
+              {isEditMode ? (
+                <input
+                  type="email"
+                  value={formData.remittanceEmail}
+                  onChange={(e) => setFormData({...formData, remittanceEmail: e.target.value})}
+                  className="w-full p-2 border rounded focus:ring-blue-500 focus:border-blue-500"
+                  placeholder="remittance@example.com"
+                />
+              ) : (
+                <p className="text-sm text-gray-900">{carrier.remittanceEmail || 'N/A'}</p>
               )}
             </div>
           </div>
-        )}
+        </div>
 
         {/* Additional Information */}
         <div className="mt-6 pt-6 border-t">
           <div className="grid grid-cols-2 gap-4">
             <div>
               <label className="block text-sm font-medium text-gray-700 mb-1">Onboarding Complete</label>
-              <span className={`inline-flex px-2 py-1 rounded-full text-xs font-medium ${
-                carrier.onboardingComplete 
-                  ? 'bg-green-100 text-green-800' 
-                  : 'bg-red-100 text-red-800'
-              }`}>
-                {carrier.onboardingComplete ? 'Yes' : 'No'}
-              </span>
+              {isEditMode ? (
+                <select
+                  value={formData.onboardingComplete ? 'true' : 'false'}
+                  onChange={(e) => setFormData({...formData, onboardingComplete: e.target.value === 'true'})}
+                  className="w-full p-2 border rounded focus:ring-blue-500 focus:border-blue-500"
+                >
+                  <option value="false">No</option>
+                  <option value="true">Yes</option>
+                </select>
+              ) : (
+                <span className={`inline-flex px-2 py-1 rounded-full text-xs font-medium ${
+                  carrier.onboardingComplete 
+                    ? 'bg-green-100 text-green-800' 
+                    : 'bg-red-100 text-red-800'
+                }`}>
+                  {carrier.onboardingComplete ? 'Yes' : 'No'}
+                </span>
+              )}
             </div>
-            {carrier.insuranceExpiration && (
-              <div>
-                <label className="block text-sm font-medium text-gray-700 mb-1">Insurance Expiration</label>
+            <div>
+              <label className="block text-sm font-medium text-gray-700 mb-1">Insurance Expiration</label>
+              {isEditMode ? (
+                <input
+                  type="date"
+                  value={formData.insuranceExpiration}
+                  onChange={(e) => setFormData({...formData, insuranceExpiration: e.target.value})}
+                  className="w-full p-2 border rounded focus:ring-blue-500 focus:border-blue-500"
+                />
+              ) : (
                 <p className="text-sm text-gray-900">
-                  {new Date(carrier.insuranceExpiration).toLocaleDateString()}
+                  {carrier.insuranceExpiration ? new Date(carrier.insuranceExpiration).toLocaleDateString() : 'N/A'}
                 </p>
+              )}
+            </div>
+          </div>
+        </div>
+
+        {/* Signed Agreements Section */}
+        <div className="mt-6 pt-6 border-t">
+          <div className="mb-4">
+            <h3 className="text-lg font-medium text-gray-900 mb-3">Signed Agreements</h3>
+            {loadingAgreements ? (
+              <div className="flex items-center justify-center py-4">
+                <div className="animate-spin rounded-full h-6 w-6 border-b-2 border-blue-600"></div>
+                <span className="ml-2 text-sm text-gray-500">Loading agreements...</span>
+              </div>
+            ) : agreements.length === 0 ? (
+              <div className="bg-gray-50 border border-gray-200 rounded-lg p-4">
+                <p className="text-sm text-gray-500 text-center">No signed agreements found</p>
+              </div>
+            ) : (
+              <div className="space-y-3">
+                {agreements.map((agreement) => (
+                  <div key={agreement.id} className="bg-gray-50 border border-gray-200 rounded-lg p-4">
+                    <div className="flex justify-between items-start">
+                      <div className="flex-1">
+                        <div className="flex items-center gap-2 mb-2">
+                          <FileText className="w-4 h-4 text-blue-600" />
+                          <h4 className="font-medium text-gray-900">{agreement.agreementTitle}</h4>
+                        </div>
+                        <div className="grid grid-cols-2 gap-4 text-xs text-gray-600">
+                          <div>
+                            <span className="font-medium">Signed By:</span> {agreement.signedBy}
+                          </div>
+                          <div>
+                            <span className="font-medium">Title:</span> {agreement.signedByTitle}
+                          </div>
+                          <div>
+                            <span className="font-medium">Date:</span> {new Date(agreement.signedAt).toLocaleDateString()}
+                          </div>
+                          <div>
+                            <span className="font-medium">Version:</span> {agreement.agreementVersion}
+                          </div>
+                          <div className="col-span-2">
+                            <span className="font-medium">IP Address:</span> {agreement.ipAddress}
+                          </div>
+                        </div>
+                      </div>
+                      <div className="flex flex-col gap-1 ml-4">
+                        {agreement.affidavitPdfPath && (
+                          <button
+                            onClick={() => downloadAgreementDocument(agreement.id, 'affidavit')}
+                            className="flex items-center gap-1 px-3 py-1 text-xs bg-blue-600 text-white rounded hover:bg-blue-700"
+                            title="Download Affidavit"
+                          >
+                            <Download className="w-3 h-3" />
+                            Affidavit
+                          </button>
+                        )}
+                        {agreement.agreementPdfPath && (
+                          <button
+                            onClick={() => downloadAgreementDocument(agreement.id, 'full')}
+                            className="flex items-center gap-1 px-3 py-1 text-xs bg-green-600 text-white rounded hover:bg-green-700"
+                            title="Download Full Agreement"
+                          >
+                            <Download className="w-3 h-3" />
+                            Agreement
+                          </button>
+                        )}
+                      </div>
+                    </div>
+                  </div>
+                ))}
               </div>
             )}
           </div>
+        </div>
+
+        {/* Uploaded Documents Section */}
+        <div className="mt-6 pt-6 border-t">
+          <div className="mb-4">
+            <div className="flex justify-between items-center mb-3">
+              <h3 className="text-lg font-medium text-gray-900">Uploaded Documents</h3>
+              <button
+                onClick={() => setShowUploadForm(true)}
+                className="flex items-center gap-1 px-3 py-1 text-sm bg-blue-600 text-white rounded hover:bg-blue-700"
+              >
+                <Upload className="w-4 h-4" />
+                Upload Document
+              </button>
+            </div>
+            {loadingDocuments ? (
+              <div className="flex items-center justify-center py-4">
+                <div className="animate-spin rounded-full h-6 w-6 border-b-2 border-blue-600"></div>
+                <span className="ml-2 text-sm text-gray-500">Loading documents...</span>
+              </div>
+            ) : documents.length === 0 ? (
+              <div className="bg-gray-50 border border-gray-200 rounded-lg p-4">
+                <p className="text-sm text-gray-500 text-center">No documents uploaded</p>
+              </div>
+            ) : (
+              <div className="space-y-3">
+                {documents.map((doc) => (
+                  <div key={doc.id} className="bg-gray-50 border border-gray-200 rounded-lg p-4">
+                    <div className="flex justify-between items-start">
+                      <div className="flex-1">
+                        <div className="flex items-center gap-2 mb-2">
+                          <FileText className="w-4 h-4 text-blue-600" />
+                          <h4 className="font-medium text-gray-900">{doc.filename}</h4>
+                        </div>
+                        <div className="flex flex-wrap gap-4 text-xs text-gray-600">
+                          <div>
+                            <span className="font-medium">Type:</span> {doc.documentType.replace(/_/g, ' ')}
+                          </div>
+                          <div>
+                            <span className="font-medium">Uploaded:</span> {new Date(doc.uploadedAt).toLocaleDateString()}
+                          </div>
+                        </div>
+                      </div>
+                      <div className="flex gap-1 ml-4">
+                        <button
+                          onClick={() => downloadDocument(doc.id, doc.filename)}
+                          className="flex items-center gap-1 px-3 py-1 text-xs bg-blue-600 text-white rounded hover:bg-blue-700"
+                          title="Download Document"
+                        >
+                          <Download className="w-3 h-3" />
+                          Download
+                        </button>
+                        <button
+                          onClick={() => handleDeleteDocument(doc.id)}
+                          className="flex items-center gap-1 px-3 py-1 text-xs bg-red-600 text-white rounded hover:bg-red-700"
+                          title="Delete Document"
+                        >
+                          <Trash2 className="w-3 h-3" />
+                          Delete
+                        </button>
+                      </div>
+                    </div>
+                  </div>
+                ))}
+              </div>
+            )}
+          </div>
+
+          {/* Upload Form */}
+          {showUploadForm && (
+            <div className="mt-4 p-4 bg-gray-50 border border-gray-200 rounded-lg">
+              <h4 className="font-medium text-gray-900 mb-3">Upload New Document</h4>
+              <div className="space-y-3">
+                <div>
+                  <label className="block text-sm font-medium text-gray-700 mb-1">Document Type</label>
+                  <select
+                    value={documentType}
+                    onChange={(e) => setDocumentType(e.target.value)}
+                    className="w-full p-2 border rounded focus:ring-blue-500 focus:border-blue-500"
+                  >
+                    <option value="">Select document type</option>
+                    <option value="INSURANCE_CERTIFICATE">Insurance Certificate</option>
+                    <option value="CARRIER_AGREEMENT">Carrier Agreement</option>
+                    <option value="W9_FORM">W9 Form</option>
+                    <option value="OPERATING_AUTHORITY">Operating Authority</option>
+                    <option value="SAFETY_RATING">Safety Rating</option>
+                    <option value="OTHER">Other</option>
+                  </select>
+                </div>
+                <div>
+                  <label className="block text-sm font-medium text-gray-700 mb-1">Select File</label>
+                  <input
+                    type="file"
+                    onChange={(e) => setUploadFile(e.target.files?.[0] || null)}
+                    className="w-full p-2 border rounded"
+                    accept=".pdf,.doc,.docx,.jpg,.jpeg,.png"
+                  />
+                  <p className="mt-1 text-xs text-gray-500">
+                    Accepted formats: PDF, DOC, DOCX, JPG, JPEG, PNG (Max 10MB)
+                  </p>
+                </div>
+                <div className="flex gap-2">
+                  <button
+                    onClick={handleUploadDocument}
+                    disabled={uploading || !uploadFile || !documentType}
+                    className="px-4 py-2 bg-blue-600 text-white rounded hover:bg-blue-700 disabled:bg-gray-400 disabled:cursor-not-allowed"
+                  >
+                    {uploading ? 'Uploading...' : 'Upload'}
+                  </button>
+                  <button
+                    onClick={() => {
+                      setShowUploadForm(false);
+                      setUploadFile(null);
+                      setDocumentType('');
+                    }}
+                    className="px-4 py-2 bg-gray-500 text-white rounded hover:bg-gray-600"
+                  >
+                    Cancel
+                  </button>
+                </div>
+              </div>
+            </div>
+          )}
         </div>
 
         {/* Timestamps */}
@@ -1137,413 +2124,38 @@ const CarrierDetailsModal: React.FC<CarrierDetailsModalProps> = ({ carrier, onCl
           </div>
         </div>
         
-        <div className="flex justify-end mt-6 pt-4 border-t">
-          <button 
-            onClick={onClose}
-            className="px-4 py-2 bg-gray-500 text-white rounded hover:bg-gray-600"
-          >
-            Close
-          </button>
-        </div>
-      </div>
-    </div>
-  );
-};
-
-// Carrier Edit Modal Component
-interface CarrierEditModalProps {
-  carrier: Carrier;
-  onClose: () => void;
-  onSave: (updatedCarrier: Carrier) => void;
-}
-
-const CarrierEditModal: React.FC<CarrierEditModalProps> = ({ carrier, onClose, onSave }) => {
-  const [formData, setFormData] = useState({
-    name: carrier.name,
-    contactPerson: carrier.contactPerson || '',
-    phone: carrier.phone || '',
-    email: carrier.email || '',
-    mcNumber: carrier.mcNumber || '',
-    dotNumber: carrier.dotNumber || '',
-    streetAddress1: carrier.streetAddress1 || '',
-    streetAddress2: carrier.streetAddress2 || '',
-    city: carrier.city || '',
-    state: carrier.state || '',
-    zipCode: carrier.zipCode || '',
-    // Map invalid status values to valid ones for server compatibility
-    status: ['PENDING', 'ACTIVE', 'INACTIVE', 'SUSPENDED'].includes(carrier.status) 
-      ? carrier.status 
-      : carrier.status === 'ONBOARDED' ? 'ACTIVE' : 'PENDING',
-    carrierType: carrier.carrierType || '',
-    safetyRating: carrier.safetyRating || '',
-    taxId: carrier.taxId || '',
-    ratePerMile: carrier.ratePerMile?.toString() || '',
-    rating: carrier.rating?.toString() || '',
-    remittanceContact: carrier.remittanceContact || '',
-    remittanceEmail: carrier.remittanceEmail || '',
-    factoringCompany: carrier.factoringCompany || '',
-    onboardingComplete: carrier.onboardingComplete,
-    insuranceExpiration: carrier.insuranceExpiration ? new Date(carrier.insuranceExpiration).toISOString().split('T')[0] : ''
-  });
-  
-  const [isSubmitting, setIsSubmitting] = useState(false);
-
-  const handleSubmit = async (e: React.FormEvent) => {
-    e.preventDefault();
-    setIsSubmitting(true);
-    
-    try {
-      // Build payload with proper validation for server
-      const payload: any = {};
-      
-      // Only include fields that have values to avoid validation issues
-      if (formData.name.trim()) payload.name = formData.name.trim();
-      if (formData.contactPerson.trim()) payload.contactPerson = formData.contactPerson.trim();
-      if (formData.phone.trim()) payload.phone = formData.phone.trim();
-      if (formData.email.trim()) payload.email = formData.email.trim();
-      if (formData.mcNumber.trim()) payload.mcNumber = formData.mcNumber.trim();
-      if (formData.dotNumber.trim()) payload.dotNumber = formData.dotNumber.trim();
-      if (formData.streetAddress1.trim()) payload.streetAddress1 = formData.streetAddress1.trim();
-      if (formData.streetAddress2.trim()) payload.streetAddress2 = formData.streetAddress2.trim();
-      if (formData.city.trim()) payload.city = formData.city.trim();
-      if (formData.state.trim()) payload.state = formData.state.trim();
-      if (formData.zipCode.trim()) payload.zipCode = formData.zipCode.trim();
-      if (formData.carrierType.trim()) payload.carrierType = formData.carrierType.trim();
-      if (formData.safetyRating.trim()) payload.safetyRating = formData.safetyRating.trim();
-      if (formData.taxId.trim()) payload.taxId = formData.taxId.trim();
-      if (formData.remittanceContact.trim()) payload.remittanceContact = formData.remittanceContact.trim();
-      if (formData.remittanceEmail.trim()) payload.remittanceEmail = formData.remittanceEmail.trim();
-      if (formData.factoringCompany.trim()) payload.factoringCompany = formData.factoringCompany.trim();
-      if (formData.insuranceExpiration) payload.insuranceExpiration = formData.insuranceExpiration;
-      
-      // Handle numeric fields
-      if (formData.ratePerMile && !isNaN(parseFloat(formData.ratePerMile))) {
-        payload.ratePerMile = parseFloat(formData.ratePerMile);
-      }
-      if (formData.rating && !isNaN(parseFloat(formData.rating))) {
-        payload.rating = parseFloat(formData.rating);
-      }
-      
-      // Always include status and onboardingComplete
-      payload.status = formData.status;
-      payload.onboardingComplete = formData.onboardingComplete;
-      
-      const response = await api.put(`/carriers/${carrier.id}`, payload);
-      onSave(response.data);
-    } catch (error) {
-      console.error('Error updating carrier:', error);
-      
-      // Enhanced error handling
-      let errorMessage = 'Failed to update carrier. Please try again.';
-      if (error.response?.data?.message) {
-        errorMessage = error.response.data.message;
-      } else if (error.response?.data?.errors && Array.isArray(error.response.data.errors)) {
-        const validationErrors = error.response.data.errors
-          .map((err: any) => `${err.path || err.param}: ${err.msg}`)
-          .join('\n');
-        errorMessage = 'Validation Errors:\n' + validationErrors;
-      }
-      alert(errorMessage);
-    } finally {
-      setIsSubmitting(false);
-    }
-  };
-
-  return (
-    <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50">
-      <div className="bg-white rounded-lg p-6 w-full max-w-4xl max-h-[90vh] overflow-y-auto">
-        <div className="flex justify-between items-center mb-6">
-          <h2 className="text-xl font-bold text-gray-900">Edit Carrier - {carrier.name}</h2>
-          <button 
-            onClick={onClose}
-            className="text-gray-400 hover:text-gray-600"
-          >
-            <X className="w-5 h-5" />
-          </button>
-        </div>
-        
-        <form onSubmit={handleSubmit} className="space-y-6">
-          {/* Basic Information */}
-          <div>
-            <h3 className="text-lg font-medium text-gray-900 mb-4">Basic Information</h3>
-            <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-              <div>
-                <label className="block text-sm font-medium text-gray-700 mb-1">Carrier Name *</label>
-                <input
-                  type="text"
-                  required
-                  value={formData.name}
-                  onChange={(e) => setFormData({ ...formData, name: e.target.value })}
-                  className="w-full px-3 py-2 border border-gray-300 rounded-md focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
-                />
-              </div>
-              <div>
-                <label className="block text-sm font-medium text-gray-700 mb-1">Contact Person</label>
-                <input
-                  type="text"
-                  value={formData.contactPerson}
-                  onChange={(e) => setFormData({ ...formData, contactPerson: e.target.value })}
-                  className="w-full px-3 py-2 border border-gray-300 rounded-md focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
-                />
-              </div>
-              <div>
-                <label className="block text-sm font-medium text-gray-700 mb-1">Phone</label>
-                <input
-                  type="tel"
-                  value={formData.phone}
-                  onChange={(e) => setFormData({ ...formData, phone: e.target.value })}
-                  className="w-full px-3 py-2 border border-gray-300 rounded-md focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
-                />
-              </div>
-              <div>
-                <label className="block text-sm font-medium text-gray-700 mb-1">Email</label>
-                <input
-                  type="email"
-                  value={formData.email}
-                  onChange={(e) => setFormData({ ...formData, email: e.target.value })}
-                  className="w-full px-3 py-2 border border-gray-300 rounded-md focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
-                />
-              </div>
-            </div>
-          </div>
-
-          {/* Address Information */}
-          <div>
-            <h3 className="text-lg font-medium text-gray-900 mb-4">Address Information</h3>
-            <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-              <div className="md:col-span-2">
-                <label className="block text-sm font-medium text-gray-700 mb-1">Street Address 1 <span className="text-red-500">*</span></label>
-                <input
-                  type="text"
-                  required
-                  value={formData.streetAddress1}
-                  onChange={(e) => setFormData({ ...formData, streetAddress1: e.target.value })}
-                  className="w-full px-3 py-2 border border-gray-300 rounded-md focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
-                />
-              </div>
-              <div className="md:col-span-2">
-                <label className="block text-sm font-medium text-gray-700 mb-1">Street Address 2</label>
-                <input
-                  type="text"
-                  value={formData.streetAddress2}
-                  onChange={(e) => setFormData({ ...formData, streetAddress2: e.target.value })}
-                  className="w-full px-3 py-2 border border-gray-300 rounded-md focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
-                />
-              </div>
-              <div>
-                <label className="block text-sm font-medium text-gray-700 mb-1">City <span className="text-red-500">*</span></label>
-                <input
-                  type="text"
-                  required
-                  value={formData.city}
-                  onChange={(e) => setFormData({ ...formData, city: e.target.value })}
-                  className="w-full px-3 py-2 border border-gray-300 rounded-md focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
-                />
-              </div>
-              <div>
-                <label className="block text-sm font-medium text-gray-700 mb-1">State <span className="text-red-500">*</span></label>
-                <input
-                  type="text"
-                  required
-                  value={formData.state}
-                  onChange={(e) => setFormData({ ...formData, state: e.target.value })}
-                  className="w-full px-3 py-2 border border-gray-300 rounded-md focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
-                />
-              </div>
-              <div>
-                <label className="block text-sm font-medium text-gray-700 mb-1">Zip Code <span className="text-red-500">*</span></label>
-                <input
-                  type="text"
-                  required
-                  value={formData.zipCode}
-                  onChange={(e) => setFormData({ ...formData, zipCode: e.target.value })}
-                  className="w-full px-3 py-2 border border-gray-300 rounded-md focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
-                />
-              </div>
-            </div>
-          </div>
-
-          {/* Regulatory Information */}
-          <div>
-            <h3 className="text-lg font-medium text-gray-900 mb-4">Regulatory Information</h3>
-            <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-              <div>
-                <label className="block text-sm font-medium text-gray-700 mb-1">MC Number <span className="text-red-500">*</span></label>
-                <input
-                  type="text"
-                  required
-                  value={formData.mcNumber}
-                  onChange={(e) => setFormData({ ...formData, mcNumber: e.target.value })}
-                  className="w-full px-3 py-2 border border-gray-300 rounded-md focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
-                />
-              </div>
-              <div>
-                <label className="block text-sm font-medium text-gray-700 mb-1">DOT Number <span className="text-red-500">*</span></label>
-                <input
-                  type="text"
-                  required
-                  value={formData.dotNumber}
-                  onChange={(e) => setFormData({ ...formData, dotNumber: e.target.value })}
-                  className="w-full px-3 py-2 border border-gray-300 rounded-md focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
-                />
-              </div>
-              <div>
-                <label className="block text-sm font-medium text-gray-700 mb-1">Safety Rating</label>
-                <select
-                  value={formData.safetyRating}
-                  onChange={(e) => setFormData({ ...formData, safetyRating: e.target.value })}
-                  className="w-full px-3 py-2 border border-gray-300 rounded-md focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
-                >
-                  <option value="">Select Rating</option>
-                  <option value="Acceptable">Acceptable</option>
-                  <option value="Conditional">Conditional</option>
-                  <option value="Unacceptable">Unacceptable</option>
-                </select>
-              </div>
-              <div>
-                <label className="block text-sm font-medium text-gray-700 mb-1">Insurance Expiration</label>
-                <input
-                  type="date"
-                  value={formData.insuranceExpiration}
-                  onChange={(e) => setFormData({ ...formData, insuranceExpiration: e.target.value })}
-                  className="w-full px-3 py-2 border border-gray-300 rounded-md focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
-                />
-              </div>
-            </div>
-          </div>
-
-          {/* Status and Type */}
-          <div>
-            <h3 className="text-lg font-medium text-gray-900 mb-4">Status and Type</h3>
-            <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-              <div>
-                <label className="block text-sm font-medium text-gray-700 mb-1">Status</label>
-                <select
-                  value={formData.status}
-                  onChange={(e) => setFormData({ ...formData, status: e.target.value as any })}
-                  className="w-full px-3 py-2 border border-gray-300 rounded-md focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
-                >
-                  <option value="PENDING">Pending</option>
-                  <option value="ACTIVE">Active</option>
-                  <option value="INACTIVE">Inactive</option>
-                  <option value="SUSPENDED">Suspended</option>
-                </select>
-              </div>
-              <div>
-                <label className="block text-sm font-medium text-gray-700 mb-1">Carrier Type</label>
-                <input
-                  type="text"
-                  value={formData.carrierType}
-                  onChange={(e) => setFormData({ ...formData, carrierType: e.target.value })}
-                  className="w-full px-3 py-2 border border-gray-300 rounded-md focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
-                />
-              </div>
-              <div>
-                <label className="flex items-center">
-                  <input
-                    type="checkbox"
-                    checked={formData.onboardingComplete}
-                    onChange={(e) => setFormData({ ...formData, onboardingComplete: e.target.checked })}
-                    className="mr-2"
-                  />
-                  <span className="text-sm font-medium text-gray-700">Onboarding Complete</span>
-                </label>
-              </div>
-            </div>
-          </div>
-
-          {/* Financial Information */}
-          <div>
-            <h3 className="text-lg font-medium text-gray-900 mb-4">Financial Information</h3>
-            <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-              <div>
-                <label className="block text-sm font-medium text-gray-700 mb-1">Rate per Mile</label>
-                <input
-                  type="number"
-                  step="0.01"
-                  value={formData.ratePerMile}
-                  onChange={(e) => setFormData({ ...formData, ratePerMile: e.target.value })}
-                  className="w-full px-3 py-2 border border-gray-300 rounded-md focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
-                />
-              </div>
-              <div>
-                <label className="block text-sm font-medium text-gray-700 mb-1">Rating</label>
-                <input
-                  type="number"
-                  step="0.1"
-                  value={formData.rating}
-                  onChange={(e) => setFormData({ ...formData, rating: e.target.value })}
-                  className="w-full px-3 py-2 border border-gray-300 rounded-md focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
-                />
-              </div>
-              <div>
-                <label className="block text-sm font-medium text-gray-700 mb-1">Tax ID</label>
-                <input
-                  type="text"
-                  value={formData.taxId}
-                  onChange={(e) => setFormData({ ...formData, taxId: e.target.value })}
-                  className="w-full px-3 py-2 border border-gray-300 rounded-md focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
-                />
-              </div>
-              <div>
-                <label className="block text-sm font-medium text-gray-700 mb-1">Factoring Company</label>
-                <input
-                  type="text"
-                  value={formData.factoringCompany}
-                  onChange={(e) => setFormData({ ...formData, factoringCompany: e.target.value })}
-                  className="w-full px-3 py-2 border border-gray-300 rounded-md focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
-                />
-              </div>
-            </div>
-          </div>
-
-          {/* Remittance Information */}
-          <div>
-            <h3 className="text-lg font-medium text-gray-900 mb-4">Remittance Information</h3>
-            <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-              <div>
-                <label className="block text-sm font-medium text-gray-700 mb-1">Remittance Contact</label>
-                <input
-                  type="text"
-                  value={formData.remittanceContact}
-                  onChange={(e) => setFormData({ ...formData, remittanceContact: e.target.value })}
-                  className="w-full px-3 py-2 border border-gray-300 rounded-md focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
-                />
-              </div>
-              <div>
-                <label className="block text-sm font-medium text-gray-700 mb-1">Remittance Email</label>
-                <input
-                  type="email"
-                  value={formData.remittanceEmail}
-                  onChange={(e) => setFormData({ ...formData, remittanceEmail: e.target.value })}
-                  className="w-full px-3 py-2 border border-gray-300 rounded-md focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
-                />
-              </div>
-            </div>
-          </div>
-          
-          <div className="flex justify-end gap-3 mt-6 pt-4 border-t">
+        <div className="flex justify-end gap-2 mt-6 pt-4 border-t">
+          {isEditMode ? (
+            <>
+              <button
+                onClick={handleCancel}
+                disabled={isSubmitting}
+                className="px-4 py-2 bg-gray-500 text-white rounded hover:bg-gray-600 disabled:bg-gray-400"
+              >
+                Cancel
+              </button>
+              <button
+                onClick={handleSave}
+                disabled={isSubmitting || !formData.name.trim()}
+                className="px-4 py-2 bg-blue-600 text-white rounded hover:bg-blue-700 disabled:bg-blue-400"
+              >
+                {isSubmitting ? 'Saving...' : 'Save Changes'}
+              </button>
+            </>
+          ) : (
             <button 
-              type="button"
               onClick={onClose}
               className="px-4 py-2 bg-gray-500 text-white rounded hover:bg-gray-600"
-              disabled={isSubmitting}
             >
-              Cancel
+              Close
             </button>
-            <button 
-              type="submit"
-              className="px-4 py-2 bg-blue-600 text-white rounded hover:bg-blue-700 disabled:bg-gray-300"
-              disabled={isSubmitting}
-            >
-              {isSubmitting ? 'Saving...' : 'Save Changes'}
-            </button>
-          </div>
-        </form>
+          )}
+        </div>
       </div>
     </div>
   );
 };
+
 
 // Carrier Delete Modal Component
 interface CarrierDeleteModalProps {
@@ -1609,6 +2221,502 @@ const CarrierDeleteModal: React.FC<CarrierDeleteModalProps> = ({ carrier, onClos
             disabled={isDeleting}
           >
             {isDeleting ? 'Deleting...' : 'Delete Carrier'}
+          </button>
+        </div>
+      </div>
+    </div>
+  );
+};
+
+// Invite Carrier Modal Component
+interface InviteCarrierModalProps {
+  onClose: () => void;
+  onSave: () => void;
+}
+
+const InviteCarrierModal: React.FC<InviteCarrierModalProps> = ({ onClose, onSave }) => {
+  const [dotNumber, setDotNumber] = useState('');
+  const [mcNumber, setMcNumber] = useState('');
+  const [email, setEmail] = useState('');
+  const [isSubmitting, setIsSubmitting] = useState(false);
+  const [isLookingUp, setIsLookingUp] = useState(false);
+  const [error, setError] = useState('');
+  const [success, setSuccess] = useState(false);
+  const [carrierData, setCarrierData] = useState<any>(null);
+  const [lookupSuccess, setLookupSuccess] = useState(false);
+
+  // Lookup carrier data to preload information
+  const handleCarrierLookup = async () => {
+    if (!dotNumber && !mcNumber) {
+      setError('Please enter either a DOT Number or MC Number to lookup carrier data');
+      return;
+    }
+
+    setIsLookingUp(true);
+    setError('');
+    setLookupSuccess(false);
+
+    try {
+      const response = await api.post('/carriers/lookup', {
+        dotNumber: dotNumber || undefined,
+        mcNumber: mcNumber || undefined
+      });
+
+      if (response.data.success && response.data.data) {
+        const data = response.data.data;
+        setCarrierData(data);
+        
+        // Pre-populate email if found
+        if (data.email) {
+          setEmail(data.email);
+        }
+        
+        setLookupSuccess(true);
+        setTimeout(() => setLookupSuccess(false), 3000);
+      } else {
+        setError('No carrier data found for the provided DOT/MC number');
+      }
+    } catch (error: any) {
+      console.error('Lookup error:', error);
+      setError(error.response?.data?.message || 'Failed to lookup carrier data. Please try again.');
+    } finally {
+      setIsLookingUp(false);
+    }
+  };
+
+  const handleSubmit = async (e: React.FormEvent) => {
+    e.preventDefault();
+    setError('');
+    
+    if (!dotNumber && !mcNumber) {
+      setError('DOT Number or MC Number is required');
+      return;
+    }
+    
+    if (!email.trim()) {
+      setError('Email is required');
+      return;
+    }
+    
+    if (!/\S+@\S+\.\S+/.test(email)) {
+      setError('Please enter a valid email address');
+      return;
+    }
+    
+    setIsSubmitting(true);
+    
+    try {
+      // Use the MyCarrierPackets invite API
+      await api.post('/carriers/invite-intellivite', { 
+        dotNumber: dotNumber || undefined,
+        mcNumber: mcNumber || undefined,
+        email: email.trim(),
+        username: 'CrossCountryFreight' // Your MCP username
+      });
+      setSuccess(true);
+      setTimeout(() => {
+        onSave();
+      }, 2000);
+    } catch (error: any) {
+      setError(
+        error.response?.data?.message || 'Failed to send invitation. Please try again.'
+      );
+    } finally {
+      setIsSubmitting(false);
+    }
+  };
+
+  if (success) {
+    return (
+      <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50">
+        <div className="bg-white rounded-lg p-6 w-full max-w-md">
+          <div className="text-center">
+            <div className="mx-auto flex items-center justify-center h-12 w-12 rounded-full bg-green-100 mb-4">
+              <Send className="h-6 w-6 text-green-600" />
+            </div>
+            <h3 className="text-lg font-medium text-gray-900 mb-2">Invitation Sent!</h3>
+            <p className="text-sm text-gray-600 mb-4">
+              The MyCarrierPackets invitation has been sent to {email} for DOT {dotNumber || mcNumber}
+            </p>
+            <button
+              onClick={onSave}
+              className="w-full bg-green-600 text-white px-4 py-2 rounded-md hover:bg-green-700"
+            >
+              Close
+            </button>
+          </div>
+        </div>
+      </div>
+    );
+  }
+
+  return (
+    <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50">
+      <div className="bg-white rounded-lg p-6 w-full max-w-lg">
+        <div className="flex justify-between items-center mb-6">
+          <div>
+            <h2 className="text-xl font-bold text-gray-900">Search & Intellivite</h2>
+            <p className="text-sm text-gray-600">Invite carriers to complete packets</p>
+          </div>
+          <button 
+            onClick={onClose}
+            className="text-gray-400 hover:text-gray-600"
+          >
+            <X className="w-5 h-5" />
+          </button>
+        </div>
+        
+        <form onSubmit={handleSubmit}>
+          {/* DOT Number Section */}
+          <div className="mb-6">
+            <label className="block text-sm font-medium text-gray-700 mb-2">
+              Enter a DOT Number
+            </label>
+            <div className="flex gap-2">
+              <input
+                type="text"
+                value={dotNumber}
+                onChange={(e) => setDotNumber(e.target.value)}
+                className="flex-1 px-3 py-2 border border-gray-300 rounded-md focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
+                placeholder="DOT Number"
+              />
+              <button
+                type="button"
+                onClick={handleCarrierLookup}
+                disabled={isLookingUp || (!dotNumber && !mcNumber)}
+                className="px-4 py-2 bg-blue-600 text-white rounded-md hover:bg-blue-700 disabled:bg-gray-400 disabled:cursor-not-allowed"
+              >
+                {isLookingUp ? 'Searching...' : 'Search'}
+              </button>
+            </div>
+          </div>
+
+          {/* OR Separator */}
+          <div className="flex items-center mb-6">
+            <div className="flex-1 border-t border-gray-300"></div>
+            <span className="px-3 text-sm text-red-500 font-medium">OR</span>
+            <div className="flex-1 border-t border-gray-300"></div>
+          </div>
+
+          {/* MC Number Section */}
+          <div className="mb-6">
+            <label className="block text-sm font-medium text-gray-700 mb-2">
+              Enter a Docket Number
+            </label>
+            <div className="flex gap-2">
+              <select className="px-3 py-2 border border-gray-300 rounded-l-md bg-gray-50">
+                <option>MC</option>
+              </select>
+              <input
+                type="text"
+                value={mcNumber}
+                onChange={(e) => setMcNumber(e.target.value)}
+                className="flex-1 px-3 py-2 border border-gray-300 rounded-r-md focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
+                placeholder="Docket Number"
+              />
+              <button
+                type="button"
+                onClick={handleCarrierLookup}
+                disabled={isLookingUp || (!dotNumber && !mcNumber)}
+                className="px-4 py-2 bg-blue-600 text-white rounded-md hover:bg-blue-700 disabled:bg-gray-400 disabled:cursor-not-allowed"
+              >
+                {isLookingUp ? 'Searching...' : 'Search'}
+              </button>
+            </div>
+          </div>
+
+          {/* Lookup Success Message */}
+          {lookupSuccess && (
+            <div className="mb-4 p-3 bg-green-50 border border-green-200 rounded-md">
+              <p className="text-sm text-green-700 flex items-center gap-1">
+                <svg className="w-4 h-4" fill="currentColor" viewBox="0 0 20 20">
+                  <path fillRule="evenodd" d="M10 18a8 8 0 100-16 8 8 0 000 16zm3.707-9.293a1 1 0 00-1.414-1.414L9 10.586 7.707 9.293a1 1 0 00-1.414 1.414l2 2a1 1 0 001.414 0l4-4z" clipRule="evenodd" />
+                </svg>
+                Carrier data loaded successfully!
+              </p>
+            </div>
+          )}
+
+          {/* Carrier Info Display */}
+          {carrierData && (
+            <div className="mb-4 p-3 bg-blue-50 border border-blue-200 rounded-md">
+              <h4 className="font-medium text-blue-900 mb-2">Found Carrier:</h4>
+              <p className="text-sm text-blue-800">{carrierData.name}</p>
+              {carrierData.city && carrierData.state && (
+                <p className="text-sm text-blue-700">{carrierData.city}, {carrierData.state}</p>
+              )}
+            </div>
+          )}
+
+          {/* Email Input */}
+          <div className="mb-4">
+            <label htmlFor="email" className="block text-sm font-medium text-gray-700 mb-2">
+              Enter a Carrier's Email
+            </label>
+            <input
+              type="email"
+              id="email"
+              value={email}
+              onChange={(e) => setEmail(e.target.value)}
+              className="w-full px-3 py-2 border border-gray-300 rounded-md focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
+              placeholder="carrier@example.com"
+              required
+            />
+          </div>
+          
+          {error && (
+            <div className="mb-4 p-3 bg-red-50 border border-red-200 rounded-md">
+              <p className="text-sm text-red-700">{error}</p>
+            </div>
+          )}
+          
+          <div className="bg-blue-50 border border-blue-200 rounded-md p-3 mb-4">
+            <p className="text-sm text-blue-800">
+              The carrier will receive an intellivite invitation to complete their MyCarrierPackets profile.
+            </p>
+          </div>
+          
+          <div className="flex justify-end gap-3">
+            <button 
+              type="button"
+              onClick={onClose}
+              className="px-4 py-2 bg-gray-500 text-white rounded hover:bg-gray-600"
+              disabled={isSubmitting}
+            >
+              Cancel
+            </button>
+            <button 
+              type="submit"
+              className="px-6 py-2 bg-blue-600 text-white rounded hover:bg-blue-700 disabled:bg-gray-300 flex items-center gap-2"
+              disabled={isSubmitting || (!dotNumber && !mcNumber) || !email}
+            >
+              {isSubmitting ? (
+                <>
+                  <div className="animate-spin rounded-full h-4 w-4 border-b-2 border-white"></div>
+                  Sending...
+                </>
+              ) : (
+                <>
+                  <Send className="w-4 h-4" />
+                  Search
+                </>
+              )}
+            </button>
+          </div>
+        </form>
+      </div>
+    </div>
+  );
+};
+
+// Resend Invitations Modal Component
+interface ResendInvitationsModalProps {
+  onClose: () => void;
+  onSave: () => void;
+  invitations: any[];
+}
+
+const ResendInvitationsModal: React.FC<ResendInvitationsModalProps> = ({ onClose, onSave, invitations }) => {
+  const [selectedInvitations, setSelectedInvitations] = useState<string[]>([]);
+  const [isSubmitting, setIsSubmitting] = useState(false);
+  const [error, setError] = useState('');
+  const [success, setSuccess] = useState(false);
+  const [resendResults, setResendResults] = useState<{success: number, failed: number}>({success: 0, failed: 0});
+
+  const handleToggleInvitation = (invitationId: string) => {
+    setSelectedInvitations(prev => 
+      prev.includes(invitationId) 
+        ? prev.filter(id => id !== invitationId)
+        : [...prev, invitationId]
+    );
+  };
+
+  const handleSelectAll = () => {
+    if (selectedInvitations.length === invitations.length) {
+      setSelectedInvitations([]);
+    } else {
+      setSelectedInvitations(invitations.map(inv => inv.id.toString()));
+    }
+  };
+
+  const handleResend = async () => {
+    if (selectedInvitations.length === 0) {
+      setError('Please select at least one invitation to resend');
+      return;
+    }
+
+    setIsSubmitting(true);
+    setError('');
+    
+    let successCount = 0;
+    let failCount = 0;
+
+    try {
+      // Process each selected invitation
+      for (const invitationId of selectedInvitations) {
+        const invitation = invitations.find(inv => inv.id.toString() === invitationId);
+        if (invitation) {
+          try {
+            // First cancel the existing invitation
+            await api.put(`/carriers/invitations/${invitation.id}/cancel`);
+            
+            // Then send new invitation to the same email
+            await api.post('/carriers/invite', { email: invitation.email });
+            successCount++;
+          } catch (error) {
+            console.error(`Failed to resend invitation to ${invitation.email}:`, error);
+            failCount++;
+          }
+        }
+      }
+
+      setResendResults({ success: successCount, failed: failCount });
+      setSuccess(true);
+      
+      if (successCount > 0) {
+        setTimeout(() => {
+          onSave();
+        }, 2000);
+      }
+    } catch (error: any) {
+      setError('Failed to resend invitations. Please try again.');
+    } finally {
+      setIsSubmitting(false);
+    }
+  };
+
+  if (success) {
+    return (
+      <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50">
+        <div className="bg-white rounded-lg p-6 w-full max-w-md">
+          <div className="text-center">
+            <div className="mx-auto flex items-center justify-center h-12 w-12 rounded-full bg-green-100 mb-4">
+              <Send className="h-6 w-6 text-green-600" />
+            </div>
+            <h3 className="text-lg font-medium text-gray-900 mb-2">Invitations Resent!</h3>
+            <div className="text-sm text-gray-600 mb-4">
+              <p className="text-green-600 font-medium">{resendResults.success} invitation(s) sent successfully</p>
+              {resendResults.failed > 0 && (
+                <p className="text-red-600 font-medium">{resendResults.failed} invitation(s) failed</p>
+              )}
+              <p className="mt-2">New registration links have been sent with updated expiration dates.</p>
+            </div>
+            <button
+              onClick={onSave}
+              className="w-full bg-green-600 text-white px-4 py-2 rounded-md hover:bg-green-700"
+            >
+              Close
+            </button>
+          </div>
+        </div>
+      </div>
+    );
+  }
+
+  return (
+    <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50">
+      <div className="bg-white rounded-lg p-6 w-full max-w-2xl max-h-[80vh] overflow-y-auto">
+        <div className="flex justify-between items-center mb-4">
+          <h2 className="text-lg font-bold text-gray-900">Resend Carrier Invitations</h2>
+          <button 
+            onClick={onClose}
+            className="text-gray-400 hover:text-gray-600"
+          >
+            <X className="w-5 h-5" />
+          </button>
+        </div>
+        
+        <div className="mb-4">
+          <p className="text-sm text-gray-600 mb-3">
+            Select which pending invitations to resend. New tokens will be generated with updated expiration dates.
+          </p>
+          
+          <div className="flex items-center justify-between mb-3">
+            <span className="text-sm font-medium text-gray-700">
+              {invitations.length} pending invitation(s)
+            </span>
+            <button
+              onClick={handleSelectAll}
+              className="text-sm text-blue-600 hover:text-blue-800"
+            >
+              {selectedInvitations.length === invitations.length ? 'Deselect All' : 'Select All'}
+            </button>
+          </div>
+        </div>
+
+        <div className="space-y-2 mb-6 max-h-60 overflow-y-auto">
+          {invitations.map((invitation) => (
+            <div
+              key={invitation.id}
+              className={`p-3 border rounded-lg cursor-pointer transition-colors ${
+                selectedInvitations.includes(invitation.id.toString())
+                  ? 'bg-blue-50 border-blue-200'
+                  : 'bg-gray-50 border-gray-200 hover:bg-gray-100'
+              }`}
+              onClick={() => handleToggleInvitation(invitation.id.toString())}
+            >
+              <div className="flex items-center justify-between">
+                <div className="flex items-center space-x-3">
+                  <input
+                    type="checkbox"
+                    checked={selectedInvitations.includes(invitation.id.toString())}
+                    onChange={() => handleToggleInvitation(invitation.id.toString())}
+                    className="h-4 w-4 text-blue-600 focus:ring-blue-500 border-gray-300 rounded"
+                  />
+                  <div>
+                    <div className="font-medium text-gray-900">{invitation.email}</div>
+                    <div className="text-xs text-gray-500">
+                      Sent: {new Date(invitation.sentAt).toLocaleDateString()} • 
+                      Expires: {new Date(invitation.expiresAt).toLocaleDateString()}
+                      {invitation.createdByUser && ` • Sent by: ${invitation.createdByUser.name}`}
+                    </div>
+                  </div>
+                </div>
+                <div className="text-xs text-gray-400">
+                  {Math.ceil((new Date(invitation.expiresAt).getTime() - Date.now()) / (1000 * 60 * 60 * 24))} days left
+                </div>
+              </div>
+            </div>
+          ))}
+        </div>
+
+        {error && (
+          <div className="mb-4 p-3 bg-red-50 border border-red-200 rounded-md">
+            <p className="text-sm text-red-700">{error}</p>
+          </div>
+        )}
+
+        <div className="bg-amber-50 border border-amber-200 rounded-md p-3 mb-4">
+          <p className="text-sm text-amber-800">
+            <strong>Note:</strong> Resending will cancel the current invitations and create new invitation tokens with fresh 7-day expiration dates. The old links will no longer be valid.
+          </p>
+        </div>
+
+        <div className="flex justify-end gap-3">
+          <button 
+            type="button"
+            onClick={onClose}
+            className="px-4 py-2 bg-gray-500 text-white rounded hover:bg-gray-600"
+            disabled={isSubmitting}
+          >
+            Cancel
+          </button>
+          <button 
+            onClick={handleResend}
+            className="px-4 py-2 bg-blue-600 text-white rounded hover:bg-blue-700 disabled:bg-gray-300 flex items-center gap-2"
+            disabled={isSubmitting || selectedInvitations.length === 0}
+          >
+            {isSubmitting ? (
+              <>
+                <div className="animate-spin rounded-full h-4 w-4 border-b-2 border-white"></div>
+                Resending...
+              </>
+            ) : (
+              <>
+                <Send className="w-4 h-4" />
+                Resend {selectedInvitations.length > 0 && `(${selectedInvitations.length})`}
+              </>
+            )}
           </button>
         </div>
       </div>

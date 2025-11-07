@@ -14,7 +14,17 @@ import {
   addCarrierDriver,
   updateCarrierDriver,
   deleteCarrierDriver,
-  getCarrierDrivers
+  getCarrierDrivers,
+  getCarrierInvitations,
+  cancelCarrierInvitation,
+  getCarrierAgreements,
+  downloadAgreementAffidavit,
+  downloadAgreementWithAffidavit,
+  getCarrierDocuments,
+  downloadCarrierDocument,
+  deleteCarrierDocument,
+  lookupCarrierData,
+  sendIntellIviteInvitation
 } from '../controllers/carrier.controller';
 import { authenticate, authorize } from '../middleware/auth.middleware';
 import { validateRequest } from '../middleware/validation.middleware';
@@ -34,7 +44,7 @@ router.use(authenticate);
 router.get(
   '/',
   [
-    query('status').optional().isIn(['PENDING', 'ACTIVE', 'INACTIVE', 'SUSPENDED', 'NOT_ONBOARDED', 'ONBOARDED']),
+    query('status').optional().isIn(['PENDING', 'ACTIVE', 'INACTIVE', 'SUSPENDED', 'NOT_ONBOARDED', 'ONBOARDED', 'REJECTED']),
     query('onboardingComplete').optional().isBoolean(),
     query('search').optional().trim(),
     query('page').optional().isInt({ min: 1 }),
@@ -52,6 +62,45 @@ router.get(
   ],
   validateRequest,
   searchCarriers
+);
+
+// Lookup carrier data from external API (Admin/Dispatcher only)
+router.post(
+  '/lookup',
+  authorize(UserRole.ADMIN, UserRole.DISPATCHER),
+  [
+    body('dotNumber').optional().trim(),
+    body('mcNumber').optional().trim()
+  ],
+  validateRequest,
+  lookupCarrierData
+);
+
+// Send MyCarrierPackets intellivite invitation (Admin/Dispatcher only)
+router.post(
+  '/invite-intellivite',
+  authorize(UserRole.ADMIN, UserRole.DISPATCHER),
+  [
+    body('dotNumber').optional().trim(),
+    body('mcNumber').optional().trim(),
+    body('email').notEmpty().isEmail().normalizeEmail(),
+    body('username').optional().trim()
+  ],
+  validateRequest,
+  sendIntellIviteInvitation
+);
+
+// Get carrier invitations (Admin/Dispatcher only) - Must come before /:id route
+router.get(
+  '/invitations',
+  authorize(UserRole.ADMIN, UserRole.DISPATCHER),
+  [
+    query('page').optional().isInt({ min: 1 }),
+    query('limit').optional().isInt({ min: 1, max: 100 }),
+    query('status').optional().isIn(['PENDING', 'REGISTERED', 'EXPIRED', 'CANCELLED'])
+  ],
+  validateRequest,
+  getCarrierInvitations
 );
 
 // Get specific carrier
@@ -87,7 +136,7 @@ router.put(
     body('mcNumber').optional().trim(),
     body('dotNumber').optional().trim(),
     body('insuranceExpiration').optional().isISO8601(),
-    body('status').optional().isIn(['PENDING', 'ACTIVE', 'INACTIVE', 'SUSPENDED']),
+    body('status').optional().isIn(['PENDING', 'ACTIVE', 'INACTIVE', 'SUSPENDED', 'REJECTED']),
     body('rating').optional().isDecimal({ decimal_digits: '0,1' }),
     body('ratePerMile').optional().isDecimal(),
     body('onboardingComplete').optional().isBoolean()
@@ -126,13 +175,20 @@ router.post(
   inviteCarrier
 );
 
+// Cancel carrier invitation (Admin/Dispatcher only)
+router.put(
+  '/invitations/:id/cancel',
+  authorize(UserRole.ADMIN, UserRole.DISPATCHER),
+  cancelCarrierInvitation
+);
+
 // Driver management routes
 // Get carrier drivers
-router.get('/:id/drivers', getCarrierDrivers);
+router.get('/:carrierId/drivers', getCarrierDrivers);
 
 // Add driver to carrier (Admin/Dispatcher only)
 router.post(
-  '/:id/drivers',
+  '/:carrierId/drivers',
   authorize(UserRole.ADMIN, UserRole.DISPATCHER),
   [
     body('name').notEmpty().trim(),
@@ -146,7 +202,7 @@ router.post(
 
 // Update carrier driver (Admin/Dispatcher only)
 router.put(
-  '/:id/drivers/:driverId',
+  '/:carrierId/drivers/:driverId',
   authorize(UserRole.ADMIN, UserRole.DISPATCHER),
   [
     body('name').optional().notEmpty().trim(),
@@ -161,9 +217,33 @@ router.put(
 
 // Delete carrier driver (Admin/Dispatcher only)
 router.delete(
-  '/:id/drivers/:driverId',
+  '/:carrierId/drivers/:driverId',
   authorize(UserRole.ADMIN, UserRole.DISPATCHER),
   deleteCarrierDriver
+);
+
+// Agreement management routes
+// Get carrier agreements
+router.get('/:id/agreements', getCarrierAgreements);
+
+// Download agreement affidavit
+router.get('/:id/agreements/:agreementId/affidavit', downloadAgreementAffidavit);
+
+// Download full agreement with affidavit
+router.get('/:id/agreements/:agreementId/full', downloadAgreementWithAffidavit);
+
+// Document management routes
+// Get carrier documents
+router.get('/:id/documents', getCarrierDocuments);
+
+// Download carrier document
+router.get('/:id/documents/:documentId', downloadCarrierDocument);
+
+// Delete carrier document (Admin/Dispatcher only)
+router.delete(
+  '/:id/documents/:documentId',
+  authorize(UserRole.ADMIN, UserRole.DISPATCHER),
+  deleteCarrierDocument
 );
 
 export default router;

@@ -11,6 +11,7 @@ export const CarrierRegistration: React.FC = () => {
   const [formData, setFormData] = useState({
     name: '',
     contactPerson: '',
+    contactPersonTitle: '',
     phone: '',
     email: '',
     mcNumber: '',
@@ -35,6 +36,8 @@ export const CarrierRegistration: React.FC = () => {
   const [errors, setErrors] = useState<string[]>([]);
   const [isSubmitted, setIsSubmitted] = useState(false);
   const [tokenValid, setTokenValid] = useState<boolean | null>(null);
+  const [existingCarrierWarning, setExistingCarrierWarning] = useState<string | null>(null);
+  const [agreementAccepted, setAgreementAccepted] = useState(false);
 
   // Validate token on component mount
   useEffect(() => {
@@ -45,8 +48,11 @@ export const CarrierRegistration: React.FC = () => {
       }
       
       try {
-        await api.get(`/carriers/validate-invitation/${encodeURIComponent(token)}`);
+        const response = await api.get(`/carriers/validate-invitation/${encodeURIComponent(token)}`);
         setTokenValid(true);
+        if (response.data.existingCarrier) {
+          setExistingCarrierWarning(response.data.warning || 'A carrier with this email already exists. Continuing will update their information.');
+        }
       } catch (error) {
         setTokenValid(false);
       }
@@ -68,6 +74,10 @@ export const CarrierRegistration: React.FC = () => {
     
     if (!formData.contactPerson.trim()) {
       validationErrors.push('Contact Person is required');
+    }
+    
+    if (!formData.contactPersonTitle.trim()) {
+      validationErrors.push('Contact Person Title is required');
     }
     
     if (!formData.phone.trim()) {
@@ -104,6 +114,10 @@ export const CarrierRegistration: React.FC = () => {
       validationErrors.push('DOT Number is required');
     }
     
+    if (!agreementAccepted) {
+      validationErrors.push('You must accept the Carrier Agreement to proceed');
+    }
+    
     if (!insuranceFile) {
       validationErrors.push('Insurance document is required');
     }
@@ -127,12 +141,16 @@ export const CarrierRegistration: React.FC = () => {
       // Create FormData for file upload
       const submitData = new FormData();
       
-      // Append all form fields
+      // Append all form fields (including empty strings as they might be checked on server)
       Object.entries(formData).forEach(([key, value]) => {
-        if (value) {
-          submitData.append(key, value);
-        }
+        submitData.append(key, value || '');
       });
+      
+      // Debug: Log what we're sending
+      console.log('Form data being sent:');
+      for (const [key, value] of submitData.entries()) {
+        console.log(`${key}:`, value);
+      }
       
       // Append the insurance file
       if (insuranceFile) {
@@ -151,6 +169,9 @@ export const CarrierRegistration: React.FC = () => {
       setIsSubmitted(true);
     } catch (error: any) {
       console.error('Error submitting registration:', error);
+      console.error('Error response:', error.response?.data);
+      console.error('Error status:', error.response?.status);
+      console.error('Token being sent:', token);
       
       // Extract validation errors from server response
       let errorMessages = ['Failed to submit registration. Please try again.'];
@@ -199,16 +220,20 @@ export const CarrierRegistration: React.FC = () => {
     );
   }
 
-  // Invalid token
-  if (tokenValid === false) {
+  // Invalid token or missing token
+  if (tokenValid === false || !token) {
     return (
       <div className="min-h-screen flex items-center justify-center bg-gray-50">
         <div className="max-w-md w-full bg-white shadow-lg rounded-lg p-8 text-center">
           <AlertCircle className="w-16 h-16 text-red-500 mx-auto mb-4" />
-          <h1 className="text-2xl font-bold text-gray-900 mb-4">Invalid Invitation</h1>
+          <h1 className="text-2xl font-bold text-gray-900 mb-4">
+            {!token ? 'Missing Registration Token' : 'Invalid Invitation'}
+          </h1>
           <p className="text-gray-600 mb-6">
-            This invitation link is invalid or has expired. Please contact CrossCountry Freight Solutions 
-            at (800) 521-0287 for assistance.
+            {!token 
+              ? 'This page requires a valid registration token. Please use the link from your invitation email.'
+              : 'This invitation link is invalid or has expired.'
+            } Please contact CrossCountry Freight Solutions at (800) 521-0287 for assistance.
           </p>
         </div>
       </div>
@@ -254,6 +279,19 @@ export const CarrierRegistration: React.FC = () => {
         </div>
 
         <div className="bg-white shadow-lg rounded-lg p-8">
+          {/* Warning Display for Existing Carrier */}
+          {existingCarrierWarning && (
+            <div className="mb-6 p-4 bg-yellow-50 border border-yellow-200 rounded-md">
+              <div className="flex">
+                <AlertCircle className="w-5 h-5 text-yellow-600 mr-3 mt-0.5" />
+                <div>
+                  <h3 className="text-sm font-medium text-yellow-800">Note</h3>
+                  <p className="text-sm text-yellow-700 mt-1">{existingCarrierWarning}</p>
+                </div>
+              </div>
+            </div>
+          )}
+          
           {/* Error Display */}
           {errors.length > 0 && (
             <div className="mb-6 p-4 bg-red-50 border border-red-200 rounded-md">
@@ -284,6 +322,7 @@ export const CarrierRegistration: React.FC = () => {
                   <label className="block text-sm font-medium text-gray-700 mb-1">Carrier Name <span className="text-red-500">*</span></label>
                   <input
                     type="text"
+                    name="name"
                     required
                     value={formData.name}
                     onChange={(e) => setFormData({ ...formData, name: e.target.value })}
@@ -294,6 +333,7 @@ export const CarrierRegistration: React.FC = () => {
                   <label className="block text-sm font-medium text-gray-700 mb-1">Contact Person <span className="text-red-500">*</span></label>
                   <input
                     type="text"
+                    name="contactPerson"
                     required
                     value={formData.contactPerson}
                     onChange={(e) => setFormData({ ...formData, contactPerson: e.target.value })}
@@ -301,9 +341,22 @@ export const CarrierRegistration: React.FC = () => {
                   />
                 </div>
                 <div>
+                  <label className="block text-sm font-medium text-gray-700 mb-1">Contact Person Title <span className="text-red-500">*</span></label>
+                  <input
+                    type="text"
+                    name="contactPersonTitle"
+                    required
+                    placeholder="e.g., Officer, CEO, Manager"
+                    value={formData.contactPersonTitle}
+                    onChange={(e) => setFormData({ ...formData, contactPersonTitle: e.target.value })}
+                    className="w-full px-3 py-2 border border-gray-300 rounded-md focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
+                  />
+                </div>
+                <div>
                   <label className="block text-sm font-medium text-gray-700 mb-1">Phone <span className="text-red-500">*</span></label>
                   <input
                     type="tel"
+                    name="phone"
                     required
                     value={formData.phone}
                     onChange={(e) => setFormData({ ...formData, phone: e.target.value })}
@@ -314,6 +367,7 @@ export const CarrierRegistration: React.FC = () => {
                   <label className="block text-sm font-medium text-gray-700 mb-1">Email <span className="text-red-500">*</span></label>
                   <input
                     type="email"
+                    name="email"
                     required
                     value={formData.email}
                     onChange={(e) => setFormData({ ...formData, email: e.target.value })}
@@ -331,6 +385,7 @@ export const CarrierRegistration: React.FC = () => {
                   <label className="block text-sm font-medium text-gray-700 mb-1">Street Address 1 <span className="text-red-500">*</span></label>
                   <input
                     type="text"
+                    name="streetAddress1"
                     required
                     value={formData.streetAddress1}
                     onChange={(e) => setFormData({ ...formData, streetAddress1: e.target.value })}
@@ -350,6 +405,7 @@ export const CarrierRegistration: React.FC = () => {
                   <label className="block text-sm font-medium text-gray-700 mb-1">City <span className="text-red-500">*</span></label>
                   <input
                     type="text"
+                    name="city"
                     required
                     value={formData.city}
                     onChange={(e) => setFormData({ ...formData, city: e.target.value })}
@@ -360,6 +416,7 @@ export const CarrierRegistration: React.FC = () => {
                   <label className="block text-sm font-medium text-gray-700 mb-1">State <span className="text-red-500">*</span></label>
                   <input
                     type="text"
+                    name="state"
                     required
                     value={formData.state}
                     onChange={(e) => setFormData({ ...formData, state: e.target.value })}
@@ -370,6 +427,7 @@ export const CarrierRegistration: React.FC = () => {
                   <label className="block text-sm font-medium text-gray-700 mb-1">Zip Code <span className="text-red-500">*</span></label>
                   <input
                     type="text"
+                    name="zipCode"
                     required
                     value={formData.zipCode}
                     onChange={(e) => setFormData({ ...formData, zipCode: e.target.value })}
@@ -387,6 +445,7 @@ export const CarrierRegistration: React.FC = () => {
                   <label className="block text-sm font-medium text-gray-700 mb-1">MC Number <span className="text-red-500">*</span></label>
                   <input
                     type="text"
+                    name="mcNumber"
                     required
                     value={formData.mcNumber}
                     onChange={(e) => setFormData({ ...formData, mcNumber: e.target.value })}
@@ -397,6 +456,7 @@ export const CarrierRegistration: React.FC = () => {
                   <label className="block text-sm font-medium text-gray-700 mb-1">DOT Number <span className="text-red-500">*</span></label>
                   <input
                     type="text"
+                    name="dotNumber"
                     required
                     value={formData.dotNumber}
                     onChange={(e) => setFormData({ ...formData, dotNumber: e.target.value })}
@@ -510,6 +570,7 @@ export const CarrierRegistration: React.FC = () => {
                     </span>
                     <input
                       id="insurance-file"
+                      name="insuranceDocument"
                       type="file"
                       className="hidden"
                       accept=".pdf,.doc,.docx,.jpg,.jpeg,.png"
@@ -528,6 +589,44 @@ export const CarrierRegistration: React.FC = () => {
                     Supported formats: PDF, DOC, DOCX, JPG, PNG (max 10MB)
                   </p>
                 )}
+              </div>
+            </div>
+
+            {/* Agreement Acceptance */}
+            <div className="bg-gray-50 p-6 rounded-lg border border-gray-200">
+              <h3 className="text-lg font-medium text-gray-900 mb-3">Carrier Agreement</h3>
+              <div className="space-y-4">
+                <p className="text-sm text-gray-600">
+                  By registering as a carrier with CrossCountry Freight Solutions, Inc., you agree to our terms and conditions.
+                </p>
+                <div className="flex items-center">
+                  <a 
+                    href="/CCFS_CarrierBroker_Agreement.docx" 
+                    download="CrossCountry_Carrier_Agreement.docx"
+                    className="text-blue-600 hover:text-blue-700 underline text-sm font-medium"
+                  >
+                    Download Carrier Agreement (DOCX)
+                  </a>
+                </div>
+                <div className="flex items-start">
+                  <input
+                    type="checkbox"
+                    id="agreement-acceptance"
+                    name="agreementAccepted"
+                    checked={agreementAccepted}
+                    onChange={(e) => setAgreementAccepted(e.target.checked)}
+                    className="mt-1 h-4 w-4 text-blue-600 focus:ring-blue-500 border-gray-300 rounded"
+                    required
+                  />
+                  <label htmlFor="agreement-acceptance" className="ml-2 text-sm text-gray-700">
+                    <span className="font-medium">I certify under penalty of perjury under the laws of the United States of America that:</span>
+                    <ul className="mt-2 ml-4 list-disc space-y-1 text-gray-600">
+                      <li>I have read and agree to the Carrier Agreement terms and conditions</li>
+                      <li>I have authorization by {formData.name || '[Carrier Name]'} to sign agreements on their behalf</li>
+                      <li>I understand that this electronic signature constitutes a legally binding agreement</li>
+                    </ul>
+                  </label>
+                </div>
               </div>
             </div>
 

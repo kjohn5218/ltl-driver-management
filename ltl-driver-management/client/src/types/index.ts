@@ -137,6 +137,15 @@ export interface Booking {
   type: BookingType;
   trailerLength?: number;
   
+  // Document uploads
+  documents?: Array<{
+    id: number;
+    filename: string;
+    documentType: string;
+    uploadedAt: string;
+    uploadedBy?: string;
+  }>;
+  
   // Multi-leg booking fields
   parentBookingId?: number;
   legNumber?: number;
@@ -277,6 +286,7 @@ export interface Location {
   timeZone?: string;
   latitude?: number;
   longitude?: number;
+  notes?: string;
   active: boolean;
   createdAt: string;
   updatedAt: string;
