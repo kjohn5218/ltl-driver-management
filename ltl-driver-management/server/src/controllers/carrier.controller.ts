@@ -7,6 +7,9 @@ import { AgreementService } from '../services/agreement.service';
 import path from 'path';
 import { format } from 'date-fns';
 import geoip from 'geoip-lite';
+import crypto from 'crypto';
+import { mcpService } from '../services/mycarrierpackets.service';
+import { isMCPConfigured } from '../config/mcp.config';
 
 export const getCarriers = async (req: Request, res: Response) => {
   try {
@@ -328,7 +331,7 @@ export const uploadDocument = async (req: Request, res: Response) => {
 
 export const inviteCarrier = async (req: Request, res: Response) => {
   try {
-    const { email } = req.body;
+    const { email, sendMCPInvite, dotNumber, mcNumber } = req.body;
     const userId = (req as any).user?.id;
     
     // Check if carrier with this email already exists
@@ -422,6 +425,22 @@ export const inviteCarrier = async (req: Request, res: Response) => {
       html: emailContent
     });
     
+    // If sendMCPInvite is true and we have DOT number, also send MCP intellivite
+    if (sendMCPInvite && dotNumber && isMCPConfigured()) {
+      try {
+        await mcpService.sendInvitation(
+          dotNumber,
+          email,
+          mcNumber,
+          invitation.createdByUser?.name || 'CrossCountryFreight'
+        );
+        console.log(`MCP intellivite invitation sent to ${email} for DOT: ${dotNumber}`);
+      } catch (mcpError) {
+        console.error('Failed to send MCP invitation:', mcpError);
+        // Don't fail the whole request if MCP fails
+      }
+    }
+    
     return res.status(200).json({ 
       message: 'Invitation sent successfully',
       email,
@@ -429,7 +448,8 @@ export const inviteCarrier = async (req: Request, res: Response) => {
         id: invitation.id,
         sentAt: invitation.sentAt,
         expiresAt: invitation.expiresAt
-      }
+      },
+      mcpInviteSent: sendMCPInvite && dotNumber && isMCPConfigured()
     });
   } catch (error) {
     console.error('Invite carrier error:', error);
@@ -1509,6 +1529,257 @@ export const lookupCarrierData = async (req: Request, res: Response): Promise<vo
   }
 };
 
+// Preview carrier data from MCP before invitation
+export const previewCarrierMCP = async (req: Request, res: Response): Promise<void> => {
+  try {
+    if (!isMCPConfigured()) {
+      res.status(503).json({ 
+        success: false,
+        message: 'MyCarrierPackets integration is not configured' 
+      });
+      return;
+    }
+
+    const { dotNumber, mcNumber } = req.query;
+    
+    if (!dotNumber) {
+      res.status(400).json({ 
+        success: false,
+        message: 'DOT Number is required' 
+      });
+      return;
+    }
+
+    const mcpData = await mcpService.previewCarrier(
+      dotNumber as string,
+      mcNumber as string
+    );
+
+    res.json({
+      success: true,
+      data: mcpData
+    });
+  } catch (error: any) {
+    console.error('MCP preview error:', error);
+    res.status(error.statusCode || 500).json({ 
+      success: false,
+      message: error.message || 'Failed to preview carrier data',
+      error: error.details || undefined
+    });
+  }
+};
+
+// Sync carrier data from MCP
+export const syncCarrierFromMCP = async (req: Request, res: Response): Promise<void> => {
+  try {
+    if (!isMCPConfigured()) {
+      res.status(503).json({ 
+        success: false,
+        message: 'MyCarrierPackets integration is not configured' 
+      });
+      return;
+    }
+
+    const { id } = req.params;
+    
+    const carrier = await prisma.carrier.findUnique({
+      where: { id: parseInt(id) }
+    });
+
+    if (!carrier || !carrier.dotNumber) {
+      res.status(404).json({ 
+        success: false,
+        message: 'Carrier not found or missing DOT number' 
+      });
+      return;
+    }
+
+    // Get data from MCP
+    const mcpData = await mcpService.getCarrierData(
+      carrier.dotNumber,
+      carrier.mcNumber || undefined
+    );
+
+    // Update carrier with MCP data
+    const updatedCarrier = await prisma.carrier.update({
+      where: { id: parseInt(id) },
+      data: {
+        // Update fields from MCP (only if they have values)
+        name: mcpData.name || carrier.name,
+        dbaName: mcpData.dbaName || carrier.dbaName,
+        safetyRating: mcpData.safetyRating || carrier.safetyRating,
+        scacCode: mcpData.scacCode || carrier.scacCode,
+        emergencyPhone: mcpData.emergencyPhone || carrier.emergencyPhone,
+        fleetSize: mcpData.fleetSize || carrier.fleetSize,
+        totalPowerUnits: mcpData.totalPowerUnits || carrier.totalPowerUnits,
+        mcpAuthorityStatus: mcpData.mcpAuthorityStatus,
+        mcpRiskScore: mcpData.mcpRiskScore,
+        mcpInsuranceExpiration: mcpData.mcpInsuranceExpiration,
+        mcpPacketCompleted: mcpData.mcpPacketCompleted,
+        mcpPacketCompletedAt: mcpData.mcpPacketCompletedAt,
+        mcpSafetyRating: mcpData.safetyRating,
+        mcpLastSync: new Date()
+      }
+    });
+
+    // Try to download documents
+    try {
+      if (mcpData._rawMcpData) {
+        await mcpService.downloadCarrierDocuments(carrier.id, mcpData._rawMcpData);
+      }
+    } catch (docError) {
+      console.error('Failed to download carrier documents:', docError);
+      // Continue - don't fail the whole sync
+    }
+
+    res.json({
+      success: true,
+      carrier: updatedCarrier,
+      message: 'Carrier data synced from MyCarrierPackets'
+    });
+  } catch (error: any) {
+    console.error('MCP sync error:', error);
+    res.status(error.statusCode || 500).json({ 
+      success: false,
+      message: error.message || 'Failed to sync carrier data',
+      error: error.details || undefined
+    });
+  }
+};
+
+// Toggle carrier monitoring
+export const toggleCarrierMonitoring = async (req: Request, res: Response): Promise<void> => {
+  try {
+    if (!isMCPConfigured()) {
+      res.status(503).json({ 
+        success: false,
+        message: 'MyCarrierPackets integration is not configured' 
+      });
+      return;
+    }
+
+    const { id } = req.params;
+    const { monitor } = req.body;
+    
+    if (typeof monitor !== 'boolean') {
+      res.status(400).json({ 
+        success: false,
+        message: 'Monitor parameter must be a boolean' 
+      });
+      return;
+    }
+
+    const carrier = await prisma.carrier.findUnique({
+      where: { id: parseInt(id) }
+    });
+
+    if (!carrier || !carrier.dotNumber) {
+      res.status(404).json({ 
+        success: false,
+        message: 'Carrier not found or missing DOT number' 
+      });
+      return;
+    }
+
+    // Call MCP API to add/remove monitoring
+    if (monitor) {
+      await mcpService.requestMonitoring(
+        carrier.dotNumber,
+        carrier.mcNumber || undefined
+      );
+    } else {
+      await mcpService.cancelMonitoring(
+        carrier.dotNumber,
+        carrier.mcNumber || undefined
+      );
+    }
+
+    // Update local database
+    const updatedCarrier = await prisma.carrier.update({
+      where: { id: parseInt(id) },
+      data: { mcpMonitored: monitor }
+    });
+
+    res.json({
+      success: true,
+      carrier: updatedCarrier,
+      message: `Carrier monitoring ${monitor ? 'enabled' : 'disabled'}`
+    });
+  } catch (error: any) {
+    console.error('Toggle monitoring error:', error);
+    res.status(error.statusCode || 500).json({ 
+      success: false,
+      message: error.message || 'Failed to toggle carrier monitoring',
+      error: error.details || undefined
+    });
+  }
+};
+
+// Get MCP integration status for a carrier
+export const getCarrierMCPStatus = async (req: Request, res: Response): Promise<void> => {
+  try {
+    const { id } = req.params;
+    
+    const carrier = await prisma.carrier.findUnique({
+      where: { id: parseInt(id) },
+      select: {
+        id: true,
+        dotNumber: true,
+        mcNumber: true,
+        mcpMonitored: true,
+        mcpLastSync: true,
+        mcpPacketCompleted: true,
+        mcpPacketCompletedAt: true,
+        mcpInsuranceExpiration: true,
+        mcpAuthorityStatus: true,
+        mcpSafetyRating: true,
+        mcpRiskScore: true
+      }
+    });
+
+    if (!carrier) {
+      res.status(404).json({ 
+        success: false,
+        message: 'Carrier not found' 
+      });
+      return;
+    }
+
+    // Generate URLs
+    const intelliviteUrl = carrier.dotNumber ? 
+      mcpService.generateIntelliviteUrl(carrier.dotNumber, carrier.mcNumber || undefined) : null;
+    
+    const viewUrl = carrier.dotNumber ? 
+      mcpService.generateCarrierViewUrl(carrier.dotNumber, carrier.mcNumber || undefined) : null;
+
+    res.json({
+      success: true,
+      mcpStatus: {
+        isConfigured: isMCPConfigured(),
+        isMonitored: carrier.mcpMonitored,
+        lastSync: carrier.mcpLastSync,
+        packetCompleted: carrier.mcpPacketCompleted,
+        packetCompletedAt: carrier.mcpPacketCompletedAt,
+        insuranceExpiration: carrier.mcpInsuranceExpiration,
+        authorityStatus: carrier.mcpAuthorityStatus,
+        safetyRating: carrier.mcpSafetyRating,
+        riskScore: carrier.mcpRiskScore,
+        urls: {
+          intellivite: intelliviteUrl,
+          view: viewUrl,
+          viewWithInsurance: viewUrl ? `${viewUrl}?requestInsurance=true` : null
+        }
+      }
+    });
+  } catch (error) {
+    console.error('Get MCP status error:', error);
+    res.status(500).json({ 
+      success: false,
+      message: 'Failed to get MCP status'
+    });
+  }
+};
+
 // Send MyCarrierPackets intellivite invitation
 export const sendIntellIviteInvitation = async (req: Request, res: Response): Promise<void> => {
   try {
@@ -1564,11 +1835,10 @@ export const sendIntellIviteInvitation = async (req: Request, res: Response): Pr
       await prisma.carrierInvitation.create({
         data: {
           email,
-          dotNumber: dotNumber || null,
-          mcNumber: mcNumber || null,
-          status: 'SENT_INTELLIVITE',
+          token: crypto.randomBytes(32).toString('hex'), // Generate unique token
+          status: 'PENDING',
           expiresAt: new Date(Date.now() + 7 * 24 * 60 * 60 * 1000), // 7 days
-          invitedBy: (req as any).user?.id || 1 // Use authenticated user ID
+          createdBy: (req as any).user?.id || 1 // Use authenticated user ID
         }
       });
     } catch (dbError) {

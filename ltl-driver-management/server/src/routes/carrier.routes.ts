@@ -24,7 +24,11 @@ import {
   downloadCarrierDocument,
   deleteCarrierDocument,
   lookupCarrierData,
-  sendIntellIviteInvitation
+  sendIntellIviteInvitation,
+  previewCarrierMCP,
+  syncCarrierFromMCP,
+  toggleCarrierMonitoring,
+  getCarrierMCPStatus
 } from '../controllers/carrier.controller';
 import { authenticate, authorize } from '../middleware/auth.middleware';
 import { validateRequest } from '../middleware/validation.middleware';
@@ -88,6 +92,20 @@ router.post(
   ],
   validateRequest,
   sendIntellIviteInvitation
+);
+
+// MyCarrierPackets Integration Routes
+
+// Preview carrier from MCP (Admin/Dispatcher only)
+router.get(
+  '/mcp/preview',
+  authorize(UserRole.ADMIN, UserRole.DISPATCHER),
+  [
+    query('dotNumber').notEmpty().trim(),
+    query('mcNumber').optional().trim()
+  ],
+  validateRequest,
+  previewCarrierMCP
 );
 
 // Get carrier invitations (Admin/Dispatcher only) - Must come before /:id route
@@ -170,9 +188,39 @@ router.post(
   authorize(UserRole.ADMIN, UserRole.DISPATCHER),
   [
     body('email').notEmpty().isEmail().normalizeEmail(),
+    body('sendMCPInvite').optional().isBoolean(),
+    body('dotNumber').optional().trim(),
+    body('mcNumber').optional().trim()
   ],
   validateRequest,
   inviteCarrier
+);
+
+// MyCarrierPackets Integration Routes for specific carriers
+
+// Get MCP status for a carrier (Admin/Dispatcher only)
+router.get(
+  '/:id/mcp/status',
+  authorize(UserRole.ADMIN, UserRole.DISPATCHER),
+  getCarrierMCPStatus
+);
+
+// Sync carrier data from MCP (Admin/Dispatcher only)
+router.post(
+  '/:id/mcp/sync',
+  authorize(UserRole.ADMIN, UserRole.DISPATCHER),
+  syncCarrierFromMCP
+);
+
+// Toggle carrier monitoring in MCP (Admin/Dispatcher only)
+router.post(
+  '/:id/mcp/monitor',
+  authorize(UserRole.ADMIN, UserRole.DISPATCHER),
+  [
+    body('monitor').notEmpty().isBoolean()
+  ],
+  validateRequest,
+  toggleCarrierMonitoring
 );
 
 // Cancel carrier invitation (Admin/Dispatcher only)

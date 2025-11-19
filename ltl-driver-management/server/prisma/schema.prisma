@@ -8,51 +8,64 @@ datasource db {
 }
 
 model User {
-  id                    Int               @id @default(autoincrement())
-  email                 String            @unique
+  id                    Int                 @id @default(autoincrement())
+  email                 String              @unique
   password              String
   name                  String
-  role                  UserRole          @default(USER)
+  role                  UserRole            @default(USER)
   createdAt             DateTime            @default(now())
   updatedAt             DateTime            @updatedAt
   createdLineItems      BookingLineItem[]
-  systemSettingsUpdates SystemSettings[]
   sentInvitations       CarrierInvitation[]
+  systemSettingsUpdates SystemSettings[]
 
   @@map("users")
 }
 
 model Carrier {
-  id                  Int                     @id @default(autoincrement())
-  name                String
-  contactPerson       String?
-  phone               String?
-  email               String?
-  mcNumber            String?                 @unique
-  dotNumber           String?                 @unique
-  insuranceExpiration DateTime?
-  status              CarrierStatus           @default(PENDING)
-  rating              Decimal?                @db.Decimal(2, 1)
-  ratePerMile         Decimal?                @db.Decimal(5, 2)
-  onboardingComplete  Boolean                 @default(false)
-  createdAt           DateTime                @default(now())
-  updatedAt           DateTime                @updatedAt
-  carrierType         String?
-  city                String?
-  factoringCompany    String?
-  remittanceContact   String?
-  remittanceEmail     String?
-  safetyRating        String?
-  state               String?
-  streetAddress1      String?
-  streetAddress2      String?
-  taxId               String?
-  zipCode             String?
-  bookings            Booking[]
-  documents           CarrierDocument[]
-  drivers             CarrierDriver[]
-  preferredRoutes     CarrierPreferredRoute[]
-  agreements          CarrierAgreement[]
+  id                     Int                     @id @default(autoincrement())
+  name                   String
+  contactPerson          String?
+  phone                  String?
+  email                  String?
+  mcNumber               String?                 @unique
+  dotNumber              String?                 @unique
+  insuranceExpiration    DateTime?
+  status                 CarrierStatus           @default(PENDING)
+  rating                 Decimal?                @db.Decimal(2, 1)
+  ratePerMile            Decimal?                @db.Decimal(5, 2)
+  onboardingComplete     Boolean                 @default(false)
+  createdAt              DateTime                @default(now())
+  updatedAt              DateTime                @updatedAt
+  carrierType            String?
+  city                   String?
+  factoringCompany       String?
+  remittanceContact      String?
+  remittanceEmail        String?
+  safetyRating           String?
+  state                  String?
+  streetAddress1         String?
+  streetAddress2         String?
+  taxId                  String?
+  zipCode                String?
+  dbaName                String?
+  emergencyPhone         String?
+  fleetSize              Int?
+  mcpAuthorityStatus     String?
+  mcpInsuranceExpiration DateTime?
+  mcpLastSync            DateTime?
+  mcpMonitored           Boolean                 @default(false)
+  mcpPacketCompleted     Boolean                 @default(false)
+  mcpPacketCompletedAt   DateTime?
+  mcpRiskScore           Int?
+  mcpSafetyRating        String?
+  scacCode               String?
+  totalPowerUnits        Int?
+  bookings               Booking[]
+  agreements             CarrierAgreement[]
+  documents              CarrierDocument[]
+  drivers                CarrierDriver[]
+  preferredRoutes        CarrierPreferredRoute[]
 
   @@map("carriers")
 }
@@ -248,32 +261,31 @@ model BookingDocument {
 }
 
 model Invoice {
-  id                    Int                     @id @default(autoincrement())
-  bookingId             Int                     @unique
-  invoiceNumber         String                  @unique
-  amount                Decimal                 @db.Decimal(8, 2)
-  baseAmount            Decimal                 @db.Decimal(8, 2) @default(0.00)
-  lineItemsAmount       Decimal                 @db.Decimal(8, 2) @default(0.00)
-  status                InvoiceStatus           @default(PENDING)
-  createdAt             DateTime                @default(now())
-  updatedAt             DateTime                @updatedAt @default(now())
+  id                    Int                 @id @default(autoincrement())
+  bookingId             Int                 @unique
+  invoiceNumber         String              @unique
+  amount                Decimal             @db.Decimal(8, 2)
+  status                InvoiceStatus       @default(PENDING)
+  createdAt             DateTime            @default(now())
   paidAt                DateTime?
+  baseAmount            Decimal             @default(0.00) @db.Decimal(8, 2)
+  includesDocuments     Boolean             @default(true)
+  lineItemsAmount       Decimal             @default(0.00) @db.Decimal(8, 2)
+  notes                 String?
   sentToAPAt            DateTime?
   sentToAPBy            String?
-  includesDocuments     Boolean                 @default(true)
-  notes                 String?
-  // Carrier address information (captured at time of invoice creation)
-  carrierName           String?
+  updatedAt             DateTime            @default(now()) @updatedAt
+  carrierCity           String?
   carrierContactPerson  String?
-  carrierPhone          String?
   carrierEmail          String?
+  carrierName           String?
+  carrierPhone          String?
+  carrierState          String?
   carrierStreetAddress1 String?
   carrierStreetAddress2 String?
-  carrierCity           String?
-  carrierState          String?
   carrierZipCode        String?
-  booking               Booking                 @relation(fields: [bookingId], references: [id])
   attachments           InvoiceAttachment[]
+  booking               Booking             @relation(fields: [bookingId], references: [id])
 
   @@index([status])
   @@index([createdAt])
@@ -281,16 +293,16 @@ model Invoice {
 }
 
 model InvoiceAttachment {
-  id            Int      @id @default(autoincrement())
-  invoiceId     Int
-  documentType  String
-  documentId    Int?
-  filename      String
-  filePath      String
-  fileSize      Int?
-  mimeType      String?
-  uploadedAt    DateTime @default(now())
-  invoice       Invoice  @relation(fields: [invoiceId], references: [id], onDelete: Cascade)
+  id           Int      @id @default(autoincrement())
+  invoiceId    Int
+  documentType String
+  documentId   Int?
+  filename     String
+  filePath     String
+  fileSize     Int?
+  mimeType     String?
+  uploadedAt   DateTime @default(now())
+  invoice      Invoice  @relation(fields: [invoiceId], references: [id], onDelete: Cascade)
 
   @@index([invoiceId])
   @@map("invoice_attachments")
@@ -319,17 +331,17 @@ model Location {
 }
 
 model CarrierInvitation {
-  id           Int                     @id @default(autoincrement())
-  email        String
-  token        String                  @unique
-  status       CarrierInvitationStatus @default(PENDING)
-  sentAt       DateTime                @default(now())
-  expiresAt    DateTime
-  registeredAt DateTime?
-  createdBy    Int?
-  createdAt    DateTime                @default(now())
-  updatedAt    DateTime                @updatedAt
-  createdByUser User?                  @relation(fields: [createdBy], references: [id])
+  id            Int                     @id @default(autoincrement())
+  email         String
+  token         String                  @unique
+  status        CarrierInvitationStatus @default(PENDING)
+  sentAt        DateTime                @default(now())
+  expiresAt     DateTime
+  registeredAt  DateTime?
+  createdBy     Int?
+  createdAt     DateTime                @default(now())
+  updatedAt     DateTime                @updatedAt
+  createdByUser User?                   @relation(fields: [createdBy], references: [id])
 
   @@index([email])
   @@index([status])
@@ -337,23 +349,23 @@ model CarrierInvitation {
 }
 
 model CarrierAgreement {
-  id                  Int      @id @default(autoincrement())
-  carrierId           Int      @map("carrier_id")
-  agreementVersion    String   @map("agreement_version")
-  agreementTitle      String   @map("agreement_title")
-  signedAt            DateTime @default(now()) @map("signed_at")
-  signedBy            String   @map("signed_by")
-  signedByTitle       String   @map("signed_by_title")
-  ipAddress           String   @map("ip_address")
-  userAgent           String?  @map("user_agent")
-  geolocation         String?
-  username            String
-  affidavitPdfPath    String?  @map("affidavit_pdf_path")
-  agreementPdfPath    String?  @map("agreement_pdf_path")
-  agreementHash       String?  @map("agreement_hash")
-  createdAt           DateTime @default(now()) @map("created_at")
-  carrier             Carrier  @relation(fields: [carrierId], references: [id], onDelete: Cascade)
-  
+  id               Int      @id @default(autoincrement())
+  carrierId        Int      @map("carrier_id")
+  agreementVersion String   @map("agreement_version")
+  agreementTitle   String   @map("agreement_title")
+  signedAt         DateTime @default(now()) @map("signed_at")
+  signedBy         String   @map("signed_by")
+  signedByTitle    String   @map("signed_by_title")
+  ipAddress        String   @map("ip_address")
+  userAgent        String?  @map("user_agent")
+  geolocation      String?
+  username         String
+  affidavitPdfPath String?  @map("affidavit_pdf_path")
+  agreementPdfPath String?  @map("agreement_pdf_path")
+  agreementHash    String?  @map("agreement_hash")
+  createdAt        DateTime @default(now()) @map("created_at")
+  carrier          Carrier  @relation(fields: [carrierId], references: [id], onDelete: Cascade)
+
   @@index([carrierId])
   @@map("carrier_agreements")
 }
