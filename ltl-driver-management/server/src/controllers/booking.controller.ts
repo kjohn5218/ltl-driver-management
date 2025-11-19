@@ -1,11 +1,7 @@
 import { Request, Response } from 'express';
 import { prisma } from '../index';
 import { Prisma, BookingStatus } from '@prisma/client';
-<<<<<<< HEAD
-import { sendBookingCancellation, sendRateConfirmationEmail, sendBookingConfirmationWithUploadLink } from '../services/notification.service';
-=======
 import * as NotificationService from '../services/notification.service';
->>>>>>> ca61f3ad1c8501e12d62e957e30c0b8a190b6fa1
 import { v4 as uuidv4 } from 'uuid';
 import multer from 'multer';
 import { PDFService } from '../services/pdf.service';
@@ -338,7 +334,6 @@ export const updateBooking = async (req: Request, res: Response) => {
       return value;
     };
 
-<<<<<<< HEAD
     // Get the current booking to check status changes
     const currentBooking = await prisma.booking.findUnique({
       where: { id: parseInt(id) },
@@ -362,14 +357,6 @@ export const updateBooking = async (req: Request, res: Response) => {
     
     // Generate document upload token if confirming the booking
     const documentUploadToken = isStatusChangingToConfirmed ? uuidv4() : undefined;
-
-=======
-    // Get the original booking to check if status is changing to COMPLETED
-    const originalBooking = await prisma.booking.findUnique({
-      where: { id: parseInt(id) }
-    });
-
->>>>>>> ca61f3ad1c8501e12d62e957e30c0b8a190b6fa1
     const booking = await prisma.booking.update({
       where: { id: parseInt(id) },
       data: {
@@ -434,14 +421,14 @@ export const updateBooking = async (req: Request, res: Response) => {
       }
     });
 
-<<<<<<< HEAD
     // If status changed to CONFIRMED, send confirmation email with document upload link
     if (isStatusChangingToConfirmed) {
-      await sendBookingConfirmationWithUploadLink(booking);
-=======
+      await NotificationService.sendBookingConfirmationWithUploadLink(booking);
+    }
+
     // Check if status changed to COMPLETED and generate invoice automatically
-    if (originalBooking && 
-        originalBooking.status !== 'COMPLETED' && 
+    if (currentBooking && 
+        currentBooking.status !== 'COMPLETED' && 
         updateData.status === 'COMPLETED') {
       try {
         const invoice = await invoiceService.createInvoice(booking.id);
@@ -453,7 +440,6 @@ export const updateBooking = async (req: Request, res: Response) => {
         // Don't fail the booking update if invoice generation fails
         // Just log the error and continue
       }
->>>>>>> ca61f3ad1c8501e12d62e957e30c0b8a190b6fa1
     }
 
     return res.json(booking);
@@ -506,13 +492,8 @@ export const confirmBooking = async (req: Request, res: Response) => {
       }
     });
 
-<<<<<<< HEAD
     // Send confirmation notification with document upload link
-    await sendBookingConfirmationWithUploadLink(updatedBooking);
-=======
-    // Send confirmation notification
-    await NotificationService.sendBookingConfirmation(updatedBooking);
->>>>>>> ca61f3ad1c8501e12d62e957e30c0b8a190b6fa1
+    await NotificationService.sendBookingConfirmationWithUploadLink(updatedBooking);
 
     return res.json(updatedBooking);
   } catch (error) {

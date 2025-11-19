@@ -97,7 +97,7 @@ export class MockMyCarrierPacketsService {
     return mockCarrier;
   }
 
-  async sendInvitation(dotNumber: string, email: string, docketNumber?: string, username?: string): Promise<any> {
+  async sendInvitation(dotNumber: string, email: string, docketNumber?: string, _username?: string): Promise<any> {
     await this.mockDelay();
     console.log(`[MOCK] Sending invitation to ${email} for DOT: ${dotNumber}`);
     
@@ -170,7 +170,7 @@ DOT: ${blobName}
     return Buffer.from(mockPdfContent);
   }
 
-  async downloadCarrierDocuments(carrierId: number, mcpData: any): Promise<any> {
+  async downloadCarrierDocuments(carrierId: number, _mcpData: any): Promise<any> {
     console.log(`[MOCK] Downloading documents for carrier ${carrierId}`);
     return {
       insurance: '/mock/path/to/insurance.pdf'
