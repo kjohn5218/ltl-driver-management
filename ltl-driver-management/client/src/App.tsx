@@ -18,11 +18,7 @@ import { ConfirmationPage } from './pages/ConfirmationPage';
 import { CarrierRegistration } from './pages/CarrierRegistration';
 import { Administration } from './pages/Administration';
 import { Drivers } from './pages/Drivers';
-<<<<<<< HEAD
-// import { DocumentUpload } from './pages/DocumentUpload';
-=======
-import DocumentUpload from './pages/DocumentUpload';
->>>>>>> ca61f3ad1c8501e12d62e957e30c0b8a190b6fa1
+import { DocumentUpload } from './pages/DocumentUpload';
 
 // Create a client
 const queryClient = new QueryClient({
@@ -46,11 +42,7 @@ function App() {
             <Route path="/register" element={<RegisterForm />} />
             <Route path="/register/carrier" element={<CarrierRegistration />} />
             <Route path="/confirm/:token" element={<ConfirmationPage />} />
-<<<<<<< HEAD
-            {/* <Route path="/upload-documents/:token" element={<DocumentUpload />} /> */}
-=======
             <Route path="/documents/upload/:token" element={<DocumentUpload />} />
->>>>>>> ca61f3ad1c8501e12d62e957e30c0b8a190b6fa1
             
             {/* Protected routes */}
             <Route

@@ -152,7 +152,6 @@ export const NewBookingSimplified: React.FC<NewBookingSimplifiedProps> = () => {
           setAvailableDrivers(drivers);
         }
       } catch (error) {
-<<<<<<< HEAD
         console.error('Failed to fetch all drivers, trying fallback approach:', error);
         try {
           // Fallback: use the regular getDrivers method with high limit
@@ -162,11 +161,6 @@ export const NewBookingSimplified: React.FC<NewBookingSimplifiedProps> = () => {
           console.error('Fallback approach also failed:', fallbackError);
           setAllDrivers([]);
         }
-=======
-        console.error('Failed to fetch all drivers:', error);
-        setAllDrivers([]);
-        setAvailableDrivers([]);
->>>>>>> ca61f3ad1c8501e12d62e957e30c0b8a190b6fa1
       }
     };
     fetchAllDrivers();

@@ -2,19 +2,13 @@ import { Request, Response } from 'express';
 import { prisma } from '../index';
 import { CarrierStatus, BookingStatus } from '@prisma/client';
 
-export const getDashboardMetrics = async (_req: Request, res: Response) => {
+export const getDashboardMetrics = async (req: Request, res: Response) => {
   try {
     console.log('Dashboard endpoint called');
     
-<<<<<<< HEAD
-    // Simplified version to test basic functionality
-    const totalCarriers = await prisma.carrier.count();
-    const activeCarriers = await prisma.carrier.count({ where: { status: CarrierStatus.ACTIVE } });
-    const totalRoutes = await prisma.route.count();
-    const totalBookings = await prisma.booking.count();
+    // Get date filters from query params
+    const { startDate, endDate } = req.query;
     
-    console.log('Basic metrics retrieved successfully');
-=======
     // Build date filter
     const dateFilter: any = {};
     if (startDate || endDate) {
@@ -52,29 +46,29 @@ export const getDashboardMetrics = async (_req: Request, res: Response) => {
       rateConfirmationsNotSent
     ] = await Promise.all([
       prisma.carrier.count(),
-      prisma.carrier.count({ where: { status: 'ACTIVE' } }),
+      prisma.carrier.count({ where: { status: CarrierStatus.ACTIVE } }),
       prisma.route.count(),
       prisma.booking.count({ where: dateFilter }),
-      prisma.booking.count({ where: { ...dateFilter, status: 'COMPLETED' } }),
+      prisma.booking.count({ where: { ...dateFilter, status: BookingStatus.COMPLETED } }),
       prisma.invoice.count({ where: { status: 'PENDING' } }),
       // Calculate total expenses from completed bookings
       prisma.booking.aggregate({
-        where: { status: 'COMPLETED' },
+        where: { status: BookingStatus.COMPLETED },
         _sum: { rate: true }
       }),
       // Calculate monthly expenses from completed bookings
       prisma.booking.aggregate({
-        where: { ...monthFilter, status: 'COMPLETED' },
+        where: { ...monthFilter, status: BookingStatus.COMPLETED },
         _sum: { rate: true }
       }),
       // Count unbooked routes (PENDING status bookings)
-      prisma.booking.count({ where: { status: 'PENDING' } }),
+      prisma.booking.count({ where: { status: BookingStatus.PENDING } }),
       // Count booked routes (CONFIRMED status bookings)
-      prisma.booking.count({ where: { status: 'CONFIRMED' } }),
+      prisma.booking.count({ where: { status: BookingStatus.CONFIRMED } }),
       // Count pending rate confirmations (not CANCELLED/COMPLETED and either not sent or not signed)
       prisma.booking.count({ 
         where: { 
-          status: { notIn: ['CANCELLED', 'COMPLETED'] },
+          status: { notIn: [BookingStatus.CANCELLED, BookingStatus.COMPLETED] },
           OR: [
             { confirmationSentAt: null },
             { confirmationSignedAt: null }
@@ -84,13 +78,13 @@ export const getDashboardMetrics = async (_req: Request, res: Response) => {
       // Count open bookings (not COMPLETED or CANCELLED)
       prisma.booking.count({ 
         where: { 
-          status: { notIn: ['COMPLETED', 'CANCELLED'] }
+          status: { notIn: [BookingStatus.COMPLETED, BookingStatus.CANCELLED] }
         } 
       }),
       // Count outstanding rate confirmations (sent but not yet signed for open bookings)
       prisma.booking.count({ 
         where: { 
-          status: { notIn: ['COMPLETED', 'CANCELLED'] },
+          status: { notIn: [BookingStatus.COMPLETED, BookingStatus.CANCELLED] },
           confirmationSentAt: { not: null },
           confirmationSignedAt: null
         } 
@@ -98,7 +92,7 @@ export const getDashboardMetrics = async (_req: Request, res: Response) => {
       // Count rate confirmations not sent (bookings without confirmation sent)
       prisma.booking.count({ 
         where: { 
-          status: { notIn: ['COMPLETED', 'CANCELLED'] },
+          status: { notIn: [BookingStatus.COMPLETED, BookingStatus.CANCELLED] },
           confirmationSentAt: null
         } 
       })
@@ -113,7 +107,6 @@ export const getDashboardMetrics = async (_req: Request, res: Response) => {
         route: true
       }
     });
->>>>>>> ca61f3ad1c8501e12d62e957e30c0b8a190b6fa1
 
     return res.json({
       metrics: {
@@ -121,15 +114,6 @@ export const getDashboardMetrics = async (_req: Request, res: Response) => {
         activeCarriers,
         totalRoutes,
         totalBookings,
-<<<<<<< HEAD
-        completedBookings: 0,
-        pendingInvoices: 0,
-        totalExpenses: 0,
-        monthlyExpenses: 0,
-        unbookedRoutes: 0,
-        bookedRoutes: 0,
-        pendingRateConfirmations: 0
-=======
         completedBookings,
         pendingInvoices,
         totalExpenses: totalExpenses._sum.rate || 0,
@@ -140,9 +124,14 @@ export const getDashboardMetrics = async (_req: Request, res: Response) => {
         openBookings,
         outstandingRateConfirmations,
         rateConfirmationsNotSent
->>>>>>> ca61f3ad1c8501e12d62e957e30c0b8a190b6fa1
       },
-      recentActivities: []
+      recentActivities: recentBookings.map(booking => ({
+        id: booking.id,
+        type: 'booking',
+        description: `Booking #${booking.id} - ${booking.carrier?.name || 'Unknown Carrier'}`,
+        date: booking.createdAt,
+        status: booking.status
+      }))
     });
   } catch (error) {
     console.error('Get dashboard metrics error:', error);

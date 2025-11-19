@@ -177,7 +177,6 @@ export const sendInsuranceExpiryReminder = async (carrier: Carrier) => {
   }
 };
 
-<<<<<<< HEAD
 export const sendBookingConfirmationWithUploadLink = async (booking: BookingWithRelations) => {
   try {
     if (!booking.carrier || !booking.carrier.email) return;
@@ -253,7 +252,9 @@ export const sendBookingConfirmationWithUploadLink = async (booking: BookingWith
     console.log(`Confirmation email with upload link sent to ${booking.carrier.email}`);
   } catch (error) {
     console.error('Failed to send booking confirmation with upload link:', error);
-=======
+  }
+};
+
 export const sendRateConfirmationSubmittedEmail = async (
   booking: BookingWithRelations,
   recipientEmail: string,
@@ -463,7 +464,6 @@ export const sendRateConfirmationSubmittedEmail = async (
   } catch (error) {
     console.error('Failed to send rate confirmation submission email:', error);
     throw error;
->>>>>>> ca61f3ad1c8501e12d62e957e30c0b8a190b6fa1
   }
 };
 
