@@ -177,6 +177,83 @@ export const sendInsuranceExpiryReminder = async (carrier: Carrier) => {
   }
 };
 
+<<<<<<< HEAD
+export const sendBookingConfirmationWithUploadLink = async (booking: BookingWithRelations) => {
+  try {
+    if (!booking.carrier || !booking.carrier.email) return;
+    if (!booking.documentUploadToken) {
+      console.error('No document upload token generated for booking:', booking.id);
+      return;
+    }
+
+    // Create upload URL using the token
+    const baseUrl = process.env.FRONTEND_URL || 'http://localhost:5173';
+    const uploadUrl = `${baseUrl}/upload-documents/${booking.documentUploadToken}`;
+
+    // Determine route information based on booking type
+    const routeInfo = booking.route 
+      ? {
+          name: booking.route.name,
+          origin: booking.route.origin,
+          destination: booking.route.destination,
+          distance: booking.route.distance?.toString() || 'N/A',
+          departureTime: booking.route.departureTime,
+          arrivalTime: booking.route.arrivalTime
+        }
+      : {
+          name: `${booking.origin} → ${booking.destination}`,
+          origin: booking.origin || 'N/A',
+          destination: booking.destination || 'N/A',
+          distance: booking.estimatedMiles?.toString() || 'N/A',
+          departureTime: booking.departureTime,
+          arrivalTime: booking.arrivalTime
+        };
+
+    const mailOptions = {
+      from: process.env.EMAIL_USER,
+      to: booking.carrier.email,
+      subject: `Booking Confirmed - ${routeInfo.name}`,
+      html: `
+        <h2>Booking Confirmation</h2>
+        <p>Dear ${booking.carrier.name},</p>
+        <p>Your booking has been confirmed with the following details:</p>
+        <ul>
+          <li><strong>Route:</strong> ${routeInfo.name} (${routeInfo.origin} to ${routeInfo.destination})</li>
+          <li><strong>Date:</strong> ${booking.bookingDate.toLocaleDateString()}</li>
+          <li><strong>Distance:</strong> ${routeInfo.distance} miles</li>
+          <li><strong>Rate:</strong> $${booking.rate}</li>
+          ${routeInfo.departureTime ? `<li><strong>Departure Time:</strong> ${routeInfo.departureTime}</li>` : ''}
+          ${routeInfo.arrivalTime ? `<li><strong>Arrival Time:</strong> ${routeInfo.arrivalTime}</li>` : ''}
+          ${booking.carrierReportTime ? `<li><strong>Report Time:</strong> ${booking.carrierReportTime}</li>` : ''}
+        </ul>
+        ${booking.notes ? `<p><strong>Notes:</strong> ${booking.notes}</p>` : ''}
+        
+        <div style="background-color: #f0f8ff; padding: 20px; margin: 20px 0; border-radius: 5px;">
+          <h3 style="color: #0066cc; margin-top: 0;">Action Required: Document Upload</h3>
+          <p>At the completion of the trip, please use the link below to upload copies of the manifests for each leg of the trip and any other related documents:</p>
+          
+          <div style="text-align: center; margin: 20px 0;">
+            <a href="${uploadUrl}" style="display: inline-block; background-color: #0066cc; color: white; padding: 12px 30px; text-decoration: none; border-radius: 5px; font-weight: bold; font-size: 16px;">
+              Upload Documents
+            </a>
+          </div>
+          
+          <p style="color: #666; font-size: 14px;">
+            Or copy and paste this link into your browser:<br>
+            <a href="${uploadUrl}" style="color: #0066cc;">${uploadUrl}</a>
+          </p>
+        </div>
+        
+        <p>Please ensure all required documentation is up to date.</p>
+        <p>Best regards,<br>LTL Management Team</p>
+      `
+    };
+
+    await transporter.sendMail(mailOptions);
+    console.log(`Confirmation email with upload link sent to ${booking.carrier.email}`);
+  } catch (error) {
+    console.error('Failed to send booking confirmation with upload link:', error);
+=======
 export const sendRateConfirmationSubmittedEmail = async (
   booking: BookingWithRelations,
   recipientEmail: string,
@@ -386,6 +463,7 @@ export const sendRateConfirmationSubmittedEmail = async (
   } catch (error) {
     console.error('Failed to send rate confirmation submission email:', error);
     throw error;
+>>>>>>> ca61f3ad1c8501e12d62e957e30c0b8a190b6fa1
   }
 };
 

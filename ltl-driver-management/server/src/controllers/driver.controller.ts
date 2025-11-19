@@ -7,6 +7,7 @@ const prisma = new PrismaClient();
 export const getDrivers = async (req: Request, res: Response): Promise<Response> => {
   try {
     const { active, carrierId, search, page = 1, limit = 20 } = req.query;
+    console.log('getDrivers called with params:', { active, carrierId, search, page, limit });
     
     // Build where clause
     const where: any = {};
@@ -30,9 +31,11 @@ export const getDrivers = async (req: Request, res: Response): Promise<Response>
       ];
     }
 
-    // Calculate pagination
-    const skip = (parseInt(page as string) - 1) * parseInt(limit as string);
-    const take = parseInt(limit as string);
+    // Calculate pagination with validation
+    const pageNum = Math.max(1, parseInt(page as string) || 1);
+    const limitNum = Math.min(5000, Math.max(1, parseInt(limit as string) || 20));
+    const skip = (pageNum - 1) * limitNum;
+    const take = limitNum;
 
     // Get drivers with carrier information
     const [drivers, total] = await Promise.all([
@@ -60,10 +63,10 @@ export const getDrivers = async (req: Request, res: Response): Promise<Response>
     return res.json({
       drivers,
       pagination: {
-        page: parseInt(page as string),
-        limit: parseInt(limit as string),
+        page: pageNum,
+        limit: limitNum,
         total,
-        pages: Math.ceil(total / parseInt(limit as string))
+        pages: Math.ceil(total / limitNum)
       }
     });
   } catch (error) {

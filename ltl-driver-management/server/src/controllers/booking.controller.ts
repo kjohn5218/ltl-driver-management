@@ -1,7 +1,11 @@
 import { Request, Response } from 'express';
 import { prisma } from '../index';
 import { Prisma, BookingStatus } from '@prisma/client';
+<<<<<<< HEAD
+import { sendBookingCancellation, sendRateConfirmationEmail, sendBookingConfirmationWithUploadLink } from '../services/notification.service';
+=======
 import * as NotificationService from '../services/notification.service';
+>>>>>>> ca61f3ad1c8501e12d62e957e30c0b8a190b6fa1
 import { v4 as uuidv4 } from 'uuid';
 import multer from 'multer';
 import { PDFService } from '../services/pdf.service';
@@ -334,11 +338,38 @@ export const updateBooking = async (req: Request, res: Response) => {
       return value;
     };
 
+<<<<<<< HEAD
+    // Get the current booking to check status changes
+    const currentBooking = await prisma.booking.findUnique({
+      where: { id: parseInt(id) },
+      include: {
+        carrier: true,
+        route: true,
+        childBookings: {
+          include: {
+            route: true
+          }
+        }
+      }
+    });
+
+    if (!currentBooking) {
+      return res.status(404).json({ message: 'Booking not found' });
+    }
+
+    // Check if status is changing to CONFIRMED
+    const isStatusChangingToConfirmed = updateData.status === 'CONFIRMED' && currentBooking.status !== 'CONFIRMED';
+    
+    // Generate document upload token if confirming the booking
+    const documentUploadToken = isStatusChangingToConfirmed ? uuidv4() : undefined;
+
+=======
     // Get the original booking to check if status is changing to COMPLETED
     const originalBooking = await prisma.booking.findUnique({
       where: { id: parseInt(id) }
     });
 
+>>>>>>> ca61f3ad1c8501e12d62e957e30c0b8a190b6fa1
     const booking = await prisma.booking.update({
       where: { id: parseInt(id) },
       data: {
@@ -386,15 +417,28 @@ export const updateBooking = async (req: Request, res: Response) => {
         destinationContact: sanitizeValue(updateData.destinationContact),
         // Time fields
         departureTime: sanitizeValue(updateData.departureTime),
-        arrivalTime: sanitizeValue(updateData.arrivalTime)
+        arrivalTime: sanitizeValue(updateData.arrivalTime),
+        // Document upload token if confirming
+        documentUploadToken: documentUploadToken,
+        documentUploadTokenCreatedAt: documentUploadToken ? new Date() : undefined
       },
       include: {
         carrier: true,
         route: true,
-        lineItems: true
+        lineItems: true,
+        childBookings: {
+          include: {
+            route: true
+          }
+        }
       }
     });
 
+<<<<<<< HEAD
+    // If status changed to CONFIRMED, send confirmation email with document upload link
+    if (isStatusChangingToConfirmed) {
+      await sendBookingConfirmationWithUploadLink(booking);
+=======
     // Check if status changed to COMPLETED and generate invoice automatically
     if (originalBooking && 
         originalBooking.status !== 'COMPLETED' && 
@@ -409,6 +453,7 @@ export const updateBooking = async (req: Request, res: Response) => {
         // Don't fail the booking update if invoice generation fails
         // Just log the error and continue
       }
+>>>>>>> ca61f3ad1c8501e12d62e957e30c0b8a190b6fa1
     }
 
     return res.json(booking);
@@ -445,15 +490,29 @@ export const confirmBooking = async (req: Request, res: Response) => {
 
     const updatedBooking = await prisma.booking.update({
       where: { id: parseInt(id) },
-      data: { status: 'CONFIRMED' },
+      data: { 
+        status: 'CONFIRMED',
+        documentUploadToken: uuidv4(),
+        documentUploadTokenCreatedAt: new Date()
+      },
       include: {
         carrier: true,
-        route: true
+        route: true,
+        childBookings: {
+          include: {
+            route: true
+          }
+        }
       }
     });
 
+<<<<<<< HEAD
+    // Send confirmation notification with document upload link
+    await sendBookingConfirmationWithUploadLink(updatedBooking);
+=======
     // Send confirmation notification
     await NotificationService.sendBookingConfirmation(updatedBooking);
+>>>>>>> ca61f3ad1c8501e12d62e957e30c0b8a190b6fa1
 
     return res.json(updatedBooking);
   } catch (error) {

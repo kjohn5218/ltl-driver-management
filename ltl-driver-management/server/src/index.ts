@@ -38,6 +38,11 @@ app.use(cors({
 app.use(express.json());
 app.use(express.urlencoded({ extended: true }));
 
+// Health check endpoint (before rate limiting)
+app.get('/api/health', (_req, res) => {
+  res.json({ status: 'OK', timestamp: new Date().toISOString() });
+});
+
 // Rate limiting
 const limiter = rateLimit({
   windowMs: 15 * 60 * 1000, // 15 minutes
@@ -58,11 +63,14 @@ app.use('/api/users', userRoutes);
 app.use('/api', lineItemRoutes);
 app.use('/api/drivers', driverRoutes);
 app.use('/api/documents', bookingDocumentRoutes);
+<<<<<<< HEAD
+=======
 
 // Health check endpoint
 app.get('/api/health', (_req, res) => {
   res.json({ status: 'OK', timestamp: new Date().toISOString() });
 });
+>>>>>>> ca61f3ad1c8501e12d62e957e30c0b8a190b6fa1
 
 // Error handling middleware
 app.use((err: any, _req: express.Request, res: express.Response, _next: express.NextFunction) => {

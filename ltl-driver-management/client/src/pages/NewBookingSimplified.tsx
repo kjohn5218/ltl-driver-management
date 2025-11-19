@@ -138,10 +138,13 @@ export const NewBookingSimplified: React.FC<NewBookingSimplifiedProps> = () => {
     }
   }, [settingsData]);
 
-  // Fetch all drivers on component mount
+  // Fetch all drivers when authenticated (fallback approach)
   useEffect(() => {
+    if (!isAuthenticated) return;
+    
     const fetchAllDrivers = async () => {
       try {
+        // Try the getAllDrivers approach first
         const drivers = await driverService.getAllDrivers();
         setAllDrivers(drivers);
         // If no carrier is selected, show all drivers
@@ -149,13 +152,25 @@ export const NewBookingSimplified: React.FC<NewBookingSimplifiedProps> = () => {
           setAvailableDrivers(drivers);
         }
       } catch (error) {
+<<<<<<< HEAD
+        console.error('Failed to fetch all drivers, trying fallback approach:', error);
+        try {
+          // Fallback: use the regular getDrivers method with high limit
+          const response = await driverService.getDrivers({ active: true, limit: 1000 });
+          setAllDrivers(response.drivers);
+        } catch (fallbackError) {
+          console.error('Fallback approach also failed:', fallbackError);
+          setAllDrivers([]);
+        }
+=======
         console.error('Failed to fetch all drivers:', error);
         setAllDrivers([]);
         setAvailableDrivers([]);
+>>>>>>> ca61f3ad1c8501e12d62e957e30c0b8a190b6fa1
       }
     };
     fetchAllDrivers();
-  }, []);
+  }, [isAuthenticated]);
 
   // Fetch drivers for selected carrier
   useEffect(() => {

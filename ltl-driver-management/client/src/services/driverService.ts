@@ -54,6 +54,25 @@ export const driverService = {
 
   // Get all drivers (no filtering)
   getAllDrivers: async (): Promise<CarrierDriver[]> => {
+<<<<<<< HEAD
+    const params = new URLSearchParams();
+    params.append('active', 'true');
+    params.append('limit', '5000');
+
+    console.log('getAllDrivers: Making request to:', `/drivers?${params.toString()}`);
+    try {
+      const response = await api.get(`/drivers?${params.toString()}`);
+      console.log('getAllDrivers: Response received:', response.data);
+      return response.data.drivers;
+    } catch (error) {
+      console.error('getAllDrivers: Full error:', error);
+      console.error('getAllDrivers: Error response data:', JSON.stringify(error.response?.data, null, 2));
+      console.error('getAllDrivers: Error status:', error.response?.status);
+      console.error('getAllDrivers: Error message:', error.message);
+      console.error('getAllDrivers: Request URL:', error.config?.url);
+      throw error;
+    }
+=======
     const allDrivers: CarrierDriver[] = [];
     let page = 1;
     let hasMore = true;
@@ -71,6 +90,7 @@ export const driverService = {
     }
     
     return allDrivers;
+>>>>>>> ca61f3ad1c8501e12d62e957e30c0b8a190b6fa1
   },
 
   // Get drivers by carrier
