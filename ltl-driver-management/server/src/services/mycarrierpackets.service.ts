@@ -36,6 +36,20 @@ interface MCPCarrierData {
     ExpirationDate?: string;
     BlobName?: string;
   };
+  W9?: {
+    BlobName?: string;
+    UploadedDate?: string;
+  };
+  OperatingAgreement?: {
+    BlobName?: string;
+    SignedDate?: string;
+  };
+  Documents?: Array<{
+    DocumentType?: string;
+    BlobName?: string;
+    FileName?: string;
+    UploadedDate?: string;
+  }>;
   CarrierOperationalDetail?: {
     FleetSize?: number;
     TotalPowerUnits?: number;
@@ -253,17 +267,167 @@ export class MyCarrierPacketsService {
   /**
    * Check for completed packets
    */
-  async getCompletedPackets(fromDate: Date, toDate: Date): Promise<any[]> {
+  async getCompletedPackets(fromDate: Date, toDate: Date): Promise<{
+    packets: Array<{
+      dotNumber: string;
+      mcNumber?: string;
+      carrierName: string;
+      completedAt: Date;
+      packetData: any;
+    }>;
+    totalCount: number;
+  }> {
     const params = new URLSearchParams({
       fromDate: fromDate.toISOString(),
       toDate: toDate.toISOString()
     });
 
-    return this.makeAuthenticatedRequest(
+    const response = await this.makeAuthenticatedRequest<any[]>(
       'POST',
       `/api/v1/Carrier/completedpackets?${params}`,
       {}
     );
+
+    // Map the response to a more structured format
+    const packets = response.map((packet: any) => ({
+      dotNumber: packet.DOTNumber?.toString() || '',
+      mcNumber: packet.MCNumber || undefined,
+      carrierName: packet.LegalName || packet.DBAName || 'Unknown',
+      completedAt: new Date(packet.PacketCompleteDate || packet.CompletedDate || new Date()),
+      packetData: packet
+    }));
+
+    return {
+      packets,
+      totalCount: packets.length
+    };
+  }
+
+  /**
+   * Check and sync completed packets
+   * This method checks for recently completed packets and updates local carrier records
+   */
+  async checkAndSyncCompletedPackets(
+    fromDate?: Date,
+    toDate?: Date
+  ): Promise<{
+    checked: number;
+    synced: number;
+    newPackets: number;
+    errors: number;
+    details: Array<{
+      dotNumber: string;
+      carrierName: string;
+      status: 'synced' | 'new' | 'error';
+      message?: string;
+    }>;
+  }> {
+    // Default to last 7 days if no date range provided
+    const endDate = toDate || new Date();
+    const startDate = fromDate || new Date(Date.now() - 7 * 24 * 60 * 60 * 1000);
+
+    console.log(`Checking completed packets from ${startDate.toISOString()} to ${endDate.toISOString()}`);
+
+    const results = {
+      checked: 0,
+      synced: 0,
+      newPackets: 0,
+      errors: 0,
+      details: [] as Array<{
+        dotNumber: string;
+        carrierName: string;
+        status: 'synced' | 'new' | 'error';
+        message?: string;
+      }>
+    };
+
+    try {
+      const { packets } = await this.getCompletedPackets(startDate, endDate);
+      results.checked = packets.length;
+
+      for (const packet of packets) {
+        try {
+          const dotNumber = packet.dotNumber;
+          
+          if (!dotNumber) {
+            results.errors++;
+            results.details.push({
+              dotNumber: 'unknown',
+              carrierName: packet.carrierName,
+              status: 'error',
+              message: 'Missing DOT number'
+            });
+            continue;
+          }
+
+          // Check if carrier exists in our database
+          const existingCarrier = await prisma.carrier.findFirst({
+            where: { dotNumber }
+          });
+
+          if (existingCarrier) {
+            // Update existing carrier with packet completion
+            const mappedData = this.mapCarrierData(packet.packetData);
+            
+            await prisma.carrier.update({
+              where: { id: existingCarrier.id },
+              data: {
+                mcpPacketCompleted: true,
+                mcpPacketCompletedAt: packet.completedAt,
+                mcpLastSync: new Date(),
+                // Update other fields from packet data
+                name: mappedData.name || existingCarrier.name,
+                dbaName: mappedData.dbaName || existingCarrier.dbaName,
+                mcpInsuranceExpiration: mappedData.mcpInsuranceExpiration,
+                mcpAuthorityStatus: mappedData.mcpAuthorityStatus,
+                mcpRiskScore: mappedData.mcpRiskScore,
+                mcpSafetyRating: mappedData.safetyRating
+              }
+            });
+
+            // Try to download documents if available
+            if (packet.packetData) {
+              try {
+                await this.downloadCarrierDocuments(existingCarrier.id, packet.packetData);
+              } catch (docError) {
+                console.error(`Failed to download documents for carrier ${existingCarrier.id}:`, docError);
+              }
+            }
+
+            results.synced++;
+            results.details.push({
+              dotNumber,
+              carrierName: packet.carrierName,
+              status: 'synced',
+              message: `Packet completed on ${packet.completedAt.toLocaleDateString()}`
+            });
+          } else {
+            // New carrier packet - log for manual review
+            results.newPackets++;
+            results.details.push({
+              dotNumber,
+              carrierName: packet.carrierName,
+              status: 'new',
+              message: 'Carrier not found in database - manual review needed'
+            });
+          }
+        } catch (error) {
+          results.errors++;
+          results.details.push({
+            dotNumber: packet.dotNumber,
+            carrierName: packet.carrierName,
+            status: 'error',
+            message: error instanceof Error ? error.message : 'Unknown error'
+          });
+        }
+      }
+
+      console.log(`Completed packets check finished. Checked: ${results.checked}, Synced: ${results.synced}, New: ${results.newPackets}, Errors: ${results.errors}`);
+      return results;
+    } catch (error) {
+      console.error('Failed to check completed packets:', error);
+      throw error;
+    }
   }
 
   /**
@@ -305,6 +469,8 @@ export class MyCarrierPacketsService {
     pageNumber = 1,
     pageSize = 2500
   ): Promise<{ carriers: any[]; pagination: any }> {
+    await this.authenticate(); // Ensure we have a valid token
+    
     const params = new URLSearchParams({
       pageNumber: pageNumber.toString(),
       pageSize: pageSize.toString()
@@ -387,17 +553,67 @@ export class MyCarrierPacketsService {
   /**
    * Get document (insurance, W9, etc.)
    */
-  async getDocument(blobName: string): Promise<Buffer> {
-    const response = await this.apiClient.post(
-      `/api/v1/Carrier/GetDocument?name=${blobName}`,
-      {},
-      {
-        headers: { Authorization: `Bearer ${this.accessToken}` },
-        responseType: 'arraybuffer'
-      }
-    );
+  async getDocument(blobName: string): Promise<{
+    buffer: Buffer;
+    contentType: string;
+    fileName: string;
+  }> {
+    try {
+      await this.authenticate();
+      
+      const response = await this.apiClient.post(
+        `/api/v1/Carrier/GetDocument?name=${encodeURIComponent(blobName)}`,
+        {},
+        {
+          headers: { Authorization: `Bearer ${this.accessToken}` },
+          responseType: 'arraybuffer'
+        }
+      );
 
-    return Buffer.from(response.data);
+      // Extract content type from headers
+      const contentType = response.headers['content-type'] || 'application/octet-stream';
+      
+      // Try to determine file extension from content type or blob name
+      let fileName = blobName;
+      if (blobName.indexOf('.') === -1) {
+        // No extension in blob name, try to determine from content type
+        const extension = this.getFileExtensionFromContentType(contentType);
+        fileName = `${blobName}${extension}`;
+      }
+
+      return {
+        buffer: Buffer.from(response.data),
+        contentType,
+        fileName
+      };
+    } catch (error) {
+      console.error(`Failed to download document ${blobName}:`, error);
+      throw new MCPError(
+        error instanceof MCPError ? error.statusCode : 500,
+        `Failed to download document: ${blobName}`,
+        error
+      );
+    }
+  }
+
+  /**
+   * Helper to determine file extension from content type
+   */
+  private getFileExtensionFromContentType(contentType: string): string {
+    const mimeToExt: { [key: string]: string } = {
+      'application/pdf': '.pdf',
+      'image/jpeg': '.jpg',
+      'image/png': '.png',
+      'image/gif': '.gif',
+      'application/msword': '.doc',
+      'application/vnd.openxmlformats-officedocument.wordprocessingml.document': '.docx',
+      'application/vnd.ms-excel': '.xls',
+      'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet': '.xlsx',
+      'text/plain': '.txt',
+      'application/octet-stream': ''
+    };
+    
+    return mimeToExt[contentType.toLowerCase()] || '';
   }
 
   /**
@@ -406,42 +622,182 @@ export class MyCarrierPacketsService {
   async downloadCarrierDocuments(
     carrierId: number,
     mcpData: MCPCarrierData
-  ): Promise<{ insurance?: string; w9?: string; agreement?: string }> {
-    const uploadDir = path.join(process.cwd(), 'uploads', 'documents', 'mcp');
+  ): Promise<{
+    downloaded: number;
+    failed: number;
+    documents: Array<{
+      type: string;
+      fileName: string;
+      status: 'success' | 'failed';
+      error?: string;
+    }>;
+  }> {
+    const uploadDir = path.join(process.cwd(), 'uploads', 'documents', 'mcp', carrierId.toString());
     await fs.mkdir(uploadDir, { recursive: true });
 
-    const documents: { insurance?: string; w9?: string; agreement?: string } = {};
+    const results = {
+      downloaded: 0,
+      failed: 0,
+      documents: [] as Array<{
+        type: string;
+        fileName: string;
+        status: 'success' | 'failed';
+        error?: string;
+      }>
+    };
 
-    // Download insurance certificate if available
-    if (mcpData.Insurance?.BlobName) {
+    // Helper function to download and save a document
+    const downloadAndSaveDocument = async (
+      blobName: string,
+      documentType: string,
+      displayName: string
+    ) => {
       try {
-        const insuranceDoc = await this.getDocument(mcpData.Insurance.BlobName);
-        const filename = `insurance_${carrierId}_${Date.now()}.pdf`;
-        const filePath = path.join(uploadDir, filename);
+        const { buffer, fileName } = await this.getDocument(blobName);
+        const timestamp = Date.now();
+        const safeFileName = fileName.replace(/[^a-z0-9.-]/gi, '_');
+        const localFileName = `${documentType.toLowerCase()}_${timestamp}_${safeFileName}`;
+        const filePath = path.join(uploadDir, localFileName);
         
-        await fs.writeFile(filePath, insuranceDoc);
-        documents.insurance = filePath;
+        await fs.writeFile(filePath, buffer);
 
-        // Save to database
-        await prisma.carrierDocument.create({
-          data: {
+        // Check if document already exists in database
+        const existingDoc = await prisma.carrierDocument.findFirst({
+          where: {
             carrierId,
-            documentType: 'MCP_INSURANCE',
-            filename: 'Insurance_Certificate.pdf',
-            filePath
+            documentType,
+            filename: displayName
           }
         });
 
-        console.log(`Downloaded insurance certificate for carrier ${carrierId}`);
+        if (!existingDoc) {
+          // Save to database
+          await prisma.carrierDocument.create({
+            data: {
+              carrierId,
+              documentType,
+              filename: displayName,
+              filePath
+            }
+          });
+        } else {
+          // Update existing document
+          await prisma.carrierDocument.update({
+            where: { id: existingDoc.id },
+            data: {
+              filePath,
+              uploadedAt: new Date()
+            }
+          });
+        }
+
+        results.downloaded++;
+        results.documents.push({
+          type: documentType,
+          fileName: displayName,
+          status: 'success'
+        });
+
+        console.log(`Downloaded ${documentType} for carrier ${carrierId}: ${fileName}`);
       } catch (error) {
-        console.error('Failed to download insurance document:', error);
+        results.failed++;
+        results.documents.push({
+          type: documentType,
+          fileName: displayName,
+          status: 'failed',
+          error: error instanceof Error ? error.message : 'Unknown error'
+        });
+        console.error(`Failed to download ${documentType} for carrier ${carrierId}:`, error);
+      }
+    };
+
+    // Download insurance certificate
+    if (mcpData.Insurance?.BlobName) {
+      await downloadAndSaveDocument(
+        mcpData.Insurance.BlobName,
+        'MCP_INSURANCE',
+        'Insurance Certificate'
+      );
+    }
+
+    // Download W9
+    if (mcpData.W9?.BlobName) {
+      await downloadAndSaveDocument(
+        mcpData.W9.BlobName,
+        'MCP_W9',
+        'W9 Tax Form'
+      );
+    }
+
+    // Download Operating Agreement
+    if (mcpData.OperatingAgreement?.BlobName) {
+      await downloadAndSaveDocument(
+        mcpData.OperatingAgreement.BlobName,
+        'MCP_OPERATING_AGREEMENT',
+        'Operating Agreement'
+      );
+    }
+
+    // Download other documents
+    if (mcpData.Documents && Array.isArray(mcpData.Documents)) {
+      for (const doc of mcpData.Documents) {
+        if (doc.BlobName) {
+          const docType = doc.DocumentType || 'OTHER';
+          const fileName = doc.FileName || doc.BlobName;
+          await downloadAndSaveDocument(
+            doc.BlobName,
+            `MCP_${docType.toUpperCase().replace(/\s+/g, '_')}`,
+            fileName
+          );
+        }
       }
     }
 
-    // Add logic for W9 and agreement documents if available in MCP data
-    // This would depend on the actual MCP API response structure
+    console.log(`Document download summary for carrier ${carrierId}: Downloaded ${results.downloaded}, Failed ${results.failed}`);
+    return results;
+  }
 
-    return documents;
+  /**
+   * Sync all documents for a specific carrier
+   */
+  async syncCarrierDocuments(carrierId: number, dotNumber: string, mcNumber?: string): Promise<{
+    success: boolean;
+    downloaded: number;
+    failed: number;
+    documents: Array<{
+      type: string;
+      fileName: string;
+      status: 'success' | 'failed';
+      error?: string;
+    }>;
+  }> {
+    try {
+      console.log(`Syncing documents for carrier ${carrierId} (DOT: ${dotNumber})`);
+      
+      // Get carrier data from MCP
+      const mcpData = await this.getCarrierData(dotNumber, mcNumber);
+      
+      // Download all available documents
+      const results = await this.downloadCarrierDocuments(carrierId, mcpData._rawMcpData || {});
+      
+      return {
+        success: true,
+        ...results
+      };
+    } catch (error) {
+      console.error(`Failed to sync documents for carrier ${carrierId}:`, error);
+      return {
+        success: false,
+        downloaded: 0,
+        failed: 0,
+        documents: [{
+          type: 'ERROR',
+          fileName: 'N/A',
+          status: 'failed',
+          error: error instanceof Error ? error.message : 'Unknown error'
+        }]
+      };
+    }
   }
 
   /**
@@ -528,6 +884,242 @@ export class MyCarrierPacketsService {
     }
     
     return url;
+  }
+
+  /**
+   * Request insurance certificate from carrier
+   * This sends a request to the carrier to upload their insurance certificate
+   */
+  async requestInsuranceCertificate(
+    dotNumber: string, 
+    docketNumber?: string,
+    recipientEmail?: string,
+    notes?: string
+  ): Promise<{
+    success: boolean;
+    message: string;
+    requestUrl: string;
+    requestId?: string;
+  }> {
+    try {
+      console.log(`Requesting insurance certificate for DOT: ${dotNumber}`);
+      
+      // Generate the request URL
+      const requestUrl = this.generateCarrierViewUrl(dotNumber, docketNumber, true);
+      
+      // Log the insurance request in our database
+      const carrier = await prisma.carrier.findFirst({
+        where: { dotNumber }
+      });
+      
+      if (carrier) {
+        // Log the request (you can add a table for this later if needed)
+        console.log(`Insurance request logged for carrier ${carrier.id} (${carrier.name})`);
+        
+        // Update carrier record to track last sync
+        await prisma.carrier.update({
+          where: { id: carrier.id },
+          data: {
+            mcpLastSync: new Date()
+          }
+        });
+      }
+      
+      // If email is provided, we could send a notification
+      if (recipientEmail && carrier?.email) {
+        try {
+          const { sendEmail } = await import('../services/notification.service');
+          const emailContent = `
+            <div style="font-family: Arial, sans-serif; max-width: 600px; margin: 0 auto;">
+              <h2 style="color: #333;">Insurance Certificate Request</h2>
+              
+              <p>Dear ${carrier.contactPerson || carrier.name},</p>
+              
+              <p>We are requesting an updated certificate of insurance for your records with CrossCountry Freight Solutions.</p>
+              
+              <div style="background-color: #f8f9fa; padding: 20px; border-radius: 5px; margin: 20px 0;">
+                <p style="margin: 0;"><strong>Please click the link below to upload your current insurance certificate:</strong></p>
+                <div style="margin: 20px 0; text-align: center;">
+                  <a href="${requestUrl}" 
+                     style="background-color: #007bff; color: white; padding: 12px 30px; text-decoration: none; border-radius: 5px; display: inline-block;">
+                    Upload Insurance Certificate
+                  </a>
+                </div>
+              </div>
+              
+              ${notes ? `<p><strong>Additional Notes:</strong> ${notes}</p>` : ''}
+              
+              <p>Please ensure your insurance certificate includes:</p>
+              <ul>
+                <li>Current effective dates</li>
+                <li>Liability coverage limits</li>
+                <li>Cargo coverage limits</li>
+                <li>CrossCountry Freight Solutions listed as certificate holder</li>
+              </ul>
+              
+              <p>If you have any questions, please contact us at (800) 521-0287.</p>
+              
+              <hr style="border: none; border-top: 1px solid #eee; margin: 30px 0;">
+              
+              <p style="color: #999; font-size: 12px;">
+                This is an automated request from CrossCountry Freight Solutions.
+              </p>
+            </div>
+          `;
+          
+          await sendEmail({
+            to: carrier.email,
+            subject: 'Insurance Certificate Request - CrossCountry Freight Solutions',
+            html: emailContent
+          });
+          
+          console.log(`Insurance request email sent to ${carrier.email}`);
+        } catch (emailError) {
+          console.error('Failed to send insurance request email:', emailError);
+          // Continue - email failure shouldn't stop the request
+        }
+      }
+      
+      return {
+        success: true,
+        message: 'Insurance certificate request generated successfully',
+        requestUrl,
+        requestId: carrier?.id?.toString()
+      };
+    } catch (error) {
+      console.error('Failed to request insurance certificate:', error);
+      throw new MCPError(
+        500, 
+        'Failed to request insurance certificate',
+        error
+      );
+    }
+  }
+
+  /**
+   * Batch update carriers from MCP MonitoredCarrierData endpoint
+   * This method fetches all monitored carriers and updates local database
+   */
+  async batchUpdateCarriers(): Promise<{
+    processed: number;
+    updated: number;
+    errors: number;
+    details: Array<{dotNumber: string; status: 'updated' | 'error'; message?: string}>
+  }> {
+    console.log('Starting batch carrier update from MCP...');
+    
+    const results = {
+      processed: 0,
+      updated: 0,
+      errors: 0,
+      details: [] as Array<{dotNumber: string; status: 'updated' | 'error'; message?: string}>
+    };
+
+    try {
+      let pageNumber = 1;
+      let hasMorePages = true;
+      const pageSize = 500; // Max allowed by API
+
+      while (hasMorePages) {
+        console.log(`Fetching page ${pageNumber} of carriers...`);
+        
+        const { carriers, pagination } = await this.getMonitoredCarrierData(pageNumber, pageSize);
+        
+        // Process each carrier
+        for (const mcpCarrier of carriers) {
+          results.processed++;
+          
+          try {
+            const dotNumber = mcpCarrier.DOTNumber?.toString() || '';
+            
+            if (!dotNumber) {
+              results.errors++;
+              results.details.push({
+                dotNumber: 'unknown',
+                status: 'error',
+                message: 'Missing DOT number'
+              });
+              continue;
+            }
+
+            // Map the carrier data
+            const mappedData = this.mapCarrierData(mcpCarrier);
+
+            // Update carrier in database
+            const existingCarrier = await prisma.carrier.findFirst({
+              where: { dotNumber }
+            });
+
+            if (existingCarrier) {
+              // Update existing carrier
+              await prisma.carrier.update({
+                where: { id: existingCarrier.id },
+                data: {
+                  name: mappedData.name,
+                  dbaName: mappedData.dbaName,
+                  mcNumber: mappedData.mcNumber,
+                  scacCode: mappedData.scacCode,
+                  streetAddress1: mappedData.streetAddress1,
+                  streetAddress2: mappedData.streetAddress2,
+                  city: mappedData.city,
+                  state: mappedData.state,
+                  zipCode: mappedData.zipCode,
+                  phone: mappedData.phone,
+                  email: mappedData.email,
+                  emergencyPhone: mappedData.emergencyPhone,
+                  fleetSize: mappedData.fleetSize,
+                  totalPowerUnits: mappedData.totalPowerUnits,
+                  safetyRating: mappedData.safetyRating,
+                  mcpAuthorityStatus: mappedData.mcpAuthorityStatus,
+                  mcpRiskScore: mappedData.mcpRiskScore,
+                  mcpInsuranceExpiration: mappedData.mcpInsuranceExpiration,
+                  mcpPacketCompleted: mappedData.mcpPacketCompleted,
+                  mcpPacketCompletedAt: mappedData.mcpPacketCompletedAt,
+                  mcpLastSync: new Date()
+                }
+              });
+
+              // Download updated documents if insurance info changed
+              if (mcpCarrier.Insurance?.BlobName && 
+                  (!existingCarrier.mcpInsuranceExpiration || 
+                   existingCarrier.mcpInsuranceExpiration.getTime() !== mappedData.mcpInsuranceExpiration?.getTime())) {
+                await this.downloadCarrierDocuments(existingCarrier.id, mcpCarrier);
+              }
+
+              results.updated++;
+              results.details.push({
+                dotNumber,
+                status: 'updated'
+              });
+            } else {
+              // Skip carriers not in our system
+              console.log(`Carrier ${dotNumber} not found in local database, skipping...`);
+            }
+          } catch (error) {
+            results.errors++;
+            results.details.push({
+              dotNumber: mcpCarrier.DOTNumber?.toString() || 'unknown',
+              status: 'error',
+              message: error instanceof Error ? error.message : 'Unknown error'
+            });
+            console.error(`Error processing carrier ${mcpCarrier.DOTNumber}:`, error);
+          }
+        }
+
+        // Check if there are more pages
+        if (pagination && pagination.totalPages && pagination.totalPages > pageNumber) {
+          pageNumber++;
+        } else {
+          hasMorePages = false;
+        }
+      }
+
+      console.log(`Batch update completed. Processed: ${results.processed}, Updated: ${results.updated}, Errors: ${results.errors}`);
+      return results;
+    } catch (error) {
+      console.error('Batch update failed:', error);
+      throw error;
+    }
   }
 }
 

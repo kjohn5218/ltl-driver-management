@@ -1,8 +1,12 @@
 import React, { useState, useEffect } from 'react';
 import { useQuery, useQueryClient, useMutation } from '@tanstack/react-query';
 import { api } from '../services/api';
-import { Carrier } from '../types';
-import { Plus, Search, Edit, Eye, Trash2, MapPin, Phone, Mail, ExternalLink, X, Send, FileText, Download, Bell, Upload } from 'lucide-react';
+import { Carrier, CarrierStatus } from '../types';
+import { Plus, Search, Edit, Trash2, ExternalLink, X, Send, FileText, Download, Bell, Upload, LayoutGrid, List, RefreshCw, Shield } from 'lucide-react';
+import { CarrierCard } from '../components/carriers/CarrierCard';
+import { CarrierList } from '../components/carriers/CarrierList';
+import { MCPStatus } from '../components/carriers/mcp/MCPStatus';
+import { carrierService } from '../services/carrierService';
 
 interface CarrierAgreement {
   id: number;
@@ -30,6 +34,13 @@ export const Carriers: React.FC = () => {
   const [showAddCarrierModal, setShowAddCarrierModal] = useState(false);
   const [showInviteModal, setShowInviteModal] = useState(false);
   const [showResendModal, setShowResendModal] = useState(false);
+  const [viewMode, setViewMode] = useState<'grid' | 'list'>('grid');
+  const [isSyncing, setIsSyncing] = useState(false);
+  const [showBatchUpdateModal, setShowBatchUpdateModal] = useState(false);
+  const [batchUpdateResult, setBatchUpdateResult] = useState<any>(null);
+  const [showCompletedPacketsModal, setShowCompletedPacketsModal] = useState(false);
+  const [completedPacketsResult, setCompletedPacketsResult] = useState<any>(null);
+  const [isCheckingPackets, setIsCheckingPackets] = useState(false);
 
   // Fetch invitations data
   const { data: invitationsData } = useQuery({
@@ -51,11 +62,70 @@ export const Carriers: React.FC = () => {
   const carriers = carriersData?.carriers || [];
 
   // Count pending registrations
-  const pendingRegistrations = carriers.filter(carrier => 
+  const pendingRegistrations = carriers.filter((carrier: Carrier) => 
     carrier.status === 'PENDING' && !carrier.onboardingComplete
   ).length;
 
-  const filteredCarriers = carriers?.filter(carrier => {
+  // Sync monitored carriers function
+  const syncMonitoredCarriers = async () => {
+    setIsSyncing(true);
+    try {
+      const result = await carrierService.syncMonitoredCarriers();
+      queryClient.invalidateQueries({ queryKey: ['carriers'] });
+      alert(`Successfully synced ${result.carriers?.length || 0} monitored carriers from MyCarrierPackets`);
+    } catch (error) {
+      console.error('Failed to sync monitored carriers:', error);
+      alert('Failed to sync monitored carriers. Please try again.');
+    } finally {
+      setIsSyncing(false);
+    }
+  };
+
+  // Batch update carriers from MCP
+  const batchUpdateCarriers = async () => {
+    setIsSyncing(true);
+    setBatchUpdateResult(null);
+    setShowBatchUpdateModal(true);
+    
+    try {
+      const result = await carrierService.batchUpdateCarriers();
+      setBatchUpdateResult(result);
+      queryClient.invalidateQueries({ queryKey: ['carriers'] });
+    } catch (error: any) {
+      console.error('Batch update failed:', error);
+      setBatchUpdateResult({
+        success: false,
+        error: error.response?.data?.message || 'Failed to batch update carriers'
+      });
+    } finally {
+      setIsSyncing(false);
+    }
+  };
+
+  // Check completed packets
+  const checkCompletedPackets = async (sync: boolean = false) => {
+    setIsCheckingPackets(true);
+    setCompletedPacketsResult(null);
+    setShowCompletedPacketsModal(true);
+    
+    try {
+      const result = await carrierService.checkCompletedPackets({ sync });
+      setCompletedPacketsResult(result);
+      if (sync && result.success) {
+        queryClient.invalidateQueries({ queryKey: ['carriers'] });
+      }
+    } catch (error: any) {
+      console.error('Check completed packets failed:', error);
+      setCompletedPacketsResult({
+        success: false,
+        error: error.response?.data?.message || 'Failed to check completed packets'
+      });
+    } finally {
+      setIsCheckingPackets(false);
+    }
+  };
+
+  const filteredCarriers = carriers?.filter((carrier: Carrier) => {
     const matchesSearch = carrier.name.toLowerCase().includes(searchTerm.toLowerCase()) ||
       (carrier.mcNumber && carrier.mcNumber.includes(searchTerm)) ||
       (carrier.dotNumber && carrier.dotNumber.includes(searchTerm)) ||
@@ -68,19 +138,7 @@ export const Carriers: React.FC = () => {
   }) || [];
 
   // Get unique states for filter
-  const uniqueStates = [...new Set(carriers.filter(c => c.state).map(c => c.state))].sort();
-
-  const getStatusBadge = (status: string) => {
-    const statusColors = {
-      ACTIVE: 'bg-green-100 text-green-800',
-      PENDING: 'bg-yellow-100 text-yellow-800',
-      INACTIVE: 'bg-gray-100 text-gray-800',
-      SUSPENDED: 'bg-red-100 text-red-800',
-      ONBOARDED: 'bg-blue-100 text-blue-800',
-      NOT_ONBOARDED: 'bg-orange-100 text-orange-800'
-    };
-    return statusColors[status as keyof typeof statusColors] || 'bg-gray-100 text-gray-800';
-  };
+  const uniqueStates: string[] = [...new Set(carriers.filter((c: Carrier) => c.state).map((c: Carrier) => c.state as string))].sort();
 
   if (isLoading) {
     return (
@@ -114,6 +172,59 @@ export const Carriers: React.FC = () => {
           >
             <Send className="w-4 h-4 mr-2" />
             Send Invitation
+          </button>
+          <button 
+            className={`inline-flex items-center px-4 py-2 bg-purple-100 text-purple-700 rounded-md hover:bg-purple-200 transition-colors border border-purple-300 ${isSyncing ? 'opacity-50 cursor-not-allowed' : ''}`}
+            onClick={syncMonitoredCarriers}
+            disabled={isSyncing}
+          >
+            {isSyncing ? (
+              <>
+                <RefreshCw className="w-4 h-4 mr-2 animate-spin" />
+                Syncing...
+              </>
+            ) : (
+              <>
+                <Shield className="w-4 h-4 mr-2" />
+                Sync MCP Monitoring
+              </>
+            )}
+          </button>
+          <button 
+            className={`inline-flex items-center px-4 py-2 bg-indigo-100 text-indigo-700 rounded-md hover:bg-indigo-200 transition-colors border border-indigo-300 ${isSyncing ? 'opacity-50 cursor-not-allowed' : ''}`}
+            onClick={batchUpdateCarriers}
+            disabled={isSyncing}
+            title="Batch update all carrier data from MyCarrierPackets"
+          >
+            {isSyncing ? (
+              <>
+                <RefreshCw className="w-4 h-4 mr-2 animate-spin" />
+                Updating...
+              </>
+            ) : (
+              <>
+                <RefreshCw className="w-4 h-4 mr-2" />
+                Batch Update MCP
+              </>
+            )}
+          </button>
+          <button 
+            className={`inline-flex items-center px-4 py-2 bg-green-100 text-green-700 rounded-md hover:bg-green-200 transition-colors border border-green-300 ${isCheckingPackets ? 'opacity-50 cursor-not-allowed' : ''}`}
+            onClick={() => checkCompletedPackets(false)}
+            disabled={isCheckingPackets}
+            title="Check for recently completed carrier packets"
+          >
+            {isCheckingPackets ? (
+              <>
+                <RefreshCw className="w-4 h-4 mr-2 animate-spin" />
+                Checking...
+              </>
+            ) : (
+              <>
+                <FileText className="w-4 h-4 mr-2" />
+                Check Completed Packets
+              </>
+            )}
           </button>
           <button 
             className="btn-primary flex items-center gap-2"
@@ -195,129 +306,91 @@ export const Carriers: React.FC = () => {
         </div>
       )}
 
-      {/* Filters */}
-      <div className="flex gap-4 mb-6">
-        <div className="flex-1 relative">
-          <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 text-gray-400 w-4 h-4" />
-          <input
-            type="text"
-            placeholder="Search by name, MC#, DOT#, or city..."
-            className="w-full pl-10 pr-4 py-2 border border-gray-300 rounded-md focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
-            value={searchTerm}
-            onChange={(e) => setSearchTerm(e.target.value)}
-          />
-        </div>
-        <select
-          className="px-3 py-2 border border-gray-300 rounded-md focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
-          value={statusFilter}
-          onChange={(e) => setStatusFilter(e.target.value)}
-        >
-          <option value="">All Statuses</option>
-          <option value="ONBOARDED">Onboarded</option>
-          <option value="NOT_ONBOARDED">Not Onboarded</option>
-          <option value="ACTIVE">Active</option>
-          <option value="PENDING">Pending</option>
-          <option value="INACTIVE">Inactive</option>
-          <option value="SUSPENDED">Suspended</option>
-        </select>
-        <select
-          className="px-3 py-2 border border-gray-300 rounded-md focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
-          value={stateFilter}
-          onChange={(e) => setStateFilter(e.target.value)}
-        >
-          <option value="">All States</option>
-          {uniqueStates.map(state => (
-            <option key={state} value={state}>{state}</option>
-          ))}
-        </select>
-      </div>
-
-      {/* Carriers Grid */}
-      <div className="grid grid-cols-1 sm:grid-cols-2 xl:grid-cols-3 gap-4 lg:gap-6">
-        {filteredCarriers.map((carrier) => (
-          <div key={carrier.id} className="bg-white rounded-lg shadow-md border border-gray-200 p-6">
-            <div className="flex justify-between items-start mb-4">
-              <div>
-                <h3 className="text-lg font-semibold text-gray-900">{carrier.name}</h3>
-                <span className={`inline-block px-2 py-1 rounded-full text-xs font-medium ${getStatusBadge(carrier.status)}`}>
-                  {carrier.status}
-                </span>
-              </div>
-              <div className="flex gap-1">
-                <button 
-                  className="p-1 text-gray-500 hover:text-blue-600"
-                  onClick={() => setViewingCarrier(carrier)}
-                  title="View Details"
-                >
-                  <Eye className="w-4 h-4" />
-                </button>
-                <button 
-                  className="p-1 text-gray-500 hover:text-red-600"
-                  onClick={() => setDeletingCarrier(carrier)}
-                  title="Delete Carrier"
-                >
-                  <Trash2 className="w-4 h-4" />
-                </button>
-              </div>
-            </div>
-
-            <div className="space-y-2 text-sm text-gray-600">
-              {(carrier.city || carrier.state) && (
-                <div className="flex items-center gap-2">
-                  <MapPin className="w-4 h-4" />
-                  <span>{carrier.city}{carrier.city && carrier.state && ', '}{carrier.state}</span>
-                </div>
-              )}
-              {carrier.phone && (
-                <div className="flex items-center gap-2">
-                  <Phone className="w-4 h-4" />
-                  <span>{carrier.phone}</span>
-                </div>
-              )}
-              {carrier.email && (
-                <div className="flex items-center gap-2">
-                  <Mail className="w-4 h-4" />
-                  <span className="truncate">{carrier.email}</span>
-                </div>
-              )}
-            </div>
-
-            <div className="mt-4 pt-4 border-t border-gray-200">
-              <div className="flex justify-between text-sm">
-                <span className="text-gray-500">MC #:</span>
-                <span className="font-medium">{carrier.mcNumber || 'N/A'}</span>
-              </div>
-              <div className="flex justify-between text-sm mt-1">
-                <span className="text-gray-500">DOT #:</span>
-                <span className="font-medium">{carrier.dotNumber || 'N/A'}</span>
-              </div>
-              {carrier.safetyRating && (
-                <div className="flex justify-between text-sm mt-1">
-                  <span className="text-gray-500">Safety:</span>
-                  <span className={`font-medium ${
-                    carrier.safetyRating === 'Acceptable' ? 'text-green-600' : 
-                    carrier.safetyRating === 'Unacceptable' ? 'text-red-600' : 
-                    'text-yellow-600'
-                  }`}>
-                    {carrier.safetyRating}
-                  </span>
-                </div>
-              )}
-              {(carrier.mcNumber || carrier.dotNumber) && (
-                <div className="mt-3">
-                  <button
-                    onClick={() => window.open('https://safer.fmcsa.dot.gov/CompanySnapshot.aspx', '_blank')}
-                    className="w-full text-center text-xs bg-blue-50 text-blue-700 px-3 py-2 rounded hover:bg-blue-100 transition-colors flex items-center justify-center gap-2"
-                  >
-                    <ExternalLink className="w-3 h-3" />
-                    View FMCSA Co.Snapshot
-                  </button>
-                </div>
-              )}
-            </div>
+      {/* Filters and View Toggle */}
+      <div className="mb-6">
+        <div className="flex gap-4 mb-4">
+          <div className="flex-1 relative">
+            <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 text-gray-400 w-4 h-4" />
+            <input
+              type="text"
+              placeholder="Search by name, MC#, DOT#, or city..."
+              className="w-full pl-10 pr-4 py-2 border border-gray-300 rounded-md focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
+              value={searchTerm}
+              onChange={(e) => setSearchTerm(e.target.value)}
+            />
           </div>
-        ))}
+          <select
+            className="px-3 py-2 border border-gray-300 rounded-md focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
+            value={statusFilter}
+            onChange={(e) => setStatusFilter(e.target.value)}
+          >
+            <option value="">All Statuses</option>
+            <option value="ONBOARDED">Onboarded</option>
+            <option value="NOT_ONBOARDED">Not Onboarded</option>
+            <option value="ACTIVE">Active</option>
+            <option value="PENDING">Pending</option>
+            <option value="INACTIVE">Inactive</option>
+            <option value="SUSPENDED">Suspended</option>
+          </select>
+          <select
+            className="px-3 py-2 border border-gray-300 rounded-md focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
+            value={stateFilter}
+            onChange={(e) => setStateFilter(e.target.value)}
+          >
+            <option value="">All States</option>
+            {uniqueStates.map((state) => (
+              <option key={state} value={state}>{state}</option>
+            ))}
+          </select>
+          {/* View Toggle */}
+          <div className="flex rounded-md shadow-sm">
+            <button
+              type="button"
+              onClick={() => setViewMode('grid')}
+              className={`relative inline-flex items-center px-3 py-2 rounded-l-md border ${
+                viewMode === 'grid'
+                  ? 'bg-blue-600 text-white border-blue-600'
+                  : 'bg-white text-gray-700 border-gray-300 hover:bg-gray-50'
+              }`}
+              title="Grid View"
+            >
+              <LayoutGrid className="w-4 h-4" />
+            </button>
+            <button
+              type="button"
+              onClick={() => setViewMode('list')}
+              className={`relative inline-flex items-center px-3 py-2 rounded-r-md border-l-0 border ${
+                viewMode === 'list'
+                  ? 'bg-blue-600 text-white border-blue-600'
+                  : 'bg-white text-gray-700 border-gray-300 hover:bg-gray-50'
+              }`}
+              title="List View"
+            >
+              <List className="w-4 h-4" />
+            </button>
+          </div>
+        </div>
       </div>
+
+      {/* Carriers Display */}
+      {viewMode === 'grid' ? (
+        <div className="grid grid-cols-1 sm:grid-cols-2 xl:grid-cols-3 gap-4 lg:gap-6">
+          {filteredCarriers.map((carrier: Carrier) => (
+            <CarrierCard
+              key={carrier.id}
+              carrier={carrier}
+              onView={() => setViewingCarrier(carrier)}
+              onDelete={() => setDeletingCarrier(carrier)}
+            />
+          ))}
+        </div>
+      ) : (
+        <CarrierList
+          carriers={filteredCarriers}
+          onView={(carrier: Carrier) => setViewingCarrier(carrier)}
+          onDelete={(carrier: Carrier) => setDeletingCarrier(carrier)}
+        />
+      )}
 
       {filteredCarriers.length === 0 && (
         <div className="text-center py-12">
@@ -377,6 +450,28 @@ export const Carriers: React.FC = () => {
             setShowResendModal(false);
           }}
           invitations={invitationsData?.invitations || []}
+        />
+      )}
+
+      {/* Batch Update Modal */}
+      {showBatchUpdateModal && (
+        <BatchUpdateModal
+          onClose={() => setShowBatchUpdateModal(false)}
+          result={batchUpdateResult}
+          isLoading={isSyncing}
+        />
+      )}
+
+      {/* Completed Packets Modal */}
+      {showCompletedPacketsModal && (
+        <CompletedPacketsModal
+          onClose={() => setShowCompletedPacketsModal(false)}
+          result={completedPacketsResult}
+          isLoading={isCheckingPackets}
+          onSync={() => {
+            setShowCompletedPacketsModal(false);
+            checkCompletedPackets(true);
+          }}
         />
       )}
     </div>
@@ -1260,6 +1355,9 @@ const CarrierDetailsModal: React.FC<CarrierDetailsModalProps> = ({ carrier, onCl
   const [uploading, setUploading] = useState(false);
   const [isEditMode, setIsEditMode] = useState(false);
   const [isSubmitting, setIsSubmitting] = useState(false);
+  const [isSyncingDocuments, setIsSyncingDocuments] = useState(false);
+  const [syncDocumentsResult, setSyncDocumentsResult] = useState<any>(null);
+  const [showSyncResultModal, setShowSyncResultModal] = useState(false);
   const [formData, setFormData] = useState({
     name: carrier.name,
     contactPerson: carrier.contactPerson || '',
@@ -1435,6 +1533,52 @@ const CarrierDetailsModal: React.FC<CarrierDetailsModalProps> = ({ carrier, onCl
     }
   };
 
+  // Handle sync MCP documents
+  const handleSyncMCPDocuments = async () => {
+    if (!carrier.dotNumber) {
+      alert('Carrier must have a DOT number to sync documents from MyCarrierPackets');
+      return;
+    }
+
+    setIsSyncingDocuments(true);
+    setSyncDocumentsResult(null);
+
+    try {
+      const response = await carrierService.syncDocuments(carrier.id);
+      setSyncDocumentsResult(response);
+      setShowSyncResultModal(true);
+      
+      // Refresh documents list to show new documents
+      const docsResponse = await api.get(`/carriers/${carrier.id}/documents`);
+      setDocuments(docsResponse.data);
+    } catch (error: any) {
+      console.error('Failed to sync documents:', error);
+      setSyncDocumentsResult({
+        success: false,
+        error: error.response?.data?.message || 'Failed to sync documents from MyCarrierPackets'
+      });
+      setShowSyncResultModal(true);
+    } finally {
+      setIsSyncingDocuments(false);
+    }
+  };
+
+  // Download MCP document
+  const downloadMCPDocument = async (doc: any) => {
+    try {
+      // Extract blob name from file path
+      const pathParts = doc.filePath.split('/');
+      const fileName = pathParts[pathParts.length - 1];
+      const blobName = fileName.split('_').slice(2).join('_');
+      
+      const url = carrierService.getMCPDocumentUrl(blobName, carrier.id);
+      window.open(url, '_blank');
+    } catch (error) {
+      console.error('Failed to download MCP document:', error);
+      alert('Failed to download document. Please try again.');
+    }
+  };
+
   const handleSave = async () => {
     setIsSubmitting(true);
     
@@ -1480,7 +1624,7 @@ const CarrierDetailsModal: React.FC<CarrierDetailsModalProps> = ({ carrier, onCl
         payload.insuranceExpiration = new Date(formData.insuranceExpiration).toISOString();
       }
       
-      const response = await api.put(`/carriers/${carrier.id}`, payload);
+      await api.put(`/carriers/${carrier.id}`, payload);
       
       // Update the carriers list
       queryClient.invalidateQueries({ queryKey: ['carriers'] });
@@ -1574,7 +1718,7 @@ const CarrierDetailsModal: React.FC<CarrierDetailsModalProps> = ({ carrier, onCl
               {isEditMode ? (
                 <select
                   value={formData.status}
-                  onChange={(e) => setFormData({...formData, status: e.target.value})}
+                  onChange={(e) => setFormData({...formData, status: e.target.value as CarrierStatus})}
                   className="w-full p-2 border rounded focus:ring-blue-500 focus:border-blue-500"
                 >
                   <option value="PENDING">PENDING</option>
@@ -1992,13 +2136,35 @@ const CarrierDetailsModal: React.FC<CarrierDetailsModalProps> = ({ carrier, onCl
           <div className="mb-4">
             <div className="flex justify-between items-center mb-3">
               <h3 className="text-lg font-medium text-gray-900">Uploaded Documents</h3>
-              <button
-                onClick={() => setShowUploadForm(true)}
-                className="flex items-center gap-1 px-3 py-1 text-sm bg-blue-600 text-white rounded hover:bg-blue-700"
-              >
-                <Upload className="w-4 h-4" />
-                Upload Document
-              </button>
+              <div className="flex gap-2">
+                {carrier.dotNumber && (
+                  <button
+                    onClick={handleSyncMCPDocuments}
+                    disabled={isSyncingDocuments}
+                    className="flex items-center gap-1 px-3 py-1 text-sm bg-purple-600 text-white rounded hover:bg-purple-700 disabled:bg-purple-400"
+                    title="Sync documents from MyCarrierPackets"
+                  >
+                    {isSyncingDocuments ? (
+                      <>
+                        <RefreshCw className="w-4 h-4 animate-spin" />
+                        Syncing...
+                      </>
+                    ) : (
+                      <>
+                        <RefreshCw className="w-4 h-4" />
+                        Sync MCP Docs
+                      </>
+                    )}
+                  </button>
+                )}
+                <button
+                  onClick={() => setShowUploadForm(true)}
+                  className="flex items-center gap-1 px-3 py-1 text-sm bg-blue-600 text-white rounded hover:bg-blue-700"
+                >
+                  <Upload className="w-4 h-4" />
+                  Upload Document
+                </button>
+              </div>
             </div>
             {loadingDocuments ? (
               <div className="flex items-center justify-center py-4">
@@ -2018,6 +2184,9 @@ const CarrierDetailsModal: React.FC<CarrierDetailsModalProps> = ({ carrier, onCl
                         <div className="flex items-center gap-2 mb-2">
                           <FileText className="w-4 h-4 text-blue-600" />
                           <h4 className="font-medium text-gray-900">{doc.filename}</h4>
+                          {doc.documentType.startsWith('MCP_') && (
+                            <span className="text-xs bg-purple-100 text-purple-700 px-2 py-1 rounded">MCP</span>
+                          )}
                         </div>
                         <div className="flex flex-wrap gap-4 text-xs text-gray-600">
                           <div>
@@ -2029,22 +2198,35 @@ const CarrierDetailsModal: React.FC<CarrierDetailsModalProps> = ({ carrier, onCl
                         </div>
                       </div>
                       <div className="flex gap-1 ml-4">
-                        <button
-                          onClick={() => downloadDocument(doc.id, doc.filename)}
-                          className="flex items-center gap-1 px-3 py-1 text-xs bg-blue-600 text-white rounded hover:bg-blue-700"
-                          title="Download Document"
-                        >
-                          <Download className="w-3 h-3" />
-                          Download
-                        </button>
-                        <button
-                          onClick={() => handleDeleteDocument(doc.id)}
-                          className="flex items-center gap-1 px-3 py-1 text-xs bg-red-600 text-white rounded hover:bg-red-700"
-                          title="Delete Document"
-                        >
-                          <Trash2 className="w-3 h-3" />
-                          Delete
-                        </button>
+                        {doc.documentType.startsWith('MCP_') ? (
+                          <button
+                            onClick={() => downloadMCPDocument(doc)}
+                            className="flex items-center gap-1 px-3 py-1 text-xs bg-purple-600 text-white rounded hover:bg-purple-700"
+                            title="Download from MCP"
+                          >
+                            <Download className="w-3 h-3" />
+                            Download
+                          </button>
+                        ) : (
+                          <>
+                            <button
+                              onClick={() => downloadDocument(doc.id, doc.filename)}
+                              className="flex items-center gap-1 px-3 py-1 text-xs bg-blue-600 text-white rounded hover:bg-blue-700"
+                              title="Download Document"
+                            >
+                              <Download className="w-3 h-3" />
+                              Download
+                            </button>
+                            <button
+                              onClick={() => handleDeleteDocument(doc.id)}
+                              className="flex items-center gap-1 px-3 py-1 text-xs bg-red-600 text-white rounded hover:bg-red-700"
+                              title="Delete Document"
+                            >
+                              <Trash2 className="w-3 h-3" />
+                              Delete
+                            </button>
+                          </>
+                        )}
                       </div>
                     </div>
                   </div>
@@ -2110,6 +2292,13 @@ const CarrierDetailsModal: React.FC<CarrierDetailsModalProps> = ({ carrier, onCl
           )}
         </div>
 
+        {/* MyCarrierPackets Status */}
+        {carrier.dotNumber && (
+          <div className="mt-6 pt-6 border-t">
+            <MCPStatus carrier={carrier} />
+          </div>
+        )}
+
         {/* Timestamps */}
         <div className="mt-6 pt-6 border-t">
           <div className="grid grid-cols-2 gap-4 text-xs text-gray-500">
@@ -2152,6 +2341,112 @@ const CarrierDetailsModal: React.FC<CarrierDetailsModalProps> = ({ carrier, onCl
           )}
         </div>
       </div>
+
+      {/* Sync Documents Result Modal */}
+      {showSyncResultModal && syncDocumentsResult && (
+        <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-[60]">
+          <div className="bg-white rounded-lg p-6 w-full max-w-md max-h-[80vh] overflow-y-auto">
+            <div className="flex justify-between items-center mb-4">
+              <h3 className="text-lg font-semibold text-gray-900">
+                {syncDocumentsResult.success ? 'Documents Synced' : 'Sync Failed'}
+              </h3>
+              <button
+                onClick={() => {
+                  setShowSyncResultModal(false);
+                  setSyncDocumentsResult(null);
+                }}
+                className="text-gray-400 hover:text-gray-500"
+              >
+                <X className="w-5 h-5" />
+              </button>
+            </div>
+
+            {syncDocumentsResult.success ? (
+              <>
+                <div className="mb-4">
+                  <p className="text-sm text-gray-600">
+                    Successfully synced documents for <strong>{syncDocumentsResult.carrier?.name}</strong>
+                  </p>
+                  {syncDocumentsResult.carrier?.dotNumber && (
+                    <p className="text-xs text-gray-500 mt-1">
+                      DOT: {syncDocumentsResult.carrier.dotNumber}
+                    </p>
+                  )}
+                </div>
+
+                {syncDocumentsResult.summary && (
+                  <div className="bg-gray-50 border border-gray-200 rounded-lg p-4 mb-4">
+                    <h4 className="font-medium text-gray-900 mb-2">Summary</h4>
+                    <div className="grid grid-cols-2 gap-2 text-sm">
+                      <div>
+                        <span className="text-gray-600">Downloaded:</span>
+                        <span className="ml-2 font-medium text-green-600">
+                          {syncDocumentsResult.summary.downloaded}
+                        </span>
+                      </div>
+                      <div>
+                        <span className="text-gray-600">Failed:</span>
+                        <span className="ml-2 font-medium text-red-600">
+                          {syncDocumentsResult.summary.failed}
+                        </span>
+                      </div>
+                    </div>
+                  </div>
+                )}
+
+                {syncDocumentsResult.documents && syncDocumentsResult.documents.length > 0 && (
+                  <div>
+                    <h4 className="font-medium text-gray-900 mb-2">Document Details</h4>
+                    <div className="space-y-2">
+                      {syncDocumentsResult.documents.map((doc: any, index: number) => (
+                        <div
+                          key={index}
+                          className={`text-sm p-2 rounded ${
+                            doc.status === 'success'
+                              ? 'bg-green-50 text-green-700'
+                              : 'bg-red-50 text-red-700'
+                          }`}
+                        >
+                          <div className="flex justify-between items-start">
+                            <div>
+                              <p className="font-medium">{doc.type}</p>
+                              <p className="text-xs">{doc.fileName}</p>
+                            </div>
+                            {doc.status === 'failed' && doc.error && (
+                              <p className="text-xs ml-2">{doc.error}</p>
+                            )}
+                          </div>
+                        </div>
+                      ))}
+                    </div>
+                  </div>
+                )}
+              </>
+            ) : (
+              <div className="text-center py-4">
+                <div className="mx-auto flex items-center justify-center h-12 w-12 rounded-full bg-red-100 mb-4">
+                  <X className="h-6 w-6 text-red-600" />
+                </div>
+                <p className="text-red-600">
+                  {syncDocumentsResult.error || 'Failed to sync documents'}
+                </p>
+              </div>
+            )}
+
+            <div className="flex justify-end mt-6">
+              <button
+                onClick={() => {
+                  setShowSyncResultModal(false);
+                  setSyncDocumentsResult(null);
+                }}
+                className="px-4 py-2 bg-gray-500 text-white rounded hover:bg-gray-600"
+              >
+                Close
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
     </div>
   );
 };
@@ -2504,6 +2799,371 @@ const InviteCarrierModal: React.FC<InviteCarrierModalProps> = ({ onClose, onSave
             </button>
           </div>
         </form>
+      </div>
+    </div>
+  );
+};
+
+// Batch Update Modal Component
+const BatchUpdateModal: React.FC<{
+  onClose: () => void;
+  result: any;
+  isLoading: boolean;
+}> = ({ onClose, result, isLoading }) => {
+  if (isLoading) {
+    return (
+      <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50">
+        <div className="bg-white rounded-lg p-6 w-full max-w-md">
+          <div className="text-center">
+            <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-indigo-600 mx-auto mb-4"></div>
+            <h3 className="text-lg font-semibold mb-2">Batch Updating Carriers</h3>
+            <p className="text-gray-600">
+              Fetching and updating carrier data from MyCarrierPackets...
+            </p>
+          </div>
+        </div>
+      </div>
+    );
+  }
+
+  if (!result) return null;
+
+  const isSuccess = result.success !== false;
+
+  return (
+    <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50">
+      <div className="bg-white rounded-lg p-6 w-full max-w-2xl max-h-[80vh] overflow-y-auto">
+        <div className="flex justify-between items-center mb-6">
+          <h2 className="text-xl font-bold text-gray-900">
+            Batch Update {isSuccess ? 'Complete' : 'Failed'}
+          </h2>
+          <button 
+            onClick={onClose}
+            className="text-gray-400 hover:text-gray-600"
+          >
+            <X className="w-6 h-6" />
+          </button>
+        </div>
+
+        {isSuccess ? (
+          <>
+            {/* Summary */}
+            <div className="bg-green-50 border border-green-200 rounded-md p-4 mb-6">
+              <div className="flex items-center mb-2">
+                <div className="flex-shrink-0">
+                  <svg className="h-5 w-5 text-green-400" xmlns="http://www.w3.org/2000/svg" viewBox="0 0 20 20" fill="currentColor">
+                    <path fillRule="evenodd" d="M10 18a8 8 0 100-16 8 8 0 000 16zm3.707-9.293a1 1 0 00-1.414-1.414L9 10.586 7.707 9.293a1 1 0 00-1.414 1.414l2 2a1 1 0 001.414 0l4-4z" clipRule="evenodd" />
+                  </svg>
+                </div>
+                <div className="ml-3">
+                  <h3 className="text-sm font-medium text-green-800">
+                    Batch update completed successfully
+                  </h3>
+                </div>
+              </div>
+              
+              <div className="grid grid-cols-3 gap-4 mt-4">
+                <div className="text-center">
+                  <div className="text-2xl font-bold text-green-600">
+                    {result.summary?.processed || 0}
+                  </div>
+                  <div className="text-sm text-gray-600">Processed</div>
+                </div>
+                <div className="text-center">
+                  <div className="text-2xl font-bold text-blue-600">
+                    {result.summary?.updated || 0}
+                  </div>
+                  <div className="text-sm text-gray-600">Updated</div>
+                </div>
+                <div className="text-center">
+                  <div className="text-2xl font-bold text-red-600">
+                    {result.summary?.errors || 0}
+                  </div>
+                  <div className="text-sm text-gray-600">Errors</div>
+                </div>
+              </div>
+            </div>
+
+            {/* Details */}
+            {result.details && result.details.length > 0 && (
+              <div className="space-y-2">
+                <h3 className="font-semibold text-gray-700 mb-2">Update Details:</h3>
+                <div className="max-h-64 overflow-y-auto border border-gray-200 rounded-md">
+                  {result.details.map((detail: any, index: number) => (
+                    <div
+                      key={index}
+                      className={`px-4 py-2 border-b last:border-b-0 ${
+                        detail.status === 'updated' 
+                          ? 'bg-green-50 text-green-800' 
+                          : 'bg-red-50 text-red-800'
+                      }`}
+                    >
+                      <div className="flex justify-between items-center">
+                        <span className="font-medium">DOT: {detail.dotNumber}</span>
+                        <span className="text-sm">
+                          {detail.status === 'updated' ? '✓ Updated' : '✗ Error'}
+                        </span>
+                      </div>
+                      {detail.message && (
+                        <div className="text-sm mt-1 text-gray-600">{detail.message}</div>
+                      )}
+                    </div>
+                  ))}
+                </div>
+              </div>
+            )}
+          </>
+        ) : (
+          <div className="bg-red-50 border border-red-200 rounded-md p-4">
+            <div className="flex">
+              <div className="flex-shrink-0">
+                <svg className="h-5 w-5 text-red-400" xmlns="http://www.w3.org/2000/svg" viewBox="0 0 20 20" fill="currentColor">
+                  <path fillRule="evenodd" d="M10 18a8 8 0 100-16 8 8 0 000 16zM8.707 7.293a1 1 0 00-1.414 1.414L8.586 10l-1.293 1.293a1 1 0 101.414 1.414L10 11.414l1.293 1.293a1 1 0 001.414-1.414L11.414 10l1.293-1.293a1 1 0 00-1.414-1.414L10 8.586 8.707 7.293z" clipRule="evenodd" />
+                </svg>
+              </div>
+              <div className="ml-3">
+                <h3 className="text-sm font-medium text-red-800">
+                  Batch update failed
+                </h3>
+                <div className="mt-2 text-sm text-red-700">
+                  {result.error || 'An unknown error occurred'}
+                </div>
+              </div>
+            </div>
+          </div>
+        )}
+
+        <div className="mt-6 flex justify-end">
+          <button 
+            onClick={onClose}
+            className="px-4 py-2 bg-gray-600 text-white rounded hover:bg-gray-700"
+          >
+            Close
+          </button>
+        </div>
+      </div>
+    </div>
+  );
+};
+
+// Completed Packets Modal Component
+const CompletedPacketsModal: React.FC<{
+  onClose: () => void;
+  result: any;
+  isLoading: boolean;
+  onSync: () => void;
+}> = ({ onClose, result, isLoading, onSync }) => {
+  if (isLoading) {
+    return (
+      <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50">
+        <div className="bg-white rounded-lg p-6 w-full max-w-md">
+          <div className="text-center">
+            <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-green-600 mx-auto mb-4"></div>
+            <h3 className="text-lg font-semibold mb-2">Checking Completed Packets</h3>
+            <p className="text-gray-600">
+              Retrieving recently completed carrier packets from MyCarrierPackets...
+            </p>
+          </div>
+        </div>
+      </div>
+    );
+  }
+
+  if (!result) return null;
+
+  const isSuccess = result.success !== false;
+  const isCheckMode = result.mode === 'check';
+
+  return (
+    <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50">
+      <div className="bg-white rounded-lg p-6 w-full max-w-3xl max-h-[80vh] overflow-y-auto">
+        <div className="flex justify-between items-center mb-6">
+          <h2 className="text-xl font-bold text-gray-900">
+            Completed Carrier Packets
+          </h2>
+          <button 
+            onClick={onClose}
+            className="text-gray-400 hover:text-gray-600"
+          >
+            <X className="w-6 h-6" />
+          </button>
+        </div>
+
+        {isSuccess ? (
+          <>
+            {/* Date Range */}
+            <div className="bg-gray-50 rounded-md p-3 mb-4">
+              <p className="text-sm text-gray-600">
+                Checked packets from {new Date(result.dateRange.from).toLocaleDateString()} to {new Date(result.dateRange.to).toLocaleDateString()}
+              </p>
+            </div>
+
+            {isCheckMode ? (
+              <>
+                {/* Check Mode Results */}
+                <div className="bg-blue-50 border border-blue-200 rounded-md p-4 mb-6">
+                  <div className="flex items-center justify-between mb-2">
+                    <h3 className="text-sm font-medium text-blue-800">
+                      Found {result.totalCount} completed packet{result.totalCount !== 1 ? 's' : ''}
+                    </h3>
+                    {result.totalCount > 0 && (
+                      <button
+                        onClick={onSync}
+                        className="px-3 py-1 bg-blue-600 text-white text-sm rounded hover:bg-blue-700"
+                      >
+                        Sync All
+                      </button>
+                    )}
+                  </div>
+                </div>
+
+                {/* Packet List */}
+                {result.packets && result.packets.length > 0 && (
+                  <div className="space-y-2">
+                    <h3 className="font-semibold text-gray-700 mb-2">Completed Packets:</h3>
+                    <div className="border border-gray-200 rounded-md overflow-hidden">
+                      <table className="w-full">
+                        <thead>
+                          <tr className="bg-gray-50">
+                            <th className="px-4 py-2 text-left text-xs font-medium text-gray-500 uppercase">Carrier</th>
+                            <th className="px-4 py-2 text-left text-xs font-medium text-gray-500 uppercase">DOT #</th>
+                            <th className="px-4 py-2 text-left text-xs font-medium text-gray-500 uppercase">MC #</th>
+                            <th className="px-4 py-2 text-left text-xs font-medium text-gray-500 uppercase">Completed</th>
+                          </tr>
+                        </thead>
+                        <tbody className="divide-y divide-gray-200">
+                          {result.packets.map((packet: any, index: number) => (
+                            <tr key={index} className="hover:bg-gray-50">
+                              <td className="px-4 py-2 text-sm">{packet.carrierName}</td>
+                              <td className="px-4 py-2 text-sm font-mono">{packet.dotNumber}</td>
+                              <td className="px-4 py-2 text-sm font-mono">{packet.mcNumber || 'N/A'}</td>
+                              <td className="px-4 py-2 text-sm">
+                                {new Date(packet.completedAt).toLocaleDateString()}
+                              </td>
+                            </tr>
+                          ))}
+                        </tbody>
+                      </table>
+                    </div>
+                  </div>
+                )}
+              </>
+            ) : (
+              <>
+                {/* Sync Mode Results */}
+                <div className="bg-green-50 border border-green-200 rounded-md p-4 mb-6">
+                  <div className="flex items-center mb-2">
+                    <div className="flex-shrink-0">
+                      <svg className="h-5 w-5 text-green-400" xmlns="http://www.w3.org/2000/svg" viewBox="0 0 20 20" fill="currentColor">
+                        <path fillRule="evenodd" d="M10 18a8 8 0 100-16 8 8 0 000 16zm3.707-9.293a1 1 0 00-1.414-1.414L9 10.586 7.707 9.293a1 1 0 00-1.414 1.414l2 2a1 1 0 001.414 0l4-4z" clipRule="evenodd" />
+                      </svg>
+                    </div>
+                    <div className="ml-3">
+                      <h3 className="text-sm font-medium text-green-800">
+                        Sync completed successfully
+                      </h3>
+                    </div>
+                  </div>
+                  
+                  <div className="grid grid-cols-4 gap-4 mt-4">
+                    <div className="text-center">
+                      <div className="text-2xl font-bold text-gray-600">
+                        {result.summary?.checked || 0}
+                      </div>
+                      <div className="text-sm text-gray-600">Checked</div>
+                    </div>
+                    <div className="text-center">
+                      <div className="text-2xl font-bold text-green-600">
+                        {result.summary?.synced || 0}
+                      </div>
+                      <div className="text-sm text-gray-600">Synced</div>
+                    </div>
+                    <div className="text-center">
+                      <div className="text-2xl font-bold text-blue-600">
+                        {result.summary?.newPackets || 0}
+                      </div>
+                      <div className="text-sm text-gray-600">New</div>
+                    </div>
+                    <div className="text-center">
+                      <div className="text-2xl font-bold text-red-600">
+                        {result.summary?.errors || 0}
+                      </div>
+                      <div className="text-sm text-gray-600">Errors</div>
+                    </div>
+                  </div>
+                </div>
+
+                {/* Sync Details */}
+                {result.details && result.details.length > 0 && (
+                  <div className="space-y-2">
+                    <h3 className="font-semibold text-gray-700 mb-2">Sync Details:</h3>
+                    <div className="max-h-64 overflow-y-auto border border-gray-200 rounded-md">
+                      {result.details.map((detail: any, index: number) => (
+                        <div
+                          key={index}
+                          className={`px-4 py-2 border-b last:border-b-0 ${
+                            detail.status === 'synced' 
+                              ? 'bg-green-50' 
+                              : detail.status === 'new'
+                              ? 'bg-blue-50'
+                              : 'bg-red-50'
+                          }`}
+                        >
+                          <div className="flex justify-between items-start">
+                            <div>
+                              <span className="font-medium">{detail.carrierName}</span>
+                              <span className="text-sm text-gray-500 ml-2">DOT: {detail.dotNumber}</span>
+                            </div>
+                            <span className={`text-sm font-medium ${
+                              detail.status === 'synced' 
+                                ? 'text-green-700' 
+                                : detail.status === 'new'
+                                ? 'text-blue-700'
+                                : 'text-red-700'
+                            }`}>
+                              {detail.status === 'synced' ? '✓ Synced' : 
+                               detail.status === 'new' ? '+ New' : '✗ Error'}
+                            </span>
+                          </div>
+                          {detail.message && (
+                            <div className="text-sm mt-1 text-gray-600">{detail.message}</div>
+                          )}
+                        </div>
+                      ))}
+                    </div>
+                  </div>
+                )}
+              </>
+            )}
+          </>
+        ) : (
+          <div className="bg-red-50 border border-red-200 rounded-md p-4">
+            <div className="flex">
+              <div className="flex-shrink-0">
+                <svg className="h-5 w-5 text-red-400" xmlns="http://www.w3.org/2000/svg" viewBox="0 0 20 20" fill="currentColor">
+                  <path fillRule="evenodd" d="M10 18a8 8 0 100-16 8 8 0 000 16zM8.707 7.293a1 1 0 00-1.414 1.414L8.586 10l-1.293 1.293a1 1 0 101.414 1.414L10 11.414l1.293 1.293a1 1 0 001.414-1.414L11.414 10l1.293-1.293a1 1 0 00-1.414-1.414L10 8.586 8.707 7.293z" clipRule="evenodd" />
+                </svg>
+              </div>
+              <div className="ml-3">
+                <h3 className="text-sm font-medium text-red-800">
+                  Failed to check completed packets
+                </h3>
+                <div className="mt-2 text-sm text-red-700">
+                  {result.error || 'An unknown error occurred'}
+                </div>
+              </div>
+            </div>
+          </div>
+        )}
+
+        <div className="mt-6 flex justify-end">
+          <button 
+            onClick={onClose}
+            className="px-4 py-2 bg-gray-600 text-white rounded hover:bg-gray-700"
+          >
+            Close
+          </button>
+        </div>
       </div>
     </div>
   );

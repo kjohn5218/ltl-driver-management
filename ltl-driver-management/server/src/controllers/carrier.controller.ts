@@ -1861,3 +1861,379 @@ export const sendIntellIviteInvitation = async (req: Request, res: Response): Pr
     });
   }
 };
+
+/**
+ * Get list of monitored carriers from MyCarrierPackets
+ */
+export const getMonitoredCarriers = async (req: Request, res: Response): Promise<void> => {
+  try {
+    // Allow mock service in development
+    if (!isMCPConfigured() && process.env.NODE_ENV !== 'development') {
+      res.status(503).json({ 
+        success: false,
+        message: 'MyCarrierPackets integration is not configured' 
+      });
+      return;
+    }
+
+    const pageNumber = parseInt(req.query.pageNumber as string) || 1;
+    const pageSize = Math.min(parseInt(req.query.pageSize as string) || 2500, 5000);
+    
+    const { carriers, pagination } = await mcpService.getMonitoredCarriers(pageNumber, pageSize);
+    
+    // Optionally sync monitored status with our database
+    if (carriers.length > 0) {
+      const dotNumbers = carriers.map((c: any) => c.DotNumber).filter(Boolean);
+      
+      // Update monitored status for all carriers in our database
+      await prisma.carrier.updateMany({
+        where: {
+          dotNumber: { in: dotNumbers }
+        },
+        data: {
+          mcpMonitored: true,
+          mcpLastSync: new Date()
+        }
+      });
+    }
+    
+    res.json({
+      success: true,
+      carriers,
+      pagination
+    });
+  } catch (error: any) {
+    console.error('Failed to get monitored carriers:', error);
+    res.status(500).json({ 
+      success: false,
+      message: 'Failed to retrieve monitored carriers from MyCarrierPackets',
+      error: error.message || 'Unknown error',
+      details: error.response?.data || error.details || undefined
+    });
+  }
+};
+
+/**
+ * Batch update all carriers from MyCarrierPackets MonitoredCarrierData endpoint
+ */
+export const batchUpdateCarriersFromMCP = async (req: Request, res: Response): Promise<void> => {
+  try {
+    if (!isMCPConfigured()) {
+      res.status(503).json({ 
+        success: false,
+        message: 'MyCarrierPackets integration is not configured' 
+      });
+      return;
+    }
+
+    // Check if user has admin privileges (optional - add your own auth check)
+    const userId = (req as any).user?.id;
+    const userRole = (req as any).user?.role;
+    
+    // Log the batch update request
+    console.log(`Batch carrier update requested by user ${userId} (role: ${userRole})`);
+
+    // Perform the batch update
+    const results = await mcpService.batchUpdateCarriers();
+
+    // Log summary to database (optional)
+    console.log(`Batch update completed:`, results);
+
+    res.json({
+      success: true,
+      summary: {
+        processed: results.processed,
+        updated: results.updated,
+        errors: results.errors,
+        timestamp: new Date()
+      },
+      details: results.details
+    });
+  } catch (error: any) {
+    console.error('Batch update carriers error:', error);
+    res.status(error.statusCode || 500).json({ 
+      success: false,
+      message: error.message || 'Failed to batch update carriers',
+      error: error.details || undefined
+    });
+  }
+};
+
+/**
+ * Request insurance certificate from carrier via MCP
+ */
+export const requestCarrierInsurance = async (req: Request, res: Response): Promise<void> => {
+  try {
+    if (!isMCPConfigured()) {
+      res.status(503).json({ 
+        success: false,
+        message: 'MyCarrierPackets integration is not configured' 
+      });
+      return;
+    }
+
+    const { id } = req.params;
+    const { sendEmail, notes } = req.body;
+    
+    const carrier = await prisma.carrier.findUnique({
+      where: { id: parseInt(id) }
+    });
+
+    if (!carrier || !carrier.dotNumber) {
+      res.status(404).json({ 
+        success: false,
+        message: 'Carrier not found or missing DOT number' 
+      });
+      return;
+    }
+
+    const userId = (req as any).user?.id;
+
+    // Request insurance certificate
+    const result = await mcpService.requestInsuranceCertificate(
+      carrier.dotNumber,
+      carrier.mcNumber || undefined,
+      sendEmail ? carrier.email : undefined,
+      notes
+    );
+
+    // Log the request
+    console.log(`Insurance certificate requested for carrier ${carrier.id} by user ${userId}`);
+
+    res.json({
+      success: true,
+      message: result.message,
+      carrier: {
+        id: carrier.id,
+        name: carrier.name,
+        dotNumber: carrier.dotNumber,
+        mcNumber: carrier.mcNumber
+      },
+      requestUrl: result.requestUrl,
+      emailSent: sendEmail && carrier.email ? true : false
+    });
+  } catch (error: any) {
+    console.error('Request carrier insurance error:', error);
+    res.status(error.statusCode || 500).json({ 
+      success: false,
+      message: error.message || 'Failed to request insurance certificate',
+      error: error.details || undefined
+    });
+  }
+};
+
+/**
+ * Sync carrier documents from MCP
+ */
+export const syncCarrierDocuments = async (req: Request, res: Response): Promise<void> => {
+  try {
+    if (!isMCPConfigured()) {
+      res.status(503).json({ 
+        success: false,
+        message: 'MyCarrierPackets integration is not configured' 
+      });
+      return;
+    }
+
+    const { id } = req.params;
+    
+    const carrier = await prisma.carrier.findUnique({
+      where: { id: parseInt(id) }
+    });
+
+    if (!carrier || !carrier.dotNumber) {
+      res.status(404).json({ 
+        success: false,
+        message: 'Carrier not found or missing DOT number' 
+      });
+      return;
+    }
+
+    const userId = (req as any).user?.id;
+    console.log(`Document sync requested for carrier ${carrier.id} by user ${userId}`);
+
+    // Sync documents from MCP
+    const result = await mcpService.syncCarrierDocuments(
+      carrier.id,
+      carrier.dotNumber,
+      carrier.mcNumber || undefined
+    );
+
+    res.json({
+      success: result.success,
+      message: result.success 
+        ? `Successfully synced ${result.downloaded} document(s)` 
+        : 'Failed to sync documents',
+      carrier: {
+        id: carrier.id,
+        name: carrier.name,
+        dotNumber: carrier.dotNumber
+      },
+      summary: {
+        downloaded: result.downloaded,
+        failed: result.failed
+      },
+      documents: result.documents
+    });
+  } catch (error: any) {
+    console.error('Sync carrier documents error:', error);
+    res.status(error.statusCode || 500).json({ 
+      success: false,
+      message: error.message || 'Failed to sync carrier documents',
+      error: error.details || undefined
+    });
+  }
+};
+
+/**
+ * Download a specific MCP document
+ */
+export const downloadMCPDocument = async (req: Request, res: Response): Promise<void> => {
+  try {
+    if (!isMCPConfigured()) {
+      res.status(503).json({ 
+        success: false,
+        message: 'MyCarrierPackets integration is not configured' 
+      });
+      return;
+    }
+
+    const { blobName } = req.params;
+    const { carrierId } = req.query;
+
+    if (!blobName) {
+      res.status(400).json({ 
+        success: false,
+        message: 'Blob name is required' 
+      });
+      return;
+    }
+
+    // If carrierId is provided, verify user has access to this carrier
+    if (carrierId) {
+      const carrier = await prisma.carrier.findUnique({
+        where: { id: parseInt(carrierId as string) }
+      });
+
+      if (!carrier) {
+        res.status(404).json({ 
+          success: false,
+          message: 'Carrier not found' 
+        });
+        return;
+      }
+    }
+
+    console.log(`Downloading MCP document: ${blobName}`);
+
+    // Download the document from MCP
+    const { buffer, contentType, fileName } = await mcpService.getDocument(blobName);
+
+    // Set response headers
+    res.setHeader('Content-Type', contentType);
+    res.setHeader('Content-Disposition', `attachment; filename="${fileName}"`);
+    res.setHeader('Content-Length', buffer.length.toString());
+
+    // Send the document
+    res.send(buffer);
+  } catch (error: any) {
+    console.error('Download MCP document error:', error);
+    res.status(error.statusCode || 500).json({ 
+      success: false,
+      message: error.message || 'Failed to download document',
+      error: error.details || undefined
+    });
+  }
+};
+
+/**
+ * Check for completed carrier packets in MCP
+ */
+export const checkCompletedPackets = async (req: Request, res: Response): Promise<void> => {
+  try {
+    if (!isMCPConfigured()) {
+      res.status(503).json({ 
+        success: false,
+        message: 'MyCarrierPackets integration is not configured' 
+      });
+      return;
+    }
+
+    const { fromDate, toDate, sync } = req.query;
+    
+    // Parse dates or use defaults
+    const endDate = toDate ? new Date(toDate as string) : new Date();
+    const startDate = fromDate 
+      ? new Date(fromDate as string) 
+      : new Date(Date.now() - 7 * 24 * 60 * 60 * 1000); // Default to last 7 days
+
+    // Validate dates
+    if (isNaN(startDate.getTime()) || isNaN(endDate.getTime())) {
+      res.status(400).json({
+        success: false,
+        message: 'Invalid date format. Use ISO 8601 format (YYYY-MM-DDTHH:MM:SS)'
+      });
+      return;
+    }
+
+    if (startDate > endDate) {
+      res.status(400).json({
+        success: false,
+        message: 'From date must be before to date'
+      });
+      return;
+    }
+
+    const userId = (req as any).user?.id;
+    console.log(`Completed packets check requested by user ${userId} from ${startDate.toISOString()} to ${endDate.toISOString()}`);
+
+    // Check if we should sync the data or just retrieve it
+    if (sync === 'true') {
+      // Sync completed packets with local database
+      const results = await mcpService.checkAndSyncCompletedPackets(startDate, endDate);
+      
+      res.json({
+        success: true,
+        mode: 'sync',
+        dateRange: {
+          from: startDate.toISOString(),
+          to: endDate.toISOString()
+        },
+        summary: {
+          checked: results.checked,
+          synced: results.synced,
+          newPackets: results.newPackets,
+          errors: results.errors,
+          timestamp: new Date()
+        },
+        details: results.details
+      });
+    } else {
+      // Just retrieve the completed packets without syncing
+      const { packets, totalCount } = await mcpService.getCompletedPackets(startDate, endDate);
+      
+      res.json({
+        success: true,
+        mode: 'check',
+        dateRange: {
+          from: startDate.toISOString(),
+          to: endDate.toISOString()
+        },
+        totalCount,
+        packets: packets.map((p: any) => ({
+          dotNumber: p.dotNumber,
+          mcNumber: p.mcNumber,
+          carrierName: p.carrierName,
+          completedAt: p.completedAt
+        }))
+      });
+    }
+  } catch (error: any) {
+    console.error('Check completed packets error:', error);
+    res.status(error.statusCode || 500).json({ 
+      success: false,
+      message: error.message || 'Failed to check completed packets',
+      error: error.details || undefined
+    });
+  }
+};

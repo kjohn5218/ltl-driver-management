@@ -28,7 +28,13 @@ import {
   previewCarrierMCP,
   syncCarrierFromMCP,
   toggleCarrierMonitoring,
-  getCarrierMCPStatus
+  getCarrierMCPStatus,
+  getMonitoredCarriers,
+  batchUpdateCarriersFromMCP,
+  requestCarrierInsurance,
+  checkCompletedPackets,
+  syncCarrierDocuments,
+  downloadMCPDocument
 } from '../controllers/carrier.controller';
 import { authenticate, authorize } from '../middleware/auth.middleware';
 import { validateRequest } from '../middleware/validation.middleware';
@@ -106,6 +112,49 @@ router.get(
   ],
   validateRequest,
   previewCarrierMCP
+);
+
+// Get monitored carriers from MCP (Admin/Dispatcher only)
+router.get(
+  '/mcp/monitored',
+  authorize(UserRole.ADMIN, UserRole.DISPATCHER),
+  [
+    query('pageNumber').optional().isInt({ min: 1 }),
+    query('pageSize').optional().isInt({ min: 1, max: 5000 })
+  ],
+  validateRequest,
+  getMonitoredCarriers
+);
+
+// Batch update carriers from MCP (Admin only)
+router.post(
+  '/mcp/batch-update',
+  authorize(UserRole.ADMIN),
+  batchUpdateCarriersFromMCP
+);
+
+// Check completed packets from MCP (Admin/Dispatcher only)
+router.get(
+  '/mcp/completed-packets',
+  authorize(UserRole.ADMIN, UserRole.DISPATCHER),
+  [
+    query('fromDate').optional().isISO8601(),
+    query('toDate').optional().isISO8601(),
+    query('sync').optional().isBoolean()
+  ],
+  validateRequest,
+  checkCompletedPackets
+);
+
+// Download MCP document (Admin/Dispatcher only)
+router.get(
+  '/mcp/document/:blobName',
+  authorize(UserRole.ADMIN, UserRole.DISPATCHER),
+  [
+    query('carrierId').optional().isInt()
+  ],
+  validateRequest,
+  downloadMCPDocument
 );
 
 // Get carrier invitations (Admin/Dispatcher only) - Must come before /:id route
@@ -221,6 +270,25 @@ router.post(
   ],
   validateRequest,
   toggleCarrierMonitoring
+);
+
+// Request insurance certificate from carrier (Admin/Dispatcher only)
+router.post(
+  '/:id/mcp/request-insurance',
+  authorize(UserRole.ADMIN, UserRole.DISPATCHER),
+  [
+    body('sendEmail').optional().isBoolean(),
+    body('notes').optional().trim()
+  ],
+  validateRequest,
+  requestCarrierInsurance
+);
+
+// Sync carrier documents from MCP (Admin/Dispatcher only)
+router.post(
+  '/:id/mcp/sync-documents',
+  authorize(UserRole.ADMIN, UserRole.DISPATCHER),
+  syncCarrierDocuments
 );
 
 // Cancel carrier invitation (Admin/Dispatcher only)

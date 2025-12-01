@@ -59,8 +59,19 @@ export interface Carrier {
   remittanceEmail?: string;
   factoringCompany?: string;
   
+  // MyCarrierPackets (MCP) fields
+  mcpMonitored: boolean;
+  mcpLastSync?: string;
+  mcpPacketCompleted: boolean;
+  mcpPacketCompletedAt?: string;
+  mcpInsuranceExpiration?: string;
+  mcpAuthorityStatus?: string;
+  mcpSafetyRating?: string;
+  mcpRiskScore?: number;
+  
   // Relations
   drivers?: CarrierDriver[];
+  documents?: CarrierDocument[];
   
   createdAt: string;
   updatedAt: string;
@@ -68,6 +79,7 @@ export interface Carrier {
     bookings: number;
     documents: number;
     preferredRoutes: number;
+    drivers?: number;
   };
 }
 
@@ -138,10 +150,11 @@ export interface Booking {
   trailerLength?: number;
   
   // Document uploads
-  documents?: Array<{
+  uploadedDocuments?: Array<{
     id: number;
     filename: string;
     documentType: string;
+    filePath?: string;
     uploadedAt: string;
     uploadedBy?: string;
   }>;

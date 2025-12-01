@@ -224,6 +224,44 @@ DOT: ${blobName}
       _rawMcpData: mcpData
     };
   }
+
+  async getMonitoredCarriers(
+    pageNumber = 1,
+    pageSize = 2500
+  ): Promise<{ carriers: any[]; pagination: any }> {
+    console.log(`Mock: Getting monitored carriers page ${pageNumber}`);
+    
+    // Return a mock list of monitored carriers
+    const mockCarriers = [
+      {
+        DotNumber: '1234567',
+        CompanyName: 'ABC Transport LLC',
+        Status: 'ACTIVE',
+        MonitoringStartDate: '2024-01-15',
+        LastCheckedDate: new Date().toISOString(),
+        HasChanges: false
+      },
+      {
+        DotNumber: '2345678',
+        CompanyName: 'XYZ Logistics Inc',
+        Status: 'ACTIVE',
+        MonitoringStartDate: '2024-02-20',
+        LastCheckedDate: new Date().toISOString(),
+        HasChanges: true,
+        Changes: ['Insurance Updated', 'Authority Status Changed']
+      }
+    ];
+    
+    return {
+      carriers: mockCarriers,
+      pagination: {
+        pageNumber,
+        pageSize,
+        totalPages: 1,
+        totalCount: mockCarriers.length
+      }
+    };
+  }
 }
 
 export const mockMcpService = new MockMyCarrierPacketsService();
