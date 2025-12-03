@@ -1,0 +1,25 @@
+/* Custom scrollbar styling for CarrierList */
+.carrier-list-scroll-container {
+  /* Firefox */
+  scrollbar-width: thin;
+  scrollbar-color: #9ca3af #f3f4f6;
+}
+
+/* Webkit browsers (Chrome, Safari, Edge) */
+.carrier-list-scroll-container::-webkit-scrollbar {
+  height: 8px;
+}
+
+.carrier-list-scroll-container::-webkit-scrollbar-track {
+  background: #f3f4f6;
+  border-radius: 4px;
+}
+
+.carrier-list-scroll-container::-webkit-scrollbar-thumb {
+  background: #9ca3af;
+  border-radius: 4px;
+}
+
+.carrier-list-scroll-container::-webkit-scrollbar-thumb:hover {
+  background: #6b7280;
+}

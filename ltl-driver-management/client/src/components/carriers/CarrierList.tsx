@@ -2,6 +2,7 @@ import React from 'react';
 import { Carrier } from '../../types';
 import { Eye, Trash2, Shield, CheckCircle, AlertCircle, XCircle, ExternalLink } from 'lucide-react';
 import { format } from 'date-fns';
+import './CarrierList.css';
 
 interface CarrierListProps {
   carriers: Carrier[];
@@ -60,17 +61,17 @@ export const CarrierList: React.FC<CarrierListProps> = ({ carriers, onView, onDe
 
   return (
     <div className="bg-white shadow-md rounded-lg overflow-hidden">
-      <div className="overflow-x-auto">
+      <div className="carrier-list-scroll-container overflow-x-auto max-w-full">
         <table className="min-w-full divide-y divide-gray-200">
           <thead className="bg-gray-50">
             <tr>
-              <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
+              <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider min-w-[200px]">
                 Carrier
               </th>
-              <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
+              <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider min-w-[120px]">
                 Location
               </th>
-              <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
+              <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider min-w-[100px]">
                 MC/DOT
               </th>
               <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
@@ -103,11 +104,11 @@ export const CarrierList: React.FC<CarrierListProps> = ({ carriers, onView, onDe
 
               return (
                 <tr key={carrier.id} className="hover:bg-gray-50">
-                  <td className="px-6 py-4 whitespace-nowrap">
+                  <td className="px-6 py-4">
                     <div>
-                      <div className="text-sm font-medium text-gray-900">{carrier.name}</div>
+                      <div className="text-sm font-medium text-gray-900 break-words max-w-xs">{carrier.name}</div>
                       {carrier.email && (
-                        <div className="text-sm text-gray-500">{carrier.email}</div>
+                        <div className="text-sm text-gray-500 break-all max-w-xs">{carrier.email}</div>
                       )}
                     </div>
                   </td>
