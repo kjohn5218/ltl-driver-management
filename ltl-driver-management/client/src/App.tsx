@@ -1,4 +1,4 @@
-import { BrowserRouter as Router, Routes, Route, Navigate } from 'react-router-dom';
+import { createBrowserRouter, RouterProvider, Navigate } from 'react-router-dom';
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
 import { Toaster } from 'react-hot-toast';
 import { AuthProvider } from './contexts/AuthContext';
@@ -30,165 +30,136 @@ const queryClient = new QueryClient({
   },
 });
 
+// Create router with future flags
+const router = createBrowserRouter([
+  {
+    path: '/login',
+    element: <LoginForm />
+  },
+  {
+    path: '/register',
+    element: <RegisterForm />
+  },
+  {
+    path: '/register/carrier',
+    element: <CarrierRegistration />
+  },
+  {
+    path: '/confirm/:token',
+    element: <ConfirmationPage />
+  },
+  {
+    path: '/documents/upload/:token',
+    element: <DocumentUpload />
+  },
+  {
+    path: '/',
+    element: <ProtectedRoute />,
+    children: [
+      {
+        element: <Layout />,
+        children: [
+          {
+            index: true,
+            element: <Navigate to="/dashboard" replace />
+          },
+          {
+            path: 'dashboard',
+            element: <Dashboard />
+          },
+          {
+            path: 'carriers',
+            element: <Carriers />
+          },
+          {
+            path: 'drivers',
+            element: <Drivers />
+          },
+          {
+            path: 'routes',
+            element: <RoutesPage />
+          },
+          {
+            path: 'locations',
+            element: <Locations />
+          },
+          {
+            path: 'bookings',
+            children: [
+              {
+                index: true,
+                element: <Bookings />
+              },
+              {
+                path: 'new',
+                element: <NewBooking />
+              }
+            ]
+          },
+          {
+            path: 'invoices',
+            element: <Invoices />
+          },
+          {
+            path: 'reports',
+            element: <Reports />
+          },
+          {
+            path: 'administration',
+            element: <Administration />
+          }
+        ]
+      }
+    ]
+  },
+  {
+    path: '/unauthorized',
+    element: (
+      <div className="min-h-screen flex items-center justify-center bg-gray-50">
+        <div className="text-center">
+          <h1 className="text-4xl font-bold text-gray-900 mb-4">403</h1>
+          <h2 className="text-xl font-semibold text-gray-700 mb-4">Access Denied</h2>
+          <p className="text-gray-600 mb-8">You don't have permission to access this page.</p>
+          <a
+            href="/dashboard"
+            className="inline-flex items-center px-4 py-2 border border-transparent text-sm font-medium rounded-md text-white bg-primary-600 hover:bg-primary-700"
+          >
+            Go to Dashboard
+          </a>
+        </div>
+      </div>
+    )
+  },
+  {
+    path: '*',
+    element: (
+      <div className="min-h-screen flex items-center justify-center bg-gray-50">
+        <div className="text-center">
+          <h1 className="text-4xl font-bold text-gray-900 mb-4">404</h1>
+          <p className="text-gray-600 mb-8">Page not found</p>
+          <a
+            href="/dashboard"
+            className="inline-flex items-center px-4 py-2 border border-transparent text-sm font-medium rounded-md text-white bg-primary-600 hover:bg-primary-700"
+          >
+            Go to Dashboard
+          </a>
+        </div>
+      </div>
+    )
+  }
+], {
+  future: {
+    v7_startTransition: true,
+    v7_relativeSplatPath: true
+  }
+});
+
 function App() {
   return (
     <QueryClientProvider client={queryClient}>
       <AuthProvider>
-        <Router>
-          <Toaster position="top-right" />
-          <Routes>
-            {/* Public routes */}
-            <Route path="/login" element={<LoginForm />} />
-            <Route path="/register" element={<RegisterForm />} />
-            <Route path="/register/carrier" element={<CarrierRegistration />} />
-            <Route path="/confirm/:token" element={<ConfirmationPage />} />
-            <Route path="/documents/upload/:token" element={<DocumentUpload />} />
-            
-            {/* Protected routes */}
-            <Route
-              path="/dashboard"
-              element={
-                <ProtectedRoute>
-                  <Layout>
-                    <Dashboard />
-                  </Layout>
-                </ProtectedRoute>
-              }
-            />
-            <Route
-              path="/carriers"
-              element={
-                <ProtectedRoute>
-                  <Layout>
-                    <Carriers />
-                  </Layout>
-                </ProtectedRoute>
-              }
-            />
-            <Route
-              path="/routes"
-              element={
-                <ProtectedRoute>
-                  <Layout>
-                    <RoutesPage />
-                  </Layout>
-                </ProtectedRoute>
-              }
-            />
-            <Route
-              path="/locations"
-              element={
-                <ProtectedRoute>
-                  <Layout>
-                    <Locations />
-                  </Layout>
-                </ProtectedRoute>
-              }
-            />
-            <Route
-              path="/bookings"
-              element={
-                <ProtectedRoute>
-                  <Layout>
-                    <Bookings />
-                  </Layout>
-                </ProtectedRoute>
-              }
-            />
-            <Route
-              path="/bookings/new"
-              element={
-                <ProtectedRoute>
-                  <Layout>
-                    <NewBooking />
-                  </Layout>
-                </ProtectedRoute>
-              }
-            />
-            <Route
-              path="/drivers"
-              element={
-                <ProtectedRoute>
-                  <Layout>
-                    <Drivers />
-                  </Layout>
-                </ProtectedRoute>
-              }
-            />
-            <Route
-              path="/invoices"
-              element={
-                <ProtectedRoute>
-                  <Layout>
-                    <Invoices />
-                  </Layout>
-                </ProtectedRoute>
-              }
-            />
-            <Route
-              path="/reports"
-              element={
-                <ProtectedRoute>
-                  <Layout>
-                    <Reports />
-                  </Layout>
-                </ProtectedRoute>
-              }
-            />
-            <Route
-              path="/admin"
-              element={
-                <ProtectedRoute roles={['ADMIN']}>
-                  <Layout>
-                    <Administration />
-                  </Layout>
-                </ProtectedRoute>
-              }
-            />
-            
-            {/* Redirect root to dashboard */}
-            <Route path="/" element={<Navigate to="/dashboard" replace />} />
-            
-            {/* Unauthorized page */}
-            <Route
-              path="/unauthorized"
-              element={
-                <div className="min-h-screen flex items-center justify-center bg-gray-50">
-                  <div className="text-center">
-                    <h1 className="text-4xl font-bold text-gray-900 mb-4">403</h1>
-                    <h2 className="text-xl font-semibold text-gray-700 mb-4">Access Denied</h2>
-                    <p className="text-gray-600 mb-8">You don't have permission to access this page.</p>
-                    <a
-                      href="/dashboard"
-                      className="inline-flex items-center px-4 py-2 border border-transparent text-sm font-medium rounded-md text-white bg-primary-600 hover:bg-primary-700"
-                    >
-                      Go to Dashboard
-                    </a>
-                  </div>
-                </div>
-              }
-            />
-            
-            {/* 404 fallback */}
-            <Route
-              path="*"
-              element={
-                <div className="min-h-screen flex items-center justify-center bg-gray-50">
-                  <div className="text-center">
-                    <h1 className="text-4xl font-bold text-gray-900 mb-4">404</h1>
-                    <p className="text-gray-600 mb-8">Page not found</p>
-                    <a
-                      href="/dashboard"
-                      className="inline-flex items-center px-4 py-2 border border-transparent text-sm font-medium rounded-md text-white bg-primary-600 hover:bg-primary-700"
-                    >
-                      Go to Dashboard
-                    </a>
-                  </div>
-                </div>
-              }
-            />
-          </Routes>
-        </Router>
+        <RouterProvider router={router} />
+        <Toaster position="top-right" />
       </AuthProvider>
     </QueryClientProvider>
   );

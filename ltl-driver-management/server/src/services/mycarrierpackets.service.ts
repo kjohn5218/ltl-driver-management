@@ -536,17 +536,22 @@ export class MyCarrierPacketsService {
       pageSize: pageSize.toString()
     });
 
-    const response = await this.apiClient.post(
+    const response = await this.makeAuthenticatedRequest<any>(
+      'POST',
       `/api/v1/Carrier/MonitoredCarrierData?${params}`,
-      {},
-      {
-        headers: { Authorization: `Bearer ${this.accessToken}` }
-      }
+      {}
     );
 
+    // The API returns a paginated response with data in the 'data' field
     return {
-      carriers: response.data,
-      pagination: response.data.pagination || { pageNumber, pageSize }
+      carriers: response.data || [],
+      pagination: {
+        pageNumber: response.pageNumber,
+        pageSize: response.pageSize,
+        totalPages: response.totalPages,
+        totalCount: response.totalCount,
+        hasMore: response.pageNumber < response.totalPages
+      }
     };
   }
 
@@ -801,6 +806,62 @@ export class MyCarrierPacketsService {
   }
 
   /**
+   * Map monitored carrier data to our carrier model
+   */
+  private mapMonitoredCarrierData(mcpData: any): MappedCarrierData {
+    // Extract insurance expiration from CertData
+    let insuranceExpiration: Date | null = null;
+    if (mcpData.CertData?.Certificate?.[0]?.Coverage) {
+      const coverages = mcpData.CertData.Certificate[0].Coverage;
+      const autoInsurance = coverages.find((c: any) => c.type === 'Auto');
+      if (autoInsurance?.expirationDate) {
+        insuranceExpiration = new Date(autoInsurance.expirationDate);
+      }
+    }
+
+    return {
+      // Basic info from Identity
+      name: mcpData.Identity?.legalName || mcpData.Identity?.dbaName || '',
+      dbaName: mcpData.Identity?.dbaName || '',
+      dotNumber: mcpData.dotNumber?.Value?.toString() || '',
+      mcNumber: mcpData.docketNumber || '',
+      scacCode: '', // Not in monitored data
+      
+      // Address from Identity
+      streetAddress1: mcpData.Identity?.businessStreet || '',
+      streetAddress2: '',
+      city: mcpData.Identity?.businessCity || '',
+      state: mcpData.Identity?.businessState || '',
+      zipCode: mcpData.Identity?.businessZipCode || '',
+      
+      // Contact from Identity
+      phone: mcpData.Identity?.businessPhone || mcpData.Identity?.cellPhone || '',
+      email: mcpData.Identity?.emailAddress || '',
+      emergencyPhone: '', // Not in monitored data
+      
+      // Equipment details
+      fleetSize: parseInt(mcpData.Equipment?.trucksTotal || '0') || 0,
+      totalPowerUnits: parseInt(mcpData.Equipment?.totalPower || '0') || 0,
+      
+      // Safety and authority
+      safetyRating: mcpData.Safety?.rating || '',
+      mcpAuthorityStatus: mcpData.Authority?.commonAuthority || mcpData.Authority?.contractAuthority || '',
+      
+      // Risk assessment
+      mcpRiskScore: mcpData.RiskAssessmentDetails?.TotalPoints || null,
+      
+      // Insurance
+      mcpInsuranceExpiration: insuranceExpiration,
+      
+      // Packet status
+      mcpPacketCompleted: false, // This would need to be determined separately
+      mcpPacketCompletedAt: null,
+      
+      _rawMcpData: mcpData
+    };
+  }
+
+  /**
    * Map MCP data to our carrier model
    */
   private mapCarrierData(mcpData: MCPCarrierData): MappedCarrierData {
@@ -1023,14 +1084,31 @@ export class MyCarrierPacketsService {
       while (hasMorePages) {
         console.log(`Fetching page ${pageNumber} of carriers...`);
         
-        const { carriers, pagination } = await this.getMonitoredCarrierData(pageNumber, pageSize);
+        let carriers: any[] = [];
+        let pagination: any = {};
+        
+        try {
+          const result = await this.getMonitoredCarrierData(pageNumber, pageSize);
+          carriers = result.carriers;
+          pagination = result.pagination;
+        } catch (error: any) {
+          console.error('Error fetching monitored carrier data:', error);
+          console.error('Error details:', {
+            message: error.message,
+            statusCode: error.statusCode,
+            details: error.details,
+            stack: error.stack
+          });
+          throw error;
+        }
         
         // Process each carrier
         for (const mcpCarrier of carriers) {
           results.processed++;
           
           try {
-            const dotNumber = mcpCarrier.DOTNumber?.toString() || '';
+            // MonitoredCarrierData has a different structure
+            const dotNumber = mcpCarrier.dotNumber?.Value?.toString() || mcpCarrier.dotNumber?.toString() || '';
             
             if (!dotNumber) {
               results.errors++;
@@ -1042,8 +1120,8 @@ export class MyCarrierPacketsService {
               continue;
             }
 
-            // Map the carrier data
-            const mappedData = this.mapCarrierData(mcpCarrier);
+            // Map the carrier data using the monitored data format
+            const mappedData = this.mapMonitoredCarrierData(mcpCarrier);
 
             // Update carrier in database
             const existingCarrier = await prisma.carrier.findFirst({
@@ -1079,11 +1157,12 @@ export class MyCarrierPacketsService {
                 }
               });
 
-              // Download updated documents if insurance info changed
-              if (mcpCarrier.Insurance?.BlobName && 
+              // Download updated documents if insurance certificate is available
+              if (mcpCarrier.CertData?.Certificate?.[0]?.BlobName && 
                   (!existingCarrier.mcpInsuranceExpiration || 
                    existingCarrier.mcpInsuranceExpiration.getTime() !== mappedData.mcpInsuranceExpiration?.getTime())) {
-                await this.downloadCarrierDocuments(existingCarrier.id, mcpCarrier);
+                // TODO: Implement document download for monitored data format
+                console.log(`Insurance certificate available for carrier ${existingCarrier.id}, download needed`);
               }
 
               results.updated++;
@@ -1107,7 +1186,7 @@ export class MyCarrierPacketsService {
         }
 
         // Check if there are more pages
-        if (pagination && pagination.totalPages && pagination.totalPages > pageNumber) {
+        if (pagination && pagination.hasMore) {
           pageNumber++;
         } else {
           hasMorePages = false;

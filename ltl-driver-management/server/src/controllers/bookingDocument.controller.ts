@@ -89,7 +89,7 @@ export const getBookingByToken = async (req: Request, res: Response) => {
 export const uploadBookingDocuments = async (req: Request, res: Response) => {
   try {
     const { token } = req.params;
-    const { documentType, legNumber, notes } = req.body;
+    const { documentType, notes } = req.body;
     
     console.log(`Document upload attempt with token: ${token}`);
     
@@ -135,18 +135,13 @@ export const uploadBookingDocuments = async (req: Request, res: Response) => {
             documentType: documentType || 'manifest',
             filename: file.originalname,
             filePath: file.path,
-            legNumber: legNumber ? parseInt(legNumber) : undefined,
             notes: notes
           }
         })
       )
     );
 
-    // Update booking to indicate documents have been uploaded
-    await prisma.booking.update({
-      where: { id: booking.id },
-      data: { hasUploadedDocuments: true }
-    });
+    // No need to update booking - documents are tracked via relation
 
     return res.json({
       message: 'Documents uploaded successfully',
@@ -242,10 +237,7 @@ export const deleteDocument = async (req: Request, res: Response) => {
     });
 
     if (remainingDocs === 0) {
-      await prisma.booking.update({
-        where: { id: document.bookingId },
-        data: { hasUploadedDocuments: false }
-      });
+      // Documents are tracked via relation - no need to update booking
     }
 
     return res.json({ message: 'Document deleted successfully' });

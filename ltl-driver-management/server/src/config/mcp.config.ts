@@ -29,7 +29,7 @@ export const getMCPConfig = (): MCPConfig => {
   };
 
   // Validate required fields
-  const requiredFields: (keyof MCPConfig)[] = ['apiKey', 'username', 'password'];
+  const requiredFields: (keyof MCPConfig)[] = ['username', 'password'];
   const missingFields = requiredFields.filter(field => !config[field]);
 
   if (missingFields.length > 0) {

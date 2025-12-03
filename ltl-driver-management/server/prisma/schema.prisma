@@ -176,7 +176,6 @@ model Booking {
   routeStandardRate            Decimal?          @db.Decimal(8, 2)
   legArrivalTimes              String?
   legDepartureTimes            String?
-  hasUploadedDocuments         Boolean           @default(false)
   documentUploadToken          String?           @unique
   documentUploadTokenCreatedAt DateTime?
   documents                    BookingDocument[]
@@ -254,7 +253,6 @@ model BookingDocument {
   filePath     String
   uploadedAt   DateTime @default(now())
   uploadedBy   String?
-  legNumber    Int?     // For multi-leg bookings to associate with specific leg
   notes        String?
   booking      Booking  @relation(fields: [bookingId], references: [id], onDelete: Cascade)
 

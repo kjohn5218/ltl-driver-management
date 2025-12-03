@@ -1,9 +1,10 @@
 import React from 'react';
+import { Outlet } from 'react-router-dom';
 import { Header } from './Header';
 import { Sidebar } from './Sidebar';
 
 interface LayoutProps {
-  children: React.ReactNode;
+  children?: React.ReactNode;
 }
 
 export const Layout: React.FC<LayoutProps> = ({ children }) => {
@@ -18,7 +19,7 @@ export const Layout: React.FC<LayoutProps> = ({ children }) => {
         
         <main className="flex-1">
           <div className="p-4 lg:p-6">
-            {children}
+            {children || <Outlet />}
           </div>
         </main>
       </div>

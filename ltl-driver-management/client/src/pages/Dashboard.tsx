@@ -379,7 +379,9 @@ export const Dashboard: React.FC = () => {
                 <div className="text-right">
                   <p className="font-semibold text-gray-900">${activity.rate}</p>
                   <p className="text-xs text-gray-500">
-                    {format(new Date(activity.bookingDate), 'MMM d, yyyy')}
+                    {activity.bookingDate && !isNaN(new Date(activity.bookingDate).getTime()) 
+                      ? format(new Date(activity.bookingDate), 'MMM d, yyyy')
+                      : 'Date not available'}
                   </p>
                   <span className={`inline-flex items-center px-2 py-1 rounded-full text-xs font-medium ${
                     activity.status === 'COMPLETED' ? 'bg-green-100 text-green-800' :
