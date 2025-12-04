@@ -43,7 +43,7 @@ export const Sidebar: React.FC<SidebarProps> = ({ isOpen, onClose }) => {
     { name: 'Locations', href: '/locations', icon: MapPin },
     { name: 'Invoices', href: '/invoices', icon: FileText },
     { name: 'Reports', href: '/reports', icon: BarChart3 },
-    { name: 'Administration', href: '/admin', icon: Users, adminOnly: true },
+    { name: 'Administration', href: '/administration', icon: Users, adminOnly: true },
   ];
 
   const isAdminOrDispatcher = user?.role === 'ADMIN' || user?.role === 'DISPATCHER';

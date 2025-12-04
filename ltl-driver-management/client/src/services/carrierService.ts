@@ -175,5 +175,25 @@ export const carrierService = {
   getMCPDocumentUrl: (blobName: string, carrierId?: number) => {
     const baseUrl = `/api/carriers/mcp/document/${encodeURIComponent(blobName)}`;
     return carrierId ? `${baseUrl}?carrierId=${carrierId}` : baseUrl;
+  },
+
+  // Sync packet status from MCP
+  syncPacketStatus: async (carrierId: number): Promise<{
+    success: boolean;
+    message: string;
+    carrier: {
+      id: number;
+      name: string;
+      dotNumber: string;
+    };
+    packetStatus: {
+      status: string | null;
+      completed: boolean;
+      completedAt: string | null;
+    };
+    error?: string;
+  }> => {
+    const response = await api.post(`/carriers/${carrierId}/mcp/sync-packet-status`);
+    return response.data;
   }
 };

@@ -9,7 +9,10 @@
     "start": "node dist/index.js",
     "migrate": "prisma migrate dev",
     "generate": "prisma generate",
-    "seed": "ts-node prisma/seed.ts"
+    "seed": "ts-node prisma/seed.ts",
+    "sync:packets": "node scripts/sync-packet-status.js",
+    "sync:packets:dry": "node scripts/sync-packet-status.js --dry-run --verbose",
+    "check:packets": "node scripts/check-packet-status.js"
   },
   "keywords": [],
   "author": "",

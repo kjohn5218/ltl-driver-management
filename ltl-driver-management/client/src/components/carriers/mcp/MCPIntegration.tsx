@@ -11,6 +11,7 @@ interface MCPIntegrationProps {
     mcpLastSync: string | null;
     mcpPacketCompleted: boolean;
     mcpPacketCompletedAt: string | null;
+    mcpPacketStatus: string | null;
     mcpInsuranceExpiration: string | null;
     mcpAuthorityStatus: string | null;
     mcpSafetyRating: string | null;
@@ -29,7 +30,7 @@ export const MCPIntegration: React.FC<MCPIntegrationProps> = ({
 }) => {
   return (
     <div className={`space-y-4 ${className}`}>
-      <MCPStatus carrier={carrier} />
+      <MCPStatus carrier={carrier} onUpdate={onUpdate} />
       {showActions && (
         <MCPActions carrier={carrier} onUpdate={onUpdate} />
       )}

@@ -69,6 +69,31 @@ export interface Carrier {
   mcpSafetyRating?: string;
   mcpRiskScore?: number;
   
+  // Carrier type flags
+  isCommonCarrier?: boolean;
+  isContractCarrier?: boolean;
+  isBroker?: boolean;
+  
+  // Equipment counts
+  truckCount?: number;
+  trailerCount?: number;
+  driverCount?: number;
+  
+  // MCP assessment statuses
+  mcpInsuranceStatus?: string;
+  mcpOperationsStatus?: string;
+  mcpSafetyStatus?: string;
+  mcpPacketStatus?: string;
+  mcpTotalPoints?: number;
+  
+  // Insurance details
+  generalLiabilityExpiration?: string;
+  generalLiabilityCoverage?: number;
+  cargoLiabilityExpiration?: string;
+  cargoLiabilityCoverage?: number;
+  autoLiabilityExpiration?: string;
+  autoLiabilityCoverage?: number;
+  
   // Relations
   drivers?: CarrierDriver[];
   documents?: CarrierDocument[];

@@ -1617,6 +1617,7 @@ export const syncCarrierFromMCP = async (req: Request, res: Response): Promise<v
         mcpInsuranceExpiration: mcpData.mcpInsuranceExpiration,
         mcpPacketCompleted: mcpData.mcpPacketCompleted,
         mcpPacketCompletedAt: mcpData.mcpPacketCompletedAt,
+        mcpPacketStatus: mcpData.mcpPacketStatus,
         mcpSafetyRating: mcpData.safetyRating,
         mcpLastSync: new Date()
       }
@@ -2141,6 +2142,70 @@ export const downloadMCPDocument = async (req: Request, res: Response): Promise<
     res.status(error.statusCode || 500).json({ 
       success: false,
       message: error.message || 'Failed to download document',
+      error: error.details || undefined
+    });
+  }
+};
+
+/**
+ * Sync packet status for a specific carrier
+ */
+export const syncCarrierPacketStatus = async (req: Request, res: Response): Promise<void> => {
+  try {
+    if (!isMCPConfigured()) {
+      res.status(503).json({ 
+        success: false,
+        message: 'MyCarrierPackets integration is not configured' 
+      });
+      return;
+    }
+
+    const { id } = req.params;
+    
+    const carrier = await prisma.carrier.findUnique({
+      where: { id: parseInt(id) }
+    });
+
+    if (!carrier || !carrier.dotNumber) {
+      res.status(404).json({ 
+        success: false,
+        message: 'Carrier not found or missing DOT number' 
+      });
+      return;
+    }
+
+    const userId = (req as any).user?.id;
+    console.log(`Packet status sync requested for carrier ${carrier.id} by user ${userId}`);
+
+    // Sync packet status from MCP
+    const result = await mcpService.syncCarrierPacketStatus(
+      carrier.id,
+      carrier.dotNumber,
+      carrier.mcNumber || undefined
+    );
+
+    res.json({
+      success: result.success,
+      message: result.success 
+        ? 'Successfully synced packet status' 
+        : 'Failed to sync packet status',
+      carrier: {
+        id: carrier.id,
+        name: carrier.name,
+        dotNumber: carrier.dotNumber
+      },
+      packetStatus: {
+        status: result.packetStatus,
+        completed: result.packetCompleted,
+        completedAt: result.packetCompletedAt
+      },
+      error: result.error
+    });
+  } catch (error: any) {
+    console.error('Sync carrier packet status error:', error);
+    res.status(error.statusCode || 500).json({ 
+      success: false,
+      message: error.message || 'Failed to sync carrier packet status',
       error: error.details || undefined
     });
   }

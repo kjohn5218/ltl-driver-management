@@ -51,12 +51,13 @@ export const Carriers: React.FC = () => {
     }
   });
 
-  const { data: carriersData, isLoading } = useQuery({
+  const { data: carriersData, isLoading, error } = useQuery({
     queryKey: ['carriers'],
     queryFn: async () => {
       const response = await api.get('/carriers?limit=5000'); // Fetch all carriers
       return response.data;
-    }
+    },
+    retry: 1
   });
 
   const carriers = carriersData?.carriers || [];
@@ -402,7 +403,10 @@ export const Carriers: React.FC = () => {
       {viewingCarrier && (
         <CarrierDetailsModal 
           carrier={viewingCarrier}
-          onClose={() => setViewingCarrier(null)}
+          onClose={() => {
+            setViewingCarrier(null);
+            queryClient.invalidateQueries({ queryKey: ['carriers'] });
+          }}
         />
       )}
 
@@ -512,8 +516,7 @@ const AddCarrierModal: React.FC<AddCarrierModalProps> = ({ onClose, onSave }) =>
     remittanceContact: '',
     remittanceEmail: '',
     factoringCompany: '',
-    onboardingComplete: false,
-    insuranceExpiration: ''
+    onboardingComplete: false
   });
   
   const [isSubmitting, setIsSubmitting] = useState(false);
@@ -697,8 +700,7 @@ const AddCarrierModal: React.FC<AddCarrierModalProps> = ({ onClose, onSave }) =>
         remittanceContact: formData.remittanceContact || undefined,
         remittanceEmail: formData.remittanceEmail || undefined,
         factoringCompany: formData.factoringCompany || undefined,
-        onboardingComplete: formData.onboardingComplete,
-        insuranceExpiration: formData.insuranceExpiration || undefined
+        onboardingComplete: formData.onboardingComplete
       };
       
       await createCarrierMutation.mutateAsync(payload);
@@ -1011,15 +1013,6 @@ const AddCarrierModal: React.FC<AddCarrierModalProps> = ({ onClose, onSave }) =>
                   <option value="Conditional">Conditional</option>
                   <option value="Unacceptable">Unacceptable</option>
                 </select>
-              </div>
-              <div>
-                <label className="block text-sm font-medium text-gray-700 mb-1">Insurance Expiration</label>
-                <input
-                  type="date"
-                  value={formData.insuranceExpiration}
-                  onChange={(e) => setFormData({ ...formData, insuranceExpiration: e.target.value })}
-                  className="w-full px-3 py-2 border border-gray-300 rounded-md focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
-                />
               </div>
             </div>
           </div>
@@ -1343,8 +1336,9 @@ interface CarrierDetailsModalProps {
   onClose: () => void;
 }
 
-const CarrierDetailsModal: React.FC<CarrierDetailsModalProps> = ({ carrier, onClose }) => {
+const CarrierDetailsModal: React.FC<CarrierDetailsModalProps> = ({ carrier: initialCarrier, onClose }) => {
   const queryClient = useQueryClient();
+  const [carrier, setCarrier] = useState(initialCarrier);
   const [agreements, setAgreements] = useState<CarrierAgreement[]>([]);
   const [loadingAgreements, setLoadingAgreements] = useState(true);
   const [documents, setDocuments] = useState<any[]>([]);
@@ -1374,15 +1368,13 @@ const CarrierDetailsModal: React.FC<CarrierDetailsModalProps> = ({ carrier, onCl
       ? carrier.status 
       : carrier.status === 'ONBOARDED' ? 'ACTIVE' : 'PENDING',
     carrierType: carrier.carrierType || '',
-    safetyRating: carrier.safetyRating || '',
     taxId: carrier.taxId || '',
     ratePerMile: carrier.ratePerMile?.toString() || '',
     rating: carrier.rating?.toString() || '',
     remittanceContact: carrier.remittanceContact || '',
     remittanceEmail: carrier.remittanceEmail || '',
     factoringCompany: carrier.factoringCompany || '',
-    onboardingComplete: carrier.onboardingComplete,
-    insuranceExpiration: carrier.insuranceExpiration ? new Date(carrier.insuranceExpiration).toISOString().split('T')[0] : ''
+    onboardingComplete: carrier.onboardingComplete
   });
 
   const getStatusBadge = (status: string) => {
@@ -1397,6 +1389,20 @@ const CarrierDetailsModal: React.FC<CarrierDetailsModalProps> = ({ carrier, onCl
     };
     return statusColors[status as keyof typeof statusColors] || 'bg-gray-100 text-gray-800';
   };
+
+  // Fetch full carrier details
+  useEffect(() => {
+    const fetchCarrierDetails = async () => {
+      try {
+        const fullCarrier = await carrierService.getCarrierById(carrier.id);
+        setCarrier(fullCarrier);
+      } catch (error) {
+        console.error('Failed to fetch carrier details:', error);
+      }
+    };
+    
+    fetchCarrierDetails();
+  }, [carrier.id]);
 
   // Fetch carrier agreements
   useEffect(() => {
@@ -1603,7 +1609,6 @@ const CarrierDetailsModal: React.FC<CarrierDetailsModalProps> = ({ carrier, onCl
       payload.onboardingComplete = formData.onboardingComplete;
       
       if (formData.carrierType.trim()) payload.carrierType = formData.carrierType.trim();
-      if (formData.safetyRating) payload.safetyRating = formData.safetyRating;
       if (formData.taxId.trim()) payload.taxId = formData.taxId.trim();
       
       // Convert numeric fields
@@ -1620,9 +1625,6 @@ const CarrierDetailsModal: React.FC<CarrierDetailsModalProps> = ({ carrier, onCl
       if (formData.remittanceEmail.trim()) payload.remittanceEmail = formData.remittanceEmail.trim();
       if (formData.factoringCompany.trim()) payload.factoringCompany = formData.factoringCompany.trim();
       
-      if (formData.insuranceExpiration) {
-        payload.insuranceExpiration = new Date(formData.insuranceExpiration).toISOString();
-      }
       
       await api.put(`/carriers/${carrier.id}`, payload);
       
@@ -1659,15 +1661,13 @@ const CarrierDetailsModal: React.FC<CarrierDetailsModalProps> = ({ carrier, onCl
         ? carrier.status 
         : carrier.status === 'ONBOARDED' ? 'ACTIVE' : 'PENDING',
       carrierType: carrier.carrierType || '',
-      safetyRating: carrier.safetyRating || '',
       taxId: carrier.taxId || '',
       ratePerMile: carrier.ratePerMile?.toString() || '',
       rating: carrier.rating?.toString() || '',
       remittanceContact: carrier.remittanceContact || '',
       remittanceEmail: carrier.remittanceEmail || '',
       factoringCompany: carrier.factoringCompany || '',
-      onboardingComplete: carrier.onboardingComplete,
-      insuranceExpiration: carrier.insuranceExpiration ? new Date(carrier.insuranceExpiration).toISOString().split('T')[0] : ''
+      onboardingComplete: carrier.onboardingComplete
     });
     setIsEditMode(false);
   };
@@ -1729,6 +1729,28 @@ const CarrierDetailsModal: React.FC<CarrierDetailsModalProps> = ({ carrier, onCl
               ) : (
                 <span className={`inline-flex px-2 py-1 rounded-full text-xs font-medium ${getStatusBadge(carrier.status)}`}>
                   {carrier.status}
+                </span>
+              )}
+            </div>
+
+            <div>
+              <label className="block text-sm font-medium text-gray-700 mb-1">Onboarding Complete</label>
+              {isEditMode ? (
+                <select
+                  value={formData.onboardingComplete ? 'true' : 'false'}
+                  onChange={(e) => setFormData({...formData, onboardingComplete: e.target.value === 'true'})}
+                  className="w-full p-2 border rounded focus:ring-blue-500 focus:border-blue-500"
+                >
+                  <option value="false">No</option>
+                  <option value="true">Yes</option>
+                </select>
+              ) : (
+                <span className={`inline-flex px-2 py-1 rounded-full text-xs font-medium ${
+                  carrier.onboardingComplete 
+                    ? 'bg-green-100 text-green-800' 
+                    : 'bg-red-100 text-red-800'
+                }`}>
+                  {carrier.onboardingComplete ? 'Yes' : 'No'}
                 </span>
               )}
             </div>
@@ -1876,30 +1898,6 @@ const CarrierDetailsModal: React.FC<CarrierDetailsModalProps> = ({ carrier, onCl
             </div>
 
             <div>
-              <label className="block text-sm font-medium text-gray-700 mb-1">Safety Rating</label>
-              {isEditMode ? (
-                <select
-                  value={formData.safetyRating}
-                  onChange={(e) => setFormData({...formData, safetyRating: e.target.value})}
-                  className="w-full p-2 border rounded focus:ring-blue-500 focus:border-blue-500"
-                >
-                  <option value="">Select rating</option>
-                  <option value="Acceptable">Acceptable</option>
-                  <option value="Conditional">Conditional</option>
-                  <option value="Unacceptable">Unacceptable</option>
-                </select>
-              ) : (
-                <p className={`text-sm font-medium ${
-                  carrier.safetyRating === 'Acceptable' ? 'text-green-600' : 
-                  carrier.safetyRating === 'Unacceptable' ? 'text-red-600' : 
-                  'text-yellow-600'
-                }`}>
-                  {carrier.safetyRating || 'N/A'}
-                </p>
-              )}
-            </div>
-
-            <div>
               <label className="block text-sm font-medium text-gray-700 mb-1">Carrier Type</label>
               {isEditMode ? (
                 <input
@@ -1915,6 +1913,7 @@ const CarrierDetailsModal: React.FC<CarrierDetailsModalProps> = ({ carrier, onCl
             </div>
           </div>
         </div>
+
 
         {/* Financial Information */}
         <div className="mt-6 pt-6 border-t">
@@ -2018,47 +2017,50 @@ const CarrierDetailsModal: React.FC<CarrierDetailsModalProps> = ({ carrier, onCl
           </div>
         </div>
 
-        {/* Additional Information */}
-        <div className="mt-6 pt-6 border-t">
-          <div className="grid grid-cols-2 gap-4">
-            <div>
-              <label className="block text-sm font-medium text-gray-700 mb-1">Onboarding Complete</label>
-              {isEditMode ? (
-                <select
-                  value={formData.onboardingComplete ? 'true' : 'false'}
-                  onChange={(e) => setFormData({...formData, onboardingComplete: e.target.value === 'true'})}
-                  className="w-full p-2 border rounded focus:ring-blue-500 focus:border-blue-500"
-                >
-                  <option value="false">No</option>
-                  <option value="true">Yes</option>
-                </select>
-              ) : (
-                <span className={`inline-flex px-2 py-1 rounded-full text-xs font-medium ${
-                  carrier.onboardingComplete 
-                    ? 'bg-green-100 text-green-800' 
-                    : 'bg-red-100 text-red-800'
-                }`}>
-                  {carrier.onboardingComplete ? 'Yes' : 'No'}
-                </span>
+
+        {/* MyCarrierPackets Status */}
+        {carrier.dotNumber && (
+          <div className="mt-6 pt-6 border-t">
+            <MCPStatus 
+              carrier={carrier} 
+              onUpdate={() => queryClient.invalidateQueries({ queryKey: ['carriers'] })}
+            />
+          </div>
+        )}
+
+        {/* Insurance Details */}
+        {(carrier.generalLiabilityExpiration || carrier.cargoLiabilityExpiration || carrier.autoLiabilityExpiration) && (
+          <div className="mt-6 pt-6 border-t">
+            <h3 className="text-lg font-medium text-gray-900 mb-4">Insurance Coverage Details</h3>
+            <div className="space-y-3">
+              {carrier.generalLiabilityExpiration && (
+                <div className="p-3 bg-gray-50 rounded-lg">
+                  <p className="text-sm font-medium text-gray-700">General Liability</p>
+                  <p className="text-xs text-gray-500">
+                    Expires: {new Date(carrier.generalLiabilityExpiration).toLocaleDateString()}
+                  </p>
+                </div>
               )}
-            </div>
-            <div>
-              <label className="block text-sm font-medium text-gray-700 mb-1">Insurance Expiration</label>
-              {isEditMode ? (
-                <input
-                  type="date"
-                  value={formData.insuranceExpiration}
-                  onChange={(e) => setFormData({...formData, insuranceExpiration: e.target.value})}
-                  className="w-full p-2 border rounded focus:ring-blue-500 focus:border-blue-500"
-                />
-              ) : (
-                <p className="text-sm text-gray-900">
-                  {carrier.insuranceExpiration ? new Date(carrier.insuranceExpiration).toLocaleDateString() : 'N/A'}
-                </p>
+              {carrier.cargoLiabilityExpiration && (
+                <div className="p-3 bg-gray-50 rounded-lg">
+                  <p className="text-sm font-medium text-gray-700">Cargo Liability w/ Reefer Breakdown</p>
+                  <p className="text-xs text-gray-500">
+                    Expires: {new Date(carrier.cargoLiabilityExpiration).toLocaleDateString()}
+                  </p>
+                </div>
+              )}
+              {carrier.autoLiabilityExpiration && (
+                <div className="p-3 bg-gray-50 rounded-lg">
+                  <p className="text-sm font-medium text-gray-700">Auto Liability</p>
+                  <p className="text-xs text-gray-500">
+                    Expires: {new Date(carrier.autoLiabilityExpiration).toLocaleDateString()}
+                  </p>
+                </div>
               )}
             </div>
           </div>
-        </div>
+        )}
+
 
         {/* Signed Agreements Section */}
         <div className="mt-6 pt-6 border-t">
@@ -2292,12 +2294,6 @@ const CarrierDetailsModal: React.FC<CarrierDetailsModalProps> = ({ carrier, onCl
           )}
         </div>
 
-        {/* MyCarrierPackets Status */}
-        {carrier.dotNumber && (
-          <div className="mt-6 pt-6 border-t">
-            <MCPStatus carrier={carrier} />
-          </div>
-        )}
 
         {/* Timestamps */}
         <div className="mt-6 pt-6 border-t">

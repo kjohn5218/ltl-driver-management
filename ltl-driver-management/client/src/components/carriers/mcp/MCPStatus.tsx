@@ -1,18 +1,22 @@
 import React, { useState } from 'react';
-import { Shield, AlertCircle, CheckCircle, XCircle, Clock, FileText } from 'lucide-react';
+import { Shield, AlertCircle, CheckCircle, XCircle, Clock, FileText, RefreshCw, ExternalLink } from 'lucide-react';
 import { format } from 'date-fns';
 import { carrierService } from '../../../services/carrierService';
+import { api } from '../../../services/api';
 import { Carrier } from '../../../types';
 
 interface MCPStatusProps {
-  carrier: Pick<Carrier, 'id' | 'dotNumber' | 'mcNumber' | 'mcpMonitored' | 'mcpLastSync' | 'mcpPacketCompleted' | 'mcpPacketCompletedAt' | 'mcpInsuranceExpiration' | 'mcpAuthorityStatus' | 'mcpSafetyRating' | 'mcpRiskScore'>;
+  carrier: Pick<Carrier, 'id' | 'dotNumber' | 'mcNumber' | 'mcpMonitored' | 'mcpLastSync' | 'mcpPacketCompleted' | 'mcpPacketCompletedAt' | 'mcpPacketStatus' | 'mcpInsuranceExpiration' | 'mcpAuthorityStatus' | 'mcpSafetyRating' | 'mcpRiskScore' | 'safetyRating'>;
+  onUpdate?: () => void;
 }
 
-export const MCPStatus: React.FC<MCPStatusProps> = ({ carrier }) => {
+export const MCPStatus: React.FC<MCPStatusProps> = ({ carrier, onUpdate }) => {
   const [isRequestingInsurance, setIsRequestingInsurance] = useState(false);
   const [showInsuranceModal, setShowInsuranceModal] = useState(false);
   const [sendEmail, setSendEmail] = useState(true);
   const [notes, setNotes] = useState('');
+  const [isSyncingAllData, setIsSyncingAllData] = useState(false);
+  const [isSyncingPacketStatus, setIsSyncingPacketStatus] = useState(false);
 
   const getStatusColor = (status: string | null) => {
     switch (status?.toUpperCase()) {
@@ -28,34 +32,43 @@ export const MCPStatus: React.FC<MCPStatusProps> = ({ carrier }) => {
   };
 
   const getSafetyRatingBadge = (rating: string | null) => {
-    switch (rating?.toUpperCase()) {
-      case 'SATISFACTORY':
-        return (
-          <span className="inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium bg-green-100 text-green-800">
-            <CheckCircle className="w-3 h-3 mr-1" />
-            Satisfactory
-          </span>
-        );
-      case 'CONDITIONAL':
-        return (
-          <span className="inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium bg-yellow-100 text-yellow-800">
-            <AlertCircle className="w-3 h-3 mr-1" />
-            Conditional
-          </span>
-        );
-      case 'UNSATISFACTORY':
-        return (
-          <span className="inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium bg-red-100 text-red-800">
-            <XCircle className="w-3 h-3 mr-1" />
-            Unsatisfactory
-          </span>
-        );
-      default:
-        return (
-          <span className="inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium bg-gray-100 text-gray-800">
-            Not Available
-          </span>
-        );
+    const upperRating = rating?.toUpperCase();
+    
+    // Handle both MCP formats
+    if (upperRating === 'SATISFACTORY' || upperRating === 'ACCEPTABLE') {
+      return (
+        <span className="inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium bg-green-100 text-green-800">
+          <CheckCircle className="w-3 h-3 mr-1" />
+          {rating}
+        </span>
+      );
+    } else if (upperRating === 'CONDITIONAL') {
+      return (
+        <span className="inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium bg-yellow-100 text-yellow-800">
+          <AlertCircle className="w-3 h-3 mr-1" />
+          {rating}
+        </span>
+      );
+    } else if (upperRating === 'UNSATISFACTORY' || upperRating === 'UNACCEPTABLE') {
+      return (
+        <span className="inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium bg-red-100 text-red-800">
+          <XCircle className="w-3 h-3 mr-1" />
+          {rating}
+        </span>
+      );
+    } else if (!rating) {
+      return (
+        <span className="inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium bg-gray-100 text-gray-800">
+          Not Available
+        </span>
+      );
+    } else {
+      // Display the actual value if it's something else
+      return (
+        <span className="inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium bg-gray-100 text-gray-800">
+          {rating}
+        </span>
+      );
     }
   };
 
@@ -113,6 +126,51 @@ export const MCPStatus: React.FC<MCPStatusProps> = ({ carrier }) => {
     }
   };
 
+  const handleSyncAllMCPData = async () => {
+    if (!carrier.dotNumber) return;
+    
+    setIsSyncingAllData(true);
+    try {
+      const response = await api.post(`/carriers/${carrier.id}/sync`);
+      
+      if (response.data.success) {
+        alert('Successfully synced all MCP data including safety rating!');
+        // Call the onUpdate callback to refresh data
+        if (onUpdate) {
+          onUpdate();
+        }
+      } else {
+        alert('Failed to sync MCP data. Please try again.');
+      }
+    } catch (error: any) {
+      console.error('Sync error:', error);
+      alert(error.response?.data?.message || 'Failed to sync MCP data');
+    } finally {
+      setIsSyncingAllData(false);
+    }
+  };
+
+  const handleSyncPacketStatus = async () => {
+    if (!carrier.dotNumber) return;
+    
+    setIsSyncingPacketStatus(true);
+    try {
+      const result = await carrierService.syncPacketStatus(carrier.id);
+      
+      if (result.success) {
+        alert(`Packet status synced successfully! Status: ${result.packetStatus.status}`);
+        // Call the onUpdate callback to refresh data without page reload
+        if (onUpdate) {
+          onUpdate();
+        }
+      }
+    } catch (error: any) {
+      alert(error.response?.data?.message || 'Failed to sync packet status');
+    } finally {
+      setIsSyncingPacketStatus(false);
+    }
+  };
+
   return (
     <div className="bg-white rounded-lg border border-gray-200 p-6">
       <div className="flex items-center justify-between mb-4">
@@ -121,6 +179,17 @@ export const MCPStatus: React.FC<MCPStatusProps> = ({ carrier }) => {
           <h3 className="text-lg font-medium text-gray-900">MyCarrierPackets Integration</h3>
         </div>
         <div className="flex items-center space-x-2">
+          {carrier.dotNumber && (
+            <button
+              onClick={handleSyncAllMCPData}
+              disabled={isSyncingAllData}
+              className="inline-flex items-center px-3 py-1 text-sm bg-blue-600 text-white rounded hover:bg-blue-700 disabled:bg-blue-400"
+              title="Sync all MCP data including safety rating"
+            >
+              <RefreshCw className={`w-4 h-4 mr-1 ${isSyncingAllData ? 'animate-spin' : ''}`} />
+              {isSyncingAllData ? 'Syncing...' : 'Sync All'}
+            </button>
+          )}
           {carrier.mcpMonitored ? (
             <span className="inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium bg-blue-100 text-blue-800">
               <CheckCircle className="w-3 h-3 mr-1" />
@@ -138,21 +207,51 @@ export const MCPStatus: React.FC<MCPStatusProps> = ({ carrier }) => {
         {/* Packet Status */}
         <div className="flex items-center justify-between">
           <span className="text-sm text-gray-600">Carrier Packet:</span>
-          {carrier.mcpPacketCompleted ? (
-            <div className="flex items-center">
-              <CheckCircle className="w-4 h-4 text-green-500 mr-1" />
-              <span className="text-sm text-green-700">
-                Completed {carrier.mcpPacketCompletedAt && 
-                  `on ${format(new Date(carrier.mcpPacketCompletedAt), 'MM/dd/yyyy')}`
-                }
-              </span>
-            </div>
-          ) : (
-            <div className="flex items-center">
-              <XCircle className="w-4 h-4 text-gray-400 mr-1" />
-              <span className="text-sm text-gray-500">Not Completed</span>
-            </div>
-          )}
+          <div className="flex items-center gap-2">
+            {carrier.mcpPacketStatus ? (
+              <div className="flex items-center">
+                {carrier.mcpPacketStatus === 'Completed' ? (
+                  <>
+                    <CheckCircle className="w-4 h-4 text-green-500 mr-1" />
+                    <span className="text-sm text-green-700">
+                      {carrier.mcpPacketStatus} {carrier.mcpPacketCompletedAt && 
+                        `on ${format(new Date(carrier.mcpPacketCompletedAt), 'MM/dd/yyyy')}`
+                      }
+                    </span>
+                  </>
+                ) : (
+                  <>
+                    <XCircle className="w-4 h-4 text-gray-400 mr-1" />
+                    <span className="text-sm text-gray-500">{carrier.mcpPacketStatus}</span>
+                  </>
+                )}
+              </div>
+            ) : carrier.mcpPacketCompleted ? (
+              <div className="flex items-center">
+                <CheckCircle className="w-4 h-4 text-green-500 mr-1" />
+                <span className="text-sm text-green-700">
+                  Completed {carrier.mcpPacketCompletedAt && 
+                    `on ${format(new Date(carrier.mcpPacketCompletedAt), 'MM/dd/yyyy')}`
+                  }
+                </span>
+              </div>
+            ) : (
+              <div className="flex items-center">
+                <XCircle className="w-4 h-4 text-gray-400 mr-1" />
+                <span className="text-sm text-gray-500">Not Completed</span>
+              </div>
+            )}
+            {carrier.dotNumber && (
+              <button
+                onClick={handleSyncPacketStatus}
+                disabled={isSyncingPacketStatus}
+                className="p-1 text-blue-600 hover:text-blue-700 hover:bg-blue-50 rounded disabled:opacity-50 disabled:cursor-not-allowed"
+                title="Sync packet status from MCP"
+              >
+                <RefreshCw className={`w-3 h-3 ${isSyncingPacketStatus ? 'animate-spin' : ''}`} />
+              </button>
+            )}
+          </div>
         </div>
 
         {/* Authority Status */}
@@ -166,7 +265,7 @@ export const MCPStatus: React.FC<MCPStatusProps> = ({ carrier }) => {
         {/* Safety Rating */}
         <div className="flex items-center justify-between">
           <span className="text-sm text-gray-600">Safety Rating:</span>
-          {getSafetyRatingBadge(carrier.mcpSafetyRating)}
+          {getSafetyRatingBadge(carrier.mcpSafetyRating || carrier.safetyRating)}
         </div>
 
         {/* Risk Score */}
@@ -228,7 +327,7 @@ export const MCPStatus: React.FC<MCPStatusProps> = ({ carrier }) => {
 
         {/* Action Buttons */}
         {carrier.dotNumber && (
-          <div className="mt-4 pt-4 border-t border-gray-100">
+          <div className="mt-4 pt-4 border-t border-gray-100 space-y-2">
             <button
               onClick={() => setShowInsuranceModal(true)}
               className="w-full flex items-center justify-center px-3 py-2 text-sm bg-blue-100 text-blue-700 hover:bg-blue-200 rounded-md transition-colors"
@@ -236,6 +335,15 @@ export const MCPStatus: React.FC<MCPStatusProps> = ({ carrier }) => {
               <FileText className="w-4 h-4 mr-2" />
               Request Insurance Certificate
             </button>
+            <a
+              href={`https://mycarrierpackets.com/CarrierInformation/DOTNumber/${carrier.dotNumber}${carrier.mcNumber ? `/DocketNumber/${carrier.mcNumber}` : ''}`}
+              target="_blank"
+              rel="noopener noreferrer"
+              className="w-full flex items-center justify-center px-3 py-2 text-sm bg-gray-100 text-gray-700 hover:bg-gray-200 rounded-md transition-colors"
+            >
+              <ExternalLink className="w-4 h-4 mr-2" />
+              View in MyCarrierPackets
+            </a>
           </div>
         )}
 

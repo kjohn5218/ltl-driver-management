@@ -60,6 +60,9 @@ interface MCPCarrierData {
       Safety?: {
         rating?: string;
       };
+      RiskAssessment?: {
+        Overall?: string;
+      };
     };
   }>;
   PacketComplete?: boolean;
@@ -94,6 +97,7 @@ export interface MappedCarrierData {
   mcpInsuranceExpiration: Date | null;
   mcpPacketCompleted: boolean;
   mcpPacketCompletedAt: Date | null;
+  mcpPacketStatus?: string;
   _rawMcpData?: MCPCarrierData;
 }
 
@@ -381,7 +385,15 @@ export class MyCarrierPacketsService {
                 mcpInsuranceExpiration: mappedData.mcpInsuranceExpiration,
                 mcpAuthorityStatus: mappedData.mcpAuthorityStatus,
                 mcpRiskScore: mappedData.mcpRiskScore,
-                mcpSafetyRating: mappedData.safetyRating
+                mcpSafetyRating: mappedData.safetyRating,
+                mcpPacketStatus: 'Completed', // Set to completed since this is from completed packets endpoint
+                // Update insurance coverage details
+                autoLiabilityExpiration: (mappedData as any).autoLiabilityExpiration || existingCarrier.autoLiabilityExpiration,
+                autoLiabilityCoverage: (mappedData as any).autoLiabilityCoverage || existingCarrier.autoLiabilityCoverage,
+                generalLiabilityExpiration: (mappedData as any).generalLiabilityExpiration || existingCarrier.generalLiabilityExpiration,
+                generalLiabilityCoverage: (mappedData as any).generalLiabilityCoverage || existingCarrier.generalLiabilityCoverage,
+                cargoLiabilityExpiration: (mappedData as any).cargoLiabilityExpiration || existingCarrier.cargoLiabilityExpiration,
+                cargoLiabilityCoverage: (mappedData as any).cargoLiabilityCoverage || existingCarrier.cargoLiabilityCoverage
               }
             });
 
@@ -808,14 +820,63 @@ export class MyCarrierPacketsService {
   /**
    * Map monitored carrier data to our carrier model
    */
-  private mapMonitoredCarrierData(mcpData: any): MappedCarrierData {
-    // Extract insurance expiration from CertData
+  private mapMonitoredCarrierData(mcpData: any): MappedCarrierData & {
+    autoLiabilityExpiration?: Date | null;
+    autoLiabilityCoverage?: number | null;
+    generalLiabilityExpiration?: Date | null;
+    generalLiabilityCoverage?: number | null;
+    cargoLiabilityExpiration?: Date | null;
+    cargoLiabilityCoverage?: number | null;
+    mcpPacketStatus?: string;
+  } {
+    // Extract insurance coverage details from CertData
     let insuranceExpiration: Date | null = null;
+    let autoLiabilityExpiration: Date | null = null;
+    let autoLiabilityCoverage: number | null = null;
+    let generalLiabilityExpiration: Date | null = null;
+    let generalLiabilityCoverage: number | null = null;
+    let cargoLiabilityExpiration: Date | null = null;
+    let cargoLiabilityCoverage: number | null = null;
+    
     if (mcpData.CertData?.Certificate?.[0]?.Coverage) {
       const coverages = mcpData.CertData.Certificate[0].Coverage;
-      const autoInsurance = coverages.find((c: any) => c.type === 'Auto');
-      if (autoInsurance?.expirationDate) {
-        insuranceExpiration = new Date(autoInsurance.expirationDate);
+      
+      // Auto Liability
+      const autoInsurance = coverages.find((c: any) => c.type === 'Auto' || c.type === 'Auto Liability');
+      if (autoInsurance) {
+        if (autoInsurance.expirationDate) {
+          autoLiabilityExpiration = new Date(autoInsurance.expirationDate);
+          insuranceExpiration = autoLiabilityExpiration; // Keep backward compatibility
+        }
+        if (autoInsurance.limit) {
+          autoLiabilityCoverage = parseFloat(autoInsurance.limit) || null;
+        }
+      }
+      
+      // General Liability
+      const generalInsurance = coverages.find((c: any) => c.type === 'General' || c.type === 'General Liability');
+      if (generalInsurance) {
+        if (generalInsurance.expirationDate) {
+          generalLiabilityExpiration = new Date(generalInsurance.expirationDate);
+        }
+        if (generalInsurance.limit) {
+          generalLiabilityCoverage = parseFloat(generalInsurance.limit) || null;
+        }
+      }
+      
+      // Cargo Liability
+      const cargoInsurance = coverages.find((c: any) => 
+        c.type === 'Cargo' || 
+        c.type === 'Cargo Liability' || 
+        c.type?.toLowerCase().includes('cargo')
+      );
+      if (cargoInsurance) {
+        if (cargoInsurance.expirationDate) {
+          cargoLiabilityExpiration = new Date(cargoInsurance.expirationDate);
+        }
+        if (cargoInsurance.limit) {
+          cargoLiabilityCoverage = parseFloat(cargoInsurance.limit) || null;
+        }
       }
     }
 
@@ -856,6 +917,15 @@ export class MyCarrierPacketsService {
       // Packet status
       mcpPacketCompleted: false, // This would need to be determined separately
       mcpPacketCompletedAt: null,
+      mcpPacketStatus: undefined, // Don't set a default - preserve existing value
+      
+      // Insurance coverage details
+      autoLiabilityExpiration,
+      autoLiabilityCoverage,
+      generalLiabilityExpiration,
+      generalLiabilityCoverage,
+      cargoLiabilityExpiration,
+      cargoLiabilityCoverage,
       
       _rawMcpData: mcpData
     };
@@ -864,7 +934,36 @@ export class MyCarrierPacketsService {
   /**
    * Map MCP data to our carrier model
    */
-  private mapCarrierData(mcpData: MCPCarrierData): MappedCarrierData {
+  private mapCarrierData(mcpData: MCPCarrierData): MappedCarrierData & {
+    autoLiabilityExpiration?: Date | null;
+    autoLiabilityCoverage?: number | null;
+    generalLiabilityExpiration?: Date | null;
+    generalLiabilityCoverage?: number | null;
+    cargoLiabilityExpiration?: Date | null;
+    cargoLiabilityCoverage?: number | null;
+    mcpPacketStatus?: string;
+  } {
+    // Extract insurance details if available
+    let autoLiabilityExpiration: Date | null = null;
+    let autoLiabilityCoverage: number | null = null;
+    let generalLiabilityExpiration: Date | null = null;
+    let generalLiabilityCoverage: number | null = null;
+    let cargoLiabilityExpiration: Date | null = null;
+    let cargoLiabilityCoverage: number | null = null;
+    
+    // For now, we'll use the general insurance expiration for all types
+    // MCP may provide more detailed data in the future
+    const insuranceExpiration = mcpData.Insurance?.ExpirationDate 
+      ? new Date(mcpData.Insurance.ExpirationDate) 
+      : null;
+    
+    // Set all insurance expirations to the same date for now
+    if (insuranceExpiration) {
+      autoLiabilityExpiration = insuranceExpiration;
+      generalLiabilityExpiration = insuranceExpiration;
+      cargoLiabilityExpiration = insuranceExpiration;
+    }
+    
     return {
       // Basic info
       name: mcpData.LegalName || mcpData.DBAName || '',
@@ -890,7 +989,10 @@ export class MyCarrierPacketsService {
       totalPowerUnits: mcpData.CarrierOperationalDetail?.TotalPowerUnits || 0,
       
       // Safety & compliance
-      safetyRating: mcpData.AssureAdvantage?.[0]?.CarrierDetails?.Safety?.rating || '',
+      // Use Risk Assessment Overall rating if Safety rating is "Not Rated"
+      safetyRating: (mcpData.AssureAdvantage?.[0]?.CarrierDetails?.Safety?.rating === 'Not Rated' 
+        ? mcpData.AssureAdvantage?.[0]?.CarrierDetails?.RiskAssessment?.Overall 
+        : mcpData.AssureAdvantage?.[0]?.CarrierDetails?.Safety?.rating) || '',
       mcpAuthorityStatus: mcpData.AuthorityStatus || '',
       mcpRiskScore: mcpData.AssureAdvantage?.[0]?.RiskScore || null,
       
@@ -904,6 +1006,15 @@ export class MyCarrierPacketsService {
       mcpPacketCompletedAt: mcpData.PacketCompleteDate 
         ? new Date(mcpData.PacketCompleteDate) 
         : null,
+      mcpPacketStatus: mcpData.PacketComplete === true ? 'Completed' : 'Not Completed',
+      
+      // Insurance coverage details
+      autoLiabilityExpiration,
+      autoLiabilityCoverage,
+      generalLiabilityExpiration,
+      generalLiabilityCoverage,
+      cargoLiabilityExpiration,
+      cargoLiabilityCoverage,
         
       // Raw data for reference
       _rawMcpData: mcpData
@@ -1058,6 +1169,78 @@ export class MyCarrierPacketsService {
   }
 
   /**
+   * Sync packet status for a specific carrier
+   * Fetches the actual carrier data to get accurate packet status
+   */
+  async syncCarrierPacketStatus(carrierId: number, dotNumber: string, mcNumber?: string): Promise<{
+    success: boolean;
+    packetStatus: string | null;
+    packetCompleted: boolean;
+    packetCompletedAt: Date | null;
+    error?: string;
+  }> {
+    try {
+      console.log(`Syncing packet status for carrier ${carrierId} (DOT: ${dotNumber})`);
+      
+      // Get fresh carrier data from MCP
+      const carrierData = await this.getCarrierData(dotNumber, mcNumber);
+      
+      // First check if this carrier appears in completed packets
+      let finalPacketStatus = {
+        completed: carrierData.mcpPacketCompleted,
+        completedAt: carrierData.mcpPacketCompletedAt,
+        status: carrierData.mcpPacketStatus || (carrierData.mcpPacketCompleted ? 'Completed' : 'Not Completed')
+      };
+
+      // Check completed packets endpoint for more accurate data
+      try {
+        const endDate = new Date();
+        const startDate = new Date(Date.now() - 365 * 24 * 60 * 60 * 1000); // Check last year
+        const { packets } = await this.getCompletedPackets(startDate, endDate);
+        
+        const completedPacket = packets.find(p => p.dotNumber === dotNumber);
+        if (completedPacket) {
+          console.log(`Found carrier ${dotNumber} in completed packets - overriding packet status`);
+          finalPacketStatus = {
+            completed: true,
+            completedAt: completedPacket.completedAt,
+            status: 'Completed'
+          };
+        }
+      } catch (error) {
+        console.warn('Failed to check completed packets endpoint:', error);
+      }
+
+      // Update carrier with accurate packet status
+      await prisma.carrier.update({
+        where: { id: carrierId },
+        data: {
+          mcpPacketCompleted: finalPacketStatus.completed,
+          mcpPacketCompletedAt: finalPacketStatus.completedAt,
+          mcpPacketStatus: finalPacketStatus.status,
+          mcpLastSync: new Date()
+        }
+      });
+      
+      return {
+        success: true,
+        packetStatus: finalPacketStatus.status,
+        packetCompleted: finalPacketStatus.completed,
+        packetCompletedAt: finalPacketStatus.completedAt
+      };
+    } catch (error) {
+      console.error(`Failed to sync packet status for carrier ${carrierId}:`, error);
+      return {
+        success: false,
+        packetStatus: null,
+        packetCompleted: false,
+        packetCompletedAt: null,
+        error: error instanceof Error ? error.message : 'Unknown error'
+      };
+    }
+  }
+
+  /**
    * Batch update carriers from MCP MonitoredCarrierData endpoint
    * This method fetches all monitored carriers and updates local database
    */
@@ -1148,12 +1331,21 @@ export class MyCarrierPacketsService {
                   fleetSize: mappedData.fleetSize,
                   totalPowerUnits: mappedData.totalPowerUnits,
                   safetyRating: mappedData.safetyRating,
+                  mcpSafetyRating: mappedData.safetyRating,
                   mcpAuthorityStatus: mappedData.mcpAuthorityStatus,
                   mcpRiskScore: mappedData.mcpRiskScore,
                   mcpInsuranceExpiration: mappedData.mcpInsuranceExpiration,
                   mcpPacketCompleted: mappedData.mcpPacketCompleted,
                   mcpPacketCompletedAt: mappedData.mcpPacketCompletedAt,
-                  mcpLastSync: new Date()
+                  ...(mappedData.mcpPacketStatus !== undefined && { mcpPacketStatus: mappedData.mcpPacketStatus }),
+                  mcpLastSync: new Date(),
+                  // Update insurance coverage details
+                  autoLiabilityExpiration: (mappedData as any).autoLiabilityExpiration || existingCarrier.autoLiabilityExpiration,
+                  autoLiabilityCoverage: (mappedData as any).autoLiabilityCoverage || existingCarrier.autoLiabilityCoverage,
+                  generalLiabilityExpiration: (mappedData as any).generalLiabilityExpiration || existingCarrier.generalLiabilityExpiration,
+                  generalLiabilityCoverage: (mappedData as any).generalLiabilityCoverage || existingCarrier.generalLiabilityCoverage,
+                  cargoLiabilityExpiration: (mappedData as any).cargoLiabilityExpiration || existingCarrier.cargoLiabilityExpiration,
+                  cargoLiabilityCoverage: (mappedData as any).cargoLiabilityCoverage || existingCarrier.cargoLiabilityCoverage
                 }
               });
 

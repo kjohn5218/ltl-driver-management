@@ -34,7 +34,8 @@ import {
   requestCarrierInsurance,
   checkCompletedPackets,
   syncCarrierDocuments,
-  downloadMCPDocument
+  downloadMCPDocument,
+  syncCarrierPacketStatus
 } from '../controllers/carrier.controller';
 import { authenticate, authorize } from '../middleware/auth.middleware';
 import { validateRequest } from '../middleware/validation.middleware';
@@ -289,6 +290,13 @@ router.post(
   '/:id/mcp/sync-documents',
   authorize(UserRole.ADMIN, UserRole.DISPATCHER),
   syncCarrierDocuments
+);
+
+// Sync carrier packet status from MCP (Admin/Dispatcher only)
+router.post(
+  '/:id/mcp/sync-packet-status',
+  authorize(UserRole.ADMIN, UserRole.DISPATCHER),
+  syncCarrierPacketStatus
 );
 
 // Cancel carrier invitation (Admin/Dispatcher only)

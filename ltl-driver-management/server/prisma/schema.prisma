@@ -61,6 +61,23 @@ model Carrier {
   mcpSafetyRating        String?
   scacCode               String?
   totalPowerUnits        Int?
+  isCommonCarrier        Boolean                 @default(false)
+  isContractCarrier      Boolean                 @default(false)
+  isBroker               Boolean                 @default(false)
+  truckCount             Int                     @default(0)
+  trailerCount           Int                     @default(0)
+  driverCount            Int                     @default(0)
+  mcpInsuranceStatus     String?
+  mcpOperationsStatus    String?
+  mcpSafetyStatus        String?
+  mcpPacketStatus        String?
+  mcpTotalPoints         Int                     @default(0)
+  generalLiabilityExpiration    DateTime?
+  generalLiabilityCoverage      Decimal?         @db.Decimal(12, 2)
+  cargoLiabilityExpiration      DateTime?
+  cargoLiabilityCoverage        Decimal?         @db.Decimal(12, 2)
+  autoLiabilityExpiration       DateTime?
+  autoLiabilityCoverage         Decimal?         @db.Decimal(12, 2)
   bookings               Booking[]
   agreements             CarrierAgreement[]
   documents              CarrierDocument[]
