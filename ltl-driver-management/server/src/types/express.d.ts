@@ -4,6 +4,10 @@ declare global {
   namespace Express {
     interface Request {
       user?: User;
+      sessionID?: string;
+      rateLimit?: {
+        resetTime?: Date;
+      };
     }
   }
 }

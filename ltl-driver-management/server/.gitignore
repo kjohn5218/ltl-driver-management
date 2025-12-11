@@ -1,9 +1,27 @@
 node_modules/
 dist/
 .env
+.env.local
+.env.production
+.env.development
 .DS_Store
 *.log
+logs/
 uploads/
 coverage/
 .vscode/
 .idea/
+
+# Security files
+security.db
+audit-report.json
+sbom.json
+sbom-npm.json
+
+# Temporary files
+*.tmp
+*.bak
+*~
+
+# OS files
+Thumbs.db

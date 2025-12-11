@@ -3,7 +3,21 @@ import cors from 'cors';
 import helmet from 'helmet';
 import dotenv from 'dotenv';
 import { PrismaClient } from '@prisma/client';
-import rateLimit from 'express-rate-limit';
+import cookieParser from 'cookie-parser';
+
+// Import security middleware
+import { 
+  authLimiter, 
+  passwordResetLimiter, 
+  apiLimiter, 
+  uploadLimiter 
+} from './middleware/rateLimiter.middleware';
+import { 
+  securityMiddleware, 
+  securityHeaders, 
+  initializeSecurityTables 
+} from './middleware/security.middleware';
+import { csrfToken, csrfCookie } from './middleware/csrf.middleware';
 
 // Import routes
 import authRoutes from './routes/auth.routes';
@@ -22,6 +36,12 @@ import bookingDocumentRoutes from './routes/bookingDocument.routes';
 // Load environment variables
 dotenv.config();
 
+// Validate critical environment variables
+if (!process.env.JWT_SECRET || process.env.JWT_SECRET.length < 32) {
+  console.error('[SECURITY] JWT_SECRET must be set and at least 32 characters long');
+  process.exit(1);
+}
+
 // Initialize Prisma Client
 export const prisma = new PrismaClient();
 
@@ -29,26 +49,73 @@ export const prisma = new PrismaClient();
 const app: Application = express();
 const PORT = process.env.PORT || 3001;
 
-// Middleware
-app.use(helmet());
-app.use(cors({
-  origin: process.env.CLIENT_URL || 'http://localhost:5173',
-  credentials: true
-}));
-app.use(express.json());
-app.use(express.urlencoded({ extended: true }));
+// Request size limits
+app.use(express.json({ limit: '10mb' }));
+app.use(express.urlencoded({ extended: true, limit: '10mb' }));
+app.use(cookieParser());
 
-// Health check endpoint (before rate limiting)
+// Security headers - must be before other middleware
+app.use(securityHeaders);
+
+// Enhanced Helmet configuration
+app.use(helmet({
+  contentSecurityPolicy: {
+    directives: {
+      defaultSrc: ["'self'"],
+      scriptSrc: ["'self'"],
+      styleSrc: ["'self'", "'unsafe-inline'"], // Remove unsafe-inline in production
+      imgSrc: ["'self'", 'data:', 'https:'],
+      fontSrc: ["'self'"],
+      connectSrc: ["'self'"],
+      frameSrc: ["'none'"],
+      objectSrc: ["'none'"],
+      baseUri: ["'self'"],
+      formAction: ["'self'"]
+    }
+  },
+  crossOriginEmbedderPolicy: { policy: "credentialless" },
+  crossOriginOpenerPolicy: { policy: "same-origin" }
+}));
+
+// CORS configuration
+app.use(cors({
+  origin: (origin, callback) => {
+    const allowedOrigins = (process.env.ALLOWED_ORIGINS || 'http://localhost:5173').split(',');
+    
+    // Allow requests with no origin (mobile apps, Postman, etc)
+    if (!origin) return callback(null, true);
+    
+    if (allowedOrigins.includes(origin)) {
+      callback(null, true);
+    } else {
+      callback(new Error('Not allowed by CORS'));
+    }
+  },
+  credentials: true,
+  optionsSuccessStatus: 200
+}));
+
+// Health check endpoint (before other security middleware)
 app.get('/api/health', (_req, res) => {
   res.json({ status: 'OK', timestamp: new Date().toISOString() });
 });
 
-// Rate limiting
-const limiter = rateLimit({
-  windowMs: 15 * 60 * 1000, // 15 minutes
-  max: 1000 // limit each IP to 1000 requests per windowMs
-});
-app.use('/api/', limiter);
+// Apply security middleware
+app.use(securityMiddleware);
+
+// Apply CSRF protection
+app.use(csrfToken);
+app.use(csrfCookie);
+
+// Apply rate limiting based on endpoint type
+app.use('/api/auth/login', authLimiter);
+app.use('/api/auth/register', authLimiter);
+app.use('/api/auth/forgot-password', passwordResetLimiter);
+app.use('/api/auth/reset-password', passwordResetLimiter);
+app.use('/api/documents/upload', uploadLimiter);
+
+// Apply general API rate limiting
+app.use('/api/', apiLimiter);
 
 // Routes
 app.use('/api/auth', authRoutes);
@@ -79,8 +146,16 @@ async function startServer() {
     await prisma.$connect();
     console.log('✅ Database connected successfully');
     
+    // Initialize security tables
+    await initializeSecurityTables();
+    
     app.listen(PORT, () => {
       console.log(`🚀 Server is running on http://localhost:${PORT}`);
+      console.log(`🔒 Security features enabled`);
+      
+      if (process.env.NODE_ENV !== 'production') {
+        console.log('⚠️  Running in development mode - some security features may be relaxed');
+      }
     });
   } catch (error) {
     console.error('❌ Failed to connect to database:', error);

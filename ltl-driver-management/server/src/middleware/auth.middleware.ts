@@ -26,23 +26,41 @@ export const authenticate = async (
       return res.status(401).json({ message: 'No token provided' });
     }
 
-    const decoded = jwt.verify(
-      token,
-      process.env.JWT_SECRET || 'default-secret'
-    ) as JwtPayload;
+    // Ensure JWT secret is configured
+    const jwtSecret = process.env.JWT_SECRET;
+    if (!jwtSecret || jwtSecret.length < 32) {
+      console.error('[SECURITY] JWT_SECRET is not configured or too short');
+      return res.status(500).json({ message: 'Server configuration error' });
+    }
+
+    const decoded = jwt.verify(token, jwtSecret, {
+      algorithms: ['HS256'], // Explicitly specify allowed algorithms
+      maxAge: '15m' // Enforce maximum age
+    }) as JwtPayload;
+
+    // Validate token payload
+    if (!decoded.userId || !decoded.email || !decoded.role) {
+      return res.status(401).json({ message: 'Invalid token payload' });
+    }
 
     const user = await prisma.user.findUnique({
       where: { id: decoded.userId }
     });
 
-    if (!user) {
+    if (!user || user.email !== decoded.email) {
       return res.status(401).json({ message: 'Invalid token' });
     }
 
     req.user = user;
     return next();
   } catch (error) {
-    return res.status(401).json({ message: 'Invalid token' });
+    if (error instanceof jwt.TokenExpiredError) {
+      return res.status(401).json({ message: 'Token expired' });
+    }
+    if (error instanceof jwt.JsonWebTokenError) {
+      return res.status(401).json({ message: 'Invalid token' });
+    }
+    return res.status(401).json({ message: 'Authentication failed' });
   }
 };
 
