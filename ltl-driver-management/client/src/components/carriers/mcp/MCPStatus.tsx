@@ -2,7 +2,6 @@ import React, { useState } from 'react';
 import { Shield, AlertCircle, CheckCircle, XCircle, Clock, FileText, RefreshCw, ExternalLink } from 'lucide-react';
 import { format } from 'date-fns';
 import { carrierService } from '../../../services/carrierService';
-import { api } from '../../../services/api';
 import { Carrier } from '../../../types';
 
 interface MCPStatusProps {
@@ -15,7 +14,6 @@ export const MCPStatus: React.FC<MCPStatusProps> = ({ carrier, onUpdate }) => {
   const [showInsuranceModal, setShowInsuranceModal] = useState(false);
   const [sendEmail, setSendEmail] = useState(true);
   const [notes, setNotes] = useState('');
-  const [isSyncingAllData, setIsSyncingAllData] = useState(false);
   const [isSyncingPacketStatus, setIsSyncingPacketStatus] = useState(false);
 
   const getStatusColor = (status: string | null) => {
@@ -126,30 +124,6 @@ export const MCPStatus: React.FC<MCPStatusProps> = ({ carrier, onUpdate }) => {
     }
   };
 
-  const handleSyncAllMCPData = async () => {
-    if (!carrier.dotNumber) return;
-    
-    setIsSyncingAllData(true);
-    try {
-      const response = await api.post(`/carriers/${carrier.id}/sync`);
-      
-      if (response.data.success) {
-        alert('Successfully synced all MCP data including safety rating!');
-        // Call the onUpdate callback to refresh data
-        if (onUpdate) {
-          onUpdate();
-        }
-      } else {
-        alert('Failed to sync MCP data. Please try again.');
-      }
-    } catch (error: any) {
-      console.error('Sync error:', error);
-      alert(error.response?.data?.message || 'Failed to sync MCP data');
-    } finally {
-      setIsSyncingAllData(false);
-    }
-  };
-
   const handleSyncPacketStatus = async () => {
     if (!carrier.dotNumber) return;
     
@@ -179,17 +153,6 @@ export const MCPStatus: React.FC<MCPStatusProps> = ({ carrier, onUpdate }) => {
           <h3 className="text-lg font-medium text-gray-900">MyCarrierPackets Integration</h3>
         </div>
         <div className="flex items-center space-x-2">
-          {carrier.dotNumber && (
-            <button
-              onClick={handleSyncAllMCPData}
-              disabled={isSyncingAllData}
-              className="inline-flex items-center px-3 py-1 text-sm bg-blue-600 text-white rounded hover:bg-blue-700 disabled:bg-blue-400"
-              title="Sync all MCP data including safety rating"
-            >
-              <RefreshCw className={`w-4 h-4 mr-1 ${isSyncingAllData ? 'animate-spin' : ''}`} />
-              {isSyncingAllData ? 'Syncing...' : 'Sync All'}
-            </button>
-          )}
           {carrier.mcpMonitored ? (
             <span className="inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium bg-blue-100 text-blue-800">
               <CheckCircle className="w-3 h-3 mr-1" />

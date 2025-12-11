@@ -1368,6 +1368,7 @@ const CarrierDetailsModal: React.FC<CarrierDetailsModalProps> = ({ carrier: init
       ? carrier.status 
       : carrier.status === 'ONBOARDED' ? 'ACTIVE' : 'PENDING',
     carrierType: carrier.carrierType || '',
+    safetyRating: carrier.safetyRating || '',
     taxId: carrier.taxId || '',
     ratePerMile: carrier.ratePerMile?.toString() || '',
     rating: carrier.rating?.toString() || '',
@@ -1392,16 +1393,55 @@ const CarrierDetailsModal: React.FC<CarrierDetailsModalProps> = ({ carrier: init
 
   // Fetch full carrier details
   useEffect(() => {
+    let isCancelled = false;
+    
     const fetchCarrierDetails = async () => {
       try {
         const fullCarrier = await carrierService.getCarrierById(carrier.id);
-        setCarrier(fullCarrier);
+        
+        // Only update state if the component is still mounted
+        if (!isCancelled) {
+          setCarrier(fullCarrier);
+          // Update formData with fresh carrier data
+          setFormData({
+            name: fullCarrier.name,
+            contactPerson: fullCarrier.contactPerson || '',
+            phone: fullCarrier.phone || '',
+            email: fullCarrier.email || '',
+            mcNumber: fullCarrier.mcNumber || '',
+            dotNumber: fullCarrier.dotNumber || '',
+            streetAddress1: fullCarrier.streetAddress1 || '',
+            streetAddress2: fullCarrier.streetAddress2 || '',
+            city: fullCarrier.city || '',
+            state: fullCarrier.state || '',
+            zipCode: fullCarrier.zipCode || '',
+            status: ['PENDING', 'ACTIVE', 'INACTIVE', 'SUSPENDED'].includes(fullCarrier.status) 
+              ? fullCarrier.status 
+              : fullCarrier.status === 'ONBOARDED' ? 'ACTIVE' : 'PENDING',
+            carrierType: fullCarrier.carrierType || '',
+            safetyRating: fullCarrier.safetyRating || '',
+            taxId: fullCarrier.taxId || '',
+            ratePerMile: fullCarrier.ratePerMile?.toString() || '',
+            rating: fullCarrier.rating?.toString() || '',
+            remittanceContact: fullCarrier.remittanceContact || '',
+            remittanceEmail: fullCarrier.remittanceEmail || '',
+            factoringCompany: fullCarrier.factoringCompany || '',
+            onboardingComplete: fullCarrier.onboardingComplete
+          });
+        }
       } catch (error) {
-        console.error('Failed to fetch carrier details:', error);
+        if (!isCancelled) {
+          console.error('Failed to fetch carrier details:', error);
+        }
       }
     };
     
     fetchCarrierDetails();
+    
+    // Cleanup function to cancel the effect if component unmounts
+    return () => {
+      isCancelled = true;
+    };
   }, [carrier.id]);
 
   // Fetch carrier agreements
@@ -1609,6 +1649,7 @@ const CarrierDetailsModal: React.FC<CarrierDetailsModalProps> = ({ carrier: init
       payload.onboardingComplete = formData.onboardingComplete;
       
       if (formData.carrierType.trim()) payload.carrierType = formData.carrierType.trim();
+      if (formData.safetyRating.trim()) payload.safetyRating = formData.safetyRating.trim();
       if (formData.taxId.trim()) payload.taxId = formData.taxId.trim();
       
       // Convert numeric fields
@@ -1661,6 +1702,7 @@ const CarrierDetailsModal: React.FC<CarrierDetailsModalProps> = ({ carrier: init
         ? carrier.status 
         : carrier.status === 'ONBOARDED' ? 'ACTIVE' : 'PENDING',
       carrierType: carrier.carrierType || '',
+      safetyRating: carrier.safetyRating || '',
       taxId: carrier.taxId || '',
       ratePerMile: carrier.ratePerMile?.toString() || '',
       rating: carrier.rating?.toString() || '',
@@ -1755,49 +1797,51 @@ const CarrierDetailsModal: React.FC<CarrierDetailsModalProps> = ({ carrier: init
               )}
             </div>
 
-            <div>
-              <label className="block text-sm font-medium text-gray-700 mb-1">Contact Person</label>
-              {isEditMode ? (
-                <input
-                  type="text"
-                  value={formData.contactPerson}
-                  onChange={(e) => setFormData({...formData, contactPerson: e.target.value})}
-                  className="w-full p-2 border rounded focus:ring-blue-500 focus:border-blue-500"
-                  placeholder="Enter contact person"
-                />
-              ) : (
-                <p className="text-sm text-gray-900">{carrier.contactPerson || 'N/A'}</p>
-              )}
-            </div>
+            <div className="grid grid-cols-3 gap-4">
+              <div>
+                <label className="block text-sm font-medium text-gray-700 mb-1">Contact Person</label>
+                {isEditMode ? (
+                  <input
+                    type="text"
+                    value={formData.contactPerson}
+                    onChange={(e) => setFormData({...formData, contactPerson: e.target.value})}
+                    className="w-full p-2 border rounded focus:ring-blue-500 focus:border-blue-500"
+                    placeholder="Enter contact person"
+                  />
+                ) : (
+                  <p className="text-sm text-gray-900">{carrier.contactPerson || 'N/A'}</p>
+                )}
+              </div>
 
-            <div>
-              <label className="block text-sm font-medium text-gray-700 mb-1">Phone</label>
-              {isEditMode ? (
-                <input
-                  type="text"
-                  value={formData.phone}
-                  onChange={(e) => setFormData({...formData, phone: e.target.value})}
-                  className="w-full p-2 border rounded focus:ring-blue-500 focus:border-blue-500"
-                  placeholder="Enter phone number"
-                />
-              ) : (
-                <p className="text-sm text-gray-900">{carrier.phone || 'N/A'}</p>
-              )}
-            </div>
+              <div>
+                <label className="block text-sm font-medium text-gray-700 mb-1">Phone</label>
+                {isEditMode ? (
+                  <input
+                    type="text"
+                    value={formData.phone}
+                    onChange={(e) => setFormData({...formData, phone: e.target.value})}
+                    className="w-full p-2 border rounded focus:ring-blue-500 focus:border-blue-500"
+                    placeholder="Enter phone number"
+                  />
+                ) : (
+                  <p className="text-sm text-gray-900">{carrier.phone || 'N/A'}</p>
+                )}
+              </div>
 
-            <div>
-              <label className="block text-sm font-medium text-gray-700 mb-1">Email</label>
-              {isEditMode ? (
-                <input
-                  type="email"
-                  value={formData.email}
-                  onChange={(e) => setFormData({...formData, email: e.target.value})}
-                  className="w-full p-2 border rounded focus:ring-blue-500 focus:border-blue-500"
-                  placeholder="Enter email address"
-                />
-              ) : (
-                <p className="text-sm text-gray-900">{carrier.email || 'N/A'}</p>
-              )}
+              <div>
+                <label className="block text-sm font-medium text-gray-700 mb-1">Email</label>
+                {isEditMode ? (
+                  <input
+                    type="email"
+                    value={formData.email}
+                    onChange={(e) => setFormData({...formData, email: e.target.value})}
+                    className="w-full p-2 border rounded focus:ring-blue-500 focus:border-blue-500"
+                    placeholder="Enter email address"
+                  />
+                ) : (
+                  <p className="text-sm text-gray-900">{carrier.email || 'N/A'}</p>
+                )}
+              </div>
             </div>
           </div>
 
@@ -1932,23 +1976,6 @@ const CarrierDetailsModal: React.FC<CarrierDetailsModalProps> = ({ carrier: init
                 />
               ) : (
                 <p className="text-sm text-gray-900">{carrier.ratePerMile ? `$${carrier.ratePerMile}` : 'N/A'}</p>
-              )}
-            </div>
-            <div>
-              <label className="block text-sm font-medium text-gray-700 mb-1">Rating</label>
-              {isEditMode ? (
-                <input
-                  type="number"
-                  step="0.1"
-                  min="0"
-                  max="5"
-                  value={formData.rating}
-                  onChange={(e) => setFormData({...formData, rating: e.target.value})}
-                  className="w-full p-2 border rounded focus:ring-blue-500 focus:border-blue-500"
-                  placeholder="0.0"
-                />
-              ) : (
-                <p className="text-sm text-gray-900">{carrier.rating || 'N/A'}</p>
               )}
             </div>
             <div>

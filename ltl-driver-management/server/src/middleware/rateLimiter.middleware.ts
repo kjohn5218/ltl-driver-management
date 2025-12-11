@@ -4,8 +4,8 @@ import { Request, Response } from 'express';
 // Custom key generator to handle authenticated vs unauthenticated users
 const keyGenerator = (req: Request): string => {
   // If user is authenticated, use user ID
-  if (req.user?.id) {
-    return `user:${req.user.id}`;
+  if ((req as any).user?.id) {
+    return `user:${(req as any).user.id}`;
   }
   // Otherwise use IP address
   return `ip:${req.ip || req.socket.remoteAddress || 'unknown'}`;
@@ -23,7 +23,7 @@ export const authLimiter = rateLimit({
     res.status(429).json({
       error: 'Too Many Requests',
       message: 'Too many authentication attempts, please try again later',
-      retryAfter: Math.ceil(req.rateLimit?.resetTime?.getTime() || Date.now() / 1000)
+      retryAfter: Math.ceil((req as any).rateLimit?.resetTime?.getTime() || Date.now() / 1000)
     });
   }
 });
@@ -41,7 +41,7 @@ export const passwordResetLimiter = rateLimit({
     res.status(429).json({
       error: 'Too Many Requests',
       message: 'Too many password reset attempts, please try again later',
-      retryAfter: Math.ceil(req.rateLimit?.resetTime?.getTime() || Date.now() / 1000)
+      retryAfter: Math.ceil((req as any).rateLimit?.resetTime?.getTime() || Date.now() / 1000)
     });
   }
 });
@@ -62,7 +62,7 @@ export const apiLimiter = rateLimit({
     res.status(429).json({
       error: 'Too Many Requests',
       message: 'API rate limit exceeded, please slow down',
-      retryAfter: Math.ceil(req.rateLimit?.resetTime?.getTime() || Date.now() / 1000)
+      retryAfter: Math.ceil((req as any).rateLimit?.resetTime?.getTime() || Date.now() / 1000)
     });
   }
 });
@@ -79,7 +79,7 @@ export const publicApiLimiter = rateLimit({
     res.status(429).json({
       error: 'Too Many Requests',
       message: 'Rate limit exceeded, please try again later',
-      retryAfter: Math.ceil(req.rateLimit?.resetTime?.getTime() || Date.now() / 1000)
+      retryAfter: Math.ceil((req as any).rateLimit?.resetTime?.getTime() || Date.now() / 1000)
     });
   }
 });
@@ -96,7 +96,7 @@ export const uploadLimiter = rateLimit({
     res.status(429).json({
       error: 'Too Many Requests',
       message: 'Upload rate limit exceeded, please try again later',
-      retryAfter: Math.ceil(req.rateLimit?.resetTime?.getTime() || Date.now() / 1000)
+      retryAfter: Math.ceil((req as any).rateLimit?.resetTime?.getTime() || Date.now() / 1000)
     });
   }
 });

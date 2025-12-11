@@ -989,10 +989,25 @@ export class MyCarrierPacketsService {
       totalPowerUnits: mcpData.CarrierOperationalDetail?.TotalPowerUnits || 0,
       
       // Safety & compliance
-      // Use Risk Assessment Overall rating if Safety rating is "Not Rated"
-      safetyRating: (mcpData.AssureAdvantage?.[0]?.CarrierDetails?.Safety?.rating === 'Not Rated' 
-        ? mcpData.AssureAdvantage?.[0]?.CarrierDetails?.RiskAssessment?.Overall 
-        : mcpData.AssureAdvantage?.[0]?.CarrierDetails?.Safety?.rating) || '',
+      // Use Risk Assessment Overall rating if Safety rating is "Not Rated" or empty
+      safetyRating: (() => {
+        const safetyRating = mcpData.AssureAdvantage?.[0]?.CarrierDetails?.Safety?.rating;
+        const riskAssessmentOverall = mcpData.AssureAdvantage?.[0]?.CarrierDetails?.RiskAssessment?.Overall;
+        
+        // Log the values for debugging
+        const companyName = mcpData.LegalName || mcpData.DBAName || '';
+        if (companyName && companyName.includes('OLR')) {
+          console.log(`MCP Safety Rating for ${companyName}: Safety="${safetyRating}", RiskAssessment="${riskAssessmentOverall}"`);
+        }
+        
+        // Check if safety rating is missing, empty, or "Not Rated" (case-insensitive)
+        if (!safetyRating || safetyRating.trim() === '' || safetyRating.toUpperCase() === 'NOT RATED') {
+          // Fall back to Risk Assessment Overall if available
+          return riskAssessmentOverall || '';
+        }
+        
+        return safetyRating;
+      })(),
       mcpAuthorityStatus: mcpData.AuthorityStatus || '',
       mcpRiskScore: mcpData.AssureAdvantage?.[0]?.RiskScore || null,
       

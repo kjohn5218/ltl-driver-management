@@ -56,8 +56,8 @@ export const csrfProtection = (req: Request, res: Response, next: NextFunction):
   }
 
   // Get session identifier
-  const sessionId = req.user?.id ? `user:${req.user.id}` : 
-                   req.sessionID || req.ip || 'anonymous';
+  const sessionId = (req as any).user?.id ? `user:${(req as any).user.id}` : 
+                   (req as any).sessionID || req.ip || 'anonymous';
 
   // Check for CSRF token in headers or body
   const providedToken = req.headers['x-csrf-token'] as string || 
@@ -83,8 +83,8 @@ export const csrfProtection = (req: Request, res: Response, next: NextFunction):
 // Middleware to generate and attach CSRF token
 export const csrfToken = (req: Request, res: Response, next: NextFunction): void => {
   // Get session identifier
-  const sessionId = req.user?.id ? `user:${req.user.id}` : 
-                   req.sessionID || req.ip || 'anonymous';
+  const sessionId = (req as any).user?.id ? `user:${(req as any).user.id}` : 
+                   (req as any).sessionID || req.ip || 'anonymous';
 
   // Generate or retrieve token
   const token = getOrCreateToken(sessionId);

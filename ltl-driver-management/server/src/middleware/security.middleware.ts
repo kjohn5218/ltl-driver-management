@@ -31,8 +31,8 @@ const strikeCache = new Map<string, { blocked: boolean; expiresAt: number }>();
 
 // Get client identity
 const getClientIdentity = (req: Request): string => {
-  if (req.user?.id) {
-    return `user:${req.user.id}`;
+  if ((req as any).user?.id) {
+    return `user:${(req as any).user.id}`;
   }
   const ip = req.ip || req.socket.remoteAddress || 'unknown';
   return `ip:${ip}`;
