@@ -25,20 +25,15 @@ import {
   Plus,
   Edit,
   Trash2,
-  Calendar,
-  List,
-  ChevronLeft,
-  ChevronRight,
   Truck,
   User,
   ArrowRight,
   Play,
   CheckCircle,
   XCircle,
-  Filter
+  Filter,
+  Calendar
 } from 'lucide-react';
-
-type ViewMode = 'calendar' | 'list';
 
 const statusFilterOptions: { value: TripStatus | ''; label: string }[] = [
   { value: '', label: 'All Statuses' },
@@ -53,7 +48,6 @@ const statusFilterOptions: { value: TripStatus | ''; label: string }[] = [
 
 export const Dispatch: React.FC = () => {
   const { user } = useAuth();
-  const [viewMode, setViewMode] = useState<ViewMode>('list');
   const [trips, setTrips] = useState<LinehaulTrip[]>([]);
   const [profiles, setProfiles] = useState<LinehaulProfile[]>([]);
   const [drivers, setDrivers] = useState<CarrierDriver[]>([]);
@@ -66,16 +60,9 @@ export const Dispatch: React.FC = () => {
   const [searchTerm, setSearchTerm] = useState('');
   const [statusFilter, setStatusFilter] = useState<TripStatus | ''>('');
   const [profileFilter, setProfileFilter] = useState<number | ''>('');
+  const [dateFilter, setDateFilter] = useState('');
   const [currentPage, setCurrentPage] = useState(1);
   const [totalPages, setTotalPages] = useState(1);
-
-  // Calendar state
-  const [currentWeekStart, setCurrentWeekStart] = useState(() => {
-    const today = new Date();
-    const day = today.getDay();
-    const diff = today.getDate() - day;
-    return new Date(today.setDate(diff));
-  });
 
   // Modals
   const [isCreateModalOpen, setIsCreateModalOpen] = useState(false);
@@ -94,7 +81,7 @@ export const Dispatch: React.FC = () => {
 
   useEffect(() => {
     fetchTrips();
-  }, [currentPage, searchTerm, statusFilter, profileFilter, viewMode, currentWeekStart]);
+  }, [currentPage, searchTerm, statusFilter, profileFilter, dateFilter]);
 
   const fetchProfiles = async () => {
     try {
@@ -132,28 +119,16 @@ export const Dispatch: React.FC = () => {
   const fetchTrips = async () => {
     try {
       setLoading(true);
-
-      if (viewMode === 'calendar') {
-        const endDate = new Date(currentWeekStart);
-        endDate.setDate(endDate.getDate() + 6);
-
-        const data = await linehaulTripService.getTripsForDispatch(
-          currentWeekStart.toISOString().split('T')[0],
-          endDate.toISOString().split('T')[0],
-          profileFilter || undefined
-        );
-        setTrips(data);
-      } else {
-        const response = await linehaulTripService.getTrips({
-          search: searchTerm || undefined,
-          status: statusFilter || undefined,
-          profileId: profileFilter || undefined,
-          page: currentPage,
-          limit: 20
-        });
-        setTrips(response.trips);
-        setTotalPages(response.pagination.totalPages);
-      }
+      const response = await linehaulTripService.getTrips({
+        search: searchTerm || undefined,
+        status: statusFilter || undefined,
+        profileId: profileFilter || undefined,
+        date: dateFilter || undefined,
+        page: currentPage,
+        limit: 20
+      });
+      setTrips(response.trips);
+      setTotalPages(response.pagination.totalPages);
     } catch (error) {
       toast.error('Failed to fetch trips');
     } finally {
@@ -220,33 +195,6 @@ export const Dispatch: React.FC = () => {
     } catch (error: any) {
       toast.error(error.response?.data?.message || `Failed to ${action} trip`);
     }
-  };
-
-  const navigateWeek = (direction: 'prev' | 'next') => {
-    const newStart = new Date(currentWeekStart);
-    newStart.setDate(newStart.getDate() + (direction === 'next' ? 7 : -7));
-    setCurrentWeekStart(newStart);
-  };
-
-  const getWeekDates = () => {
-    const dates = [];
-    for (let i = 0; i < 7; i++) {
-      const date = new Date(currentWeekStart);
-      date.setDate(date.getDate() + i);
-      dates.push(date);
-    }
-    return dates;
-  };
-
-  const getTripsForDate = (date: Date) => {
-    return trips.filter(trip => {
-      const tripDate = new Date(trip.dispatchDate);
-      return tripDate.toDateString() === date.toDateString();
-    });
-  };
-
-  const formatDate = (date: Date) => {
-    return date.toLocaleDateString('en-US', { weekday: 'short', month: 'short', day: 'numeric' });
   };
 
   const columns = [
@@ -386,96 +334,6 @@ export const Dispatch: React.FC = () => {
       : [])
   ];
 
-  const renderCalendarView = () => {
-    const weekDates = getWeekDates();
-
-    return (
-      <div className="bg-white shadow rounded-lg overflow-hidden">
-        {/* Calendar Header */}
-        <div className="p-4 border-b border-gray-200 flex items-center justify-between">
-          <button
-            onClick={() => navigateWeek('prev')}
-            className="p-2 hover:bg-gray-100 rounded-md"
-          >
-            <ChevronLeft className="w-5 h-5" />
-          </button>
-          <h3 className="font-medium text-gray-900">
-            {formatDate(currentWeekStart)} - {formatDate(weekDates[6])}
-          </h3>
-          <button
-            onClick={() => navigateWeek('next')}
-            className="p-2 hover:bg-gray-100 rounded-md"
-          >
-            <ChevronRight className="w-5 h-5" />
-          </button>
-        </div>
-
-        {/* Calendar Grid */}
-        <div className="grid grid-cols-7 divide-x divide-gray-200">
-          {weekDates.map((date) => (
-            <div key={date.toISOString()} className="min-h-[300px]">
-              <div className={`p-2 text-center border-b ${
-                date.toDateString() === new Date().toDateString()
-                  ? 'bg-indigo-50 font-medium'
-                  : 'bg-gray-50'
-              }`}>
-                <div className="text-xs text-gray-500">{date.toLocaleDateString('en-US', { weekday: 'short' })}</div>
-                <div className={`text-lg ${
-                  date.toDateString() === new Date().toDateString() ? 'text-indigo-600' : 'text-gray-900'
-                }`}>
-                  {date.getDate()}
-                </div>
-              </div>
-
-              <div className="p-2 space-y-2">
-                {getTripsForDate(date).map((trip) => (
-                  <div
-                    key={trip.id}
-                    onClick={() => {
-                      setSelectedTrip(trip);
-                      setIsDetailsModalOpen(true);
-                    }}
-                    className="p-2 bg-white border rounded shadow-sm cursor-pointer hover:shadow-md transition-shadow"
-                  >
-                    <div className="flex items-center justify-between mb-1">
-                      <span className="text-xs font-medium text-gray-900">
-                        {trip.tripNumber}
-                      </span>
-                      <TripStatusBadge status={trip.status} />
-                    </div>
-                    <div className="text-xs text-gray-600">
-                      {trip.linehaulProfile?.profileCode}
-                    </div>
-                    <div className="text-xs text-gray-500 mt-1">
-                      {trip.plannedDeparture || '-'}
-                    </div>
-                    {trip.driver && (
-                      <div className="text-xs text-gray-500 truncate">
-                        {trip.driver.name}
-                      </div>
-                    )}
-                  </div>
-                ))}
-
-                {isAdmin && (
-                  <button
-                    onClick={() => {
-                      // Pre-fill date for new trip
-                      setIsCreateModalOpen(true);
-                    }}
-                    className="w-full p-2 text-xs text-gray-500 hover:text-indigo-600 hover:bg-indigo-50 rounded border border-dashed border-gray-300"
-                  >
-                    + Add Trip
-                  </button>
-                )}
-              </div>
-            </div>
-          ))}
-        </div>
-      </div>
-    );
-  };
-
   return (
     <div className="space-y-6">
       <PageHeader
@@ -483,68 +341,62 @@ export const Dispatch: React.FC = () => {
         subtitle="Manage linehaul trip dispatch and driver assignments"
       />
 
-      {/* View Toggle and Filters */}
+      {/* Filters */}
       <div className="bg-white shadow rounded-lg p-4">
         <div className="flex flex-col md:flex-row md:items-center md:justify-between space-y-4 md:space-y-0">
-          <div className="flex items-center space-x-4">
-            {/* View Mode Toggle */}
-            <div className="flex border rounded-md">
-              <button
-                onClick={() => setViewMode('calendar')}
-                className={`px-3 py-2 flex items-center text-sm ${
-                  viewMode === 'calendar'
-                    ? 'bg-indigo-50 text-indigo-600'
-                    : 'text-gray-600 hover:bg-gray-50'
-                }`}
-              >
-                <Calendar className="w-4 h-4 mr-1" />
-                Calendar
-              </button>
-              <button
-                onClick={() => setViewMode('list')}
-                className={`px-3 py-2 flex items-center text-sm ${
-                  viewMode === 'list'
-                    ? 'bg-indigo-50 text-indigo-600'
-                    : 'text-gray-600 hover:bg-gray-50'
-                }`}
-              >
-                <List className="w-4 h-4 mr-1" />
-                List
-              </button>
+          <div className="flex flex-wrap items-center gap-4">
+            <div className="w-64">
+              <Search
+                value={searchTerm}
+                onChange={(value) => {
+                  setSearchTerm(value);
+                  setCurrentPage(1);
+                }}
+                placeholder="Search trips..."
+              />
             </div>
 
-            {viewMode === 'list' && (
-              <>
-                <div className="w-64">
-                  <Search
-                    value={searchTerm}
-                    onChange={(value) => {
-                      setSearchTerm(value);
-                      setCurrentPage(1);
-                    }}
-                    placeholder="Search trips..."
-                  />
-                </div>
+            <div className="flex items-center space-x-2">
+              <Calendar className="w-4 h-4 text-gray-400" />
+              <input
+                type="date"
+                value={dateFilter}
+                onChange={(e) => {
+                  setDateFilter(e.target.value);
+                  setCurrentPage(1);
+                }}
+                className="rounded-md border-gray-300 text-sm"
+              />
+              {dateFilter && (
+                <button
+                  onClick={() => {
+                    setDateFilter('');
+                    setCurrentPage(1);
+                  }}
+                  className="text-gray-400 hover:text-gray-600 text-sm"
+                >
+                  Clear
+                </button>
+              )}
+            </div>
 
-                <div className="flex items-center space-x-2">
-                  <Filter className="w-4 h-4 text-gray-400" />
-                  <select
-                    value={statusFilter}
-                    onChange={(e) => {
-                      setStatusFilter(e.target.value as TripStatus | '');
-                      setCurrentPage(1);
-                    }}
-                    className="rounded-md border-gray-300 text-sm"
-                  >
-                    {statusFilterOptions.map((option) => (
-                      <option key={option.value} value={option.value}>
-                        {option.label}
-                      </option>
-                    ))}
-                  </select>
-                </div>
-              </>
-            )}
+            <div className="flex items-center space-x-2">
+              <Filter className="w-4 h-4 text-gray-400" />
+              <select
+                value={statusFilter}
+                onChange={(e) => {
+                  setStatusFilter(e.target.value as TripStatus | '');
+                  setCurrentPage(1);
+                }}
+                className="rounded-md border-gray-300 text-sm"
+              >
+                {statusFilterOptions.map((option) => (
+                  <option key={option.value} value={option.value}>
+                    {option.label}
+                  </option>
+                ))}
+              </select>
+            </div>
 
             <select
               value={profileFilter}
@@ -576,23 +428,19 @@ export const Dispatch: React.FC = () => {
       </div>
 
       {/* Content */}
-      {viewMode === 'calendar' ? (
-        renderCalendarView()
-      ) : (
-        <div className="bg-white shadow rounded-lg">
-          <DataTable columns={columns} data={trips} loading={loading} />
+      <div className="bg-white shadow rounded-lg">
+        <DataTable columns={columns} data={trips} loading={loading} />
 
-          {!loading && trips.length > 0 && (
-            <div className="px-6 py-4 border-t border-gray-200">
-              <TablePagination
-                currentPage={currentPage}
-                totalPages={totalPages}
-                onPageChange={setCurrentPage}
-              />
-            </div>
-          )}
-        </div>
-      )}
+        {!loading && trips.length > 0 && (
+          <div className="px-6 py-4 border-t border-gray-200">
+            <TablePagination
+              currentPage={currentPage}
+              totalPages={totalPages}
+              onPageChange={setCurrentPage}
+            />
+          </div>
+        )}
+      </div>
 
       {/* Create Trip Modal */}
       <Modal

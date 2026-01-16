@@ -8,6 +8,7 @@ interface TripFilters {
   driverId?: number;
   originTerminalId?: number;
   destinationTerminalId?: number;
+  date?: string;  // Single date filter
   startDate?: string;
   endDate?: string;
   page?: number;
@@ -41,8 +42,14 @@ export const linehaulTripService = {
     if (filters?.driverId) params.append('driverId', filters.driverId.toString());
     if (filters?.originTerminalId) params.append('originTerminalId', filters.originTerminalId.toString());
     if (filters?.destinationTerminalId) params.append('destinationTerminalId', filters.destinationTerminalId.toString());
-    if (filters?.startDate) params.append('startDate', filters.startDate);
-    if (filters?.endDate) params.append('endDate', filters.endDate);
+    // Single date filter - use as both start and end date
+    if (filters?.date) {
+      params.append('startDate', filters.date);
+      params.append('endDate', filters.date);
+    } else {
+      if (filters?.startDate) params.append('startDate', filters.startDate);
+      if (filters?.endDate) params.append('endDate', filters.endDate);
+    }
     if (filters?.page) params.append('page', filters.page.toString());
     if (filters?.limit) params.append('limit', filters.limit.toString());
 
