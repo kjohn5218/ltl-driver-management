@@ -42,13 +42,14 @@ export const Sidebar: React.FC<SidebarProps> = ({ isOpen, onClose }) => {
 
   const navigation = [
     { name: 'Dashboard', href: '/dashboard', icon: Home },
-    { name: 'Bookings', href: '/bookings', icon: Calendar },
     { name: 'Drivers', href: '/drivers', icon: User },
     { name: 'Carriers', href: '/carriers', icon: Truck },
     { name: 'Linehaul Profiles', href: '/routes', icon: Route },
     { name: 'Locations', href: '/locations', icon: MapPin },
-    { name: 'Invoices', href: '/invoices', icon: FileText },
     { name: 'Reports', href: '/reports', icon: BarChart3 },
+    // Contract Power
+    { name: 'Bookings', href: '/bookings', icon: Calendar, section: 'contractpower' },
+    { name: 'Invoices', href: '/invoices', icon: FileText, section: 'contractpower' },
     // Dispatch & Fleet Management
     { name: 'Dispatch Board', href: '/dispatch', icon: Send, section: 'dispatch' },
     { name: 'Dispatch Trip', href: '/dispatch/trip', icon: Truck, section: 'dispatch' },
@@ -165,11 +166,13 @@ export const Sidebar: React.FC<SidebarProps> = ({ isOpen, onClose }) => {
               return null;
             }
 
-            // Hide dispatch & payroll items for non-admin/dispatcher users
-            if ((item.section === 'dispatch' || item.section === 'payroll') && !isAdminOrDispatcher) {
+            // Hide dispatch, payroll & contractpower items for non-admin/dispatcher users
+            if ((item.section === 'dispatch' || item.section === 'payroll' || item.section === 'contractpower') && !isAdminOrDispatcher) {
               return null;
             }
 
+            // Add section divider before Contract Power section
+            const showContractPowerDivider = item.name === 'Bookings' && isAdminOrDispatcher;
             // Add section divider before Dispatch section
             const showDispatchDivider = item.name === 'Dispatch Board' && isAdminOrDispatcher;
             // Add section divider before Rate Cards
@@ -177,6 +180,13 @@ export const Sidebar: React.FC<SidebarProps> = ({ isOpen, onClose }) => {
 
             return (
               <React.Fragment key={item.name}>
+                {showContractPowerDivider && (
+                  <div className="pt-4 pb-2">
+                    <p className="px-3 text-xs font-semibold text-gray-400 dark:text-gray-500 uppercase tracking-wider">
+                      Contract Power
+                    </p>
+                  </div>
+                )}
                 {showDispatchDivider && (
                   <div className="pt-4 pb-2">
                     <p className="px-3 text-xs font-semibold text-gray-400 dark:text-gray-500 uppercase tracking-wider">
