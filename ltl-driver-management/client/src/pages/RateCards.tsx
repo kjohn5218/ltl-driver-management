@@ -7,7 +7,7 @@ import { Search } from '../components/common/Search';
 import { Modal } from '../components/common/Modal';
 import { rateCardService } from '../services/rateCardService';
 import { linehaulProfileService } from '../services/linehaulProfileService';
-import { terminalService } from '../services/terminalService';
+import { locationService } from '../services/locationService';
 import { driverService } from '../services/driverService';
 import { carrierService } from '../services/carrierService';
 import {
@@ -15,7 +15,7 @@ import {
   RateCardType,
   RateMethod,
   LinehaulProfile,
-  Terminal,
+  Location,
   CarrierDriver,
   Carrier
 } from '../types';
@@ -64,7 +64,7 @@ export const RateCards: React.FC = () => {
   const { user } = useAuth();
   const [rateCards, setRateCards] = useState<RateCard[]>([]);
   const [profiles, setProfiles] = useState<LinehaulProfile[]>([]);
-  const [terminals, setTerminals] = useState<Terminal[]>([]);
+  const [locations, setLocations] = useState<Location[]>([]);
   const [drivers, setDrivers] = useState<CarrierDriver[]>([]);
   const [carriers, setCarriers] = useState<Carrier[]>([]);
   const [loading, setLoading] = useState(true);
@@ -103,7 +103,7 @@ export const RateCards: React.FC = () => {
 
   useEffect(() => {
     fetchProfiles();
-    fetchTerminals();
+    fetchLocations();
     fetchDrivers();
     fetchCarriers();
   }, []);
@@ -121,12 +121,12 @@ export const RateCards: React.FC = () => {
     }
   };
 
-  const fetchTerminals = async () => {
+  const fetchLocations = async () => {
     try {
-      const data = await terminalService.getTerminalsList();
-      setTerminals(data);
+      const data = await locationService.getLocationsList();
+      setLocations(data);
     } catch (error) {
-      console.error('Failed to fetch terminals:', error);
+      console.error('Failed to fetch locations:', error);
     }
   };
 
@@ -467,28 +467,28 @@ export const RateCards: React.FC = () => {
           {formData.rateType === 'OD_PAIR' && (
             <>
               <div>
-                <label className="block text-sm font-medium text-gray-700">Origin Terminal</label>
+                <label className="block text-sm font-medium text-gray-700">Origin Location</label>
                 <select
                   value={formData.originTerminalId}
                   onChange={(e) => setFormData({ ...formData, originTerminalId: e.target.value })}
                   className="mt-1 block w-full rounded-md border-gray-300 shadow-sm focus:border-indigo-500 focus:ring-indigo-500 sm:text-sm"
                 >
                   <option value="">Select Origin</option>
-                  {terminals.map((terminal) => (
-                    <option key={terminal.id} value={terminal.id}>{terminal.code} - {terminal.name}</option>
+                  {locations.map((location) => (
+                    <option key={location.id} value={location.id}>{location.code} - {location.name}</option>
                   ))}
                 </select>
               </div>
               <div>
-                <label className="block text-sm font-medium text-gray-700">Destination Terminal</label>
+                <label className="block text-sm font-medium text-gray-700">Destination Location</label>
                 <select
                   value={formData.destinationTerminalId}
                   onChange={(e) => setFormData({ ...formData, destinationTerminalId: e.target.value })}
                   className="mt-1 block w-full rounded-md border-gray-300 shadow-sm focus:border-indigo-500 focus:ring-indigo-500 sm:text-sm"
                 >
                   <option value="">Select Destination</option>
-                  {terminals.map((terminal) => (
-                    <option key={terminal.id} value={terminal.id}>{terminal.code} - {terminal.name}</option>
+                  {locations.map((location) => (
+                    <option key={location.id} value={location.id}>{location.code} - {location.name}</option>
                   ))}
                 </select>
               </div>

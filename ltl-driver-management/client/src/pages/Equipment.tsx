@@ -9,13 +9,13 @@ import { TruckForm } from '../components/equipment/TruckForm';
 import { TrailerForm } from '../components/equipment/TrailerForm';
 import { DollyForm } from '../components/equipment/DollyForm';
 import { equipmentService } from '../services/equipmentService';
-import { terminalService } from '../services/terminalService';
+import { locationService } from '../services/locationService';
 import {
   EquipmentTruck,
   EquipmentTrailer,
   EquipmentDolly,
   EquipmentStatus,
-  Terminal
+  Location
 } from '../types';
 import { useAuth } from '../contexts/AuthContext';
 import { toast } from 'react-hot-toast';
@@ -61,7 +61,7 @@ export const Equipment: React.FC = () => {
   const [trucks, setTrucks] = useState<EquipmentTruck[]>([]);
   const [trailers, setTrailers] = useState<EquipmentTrailer[]>([]);
   const [dollies, setDollies] = useState<EquipmentDolly[]>([]);
-  const [terminals, setTerminals] = useState<Terminal[]>([]);
+  const [locations, setLocations] = useState<Location[]>([]);
 
   // Modals
   const [isCreateModalOpen, setIsCreateModalOpen] = useState(false);
@@ -74,19 +74,19 @@ export const Equipment: React.FC = () => {
   const isAdmin = user?.role === 'ADMIN' || user?.role === 'DISPATCHER';
 
   useEffect(() => {
-    fetchTerminals();
+    fetchLocations();
   }, []);
 
   useEffect(() => {
     fetchData();
   }, [activeTab, currentPage, searchTerm, statusFilter, terminalFilter]);
 
-  const fetchTerminals = async () => {
+  const fetchLocations = async () => {
     try {
-      const data = await terminalService.getTerminalsList();
-      setTerminals(data);
+      const data = await locationService.getLocationsList();
+      setLocations(data);
     } catch (error) {
-      console.error('Failed to fetch terminals:', error);
+      console.error('Failed to fetch locations:', error);
     }
   };
 
@@ -569,10 +569,10 @@ export const Equipment: React.FC = () => {
                   }}
                   className="rounded-md border-gray-300 text-sm focus:border-indigo-500 focus:ring-indigo-500"
                 >
-                  <option value="">All Terminals</option>
-                  {terminals.map((terminal) => (
-                    <option key={terminal.id} value={terminal.id}>
-                      {terminal.code} - {terminal.name}
+                  <option value="">All Locations</option>
+                  {locations.map((location) => (
+                    <option key={location.id} value={location.id}>
+                      {location.code} - {location.name}
                     </option>
                   ))}
                 </select>
@@ -614,21 +614,21 @@ export const Equipment: React.FC = () => {
       >
         {activeTab === 'trucks' && (
           <TruckForm
-            terminals={terminals}
+            locations={locations}
             onSubmit={handleCreate}
             onCancel={() => setIsCreateModalOpen(false)}
           />
         )}
         {activeTab === 'trailers' && (
           <TrailerForm
-            terminals={terminals}
+            locations={locations}
             onSubmit={handleCreate}
             onCancel={() => setIsCreateModalOpen(false)}
           />
         )}
         {activeTab === 'dollies' && (
           <DollyForm
-            terminals={terminals}
+            locations={locations}
             onSubmit={handleCreate}
             onCancel={() => setIsCreateModalOpen(false)}
           />
@@ -644,7 +644,7 @@ export const Equipment: React.FC = () => {
         {activeTab === 'trucks' && (
           <TruckForm
             truck={selectedTruck}
-            terminals={terminals}
+            locations={locations}
             onSubmit={handleUpdate}
             onCancel={() => setIsEditModalOpen(false)}
           />
@@ -652,7 +652,7 @@ export const Equipment: React.FC = () => {
         {activeTab === 'trailers' && (
           <TrailerForm
             trailer={selectedTrailer}
-            terminals={terminals}
+            locations={locations}
             onSubmit={handleUpdate}
             onCancel={() => setIsEditModalOpen(false)}
           />
@@ -660,7 +660,7 @@ export const Equipment: React.FC = () => {
         {activeTab === 'dollies' && (
           <DollyForm
             dolly={selectedDolly}
-            terminals={terminals}
+            locations={locations}
             onSubmit={handleUpdate}
             onCancel={() => setIsEditModalOpen(false)}
           />

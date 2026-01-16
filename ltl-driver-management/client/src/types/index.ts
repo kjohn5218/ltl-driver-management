@@ -483,6 +483,8 @@ export interface LinehaulProfile {
   name: string;
   originTerminalId: number;
   destinationTerminalId: number;
+  origin?: string;  // For display when mapped from Route
+  destination?: string;  // For display when mapped from Route
   standardDepartureTime?: string;
   standardArrivalTime?: string;
   distanceMiles?: number;

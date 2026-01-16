@@ -1,9 +1,9 @@
 import React, { useState, useEffect } from 'react';
-import { EquipmentTruck, TruckType, EquipmentStatus, Terminal } from '../../types';
+import { EquipmentTruck, TruckType, EquipmentStatus, Location } from '../../types';
 
 interface TruckFormProps {
   truck?: EquipmentTruck | null;
-  terminals: Terminal[];
+  locations: Location[];
   onSubmit: (data: Partial<EquipmentTruck>) => void;
   onCancel: () => void;
 }
@@ -24,7 +24,7 @@ const statusOptions: { value: EquipmentStatus; label: string }[] = [
 
 export const TruckForm: React.FC<TruckFormProps> = ({
   truck,
-  terminals,
+  locations,
   onSubmit,
   onCancel
 }) => {
@@ -176,10 +176,10 @@ export const TruckForm: React.FC<TruckFormProps> = ({
             onChange={(e) => setFormData({ ...formData, currentTerminalId: e.target.value })}
             className="mt-1 block w-full rounded-md border-gray-300 shadow-sm focus:border-indigo-500 focus:ring-indigo-500 sm:text-sm"
           >
-            <option value="">Select Terminal</option>
-            {terminals.map((terminal) => (
-              <option key={terminal.id} value={terminal.id}>
-                {terminal.code} - {terminal.name}
+            <option value="">Select Location</option>
+            {locations.map((location) => (
+              <option key={location.id} value={location.id}>
+                {location.code} - {location.name}
               </option>
             ))}
           </select>

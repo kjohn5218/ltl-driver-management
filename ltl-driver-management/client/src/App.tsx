@@ -20,8 +20,6 @@ import { Administration } from './pages/Administration';
 import { Drivers } from './pages/Drivers';
 import { DocumentUpload } from './pages/DocumentUpload';
 import { Equipment } from './pages/Equipment';
-import { Terminals } from './pages/Terminals';
-import { LinehaulProfiles } from './pages/LinehaulProfiles';
 import { Dispatch } from './pages/Dispatch';
 import { RateCards } from './pages/RateCards';
 import { Payroll } from './pages/Payroll';
@@ -121,14 +119,6 @@ const router = createBrowserRouter([
           {
             path: 'equipment',
             element: <Equipment />
-          },
-          {
-            path: 'terminals',
-            element: <Terminals />
-          },
-          {
-            path: 'linehaul-profiles',
-            element: <LinehaulProfiles />
           },
           {
             path: 'rate-cards',

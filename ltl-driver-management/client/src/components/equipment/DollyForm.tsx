@@ -1,9 +1,9 @@
 import React, { useState, useEffect } from 'react';
-import { EquipmentDolly, DollyType, EquipmentStatus, Terminal } from '../../types';
+import { EquipmentDolly, DollyType, EquipmentStatus, Location } from '../../types';
 
 interface DollyFormProps {
   dolly?: EquipmentDolly | null;
-  terminals: Terminal[];
+  locations: Location[];
   onSubmit: (data: Partial<EquipmentDolly>) => void;
   onCancel: () => void;
 }
@@ -23,7 +23,7 @@ const statusOptions: { value: EquipmentStatus; label: string }[] = [
 
 export const DollyForm: React.FC<DollyFormProps> = ({
   dolly,
-  terminals,
+  locations,
   onSubmit,
   onCancel
 }) => {
@@ -87,16 +87,16 @@ export const DollyForm: React.FC<DollyFormProps> = ({
         </div>
 
         <div>
-          <label className="block text-sm font-medium text-gray-700">Current Terminal</label>
+          <label className="block text-sm font-medium text-gray-700">Current Location</label>
           <select
             value={formData.currentTerminalId}
             onChange={(e) => setFormData({ ...formData, currentTerminalId: e.target.value })}
             className="mt-1 block w-full rounded-md border-gray-300 shadow-sm focus:border-indigo-500 focus:ring-indigo-500 sm:text-sm"
           >
-            <option value="">Select Terminal</option>
-            {terminals.map((terminal) => (
-              <option key={terminal.id} value={terminal.id}>
-                {terminal.code} - {terminal.name}
+            <option value="">Select Location</option>
+            {locations.map((location) => (
+              <option key={location.id} value={location.id}>
+                {location.code} - {location.name}
               </option>
             ))}
           </select>
