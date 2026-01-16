@@ -33,6 +33,15 @@ import lineItemRoutes from './routes/lineItem.routes';
 import driverRoutes from './routes/driver.routes';
 import bookingDocumentRoutes from './routes/bookingDocument.routes';
 
+// Dispatch & Fleet Management routes
+import terminalRoutes from './routes/terminal.routes';
+import equipmentRoutes from './routes/equipment.routes';
+import linehaulProfileRoutes from './routes/linehaulProfile.routes';
+import linehaulTripRoutes from './routes/linehaulTrip.routes';
+import tripOperationsRoutes from './routes/tripOperations.routes';
+import rateCardRoutes from './routes/rateCard.routes';
+import payrollRoutes from './routes/payroll.routes';
+
 // Load environment variables
 dotenv.config();
 
@@ -130,6 +139,15 @@ app.use('/api/users', userRoutes);
 app.use('/api', lineItemRoutes);
 app.use('/api/drivers', driverRoutes);
 app.use('/api/documents', bookingDocumentRoutes);
+
+// Dispatch & Fleet Management routes
+app.use('/api/terminals', terminalRoutes);
+app.use('/api/equipment', equipmentRoutes);
+app.use('/api/linehaul-profiles', linehaulProfileRoutes);
+app.use('/api/linehaul-trips', linehaulTripRoutes);
+app.use('/api/trip-operations', tripOperationsRoutes);
+app.use('/api/rate-cards', rateCardRoutes);
+app.use('/api/payroll', payrollRoutes);
 
 // Error handling middleware
 app.use((err: any, _req: express.Request, res: express.Response, _next: express.NextFunction) => {

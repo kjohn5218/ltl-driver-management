@@ -19,70 +19,79 @@ model User {
   sentInvitations       CarrierInvitation[]
   systemSettingsUpdates SystemSettings[]
 
+  // Dispatch module relations
+  createdTrips       LinehaulTrip[] @relation("TripCreator")
+  dispatchedTrips    LinehaulTrip[] @relation("TripDispatcher")
+  reportedDelays     TripDelay[]
+  closedPayPeriods   PayPeriod[]    @relation("PayPeriodCloser")
+  exportedPayPeriods PayPeriod[]    @relation("PayPeriodExporter")
+  reviewedTripPays   TripPay[]      @relation("TripPayReviewer")
+  approvedTripPays   TripPay[]      @relation("TripPayApprover")
+
   @@map("users")
 }
 
 model Carrier {
-  id                     Int                     @id @default(autoincrement())
-  name                   String
-  contactPerson          String?
-  phone                  String?
-  email                  String?
-  mcNumber               String?                 @unique
-  dotNumber              String?                 @unique
-  insuranceExpiration    DateTime?
-  status                 CarrierStatus           @default(PENDING)
-  rating                 Decimal?                @db.Decimal(2, 1)
-  ratePerMile            Decimal?                @db.Decimal(5, 2)
-  onboardingComplete     Boolean                 @default(false)
-  createdAt              DateTime                @default(now())
-  updatedAt              DateTime                @updatedAt
-  carrierType            String?
-  city                   String?
-  factoringCompany       String?
-  remittanceContact      String?
-  remittanceEmail        String?
-  safetyRating           String?
-  state                  String?
-  streetAddress1         String?
-  streetAddress2         String?
-  taxId                  String?
-  zipCode                String?
-  dbaName                String?
-  emergencyPhone         String?
-  fleetSize              Int?
-  mcpAuthorityStatus     String?
-  mcpInsuranceExpiration DateTime?
-  mcpLastSync            DateTime?
-  mcpMonitored           Boolean                 @default(false)
-  mcpPacketCompleted     Boolean                 @default(false)
-  mcpPacketCompletedAt   DateTime?
-  mcpRiskScore           Int?
-  mcpSafetyRating        String?
-  scacCode               String?
-  totalPowerUnits        Int?
-  isCommonCarrier        Boolean                 @default(false)
-  isContractCarrier      Boolean                 @default(false)
-  isBroker               Boolean                 @default(false)
-  truckCount             Int                     @default(0)
-  trailerCount           Int                     @default(0)
-  driverCount            Int                     @default(0)
-  mcpInsuranceStatus     String?
-  mcpOperationsStatus    String?
-  mcpSafetyStatus        String?
-  mcpPacketStatus        String?
-  mcpTotalPoints         Int                     @default(0)
-  generalLiabilityExpiration    DateTime?
-  generalLiabilityCoverage      Decimal?         @db.Decimal(12, 2)
-  cargoLiabilityExpiration      DateTime?
-  cargoLiabilityCoverage        Decimal?         @db.Decimal(12, 2)
-  autoLiabilityExpiration       DateTime?
-  autoLiabilityCoverage         Decimal?         @db.Decimal(12, 2)
-  bookings               Booking[]
-  agreements             CarrierAgreement[]
-  documents              CarrierDocument[]
-  drivers                CarrierDriver[]
-  preferredRoutes        CarrierPreferredRoute[]
+  id                         Int                     @id @default(autoincrement())
+  name                       String
+  contactPerson              String?
+  phone                      String?
+  email                      String?
+  mcNumber                   String?                 @unique
+  dotNumber                  String?                 @unique
+  insuranceExpiration        DateTime?
+  status                     CarrierStatus           @default(PENDING)
+  rating                     Decimal?                @db.Decimal(2, 1)
+  ratePerMile                Decimal?                @db.Decimal(5, 2)
+  onboardingComplete         Boolean                 @default(false)
+  createdAt                  DateTime                @default(now())
+  updatedAt                  DateTime                @updatedAt
+  carrierType                String?
+  city                       String?
+  factoringCompany           String?
+  remittanceContact          String?
+  remittanceEmail            String?
+  safetyRating               String?
+  state                      String?
+  streetAddress1             String?
+  streetAddress2             String?
+  taxId                      String?
+  zipCode                    String?
+  dbaName                    String?
+  emergencyPhone             String?
+  fleetSize                  Int?
+  mcpAuthorityStatus         String?
+  mcpInsuranceExpiration     DateTime?
+  mcpLastSync                DateTime?
+  mcpMonitored               Boolean                 @default(false)
+  mcpPacketCompleted         Boolean                 @default(false)
+  mcpPacketCompletedAt       DateTime?
+  mcpRiskScore               Int?
+  mcpSafetyRating            String?
+  scacCode                   String?
+  totalPowerUnits            Int?
+  isCommonCarrier            Boolean                 @default(false)
+  isContractCarrier          Boolean                 @default(false)
+  isBroker                   Boolean                 @default(false)
+  truckCount                 Int                     @default(0)
+  trailerCount               Int                     @default(0)
+  driverCount                Int                     @default(0)
+  mcpInsuranceStatus         String?
+  mcpOperationsStatus        String?
+  mcpSafetyStatus            String?
+  mcpPacketStatus            String?
+  mcpTotalPoints             Int                     @default(0)
+  generalLiabilityExpiration DateTime?
+  generalLiabilityCoverage   Decimal?                @db.Decimal(12, 2)
+  cargoLiabilityExpiration   DateTime?
+  cargoLiabilityCoverage     Decimal?                @db.Decimal(12, 2)
+  autoLiabilityExpiration    DateTime?
+  autoLiabilityCoverage      Decimal?                @db.Decimal(12, 2)
+  bookings                   Booking[]
+  agreements                 CarrierAgreement[]
+  documents                  CarrierDocument[]
+  drivers                    CarrierDriver[]
+  preferredRoutes            CarrierPreferredRoute[]
 
   @@map("carriers")
 }
@@ -257,8 +266,47 @@ model CarrierDriver {
   createdAt     DateTime @default(now())
   updatedAt     DateTime @updatedAt
   number        String?
-  carrier       Carrier  @relation(fields: [carrierId], references: [id], onDelete: Cascade)
 
+  // Extended driver information for dispatch
+  externalDriverId      String? // External system ID
+  licenseClass          String? // CDL class (A, B, C)
+  licenseState          String?
+  licenseExpiration     DateTime?
+  endorsements          String? // Comma-separated: hazmat, tanker, doubles, etc.
+  medicalCardExpiration DateTime?
+  dateOfHire            DateTime?
+  dateOfBirth           DateTime?
+
+  // Current status and location
+  driverStatus        DriverStatus @default(AVAILABLE)
+  currentTerminalCode String?
+  currentLatitude     Decimal?     @db.Decimal(10, 7)
+  currentLongitude    Decimal?     @db.Decimal(10, 7)
+  lastStatusUpdate    DateTime?
+
+  // Hours of Service (HOS) tracking
+  hosDriveTimeRemaining Int? // Minutes remaining
+  hosDutyTimeRemaining  Int? // Minutes remaining
+  hosCycleTimeRemaining Int? // Minutes remaining (70/8 or 60/7)
+  hosLastUpdate         DateTime?
+  hosViolations         Int       @default(0)
+
+  // Performance and preferences
+  rating           Decimal? @db.Decimal(3, 2) // e.g., 4.85
+  preferredRoutes  String? // Comma-separated terminal codes
+  homeTerminalCode String?
+  teamDriverId     Int? // Preferred team partner
+
+  // Relations
+  carrier        Carrier          @relation(fields: [carrierId], references: [id], onDelete: Cascade)
+  assignedTrucks EquipmentTruck[]
+  primaryTrips   LinehaulTrip[]   @relation("PrimaryDriver")
+  teamTrips      LinehaulTrip[]   @relation("TeamDriver")
+  tripPays       TripPay[]
+
+  @@index([carrierId])
+  @@index([driverStatus])
+  @@index([externalDriverId])
   @@map("carrier_drivers")
 }
 
@@ -392,6 +440,9 @@ enum UserRole {
   DISPATCHER
   USER
   CARRIER
+  YARD_MANAGER
+  PAYROLL_ADMIN
+  PAYROLL_CLERK
 }
 
 enum CarrierStatus {
@@ -436,4 +487,554 @@ enum CarrierInvitationStatus {
   REGISTERED
   EXPIRED
   CANCELLED
+}
+
+// ============================================
+// DISPATCH & FLEET MANAGEMENT MODULE - ENUMS
+// ============================================
+
+enum EquipmentStatus {
+  AVAILABLE
+  DISPATCHED
+  IN_TRANSIT
+  MAINTENANCE
+  OUT_OF_SERVICE
+}
+
+enum TruckType {
+  DAY_CAB
+  SLEEPER
+  STRAIGHT_TRUCK
+}
+
+enum TrailerType {
+  DRY_VAN_53
+  DRY_VAN_28
+  PUP_TRAILER
+  REEFER_53
+  REEFER_28
+  FLATBED
+  STEP_DECK
+  TANKER
+  INTERMODAL
+}
+
+enum DollyType {
+  A_DOLLY
+  B_DOLLY
+}
+
+enum TripStatus {
+  PLANNED
+  ASSIGNED
+  DISPATCHED
+  IN_TRANSIT
+  ARRIVED
+  COMPLETED
+  CANCELLED
+}
+
+enum DelayCode {
+  EQUIPMENT_BREAKDOWN
+  DRIVER_UNAVAILABILITY
+  WEATHER_CONDITIONS
+  TRAFFIC_ROAD_CONDITIONS
+  SHIPPER_DELAY
+  RECEIVER_DELAY
+  DETENTION
+  OTHER
+}
+
+enum RateMethod {
+  PER_MILE
+  FLAT_RATE
+  HOURLY
+  PERCENTAGE
+}
+
+enum RateCardType {
+  DRIVER
+  CARRIER
+  LINEHAUL
+  OD_PAIR
+  DEFAULT
+}
+
+enum AccessorialType {
+  LAYOVER
+  DETENTION
+  BREAKDOWN
+  HELPER
+  TRAINER
+  HAZMAT
+  TEAM_DRIVER
+  STOP_CHARGE
+  FUEL_SURCHARGE
+  OTHER
+}
+
+enum PayPeriodStatus {
+  OPEN
+  CLOSED
+  LOCKED
+  EXPORTED
+}
+
+enum TripPayStatus {
+  PENDING
+  CALCULATED
+  REVIEWED
+  APPROVED
+  PAID
+  DISPUTED
+}
+
+enum DriverStatus {
+  AVAILABLE
+  ON_DUTY
+  DRIVING
+  SLEEPER_BERTH
+  OFF_DUTY
+  PERSONAL_CONVEYANCE
+  YARD_MOVE
+}
+
+// ============================================
+// DISPATCH & FLEET MANAGEMENT MODULE - MODELS
+// ============================================
+
+// Terminal/Yard Locations
+model Terminal {
+  id        Int      @id @default(autoincrement())
+  code      String   @unique
+  name      String
+  address   String?
+  city      String?
+  state     String?
+  zipCode   String?
+  timezone  String?
+  latitude  Decimal? @db.Decimal(10, 7)
+  longitude Decimal? @db.Decimal(10, 7)
+  phone     String?
+  contact   String?
+  active    Boolean  @default(true)
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  // Relations
+  trucks                 EquipmentTruck[]
+  trailers               EquipmentTrailer[]
+  dollies                EquipmentDolly[]
+  equipmentRequirements  TerminalEquipmentRequirement[]
+  originLinehaulProfiles LinehaulProfile[]              @relation("OriginTerminal")
+  destLinehaulProfiles   LinehaulProfile[]              @relation("DestinationTerminal")
+  originRateCards        RateCard[]                     @relation("RateCardOrigin")
+  destRateCards          RateCard[]                     @relation("RateCardDestination")
+
+  @@map("terminals")
+}
+
+// Power Units (Tractors/Trucks)
+model EquipmentTruck {
+  id                  Int             @id @default(autoincrement())
+  unitNumber          String          @unique
+  truckType           TruckType       @default(DAY_CAB)
+  make                String?
+  model               String?
+  year                Int?
+  vin                 String?
+  currentTerminalId   Int?
+  status              EquipmentStatus @default(AVAILABLE)
+  assignedDriverId    Int?
+  lastLocationUpdate  DateTime?
+  maintenanceStatus   String?
+  maintenanceNotes    String?
+  nextMaintenanceDate DateTime?
+  externalFleetId     String?
+  owned               Boolean         @default(true)
+  leaseExpiration     DateTime?
+  licensePlate        String?
+  licensePlateState   String?
+  fuelType            String?
+  createdAt           DateTime        @default(now())
+  updatedAt           DateTime        @updatedAt
+
+  // Relations
+  currentTerminal Terminal?      @relation(fields: [currentTerminalId], references: [id])
+  assignedDriver  CarrierDriver? @relation(fields: [assignedDriverId], references: [id])
+  linehaulTrips   LinehaulTrip[]
+
+  @@index([currentTerminalId])
+  @@index([status])
+  @@index([assignedDriverId])
+  @@map("equipment_trucks")
+}
+
+// Trailers
+model EquipmentTrailer {
+  id                 Int             @id @default(autoincrement())
+  unitNumber         String          @unique
+  trailerType        TrailerType     @default(DRY_VAN_53)
+  lengthFeet         Int?
+  capacityWeight     Int?
+  capacityCube       Int?
+  currentTerminalId  Int?
+  status             EquipmentStatus @default(AVAILABLE)
+  currentLocation    String?
+  externalFleetId    String?
+  owned              Boolean         @default(true)
+  leaseExpiration    DateTime?
+  licensePlate       String?
+  licensePlateState  String?
+  lastInspectionDate DateTime?
+  nextInspectionDate DateTime?
+  maintenanceStatus  String?
+  maintenanceNotes   String?
+  createdAt          DateTime        @default(now())
+  updatedAt          DateTime        @updatedAt
+
+  // Relations
+  currentTerminal Terminal?      @relation(fields: [currentTerminalId], references: [id])
+  primaryTrips    LinehaulTrip[] @relation("PrimaryTrailer")
+  secondaryTrips  LinehaulTrip[] @relation("SecondaryTrailer")
+
+  @@index([currentTerminalId])
+  @@index([status])
+  @@index([trailerType])
+  @@map("equipment_trailers")
+}
+
+// Converter Dollies
+model EquipmentDolly {
+  id                 Int             @id @default(autoincrement())
+  unitNumber         String          @unique
+  dollyType          DollyType       @default(A_DOLLY)
+  currentTerminalId  Int?
+  status             EquipmentStatus @default(AVAILABLE)
+  externalFleetId    String?
+  lastInspectionDate DateTime?
+  nextInspectionDate DateTime?
+  maintenanceStatus  String?
+  maintenanceNotes   String?
+  createdAt          DateTime        @default(now())
+  updatedAt          DateTime        @updatedAt
+
+  // Relations
+  currentTerminal Terminal?      @relation(fields: [currentTerminalId], references: [id])
+  linehaulTrips   LinehaulTrip[]
+
+  @@index([currentTerminalId])
+  @@index([status])
+  @@map("equipment_dollies")
+}
+
+// Terminal Equipment Requirements
+model TerminalEquipmentRequirement {
+  id             Int       @id @default(autoincrement())
+  terminalId     Int
+  equipmentType  String // truck, trailer_53, trailer_28, dolly_a, dolly_b, etc.
+  minCount       Int       @default(0)
+  maxCount       Int?
+  dayOfWeek      Int? // 0-6, null for all days
+  effectiveDate  DateTime?
+  expirationDate DateTime?
+  seasonalNote   String?
+  createdAt      DateTime  @default(now())
+  updatedAt      DateTime  @updatedAt
+
+  // Relations
+  terminal Terminal @relation(fields: [terminalId], references: [id], onDelete: Cascade)
+
+  @@index([terminalId])
+  @@index([equipmentType])
+  @@map("terminal_equipment_requirements")
+}
+
+// Linehaul Profiles (Standard Routes)
+model LinehaulProfile {
+  id                    Int      @id @default(autoincrement())
+  profileCode           String   @unique
+  name                  String
+  originTerminalId      Int
+  destinationTerminalId Int
+  standardDepartureTime String? // Time in HH:MM format
+  standardArrivalTime   String? // Time in HH:MM format
+  distanceMiles         Int?
+  transitTimeMinutes    Int?
+  frequency             String? // daily, mon-fri, specific days, on-demand
+  equipmentConfig       String? // tractor-trailer, tractor-pup-dolly-pup, etc.
+  requiresTeamDriver    Boolean  @default(false)
+  hazmatRequired        Boolean  @default(false)
+  active                Boolean  @default(true)
+  notes                 String?
+  createdAt             DateTime @default(now())
+  updatedAt             DateTime @updatedAt
+
+  // Relations
+  originTerminal      Terminal       @relation("OriginTerminal", fields: [originTerminalId], references: [id])
+  destinationTerminal Terminal       @relation("DestinationTerminal", fields: [destinationTerminalId], references: [id])
+  trips               LinehaulTrip[]
+  rateCards           RateCard[]
+
+  @@index([originTerminalId])
+  @@index([destinationTerminalId])
+  @@index([active])
+  @@map("linehaul_profiles")
+}
+
+// Linehaul Trips (Actual Dispatches)
+model LinehaulTrip {
+  id                Int        @id @default(autoincrement())
+  tripNumber        String     @unique
+  linehaulProfileId Int?
+  dispatchDate      DateTime
+  plannedDeparture  DateTime?
+  actualDeparture   DateTime?
+  plannedArrival    DateTime?
+  actualArrival     DateTime?
+  status            TripStatus @default(PLANNED)
+
+  // Driver assignment (can be internal driver or external carrier driver)
+  driverId         Int?
+  driverExternalId String? // For external driver system
+  teamDriverId     Int? // Second driver for team
+
+  // Equipment assignment
+  truckId    Int?
+  trailerId  Int?
+  dollyId    Int?
+  trailer2Id Int? // For double/triple configs
+
+  // Load details
+  totalWeight     Int?
+  totalPieces     Int?
+  shipmentCount   Int?
+  cubeUtilization Decimal? @db.Decimal(5, 2) // Percentage
+
+  // Origin/Destination (can override profile)
+  originTerminalCode      String?
+  destinationTerminalCode String?
+  actualMileage           Int?
+
+  // Notes and instructions
+  notes               String?
+  specialInstructions String?
+
+  // Tracking
+  lastKnownLatitude  Decimal?  @db.Decimal(10, 7)
+  lastKnownLongitude Decimal?  @db.Decimal(10, 7)
+  lastLocationUpdate DateTime?
+  estimatedArrival   DateTime?
+
+  // Audit
+  createdBy    Int?
+  dispatchedBy Int?
+  dispatchedAt DateTime?
+  createdAt    DateTime  @default(now())
+  updatedAt    DateTime  @updatedAt
+
+  // Relations
+  linehaulProfile  LinehaulProfile?  @relation(fields: [linehaulProfileId], references: [id])
+  driver           CarrierDriver?    @relation("PrimaryDriver", fields: [driverId], references: [id])
+  teamDriver       CarrierDriver?    @relation("TeamDriver", fields: [teamDriverId], references: [id])
+  truck            EquipmentTruck?   @relation(fields: [truckId], references: [id])
+  trailer          EquipmentTrailer? @relation("PrimaryTrailer", fields: [trailerId], references: [id])
+  dolly            EquipmentDolly?   @relation(fields: [dollyId], references: [id])
+  trailer2         EquipmentTrailer? @relation("SecondaryTrailer", fields: [trailer2Id], references: [id])
+  createdByUser    User?             @relation("TripCreator", fields: [createdBy], references: [id])
+  dispatchedByUser User?             @relation("TripDispatcher", fields: [dispatchedBy], references: [id])
+  shipments        TripShipment[]
+  delays           TripDelay[]
+  tripPay          TripPay[]
+
+  @@index([dispatchDate])
+  @@index([status])
+  @@index([driverId])
+  @@index([linehaulProfileId])
+  @@map("linehaul_trips")
+}
+
+// Trip Shipments (Load Manifest)
+model TripShipment {
+  id                  Int       @id @default(autoincrement())
+  tripId              Int
+  proNumber           String
+  originTerminal      String?
+  destinationTerminal String?
+  weight              Int?
+  pieces              Int?
+  handlingUnits       Int?
+  serviceLevel        String? // standard, guaranteed, expedited
+  specialInstructions String?
+  hazmat              Boolean   @default(false)
+  hazmatClass         String?
+  externalShipmentId  String?
+  loadedAt            DateTime?
+  createdAt           DateTime  @default(now())
+
+  // Relations
+  trip LinehaulTrip @relation(fields: [tripId], references: [id], onDelete: Cascade)
+
+  @@index([tripId])
+  @@index([proNumber])
+  @@map("trip_shipments")
+}
+
+// Trip Delays
+model TripDelay {
+  id               Int       @id @default(autoincrement())
+  tripId           Int
+  delayCode        DelayCode
+  delayReason      String?
+  delayMinutes     Int
+  reportedAt       DateTime  @default(now())
+  reportedBy       Int?
+  affectsShipments Boolean   @default(true)
+  resolvedAt       DateTime?
+  resolutionNotes  String?
+  createdAt        DateTime  @default(now())
+
+  // Relations
+  trip     LinehaulTrip @relation(fields: [tripId], references: [id], onDelete: Cascade)
+  reporter User?        @relation(fields: [reportedBy], references: [id])
+
+  @@index([tripId])
+  @@index([delayCode])
+  @@map("trip_delays")
+}
+
+// Rate Cards
+model RateCard {
+  id                    Int          @id @default(autoincrement())
+  rateType              RateCardType
+  entityId              Int? // References driver_id, carrier_id, linehaul_profile_id based on rateType
+  originTerminalId      Int?
+  destinationTerminalId Int?
+  linehaulProfileId     Int?
+  rateMethod            RateMethod   @default(PER_MILE)
+  rateAmount            Decimal      @db.Decimal(8, 2)
+  minimumAmount         Decimal?     @db.Decimal(8, 2)
+  maximumAmount         Decimal?     @db.Decimal(8, 2)
+  effectiveDate         DateTime
+  expirationDate        DateTime?
+  equipmentType         String?
+  priority              Int          @default(5) // Lower = higher priority
+  externalRateId        String?
+  notes                 String?
+  active                Boolean      @default(true)
+  createdAt             DateTime     @default(now())
+  updatedAt             DateTime     @updatedAt
+
+  // Relations
+  originTerminal      Terminal?         @relation("RateCardOrigin", fields: [originTerminalId], references: [id])
+  destinationTerminal Terminal?         @relation("RateCardDestination", fields: [destinationTerminalId], references: [id])
+  linehaulProfile     LinehaulProfile?  @relation(fields: [linehaulProfileId], references: [id])
+  accessorialRates    AccessorialRate[]
+  tripPays            TripPay[]
+
+  @@index([rateType])
+  @@index([entityId])
+  @@index([effectiveDate])
+  @@index([active])
+  @@map("rate_cards")
+}
+
+// Accessorial Rates
+model AccessorialRate {
+  id              Int             @id @default(autoincrement())
+  rateCardId      Int
+  accessorialType AccessorialType
+  rateAmount      Decimal         @db.Decimal(8, 2)
+  rateMethod      RateMethod      @default(FLAT_RATE)
+  minimumCharge   Decimal?        @db.Decimal(8, 2)
+  maximumCharge   Decimal?        @db.Decimal(8, 2)
+  description     String?
+  createdAt       DateTime        @default(now())
+  updatedAt       DateTime        @updatedAt
+
+  // Relations
+  rateCard RateCard @relation(fields: [rateCardId], references: [id], onDelete: Cascade)
+
+  @@index([rateCardId])
+  @@index([accessorialType])
+  @@map("accessorial_rates")
+}
+
+// Pay Periods
+model PayPeriod {
+  id            Int             @id @default(autoincrement())
+  periodStart   DateTime
+  periodEnd     DateTime
+  status        PayPeriodStatus @default(OPEN)
+  closedAt      DateTime?
+  closedBy      Int?
+  exportedAt    DateTime?
+  exportedBy    Int?
+  exportBatchId String?
+  notes         String?
+  createdAt     DateTime        @default(now())
+  updatedAt     DateTime        @updatedAt
+
+  // Relations
+  closedByUser   User?     @relation("PayPeriodCloser", fields: [closedBy], references: [id])
+  exportedByUser User?     @relation("PayPeriodExporter", fields: [exportedBy], references: [id])
+  tripPays       TripPay[]
+
+  @@index([periodStart])
+  @@index([periodEnd])
+  @@index([status])
+  @@map("pay_periods")
+}
+
+// Trip Pay Records
+model TripPay {
+  id               Int     @id @default(autoincrement())
+  tripId           Int
+  payPeriodId      Int?
+  driverId         Int?
+  driverExternalId String?
+  rateCardId       Int?
+
+  // Pay breakdown
+  basePay        Decimal? @db.Decimal(8, 2)
+  mileagePay     Decimal? @db.Decimal(8, 2)
+  accessorialPay Decimal? @db.Decimal(8, 2)
+  bonusPay       Decimal? @db.Decimal(8, 2)
+  deductions     Decimal? @db.Decimal(8, 2)
+  totalGrossPay  Decimal? @db.Decimal(8, 2)
+
+  // For team/split pay
+  splitPercentage Decimal? @db.Decimal(5, 2) // e.g., 50.00 for 50%
+  splitType       String? // primary, team, trainer, trainee
+
+  // Status tracking
+  status       TripPayStatus @default(PENDING)
+  calculatedAt DateTime?
+  reviewedBy   Int?
+  reviewedAt   DateTime?
+  approvedBy   Int?
+  approvedAt   DateTime?
+  paidAt       DateTime?
+
+  // Payroll export
+  externalPayrollId String?
+  exportedAt        DateTime?
+
+  notes     String?
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  // Relations
+  trip      LinehaulTrip   @relation(fields: [tripId], references: [id], onDelete: Cascade)
+  payPeriod PayPeriod?     @relation(fields: [payPeriodId], references: [id])
+  driver    CarrierDriver? @relation(fields: [driverId], references: [id])
+  rateCard  RateCard?      @relation(fields: [rateCardId], references: [id])
+  reviewer  User?          @relation("TripPayReviewer", fields: [reviewedBy], references: [id])
+  approver  User?          @relation("TripPayApprover", fields: [approvedBy], references: [id])
+
+  @@index([tripId])
+  @@index([payPeriodId])
+  @@index([driverId])
+  @@index([status])
+  @@map("trip_pay")
 }

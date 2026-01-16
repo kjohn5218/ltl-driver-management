@@ -1,12 +1,12 @@
 import React, { useState, useEffect } from 'react';
 import { NavLink } from 'react-router-dom';
 import { useAuth } from '../../contexts/AuthContext';
-import { 
-  Home, 
-  Truck, 
-  Route, 
-  Calendar, 
-  FileText, 
+import {
+  Home,
+  Truck,
+  Route,
+  Calendar,
+  FileText,
   BarChart3,
   MapPin,
   X,
@@ -16,7 +16,13 @@ import {
   Check,
   AlertCircle,
   Users,
-  User
+  User,
+  Package,
+  Building2,
+  GitBranch,
+  Send,
+  DollarSign,
+  Wallet
 } from 'lucide-react';
 import { clsx } from 'clsx';
 import { api } from '../../services/api';
@@ -43,6 +49,13 @@ export const Sidebar: React.FC<SidebarProps> = ({ isOpen, onClose }) => {
     { name: 'Locations', href: '/locations', icon: MapPin },
     { name: 'Invoices', href: '/invoices', icon: FileText },
     { name: 'Reports', href: '/reports', icon: BarChart3 },
+    // Dispatch & Fleet Management
+    { name: 'Dispatch', href: '/dispatch', icon: Send, section: 'dispatch' },
+    { name: 'Equipment', href: '/equipment', icon: Package, section: 'dispatch' },
+    { name: 'Terminals', href: '/terminals', icon: Building2, section: 'dispatch' },
+    { name: 'Linehaul Profiles', href: '/linehaul-profiles', icon: GitBranch, section: 'dispatch' },
+    { name: 'Rate Cards', href: '/rate-cards', icon: DollarSign, section: 'payroll' },
+    { name: 'Payroll', href: '/payroll', icon: Wallet, section: 'payroll' },
     { name: 'Administration', href: '/administration', icon: Users, adminOnly: true },
   ];
 
@@ -138,8 +151,8 @@ export const Sidebar: React.FC<SidebarProps> = ({ isOpen, onClose }) => {
           </div>
         </div>
 
-        <nav className="mt-6 px-3 space-y-2">
-          {navigation.map((item) => {
+        <nav className="mt-6 px-3 space-y-1">
+          {navigation.map((item, index) => {
             // Hide certain items for non-admin/dispatcher users
             if ((item.name === 'Carriers' || item.name === 'Routes' || item.name === 'Reports') && !isAdminOrDispatcher) {
               return null;
@@ -150,25 +163,50 @@ export const Sidebar: React.FC<SidebarProps> = ({ isOpen, onClose }) => {
               return null;
             }
 
+            // Hide dispatch & payroll items for non-admin/dispatcher users
+            if ((item.section === 'dispatch' || item.section === 'payroll') && !isAdminOrDispatcher) {
+              return null;
+            }
+
+            // Add section divider before Dispatch section
+            const showDispatchDivider = item.name === 'Dispatch' && isAdminOrDispatcher;
+            // Add section divider before Rate Cards
+            const showPayrollDivider = item.name === 'Rate Cards' && isAdminOrDispatcher;
+
             return (
-              <NavLink
-                key={item.name}
-                to={item.href}
-                className={({ isActive }) =>
-                  clsx(
-                    'group flex items-center px-3 py-2.5 text-sm font-medium rounded-lg transition-colors',
-                    isActive
-                      ? 'bg-blue-50 text-blue-700 border-r-2 border-blue-700'
-                      : 'text-gray-700 hover:bg-gray-50 hover:text-gray-900'
-                  )
-                }
-              >
-                <item.icon
-                  className="mr-3 h-5 w-5 flex-shrink-0 text-gray-500 group-hover:text-gray-700"
-                  aria-hidden="true"
-                />
-                {item.name}
-              </NavLink>
+              <React.Fragment key={item.name}>
+                {showDispatchDivider && (
+                  <div className="pt-4 pb-2">
+                    <p className="px-3 text-xs font-semibold text-gray-400 uppercase tracking-wider">
+                      Dispatch & Fleet
+                    </p>
+                  </div>
+                )}
+                {showPayrollDivider && (
+                  <div className="pt-4 pb-2">
+                    <p className="px-3 text-xs font-semibold text-gray-400 uppercase tracking-wider">
+                      Payroll
+                    </p>
+                  </div>
+                )}
+                <NavLink
+                  to={item.href}
+                  className={({ isActive }) =>
+                    clsx(
+                      'group flex items-center px-3 py-2.5 text-sm font-medium rounded-lg transition-colors',
+                      isActive
+                        ? 'bg-blue-50 text-blue-700 border-r-2 border-blue-700'
+                        : 'text-gray-700 hover:bg-gray-50 hover:text-gray-900'
+                    )
+                  }
+                >
+                  <item.icon
+                    className="mr-3 h-5 w-5 flex-shrink-0 text-gray-500 group-hover:text-gray-700"
+                    aria-hidden="true"
+                  />
+                  {item.name}
+                </NavLink>
+              </React.Fragment>
             );
           })}
         </nav>

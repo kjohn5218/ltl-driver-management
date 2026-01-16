@@ -339,3 +339,388 @@ export interface PaginatedResponse<T> {
     pages: number;
   };
 }
+
+// ==================== DISPATCH & FLEET MANAGEMENT ====================
+
+// Enums
+export type TripStatus = 'PLANNED' | 'ASSIGNED' | 'DISPATCHED' | 'IN_TRANSIT' | 'ARRIVED' | 'COMPLETED' | 'CANCELLED';
+export type EquipmentStatus = 'AVAILABLE' | 'DISPATCHED' | 'IN_TRANSIT' | 'MAINTENANCE' | 'OUT_OF_SERVICE';
+export type TruckType = 'DAY_CAB' | 'SLEEPER' | 'STRAIGHT_TRUCK';
+export type TrailerType = 'DRY_VAN_53' | 'DRY_VAN_28' | 'PUP_TRAILER' | 'REEFER_53' | 'REEFER_28' | 'FLATBED' | 'STEP_DECK' | 'TANKER' | 'INTERMODAL';
+export type DollyType = 'A_DOLLY' | 'B_DOLLY';
+export type EquipmentConfig = 'SINGLE' | 'DOUBLE' | 'TRIPLE' | 'ROCKY_MOUNTAIN' | 'TURNPIKE';
+export type PayPeriodStatus = 'OPEN' | 'CLOSED' | 'LOCKED' | 'EXPORTED';
+export type TripPayStatus = 'PENDING' | 'CALCULATED' | 'REVIEWED' | 'APPROVED' | 'PAID' | 'DISPUTED';
+export type RateCardType = 'DRIVER' | 'CARRIER' | 'LINEHAUL' | 'OD_PAIR' | 'DEFAULT';
+export type RateMethod = 'PER_MILE' | 'FLAT_RATE' | 'HOURLY' | 'PERCENTAGE';
+export type AccessorialType = 'LAYOVER' | 'DETENTION' | 'BREAKDOWN' | 'HELPER' | 'TRAINER' | 'HAZMAT' | 'TEAM_DRIVER' | 'STOP_CHARGE' | 'FUEL_SURCHARGE' | 'OTHER';
+export type DayOfWeek = 'MONDAY' | 'TUESDAY' | 'WEDNESDAY' | 'THURSDAY' | 'FRIDAY' | 'SATURDAY' | 'SUNDAY';
+export type EquipmentType = 'TRUCK' | 'TRAILER' | 'DOLLY';
+export type DelayType = 'WEATHER' | 'TRAFFIC' | 'BREAKDOWN' | 'DETENTION' | 'LOADING' | 'UNLOADING' | 'REST' | 'ACCIDENT' | 'CUSTOMS' | 'DISPATCH' | 'OTHER';
+
+// Terminal
+export interface Terminal {
+  id: number;
+  code: string;
+  name: string;
+  address?: string;
+  city: string;
+  state: string;
+  zipCode?: string;
+  phone?: string;
+  email?: string;
+  latitude?: number;
+  longitude?: number;
+  timezone: string;
+  notes?: string;
+  active: boolean;
+  createdAt: string;
+  updatedAt: string;
+  equipmentRequirements?: TerminalEquipmentRequirement[];
+  _count?: {
+    trucks: number;
+    trailers: number;
+    dollies: number;
+    linehaulProfilesOrigin: number;
+    linehaulProfilesDestination: number;
+  };
+}
+
+export interface TerminalEquipmentRequirement {
+  id: number;
+  terminalId: number;
+  equipmentType: string;
+  minCount: number;
+  maxCount?: number;
+  dayOfWeek?: number;
+  notes?: string;
+  createdAt: string;
+  updatedAt: string;
+}
+
+// Equipment
+export interface EquipmentTruck {
+  id: number;
+  unitNumber: string;
+  truckType: TruckType;
+  make?: string;
+  model?: string;
+  year?: number;
+  vin?: string;
+  currentTerminalId?: number;
+  status: EquipmentStatus;
+  assignedDriverId?: number;
+  lastLocationUpdate?: string;
+  maintenanceStatus?: string;
+  maintenanceNotes?: string;
+  nextMaintenanceDate?: string;
+  externalFleetId?: string;
+  owned?: boolean;
+  leaseExpiration?: string;
+  licensePlate?: string;
+  licensePlateState?: string;
+  fuelType?: string;
+  createdAt: string;
+  updatedAt: string;
+  currentTerminal?: Terminal;
+  assignedDriver?: CarrierDriver;
+  _count?: {
+    linehaulTrips: number;
+  };
+}
+
+export interface EquipmentTrailer {
+  id: number;
+  unitNumber: string;
+  trailerType: TrailerType;
+  lengthFeet?: number;
+  capacityWeight?: number;
+  capacityCube?: number;
+  currentTerminalId?: number;
+  status: EquipmentStatus;
+  currentLocation?: string;
+  externalFleetId?: string;
+  owned?: boolean;
+  leaseExpiration?: string;
+  licensePlate?: string;
+  licensePlateState?: string;
+  lastInspectionDate?: string;
+  nextInspectionDate?: string;
+  maintenanceStatus?: string;
+  maintenanceNotes?: string;
+  createdAt: string;
+  updatedAt: string;
+  currentTerminal?: Terminal;
+  _count?: {
+    primaryTrips: number;
+    secondaryTrips: number;
+  };
+}
+
+export interface EquipmentDolly {
+  id: number;
+  unitNumber: string;
+  dollyType: DollyType;
+  currentTerminalId?: number;
+  status: EquipmentStatus;
+  externalFleetId?: string;
+  lastInspectionDate?: string;
+  nextInspectionDate?: string;
+  maintenanceStatus?: string;
+  maintenanceNotes?: string;
+  createdAt: string;
+  updatedAt: string;
+  currentTerminal?: Terminal;
+  _count?: {
+    linehaulTrips: number;
+  };
+}
+
+// Linehaul Profile
+export interface LinehaulProfile {
+  id: number;
+  profileCode: string;
+  name: string;
+  originTerminalId: number;
+  destinationTerminalId: number;
+  standardDepartureTime?: string;
+  standardArrivalTime?: string;
+  distanceMiles?: number;
+  transitTimeMinutes?: number;
+  equipmentConfig: EquipmentConfig;
+  requiresTeamDriver: boolean;
+  hazmatRequired: boolean;
+  frequency?: string;
+  notes?: string;
+  active: boolean;
+  createdAt: string;
+  updatedAt: string;
+  originTerminal?: Terminal;
+  destinationTerminal?: Terminal;
+  _count?: {
+    linehaulTrips: number;
+    rateCards: number;
+  };
+}
+
+// Linehaul Trip
+export interface LinehaulTrip {
+  id: number;
+  tripNumber: string;
+  linehaulProfileId?: number;
+  dispatchDate: string;
+  plannedDeparture?: string;
+  actualDeparture?: string;
+  plannedArrival?: string;
+  actualArrival?: string;
+  status: TripStatus;
+  driverId?: number;
+  driverExternalId?: string;
+  teamDriverId?: number;
+  truckId?: number;
+  trailerId?: number;
+  trailer2Id?: number;
+  dollyId?: number;
+  actualMileage?: number;
+  notes?: string;
+  createdAt: string;
+  updatedAt: string;
+  linehaulProfile?: LinehaulProfile;
+  driver?: CarrierDriver;
+  teamDriver?: CarrierDriver;
+  truck?: EquipmentTruck;
+  trailer?: EquipmentTrailer;
+  trailer2?: EquipmentTrailer;
+  dolly?: EquipmentDolly;
+  shipments?: TripShipment[];
+  delays?: TripDelay[];
+  tripPay?: TripPay;
+  _count?: {
+    shipments: number;
+    delays: number;
+  };
+}
+
+// Trip Shipment
+export interface TripShipment {
+  id: number;
+  tripId: number;
+  proNumber: string;
+  origin?: string;
+  destination?: string;
+  weight?: number;
+  pieces?: number;
+  commodity?: string;
+  deliveryNotes?: string;
+  pickedUpAt?: string;
+  deliveredAt?: string;
+  createdAt: string;
+  updatedAt: string;
+}
+
+// Trip Delay
+export interface TripDelay {
+  id: number;
+  tripId: number;
+  delayType: DelayType;
+  startTime: string;
+  endTime?: string;
+  durationMinutes?: number;
+  location?: string;
+  description?: string;
+  billable: boolean;
+  notes?: string;
+  createdAt: string;
+  updatedAt: string;
+}
+
+// Rate Card
+export interface RateCard {
+  id: number;
+  rateType: RateCardType;
+  entityId?: number;
+  originTerminalId?: number;
+  destinationTerminalId?: number;
+  linehaulProfileId?: number;
+  rateMethod: RateMethod;
+  rateAmount: number;
+  minimumAmount?: number;
+  maximumAmount?: number;
+  effectiveDate: string;
+  expirationDate?: string;
+  equipmentType?: string;
+  priority: number;
+  externalRateId?: string;
+  notes?: string;
+  active: boolean;
+  createdAt: string;
+  updatedAt: string;
+  originTerminal?: Terminal;
+  destinationTerminal?: Terminal;
+  linehaulProfile?: LinehaulProfile;
+  accessorialRates?: AccessorialRate[];
+  _count?: {
+    accessorialRates: number;
+    tripPays: number;
+  };
+}
+
+export interface AccessorialRate {
+  id: number;
+  rateCardId: number;
+  accessorialType: AccessorialType;
+  rateAmount: number;
+  rateMethod: RateMethod;
+  minimumCharge?: number;
+  maximumCharge?: number;
+  description?: string;
+  createdAt: string;
+  updatedAt: string;
+}
+
+// Pay Period
+export interface PayPeriod {
+  id: number;
+  periodStart: string;
+  periodEnd: string;
+  status: PayPeriodStatus;
+  closedAt?: string;
+  closedBy?: number;
+  exportedAt?: string;
+  exportedBy?: number;
+  exportBatchId?: string;
+  notes?: string;
+  createdAt: string;
+  updatedAt: string;
+  tripPays?: TripPay[];
+  _count?: {
+    tripPays: number;
+  };
+}
+
+// Trip Pay
+export interface TripPay {
+  id: number;
+  tripId: number;
+  payPeriodId?: number;
+  driverId?: number;
+  driverExternalId?: string;
+  rateCardId?: number;
+  basePay?: number;
+  mileagePay?: number;
+  accessorialPay?: number;
+  bonusPay?: number;
+  deductions?: number;
+  totalGrossPay?: number;
+  splitPercentage?: number;
+  splitType?: string;
+  status: TripPayStatus;
+  calculatedAt?: string;
+  reviewedBy?: number;
+  reviewedAt?: string;
+  approvedBy?: number;
+  approvedAt?: string;
+  paidAt?: string;
+  externalPayrollId?: string;
+  exportedAt?: string;
+  notes?: string;
+  createdAt: string;
+  updatedAt: string;
+  trip?: LinehaulTrip;
+  payPeriod?: PayPeriod;
+  driver?: CarrierDriver;
+  rateCard?: RateCard;
+}
+
+// API Response types for dispatch module
+export interface TripsResponse {
+  trips: LinehaulTrip[];
+  pagination: {
+    page: number;
+    limit: number;
+    total: number;
+    totalPages: number;
+  };
+}
+
+export interface EquipmentResponse<T> {
+  trucks?: T[];
+  trailers?: T[];
+  dollies?: T[];
+  pagination: {
+    page: number;
+    limit: number;
+    total: number;
+    totalPages: number;
+  };
+}
+
+export interface PayPeriodsResponse {
+  payPeriods: PayPeriod[];
+  pagination: {
+    page: number;
+    limit: number;
+    total: number;
+    totalPages: number;
+  };
+}
+
+export interface TripPaysResponse {
+  tripPays: TripPay[];
+  pagination: {
+    page: number;
+    limit: number;
+    total: number;
+    totalPages: number;
+  };
+}
+
+export interface RateCardsResponse {
+  rateCards: RateCard[];
+  pagination: {
+    page: number;
+    limit: number;
+    total: number;
+    totalPages: number;
+  };
+}
