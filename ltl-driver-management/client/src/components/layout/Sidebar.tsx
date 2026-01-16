@@ -42,6 +42,14 @@ export const Sidebar: React.FC<SidebarProps> = ({ isOpen, onClose }) => {
 
   const navigation = [
     { name: 'Dashboard', href: '/dashboard', icon: Home },
+    // Dispatch & Fleet Management
+    { name: 'Dispatch Board', href: '/dispatch', icon: Send, section: 'dispatch' },
+    { name: 'Dispatch Trip', href: '/dispatch/trip', icon: Truck, section: 'dispatch' },
+    { name: 'Arrive Trip', href: '/arrive-trip', icon: CheckCircle, section: 'dispatch' },
+    { name: 'Transfer Scans', href: '/transfer-scans', icon: QrCode, section: 'dispatch' },
+    { name: 'Print Hazmat BOL', href: '/print-hazmat-bol', icon: Printer, section: 'dispatch' },
+    { name: 'Equipment', href: '/equipment', icon: Package, section: 'dispatch' },
+    // Core Management
     { name: 'Drivers', href: '/drivers', icon: User },
     { name: 'Carriers', href: '/carriers', icon: Truck },
     { name: 'Linehaul Profiles', href: '/routes', icon: Route },
@@ -50,13 +58,7 @@ export const Sidebar: React.FC<SidebarProps> = ({ isOpen, onClose }) => {
     // Contract Power
     { name: 'Bookings', href: '/bookings', icon: Calendar, section: 'contractpower' },
     { name: 'Invoices', href: '/invoices', icon: FileText, section: 'contractpower' },
-    // Dispatch & Fleet Management
-    { name: 'Dispatch Board', href: '/dispatch', icon: Send, section: 'dispatch' },
-    { name: 'Dispatch Trip', href: '/dispatch/trip', icon: Truck, section: 'dispatch' },
-    { name: 'Arrive Trip', href: '/arrive-trip', icon: CheckCircle, section: 'dispatch' },
-    { name: 'Transfer Scans', href: '/transfer-scans', icon: QrCode, section: 'dispatch' },
-    { name: 'Print Hazmat BOL', href: '/print-hazmat-bol', icon: Printer, section: 'dispatch' },
-    { name: 'Equipment', href: '/equipment', icon: Package, section: 'dispatch' },
+    // Payroll
     { name: 'Rate Cards', href: '/rate-cards', icon: DollarSign, section: 'payroll' },
     { name: 'Payroll', href: '/payroll', icon: Wallet, section: 'payroll' },
     { name: 'Administration', href: '/administration', icon: Users, adminOnly: true },
@@ -171,26 +173,35 @@ export const Sidebar: React.FC<SidebarProps> = ({ isOpen, onClose }) => {
               return null;
             }
 
+            // Add section divider before Dispatch section (right after Dashboard)
+            const showDispatchDivider = item.name === 'Dispatch Board' && isAdminOrDispatcher;
+            // Add section divider before Core Management section
+            const showCoreDivider = item.name === 'Drivers';
             // Add section divider before Contract Power section
             const showContractPowerDivider = item.name === 'Bookings' && isAdminOrDispatcher;
-            // Add section divider before Dispatch section
-            const showDispatchDivider = item.name === 'Dispatch Board' && isAdminOrDispatcher;
-            // Add section divider before Rate Cards
+            // Add section divider before Payroll section
             const showPayrollDivider = item.name === 'Rate Cards' && isAdminOrDispatcher;
 
             return (
               <React.Fragment key={item.name}>
-                {showContractPowerDivider && (
-                  <div className="pt-4 pb-2">
-                    <p className="px-3 text-xs font-semibold text-gray-400 dark:text-gray-500 uppercase tracking-wider">
-                      Contract Power
-                    </p>
-                  </div>
-                )}
                 {showDispatchDivider && (
                   <div className="pt-4 pb-2">
                     <p className="px-3 text-xs font-semibold text-gray-400 dark:text-gray-500 uppercase tracking-wider">
                       Dispatch & Fleet
+                    </p>
+                  </div>
+                )}
+                {showCoreDivider && (
+                  <div className="pt-4 pb-2">
+                    <p className="px-3 text-xs font-semibold text-gray-400 dark:text-gray-500 uppercase tracking-wider">
+                      Management
+                    </p>
+                  </div>
+                )}
+                {showContractPowerDivider && (
+                  <div className="pt-4 pb-2">
+                    <p className="px-3 text-xs font-semibold text-gray-400 dark:text-gray-500 uppercase tracking-wider">
+                      Contract Power
                     </p>
                   </div>
                 )}
