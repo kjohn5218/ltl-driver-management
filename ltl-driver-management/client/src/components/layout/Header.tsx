@@ -36,7 +36,7 @@ export const Header: React.FC<HeaderProps> = ({ onMenuClick }) => {
             <div className="flex items-center ml-2">
               <img src="/ccfs-logo.svg" alt="CCFS Logo" className="h-8 mr-3" />
               <h1 className="text-xl font-semibold text-gray-900 dark:text-white">
-                LTL Driver Management
+                Linehaul Management
               </h1>
             </div>
           </div>

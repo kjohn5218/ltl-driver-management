@@ -150,7 +150,7 @@ export const Sidebar: React.FC<SidebarProps> = ({ isOpen, onClose }) => {
           <div className="flex items-center">
             <Truck className="h-8 w-8 text-blue-600" />
             <div className="ml-3">
-              <h1 className="text-lg font-bold text-gray-900 dark:text-white">LTL Driver</h1>
+              <h1 className="text-lg font-bold text-gray-900 dark:text-white">Linehaul</h1>
               <p className="text-xs text-gray-500 dark:text-gray-400">Management</p>
             </div>
           </div>
