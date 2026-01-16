@@ -726,3 +726,110 @@ export interface RateCardsResponse {
     totalPages: number;
   };
 }
+
+// ==================== MANIFEST & DISPATCH OPERATIONS ====================
+
+// Theme
+export type ThemeMode = 'light' | 'dark';
+
+// Manifest Status
+export type ManifestStatus = 'OPEN' | 'CLOSED' | 'IN_TRANSIT' | 'DELIVERED';
+
+// Manifest
+export interface Manifest {
+  id: number;
+  manifestNumber: string;
+  tripId?: number;
+  originTerminalId: number;
+  destinationTerminalId: number;
+  status: ManifestStatus;
+  sealNumber?: string;
+  createdAt: string;
+  updatedAt: string;
+  originTerminal?: Terminal;
+  destinationTerminal?: Terminal;
+  trip?: LinehaulTrip;
+  shipments?: ManifestShipment[];
+  _count?: {
+    shipments: number;
+  };
+}
+
+export interface ManifestShipment {
+  id: number;
+  manifestId: number;
+  proNumber: string;
+  consignee: string;
+  location?: string;
+  loadedCount: number;
+  totalCount: number;
+  hazmat: boolean;
+  weight?: number;
+  pieces?: number;
+  specialInstructions?: string;
+  createdAt: string;
+  updatedAt: string;
+}
+
+// Dispatch Operations
+export interface DispatchTripRequest {
+  driverId: number;
+  manifestId?: number;
+  dollyId?: number;
+  sealNumber?: string;
+  originTerminalId: number;
+  destinationTerminalId: number;
+  isOwnerOperator: boolean;
+  powerUnitId: number;
+  trailerId?: number;
+  notes?: string;
+}
+
+export interface ArriveTripData {
+  id: number;
+  tripNumber: string;
+  driverName: string;
+  manifests: string[];
+  powerUnit: string;
+  trailers: string[];
+  converterDollies: string[];
+  tripType: 'Linehaul' | 'Regional';
+  status: TripStatus;
+  plannedArrival?: string;
+}
+
+export interface DispatchBoardStats {
+  averageMilageLate: number;
+  headHaulLoadFactor: number;
+  totalLoads: number;
+  outboundLoads: number;
+  inboundLoads: number;
+}
+
+// Transfer Scans
+export interface TransferShipmentRequest {
+  shipmentIds: number[];
+  targetManifestId?: number;
+  newManifestNumber?: string;
+  originTerminalId?: number;
+  destinationTerminalId?: number;
+}
+
+// Hazmat BOL
+export interface HazmatBOLRequest {
+  manifestNumber?: string;
+  proNumber?: string;
+  terminalId: number;
+  printerId?: string;
+}
+
+// API Response types for manifests
+export interface ManifestsResponse {
+  manifests: Manifest[];
+  pagination: {
+    page: number;
+    limit: number;
+    total: number;
+    totalPages: number;
+  };
+}

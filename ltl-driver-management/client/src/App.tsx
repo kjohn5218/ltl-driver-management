@@ -2,6 +2,7 @@ import { createBrowserRouter, RouterProvider, Navigate } from 'react-router-dom'
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
 import { Toaster } from 'react-hot-toast';
 import { AuthProvider } from './contexts/AuthContext';
+import { ThemeProvider } from './contexts/ThemeContext';
 import { ProtectedRoute } from './components/auth/ProtectedRoute';
 import { LoginForm } from './components/auth/LoginForm';
 import { RegisterForm } from './components/auth/RegisterForm';
@@ -21,6 +22,10 @@ import { Drivers } from './pages/Drivers';
 import { DocumentUpload } from './pages/DocumentUpload';
 import { Equipment } from './pages/Equipment';
 import { Dispatch } from './pages/Dispatch';
+import { DispatchTrip } from './pages/DispatchTrip';
+import { ArriveTrip } from './pages/ArriveTrip';
+import { TransferScans } from './pages/TransferScans';
+import { PrintHazmatBOL } from './pages/PrintHazmatBOL';
 import { RateCards } from './pages/RateCards';
 import { Payroll } from './pages/Payroll';
 
@@ -117,6 +122,22 @@ const router = createBrowserRouter([
             element: <Dispatch />
           },
           {
+            path: 'dispatch/trip',
+            element: <DispatchTrip />
+          },
+          {
+            path: 'arrive-trip',
+            element: <ArriveTrip />
+          },
+          {
+            path: 'transfer-scans',
+            element: <TransferScans />
+          },
+          {
+            path: 'print-hazmat-bol',
+            element: <PrintHazmatBOL />
+          },
+          {
             path: 'equipment',
             element: <Equipment />
           },
@@ -177,10 +198,12 @@ const router = createBrowserRouter([
 function App() {
   return (
     <QueryClientProvider client={queryClient}>
-      <AuthProvider>
-        <RouterProvider router={router} />
-        <Toaster position="top-right" />
-      </AuthProvider>
+      <ThemeProvider>
+        <AuthProvider>
+          <RouterProvider router={router} />
+          <Toaster position="top-right" />
+        </AuthProvider>
+      </ThemeProvider>
     </QueryClientProvider>
   );
 }

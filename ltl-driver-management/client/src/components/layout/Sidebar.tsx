@@ -19,7 +19,10 @@ import {
   Package,
   Send,
   DollarSign,
-  Wallet
+  Wallet,
+  QrCode,
+  Printer,
+  CheckCircle
 } from 'lucide-react';
 import { clsx } from 'clsx';
 import { api } from '../../services/api';
@@ -47,7 +50,11 @@ export const Sidebar: React.FC<SidebarProps> = ({ isOpen, onClose }) => {
     { name: 'Invoices', href: '/invoices', icon: FileText },
     { name: 'Reports', href: '/reports', icon: BarChart3 },
     // Dispatch & Fleet Management
-    { name: 'Dispatch', href: '/dispatch', icon: Send, section: 'dispatch' },
+    { name: 'Dispatch Board', href: '/dispatch', icon: Send, section: 'dispatch' },
+    { name: 'Dispatch Trip', href: '/dispatch/trip', icon: Truck, section: 'dispatch' },
+    { name: 'Arrive Trip', href: '/arrive-trip', icon: CheckCircle, section: 'dispatch' },
+    { name: 'Transfer Scans', href: '/transfer-scans', icon: QrCode, section: 'dispatch' },
+    { name: 'Print Hazmat BOL', href: '/print-hazmat-bol', icon: Printer, section: 'dispatch' },
     { name: 'Equipment', href: '/equipment', icon: Package, section: 'dispatch' },
     { name: 'Rate Cards', href: '/rate-cards', icon: DollarSign, section: 'payroll' },
     { name: 'Payroll', href: '/payroll', icon: Wallet, section: 'payroll' },
@@ -120,34 +127,34 @@ export const Sidebar: React.FC<SidebarProps> = ({ isOpen, onClose }) => {
       {/* Sidebar */}
       <div
         className={clsx(
-          'fixed inset-y-0 left-0 z-50 w-56 bg-white shadow-lg transform transition-transform lg:translate-x-0 lg:static lg:inset-0 lg:flex-shrink-0 border-r border-gray-200',
+          'fixed inset-y-0 left-0 z-50 w-56 bg-white dark:bg-gray-800 shadow-lg transform transition-transform lg:translate-x-0 lg:static lg:inset-0 lg:flex-shrink-0 border-r border-gray-200 dark:border-gray-700',
           isOpen ? 'translate-x-0' : '-translate-x-full lg:translate-x-0'
         )}
       >
         {/* Mobile header */}
-        <div className="flex items-center justify-between h-16 px-4 border-b border-gray-200 lg:hidden">
-          <h2 className="text-lg font-semibold text-gray-900">Menu</h2>
+        <div className="flex items-center justify-between h-16 px-4 border-b border-gray-200 dark:border-gray-700 lg:hidden">
+          <h2 className="text-lg font-semibold text-gray-900 dark:text-white">Menu</h2>
           <button
             onClick={onClose}
-            className="p-2 rounded-md text-gray-400 hover:text-gray-500 hover:bg-gray-100"
+            className="p-2 rounded-md text-gray-400 hover:text-gray-500 hover:bg-gray-100 dark:hover:bg-gray-700"
           >
             <X className="h-5 w-5" />
           </button>
         </div>
 
         {/* Desktop logo area */}
-        <div className="hidden lg:flex items-center px-4 py-4 border-b border-gray-200">
+        <div className="hidden lg:flex items-center px-4 py-4 border-b border-gray-200 dark:border-gray-700">
           <div className="flex items-center">
             <Truck className="h-8 w-8 text-blue-600" />
             <div className="ml-3">
-              <h1 className="text-lg font-bold text-gray-900">LTL Driver</h1>
-              <p className="text-xs text-gray-500">Management</p>
+              <h1 className="text-lg font-bold text-gray-900 dark:text-white">LTL Driver</h1>
+              <p className="text-xs text-gray-500 dark:text-gray-400">Management</p>
             </div>
           </div>
         </div>
 
         <nav className="mt-6 px-3 space-y-1">
-          {navigation.map((item, index) => {
+          {navigation.map((item) => {
             // Hide certain items for non-admin/dispatcher users
             if ((item.name === 'Carriers' || item.name === 'Routes' || item.name === 'Reports') && !isAdminOrDispatcher) {
               return null;
@@ -164,7 +171,7 @@ export const Sidebar: React.FC<SidebarProps> = ({ isOpen, onClose }) => {
             }
 
             // Add section divider before Dispatch section
-            const showDispatchDivider = item.name === 'Dispatch' && isAdminOrDispatcher;
+            const showDispatchDivider = item.name === 'Dispatch Board' && isAdminOrDispatcher;
             // Add section divider before Rate Cards
             const showPayrollDivider = item.name === 'Rate Cards' && isAdminOrDispatcher;
 
@@ -172,14 +179,14 @@ export const Sidebar: React.FC<SidebarProps> = ({ isOpen, onClose }) => {
               <React.Fragment key={item.name}>
                 {showDispatchDivider && (
                   <div className="pt-4 pb-2">
-                    <p className="px-3 text-xs font-semibold text-gray-400 uppercase tracking-wider">
+                    <p className="px-3 text-xs font-semibold text-gray-400 dark:text-gray-500 uppercase tracking-wider">
                       Dispatch & Fleet
                     </p>
                   </div>
                 )}
                 {showPayrollDivider && (
                   <div className="pt-4 pb-2">
-                    <p className="px-3 text-xs font-semibold text-gray-400 uppercase tracking-wider">
+                    <p className="px-3 text-xs font-semibold text-gray-400 dark:text-gray-500 uppercase tracking-wider">
                       Payroll
                     </p>
                   </div>
@@ -190,13 +197,13 @@ export const Sidebar: React.FC<SidebarProps> = ({ isOpen, onClose }) => {
                     clsx(
                       'group flex items-center px-3 py-2.5 text-sm font-medium rounded-lg transition-colors',
                       isActive
-                        ? 'bg-blue-50 text-blue-700 border-r-2 border-blue-700'
-                        : 'text-gray-700 hover:bg-gray-50 hover:text-gray-900'
+                        ? 'bg-blue-50 dark:bg-blue-900/30 text-blue-700 dark:text-blue-400 border-r-2 border-blue-700 dark:border-blue-400'
+                        : 'text-gray-700 dark:text-gray-300 hover:bg-gray-50 dark:hover:bg-gray-700 hover:text-gray-900 dark:hover:text-white'
                     )
                   }
                 >
                   <item.icon
-                    className="mr-3 h-5 w-5 flex-shrink-0 text-gray-500 group-hover:text-gray-700"
+                    className="mr-3 h-5 w-5 flex-shrink-0 text-gray-500 dark:text-gray-400 group-hover:text-gray-700 dark:group-hover:text-gray-200"
                     aria-hidden="true"
                   />
                   {item.name}
