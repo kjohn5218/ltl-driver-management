@@ -1,15 +1,18 @@
-import React from 'react';
+import React, { useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import {
   Truck,
   LayoutGrid,
   QrCode,
   Printer,
-  FileText
+  FileText,
+  Plus
 } from 'lucide-react';
+import { CreateLoadsheetModal } from '../components/loadsheet/CreateLoadsheetModal';
 
 export const Dashboard: React.FC = () => {
   const navigate = useNavigate();
+  const [isCreateLoadsheetModalOpen, setIsCreateLoadsheetModalOpen] = useState(false);
 
   // Quick Navigation Cards
   const quickNavCards = [
@@ -49,11 +52,11 @@ export const Dashboard: React.FC = () => {
       route: '/print-hazmat-bol'
     },
     {
-      name: 'Create Loadsheets',
+      name: 'Loadsheets',
       icon: FileText,
       color: 'bg-teal-500',
       hoverColor: 'hover:bg-teal-600',
-      route: '/loadsheets/new'
+      route: '/loadsheets'
     }
   ];
 
@@ -81,7 +84,22 @@ export const Dashboard: React.FC = () => {
             <span className="text-sm font-semibold text-center">{card.name}</span>
           </button>
         ))}
+        {/* Create Loadsheet - Opens Modal */}
+        <button
+          onClick={() => setIsCreateLoadsheetModalOpen(true)}
+          className="bg-indigo-500 hover:bg-indigo-600 p-6 rounded-lg shadow-lg transition-all duration-200 transform hover:scale-105 flex flex-col items-center justify-center text-white"
+        >
+          <Plus className="h-10 w-10 mb-3" />
+          <span className="text-sm font-semibold text-center">Create Loadsheet</span>
+        </button>
       </div>
+
+      {/* Create Loadsheet Modal */}
+      <CreateLoadsheetModal
+        isOpen={isCreateLoadsheetModalOpen}
+        onClose={() => setIsCreateLoadsheetModalOpen(false)}
+        onSuccess={() => {}}
+      />
     </div>
   );
 };
