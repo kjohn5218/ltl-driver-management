@@ -448,6 +448,7 @@ export interface EquipmentTrailer {
   nextInspectionDate?: string;
   maintenanceStatus?: string;
   maintenanceNotes?: string;
+  pintleHook?: boolean;
   createdAt: string;
   updatedAt: string;
   currentTerminal?: Terminal;
@@ -832,4 +833,287 @@ export interface ManifestsResponse {
     total: number;
     totalPages: number;
   };
+}
+
+// ==================== LOADSHEET MODULE ====================
+
+// Loadsheet Enums
+export type LoadsheetStatus = 'DRAFT' | 'OPEN' | 'LOADING' | 'CLOSED' | 'DISPATCHED';
+export type LoadType = 'PURE' | 'MIX';
+export type ConditionStatus = 'OK' | 'REPAIR';
+export type HazmatPlacardType = 'CORROSIVE' | 'FLAMMABLE' | 'OTHER' | 'DANGEROUS' | 'OXIDIZER';
+
+// Loadsheet
+export interface Loadsheet {
+  id: number;
+  manifestNumber: string;
+
+  // Header
+  trailerNumber: string;
+  suggestedTrailerLength?: number;
+  pintleHookRequired: boolean;
+  targetDispatchTime?: string;
+  linehaulName: string;
+  preloadManifest?: string;
+  originTerminalId?: number;
+  originTerminalCode?: string;
+  linehaulTripId?: number;
+  doNotLoadPlacardableHazmat?: boolean;
+  doorNumber?: string;
+
+  // Loading Info
+  loadDate: string;
+  straps?: number;
+  closeTime?: string;
+  loadType: LoadType;
+  loadbars?: number;
+  loaderNumber?: string;
+  exceptions?: string;
+  capacity?: string;
+  blankets?: number;
+  loaderName?: string;
+  sealNumber?: string;
+
+  // Trailer Condition
+  wallCondition: ConditionStatus;
+  floorCondition: ConditionStatus;
+  roofCondition: ConditionStatus;
+  trailerConditionComment?: string;
+
+  // HAZMAT Placards (JSON string array)
+  hazmatPlacards?: string;
+
+  // Status
+  status: LoadsheetStatus;
+  createdBy?: number;
+  createdAt: string;
+  updatedAt: string;
+  printedAt?: string;
+  lastScanAt?: string;
+
+  // Relations
+  originTerminal?: Terminal;
+  linehaulTrip?: LinehaulTrip;
+  hazmatItems?: LoadsheetHazmatItem[];
+  dispatchEntries?: LoadsheetDispatchEntry[];
+  freightPlacements?: LoadsheetFreightPlacement[];
+
+  _count?: {
+    hazmatItems: number;
+    dispatchEntries: number;
+  };
+}
+
+export interface LoadsheetHazmatItem {
+  id: number;
+  loadsheetId: number;
+  itemNumber: number;  // 1-10 (HM1-HM10)
+  proNumber?: string;
+  hazmatClass?: string;
+  weight?: number;
+  createdAt?: string;
+}
+
+export interface LoadsheetDispatchEntry {
+  id: number;
+  loadsheetId: number;
+  rowNumber: number;
+  dispatchTime?: string;
+  dispatchTerminal?: string;
+  nextTerminal?: string;
+  tractorNumber?: string;
+  driverNumber?: string;
+  driverName?: string;
+  supervisorNumber?: string;
+  createdAt?: string;
+}
+
+export interface LoadsheetFreightPlacement {
+  id: number;
+  loadsheetId: number;
+  rowNumber: number;
+  loose?: string;
+  left?: string;
+  right?: string;
+  createdAt?: string;
+}
+
+// Loadsheet API Request/Response types
+export interface LoadsheetsResponse {
+  loadsheets: Loadsheet[];
+  pagination: {
+    page: number;
+    limit: number;
+    total: number;
+    totalPages: number;
+  };
+}
+
+export interface LoadsheetFilters {
+  search?: string;
+  status?: LoadsheetStatus;
+  linehaulTripId?: number;
+  originTerminalId?: number;
+  originTerminalCode?: string;
+  startDate?: string;
+  endDate?: string;
+  page?: number;
+  limit?: number;
+}
+
+export interface CreateLoadsheetRequest {
+  trailerNumber: string;
+  linehaulName: string;
+  suggestedTrailerLength?: number;
+  pintleHookRequired?: boolean;
+  targetDispatchTime?: string;
+  preloadManifest?: string;
+  originTerminalId?: number;
+  originTerminalCode?: string;
+  linehaulTripId?: number;
+  doNotLoadPlacardableHazmat?: boolean;
+  doorNumber?: string;
+  loadDate?: string;
+  straps?: number;
+  closeTime?: string;
+  loadType?: LoadType;
+  loadbars?: number;
+  loaderNumber?: string;
+  exceptions?: string;
+  capacity?: string;
+  blankets?: number;
+  loaderName?: string;
+  sealNumber?: string;
+  wallCondition?: ConditionStatus;
+  floorCondition?: ConditionStatus;
+  roofCondition?: ConditionStatus;
+  trailerConditionComment?: string;
+  hazmatPlacards?: HazmatPlacardType[];
+  hazmatItems?: Omit<LoadsheetHazmatItem, 'id' | 'loadsheetId' | 'createdAt'>[];
+  dispatchEntries?: Omit<LoadsheetDispatchEntry, 'id' | 'loadsheetId' | 'createdAt'>[];
+  freightPlacements?: Omit<LoadsheetFreightPlacement, 'id' | 'loadsheetId' | 'createdAt'>[];
+}
+
+// Duplicate loadsheet check
+export interface DuplicateLoadsheet {
+  id: number;
+  manifestNumber: string;
+  trailerNumber: string;
+  linehaulName: string;
+  loadDate: string;
+  status: LoadsheetStatus;
+  originTerminalCode?: string;
+}
+
+export interface CheckDuplicateLoadsheetsRequest {
+  trailerNumber: string;
+  originTerminalCode: string;
+}
+
+export interface CheckDuplicateLoadsheetsResponse {
+  hasDuplicates: boolean;
+  duplicates: DuplicateLoadsheet[];
+}
+
+// ==================== TRIP DOCUMENT MODULE ====================
+
+// Trip Document Enums
+export type TripDocumentType = 'LINEHAUL_MANIFEST' | 'PLACARD_SHEET' | 'HAZMAT_BOL';
+export type TripDocumentStatus = 'PENDING' | 'GENERATED' | 'ERROR';
+
+// Trip Document
+export interface TripDocument {
+  id: number;
+  tripId: number;
+  documentType: TripDocumentType;
+  documentNumber: string;
+  status: TripDocumentStatus;
+  generatedAt?: string;
+  errorMessage?: string;
+  createdAt: string;
+  updatedAt: string;
+  manifestData?: ManifestDocumentData;
+  placardData?: PlacardSheetData;
+}
+
+// Manifest Document Data
+export interface ManifestDocumentData {
+  id: number;
+  tripDocumentId: number;
+  tripDisplay: string;
+  manifestNumber: string;
+  driverName?: string;
+  trailerNumber?: string;
+  originCode: string;
+  destCode: string;
+  effort?: string;
+  timeDue?: string;
+  lastLoad?: string;
+  totalScans: number;
+  totalPieces: number;
+  totalWeight: number;
+  dispatchedAt?: string;
+  arrivedAt?: string;
+  freightItems?: ManifestFreightItem[];
+}
+
+// Manifest Freight Item
+export interface ManifestFreightItem {
+  id: number;
+  manifestDataId: number;
+  proNumber: string;
+  destTerminal?: string;
+  destTerminalSub?: string;
+  scans: number;
+  pieces: number;
+  weight: number;
+  consigneeName?: string;
+  consigneeCity?: string;
+  shipperName?: string;
+  shipperCity?: string;
+  expDeliveryDate?: string;
+  loadedTerminal?: string;
+  unloadedTerminal?: string;
+  isHazmat: boolean;
+  hazmatClass?: string;
+  sortOrder: number;
+}
+
+// Placard Sheet Data
+export interface PlacardSheetData {
+  id: number;
+  tripDocumentId: number;
+  tripDisplay: string;
+  trailerNumber?: string;
+  hazmatItems?: PlacardHazmatItem[];
+  requiredPlacards?: RequiredPlacard[];
+}
+
+// Placard Hazmat Item
+export interface PlacardHazmatItem {
+  id: number;
+  placardDataId: number;
+  proNumber: string;
+  unNumber: string;
+  hazardClass: string;
+  packingGroup?: string;
+  weight?: number;
+  isBulk: boolean;
+  isLimitedQty: boolean;
+  shippingName: string;
+  sortOrder: number;
+}
+
+// Required Placard
+export interface RequiredPlacard {
+  id: number;
+  placardDataId: number;
+  placardClass: string;
+  placardLabel: string;
+}
+
+// Trip Documents Response
+export interface TripDocumentsResponse {
+  documents: TripDocument[];
+  hasHazmat: boolean;
 }

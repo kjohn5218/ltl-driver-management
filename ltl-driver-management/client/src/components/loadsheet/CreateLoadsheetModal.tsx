@@ -9,7 +9,8 @@ import {
   EquipmentTrailer,
   LinehaulProfile,
   CreateLoadsheetRequest,
-  Loadsheet
+  Loadsheet,
+  DuplicateLoadsheet
 } from '../../types';
 import { toast } from 'react-hot-toast';
 import {
@@ -21,6 +22,7 @@ import {
   AlertTriangle,
   Search
 } from 'lucide-react';
+import { DuplicateLoadsheetModal } from './DuplicateLoadsheetModal';
 
 // Type-to-filter dropdown component
 interface TypeToFilterProps<T> {
@@ -156,6 +158,12 @@ export const CreateLoadsheetModal: React.FC<CreateLoadsheetModalProps> = ({
 }) => {
   const [saving, setSaving] = useState(false);
   const [createdLoadsheet, setCreatedLoadsheet] = useState<Loadsheet | null>(null);
+  const [isReprint, setIsReprint] = useState(false);
+
+  // Duplicate check state
+  const [showDuplicateModal, setShowDuplicateModal] = useState(false);
+  const [duplicateLoadsheets, setDuplicateLoadsheets] = useState<DuplicateLoadsheet[]>([]);
+  const [checkingDuplicates, setCheckingDuplicates] = useState(false);
 
   // Data sources for type-to-filter dropdowns
   const [terminals, setTerminals] = useState<Terminal[]>([]);
@@ -172,6 +180,7 @@ export const CreateLoadsheetModal: React.FC<CreateLoadsheetModalProps> = ({
   const [pintleHook, setPintleHook] = useState<boolean>(false);
   const [targetDispatchTime, setTargetDispatchTime] = useState<string>('');
   const [doNotLoadPlacardableHazmat, setDoNotLoadPlacardableHazmat] = useState(false);
+  const [doorNumber, setDoorNumber] = useState<string>('');
 
   useEffect(() => {
     if (isOpen) {
@@ -189,7 +198,11 @@ export const CreateLoadsheetModal: React.FC<CreateLoadsheetModalProps> = ({
     setPintleHook(false);
     setTargetDispatchTime('');
     setDoNotLoadPlacardableHazmat(false);
+    setDoorNumber('');
     setCreatedLoadsheet(null);
+    setIsReprint(false);
+    setShowDuplicateModal(false);
+    setDuplicateLoadsheets([]);
   };
 
   const handleClose = () => {
@@ -255,7 +268,38 @@ export const CreateLoadsheetModal: React.FC<CreateLoadsheetModalProps> = ({
     }
 
     try {
+      setCheckingDuplicates(true);
+
+      // First check for duplicate loadsheets
+      const duplicateCheck = await loadsheetService.checkDuplicateLoadsheets({
+        trailerNumber: selectedTrailer.unitNumber,
+        originTerminalCode: selectedTerminal.code
+      });
+
+      if (duplicateCheck.hasDuplicates) {
+        // Show duplicate modal and let user decide
+        setDuplicateLoadsheets(duplicateCheck.duplicates);
+        setShowDuplicateModal(true);
+        setCheckingDuplicates(false);
+        return;
+      }
+
+      // No duplicates, proceed with creating the loadsheet
+      await createNewLoadsheet();
+    } catch (error: any) {
+      toast.error(error.response?.data?.message || 'Failed to check for duplicates');
+      setCheckingDuplicates(false);
+    }
+  };
+
+  const createNewLoadsheet = async () => {
+    if (!selectedTrailer || !selectedProfile || !selectedTerminal) {
+      return;
+    }
+
+    try {
       setSaving(true);
+      setCheckingDuplicates(false);
 
       const dataToSend: CreateLoadsheetRequest & { doNotLoadPlacardableHazmat?: boolean } = {
         trailerNumber: selectedTrailer.unitNumber,
@@ -265,17 +309,38 @@ export const CreateLoadsheetModal: React.FC<CreateLoadsheetModalProps> = ({
         targetDispatchTime: targetDispatchTime || undefined,
         originTerminalId: selectedTerminal.id,
         originTerminalCode: selectedTerminal.code,
-        doNotLoadPlacardableHazmat
+        doNotLoadPlacardableHazmat,
+        doorNumber: doorNumber || undefined
       };
 
       const created = await loadsheetService.createLoadsheet(dataToSend);
       toast.success(`Loadsheet ${created.manifestNumber} created successfully`);
       setCreatedLoadsheet(created);
+      setIsReprint(false);
       onSuccess();
     } catch (error: any) {
       toast.error(error.response?.data?.message || 'Failed to create loadsheet');
     } finally {
       setSaving(false);
+    }
+  };
+
+  const handleContinueCreate = () => {
+    setShowDuplicateModal(false);
+    createNewLoadsheet();
+  };
+
+  const handleReprintSelected = async (loadsheet: DuplicateLoadsheet) => {
+    // Close duplicate modal and show the success state with the selected loadsheet
+    setShowDuplicateModal(false);
+
+    try {
+      // Fetch the full loadsheet data
+      const fullLoadsheet = await loadsheetService.getLoadsheetById(loadsheet.id);
+      setCreatedLoadsheet(fullLoadsheet);
+      setIsReprint(true);
+    } catch (error) {
+      toast.error('Failed to load existing loadsheet');
     }
   };
 
@@ -331,6 +396,7 @@ export const CreateLoadsheetModal: React.FC<CreateLoadsheetModalProps> = ({
   };
 
   return (
+    <>
     <Transition.Root show={isOpen} as={Fragment}>
       <Dialog as="div" className="relative z-50" onClose={handleClose}>
         <Transition.Child
@@ -373,10 +439,15 @@ export const CreateLoadsheetModal: React.FC<CreateLoadsheetModalProps> = ({
                   <div className="text-center py-6">
                     <CheckCircle className="mx-auto h-16 w-16 text-green-500 mb-4" />
                     <Dialog.Title as="h3" className="text-xl font-semibold text-gray-900 dark:text-white mb-2">
-                      Loadsheet Created Successfully
+                      {isReprint ? 'Existing Loadsheet Selected' : 'Loadsheet Created Successfully'}
                     </Dialog.Title>
                     <p className="text-gray-600 dark:text-gray-300 mb-6">
                       Manifest Number: <span className="font-mono font-bold text-blue-600 dark:text-blue-400">{createdLoadsheet.manifestNumber}</span>
+                      {isReprint && (
+                        <span className="block text-sm mt-1 text-gray-500 dark:text-gray-400">
+                          You can download or print this existing loadsheet below.
+                        </span>
+                      )}
                     </p>
 
                     <div className="flex justify-center gap-4 mb-6">
@@ -464,6 +535,23 @@ export const CreateLoadsheetModal: React.FC<CreateLoadsheetModalProps> = ({
                             Populated from fleet data
                           </p>
                         </div>
+
+                        {/* Door Number */}
+                        <div>
+                          <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">
+                            Door Number
+                          </label>
+                          <input
+                            type="text"
+                            value={doorNumber}
+                            onChange={(e) => setDoorNumber(e.target.value)}
+                            className="w-full px-3 py-2 border border-gray-300 dark:border-gray-600 rounded-lg bg-white dark:bg-gray-700 text-gray-900 dark:text-white focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
+                            placeholder="Enter door number"
+                          />
+                          <p className="text-xs text-gray-500 dark:text-gray-400 mt-1">
+                            Loading door location for scanners
+                          </p>
+                        </div>
                       </div>
 
                       {/* Hazmat Warning Checkbox */}
@@ -501,11 +589,11 @@ export const CreateLoadsheetModal: React.FC<CreateLoadsheetModalProps> = ({
                         </button>
                         <button
                           type="submit"
-                          disabled={saving}
+                          disabled={saving || checkingDuplicates}
                           className="flex items-center gap-2 px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 disabled:opacity-50 transition-colors"
                         >
                           <Save className="w-4 h-4" />
-                          {saving ? 'Creating...' : 'Create Loadsheet'}
+                          {checkingDuplicates ? 'Checking...' : saving ? 'Creating...' : 'Create Loadsheet'}
                         </button>
                       </div>
                     </form>
@@ -517,5 +605,16 @@ export const CreateLoadsheetModal: React.FC<CreateLoadsheetModalProps> = ({
         </div>
       </Dialog>
     </Transition.Root>
+
+    {/* Duplicate Loadsheet Warning Modal */}
+    <DuplicateLoadsheetModal
+      isOpen={showDuplicateModal}
+      onClose={() => setShowDuplicateModal(false)}
+      duplicates={duplicateLoadsheets}
+      trailerNumber={selectedTrailer?.unitNumber || ''}
+      onReprintSelected={handleReprintSelected}
+      onContinueCreate={handleContinueCreate}
+    />
+  </>
   );
 };
