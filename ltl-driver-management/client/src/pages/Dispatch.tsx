@@ -1,4 +1,5 @@
 import React, { useState, useEffect } from 'react';
+import { useSearchParams } from 'react-router-dom';
 import { PageHeader } from '../components/common/PageHeader';
 import { DataTable } from '../components/common/DataTable';
 import { TablePagination } from '../components/common/TablePagination';
@@ -16,6 +17,7 @@ import { loadsheetService } from '../services/loadsheetService';
 import { carrierService } from '../services/carrierService';
 import { DriversTab } from '../components/dispatch/DriversTab';
 import { LoadsTab } from '../components/dispatch/LoadsTab';
+import { OutboundTab } from '../components/dispatch/OutboundTab';
 import {
   LinehaulTrip,
   LinehaulProfile,
@@ -43,12 +45,12 @@ import {
   Users,
   MapPin,
   FileText,
-  Send,
   Clock,
-  Container
+  Container,
+  LogOut
 } from 'lucide-react';
 
-type DispatchTab = 'planning' | 'loads' | 'drivers';
+type DispatchTab = 'planning' | 'loads' | 'drivers' | 'outbound';
 
 // Loadsheet status filter options for the planning table
 const planningStatusFilterOptions: { value: string; label: string }[] = [
@@ -68,6 +70,7 @@ interface PlanningData {
 
 export const Dispatch: React.FC = () => {
   const { user } = useAuth();
+  const [searchParams, setSearchParams] = useSearchParams();
   const [trips, setTrips] = useState<LinehaulTrip[]>([]);
   const [profiles, setProfiles] = useState<LinehaulProfile[]>([]);
   const [drivers, setDrivers] = useState<CarrierDriver[]>([]);
@@ -88,8 +91,22 @@ export const Dispatch: React.FC = () => {
   const [dispatchingLoadsheetId, setDispatchingLoadsheetId] = useState<number | null>(null);
   const [dispatchingTripId, setDispatchingTripId] = useState<number | null>(null);
 
-  // Tab state
-  const [activeTab, setActiveTab] = useState<DispatchTab>('planning');
+  // Tab state - read from URL params
+  const tabFromUrl = searchParams.get('tab') as DispatchTab | null;
+  const [activeTab, setActiveTab] = useState<DispatchTab>(tabFromUrl || 'planning');
+
+  // Update tab when URL changes
+  useEffect(() => {
+    if (tabFromUrl && tabFromUrl !== activeTab) {
+      setActiveTab(tabFromUrl);
+    }
+  }, [tabFromUrl]);
+
+  // Update URL when tab changes
+  const handleTabChange = (tab: DispatchTab) => {
+    setActiveTab(tab);
+    setSearchParams({ tab });
+  };
 
   // Filters
   const [planningSearchTerm, setPlanningSearchTerm] = useState('');
@@ -97,6 +114,10 @@ export const Dispatch: React.FC = () => {
   const [profileFilter, setProfileFilter] = useState<number | ''>('');
   const [startDate, setStartDate] = useState('');
   const [endDate, setEndDate] = useState('');
+
+  // Sorting for planning table
+  const [planningSortField, setPlanningSortField] = useState<string>('loadDate');
+  const [planningSortDirection, setPlanningSortDirection] = useState<'asc' | 'desc'>('desc');
   const [selectedOrigins, setSelectedOrigins] = useState<number[]>([]);
   const [locationTypeFilter, setLocationTypeFilter] = useState<'all' | 'physical' | 'virtual'>('all');
   const [currentPage, setCurrentPage] = useState(1);
@@ -109,23 +130,90 @@ export const Dispatch: React.FC = () => {
     return true; // 'all' shows everything
   });
 
-  // Filter planning loadsheets by search term and status
-  const filteredPlanningLoadsheets = planningLoadsheets.filter(ls => {
-    // Filter by status
-    if (planningStatusFilter && ls.status !== planningStatusFilter) {
-      return false;
+  // Filter and sort planning loadsheets
+  const filteredPlanningLoadsheets = planningLoadsheets
+    .filter(ls => {
+      // Filter by status
+      if (planningStatusFilter && ls.status !== planningStatusFilter) {
+        return false;
+      }
+      // Filter by search term (search manifest number, linehaul name, trailer number, terminal code)
+      if (planningSearchTerm) {
+        const searchLower = planningSearchTerm.toLowerCase();
+        const matchesManifest = ls.manifestNumber?.toLowerCase().includes(searchLower);
+        const matchesLinehaul = ls.linehaulName?.toLowerCase().includes(searchLower);
+        const matchesTrailer = ls.trailerNumber?.toLowerCase().includes(searchLower);
+        const matchesOrigin = ls.originTerminalCode?.toLowerCase().includes(searchLower);
+        return matchesManifest || matchesLinehaul || matchesTrailer || matchesOrigin;
+      }
+      return true;
+    })
+    .sort((a, b) => {
+      const direction = planningSortDirection === 'asc' ? 1 : -1;
+      let aVal: any, bVal: any;
+
+      switch (planningSortField) {
+        case 'location':
+          aVal = a.originTerminalCode || '';
+          bVal = b.originTerminalCode || '';
+          break;
+        case 'linehaul':
+          aVal = a.linehaulName || '';
+          bVal = b.linehaulName || '';
+          break;
+        case 'manifestNumber':
+          aVal = a.manifestNumber || '';
+          bVal = b.manifestNumber || '';
+          break;
+        case 'trailerNumber':
+          aVal = a.trailerNumber || '';
+          bVal = b.trailerNumber || '';
+          break;
+        case 'loadDate':
+          aVal = new Date(a.loadDate).getTime();
+          bVal = new Date(b.loadDate).getTime();
+          break;
+        case 'targetDispatchTime':
+          aVal = a.targetDispatchTime || '';
+          bVal = b.targetDispatchTime || '';
+          break;
+        case 'status':
+          aVal = a.status || '';
+          bVal = b.status || '';
+          break;
+        default:
+          return 0;
+      }
+
+      if (aVal < bVal) return -1 * direction;
+      if (aVal > bVal) return 1 * direction;
+      return 0;
+    });
+
+  // Handle planning table sort
+  const handlePlanningSort = (field: string) => {
+    if (planningSortField === field) {
+      setPlanningSortDirection(prev => prev === 'asc' ? 'desc' : 'asc');
+    } else {
+      setPlanningSortField(field);
+      setPlanningSortDirection('asc');
     }
-    // Filter by search term (search manifest number, linehaul name, trailer number, terminal code)
-    if (planningSearchTerm) {
-      const searchLower = planningSearchTerm.toLowerCase();
-      const matchesManifest = ls.manifestNumber?.toLowerCase().includes(searchLower);
-      const matchesLinehaul = ls.linehaulName?.toLowerCase().includes(searchLower);
-      const matchesTrailer = ls.trailerNumber?.toLowerCase().includes(searchLower);
-      const matchesOrigin = ls.originTerminalCode?.toLowerCase().includes(searchLower);
-      return matchesManifest || matchesLinehaul || matchesTrailer || matchesOrigin;
-    }
-    return true;
-  });
+  };
+
+  // Render sortable header
+  const renderSortableHeader = (field: string, label: string) => (
+    <button
+      onClick={() => handlePlanningSort(field)}
+      className="flex items-center space-x-1 text-left text-xs font-medium text-gray-500 uppercase tracking-wider hover:text-gray-700"
+    >
+      <span>{label}</span>
+      {planningSortField === field && (
+        <span className="text-indigo-600">
+          {planningSortDirection === 'asc' ? '↑' : '↓'}
+        </span>
+      )}
+    </button>
+  );
 
   // Modals
   const [isCreateModalOpen, setIsCreateModalOpen] = useState(false);
@@ -407,10 +495,13 @@ export const Dispatch: React.FC = () => {
         notes: `Created from loadsheet ${loadsheet.manifestNumber}`
       };
 
-      await linehaulTripService.createTrip(tripData);
+      const createdTrip = await linehaulTripService.createTrip(tripData);
 
-      // Update loadsheet status to DISPATCHED
-      await loadsheetService.updateLoadsheet(loadsheet.id, { status: 'DISPATCHED' });
+      // Update loadsheet status to DISPATCHED and link to trip
+      await loadsheetService.updateLoadsheet(loadsheet.id, {
+        status: 'DISPATCHED',
+        linehaulTripId: createdTrip.id
+      });
 
       toast.success(`Trip created and dispatched for ${loadsheet.manifestNumber}`);
 
@@ -669,7 +760,7 @@ export const Dispatch: React.FC = () => {
         <div className="border-b border-gray-200">
           <nav className="flex -mb-px">
             <button
-              onClick={() => setActiveTab('planning')}
+              onClick={() => handleTabChange('planning')}
               className={`flex items-center px-6 py-4 text-sm font-medium border-b-2 ${
                 activeTab === 'planning'
                   ? 'border-indigo-500 text-indigo-600'
@@ -680,7 +771,7 @@ export const Dispatch: React.FC = () => {
               Planning
             </button>
             <button
-              onClick={() => setActiveTab('loads')}
+              onClick={() => handleTabChange('loads')}
               className={`flex items-center px-6 py-4 text-sm font-medium border-b-2 ${
                 activeTab === 'loads'
                   ? 'border-indigo-500 text-indigo-600'
@@ -691,7 +782,18 @@ export const Dispatch: React.FC = () => {
               Loads
             </button>
             <button
-              onClick={() => setActiveTab('drivers')}
+              onClick={() => handleTabChange('outbound')}
+              className={`flex items-center px-6 py-4 text-sm font-medium border-b-2 ${
+                activeTab === 'outbound'
+                  ? 'border-green-500 text-green-600'
+                  : 'border-transparent text-gray-500 hover:text-gray-700 hover:border-gray-300'
+              }`}
+            >
+              <LogOut className="w-4 h-4 mr-2" />
+              Outbound
+            </button>
+            <button
+              onClick={() => handleTabChange('drivers')}
               className={`flex items-center px-6 py-4 text-sm font-medium border-b-2 ${
                 activeTab === 'drivers'
                   ? 'border-indigo-500 text-indigo-600'
@@ -869,35 +971,32 @@ export const Dispatch: React.FC = () => {
                   <table className="min-w-full divide-y divide-gray-200">
                     <thead className="bg-gray-50">
                       <tr>
-                        <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
-                          Location
+                        <th className="px-4 py-3">
+                          {renderSortableHeader('location', 'Location')}
                         </th>
-                        <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
-                          Linehaul
+                        <th className="px-4 py-3">
+                          {renderSortableHeader('linehaul', 'Linehaul')}
                         </th>
-                        <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
-                          Manifest #
+                        <th className="px-4 py-3">
+                          {renderSortableHeader('manifestNumber', 'Manifest #')}
                         </th>
-                        <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
-                          Trailer
+                        <th className="px-4 py-3">
+                          {renderSortableHeader('trailerNumber', 'Trailer')}
                         </th>
-                        <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
-                          Load Date
+                        <th className="px-4 py-3">
+                          {renderSortableHeader('loadDate', 'Load Date')}
                         </th>
-                        <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
-                          Target Dispatch
+                        <th className="px-4 py-3">
+                          {renderSortableHeader('targetDispatchTime', 'Target Dispatch')}
                         </th>
-                        <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
-                          Status
+                        <th className="px-4 py-3">
+                          {renderSortableHeader('status', 'Status')}
                         </th>
                         <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
                           Planned Carrier
                         </th>
                         <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
                           Planned Driver
-                        </th>
-                        <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
-                          Action
                         </th>
                       </tr>
                     </thead>
@@ -978,19 +1077,6 @@ export const Dispatch: React.FC = () => {
                               ))}
                             </select>
                           </td>
-                          <td className="px-4 py-3 whitespace-nowrap">
-                            <button
-                              onClick={() => handleDispatchFromPlanning(loadsheet)}
-                              disabled={
-                                dispatchingLoadsheetId === loadsheet.id ||
-                                !planningData[loadsheet.id]?.plannedDriverId
-                              }
-                              className="inline-flex items-center px-3 py-1.5 border border-transparent text-sm font-medium rounded-md text-white bg-green-600 hover:bg-green-700 disabled:opacity-50 disabled:cursor-not-allowed"
-                            >
-                              <Send className="w-3 h-3 mr-1" />
-                              {dispatchingLoadsheetId === loadsheet.id ? 'Dispatching...' : 'Dispatch'}
-                            </button>
-                          </td>
                         </tr>
                       ))}
                     </tbody>
@@ -1032,9 +1118,6 @@ export const Dispatch: React.FC = () => {
                           </th>
                           <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
                             Planned Driver
-                          </th>
-                          <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
-                            Action
                           </th>
                         </tr>
                       </thead>
@@ -1096,19 +1179,6 @@ export const Dispatch: React.FC = () => {
                                 ))}
                               </select>
                             </td>
-                            <td className="px-4 py-3 whitespace-nowrap">
-                              <button
-                                onClick={() => handleDispatchContinuingTrip(trip)}
-                                disabled={
-                                  dispatchingTripId === trip.id ||
-                                  !continuingTripData[trip.id]?.plannedDriverId
-                                }
-                                className="inline-flex items-center px-3 py-1.5 border border-transparent text-sm font-medium rounded-md text-white bg-amber-600 hover:bg-amber-700 disabled:opacity-50 disabled:cursor-not-allowed"
-                              >
-                                <Send className="w-3 h-3 mr-1" />
-                                {dispatchingTripId === trip.id ? 'Dispatching...' : 'Continue'}
-                              </button>
-                            </td>
                           </tr>
                         ))}
                       </tbody>
@@ -1124,6 +1194,10 @@ export const Dispatch: React.FC = () => {
 
       {activeTab === 'loads' && (
         <LoadsTab />
+      )}
+
+      {activeTab === 'outbound' && (
+        <OutboundTab />
       )}
 
       {activeTab === 'drivers' && (
