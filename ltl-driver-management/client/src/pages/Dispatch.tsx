@@ -15,6 +15,7 @@ import { locationService } from '../services/locationService';
 import { loadsheetService } from '../services/loadsheetService';
 import { carrierService } from '../services/carrierService';
 import { DriversTab } from '../components/dispatch/DriversTab';
+import { LoadsTab } from '../components/dispatch/LoadsTab';
 import {
   LinehaulTrip,
   LinehaulProfile,
@@ -43,10 +44,11 @@ import {
   MapPin,
   FileText,
   Send,
-  Clock
+  Clock,
+  Container
 } from 'lucide-react';
 
-type DispatchTab = 'planning' | 'drivers';
+type DispatchTab = 'planning' | 'loads' | 'drivers';
 
 // Loadsheet status filter options for the planning table
 const planningStatusFilterOptions: { value: string; label: string }[] = [
@@ -678,6 +680,17 @@ export const Dispatch: React.FC = () => {
               Planning
             </button>
             <button
+              onClick={() => setActiveTab('loads')}
+              className={`flex items-center px-6 py-4 text-sm font-medium border-b-2 ${
+                activeTab === 'loads'
+                  ? 'border-indigo-500 text-indigo-600'
+                  : 'border-transparent text-gray-500 hover:text-gray-700 hover:border-gray-300'
+              }`}
+            >
+              <Container className="w-4 h-4 mr-2" />
+              Loads
+            </button>
+            <button
               onClick={() => setActiveTab('drivers')}
               className={`flex items-center px-6 py-4 text-sm font-medium border-b-2 ${
                 activeTab === 'drivers'
@@ -1107,6 +1120,10 @@ export const Dispatch: React.FC = () => {
           </div>
 
         </>
+      )}
+
+      {activeTab === 'loads' && (
+        <LoadsTab />
       )}
 
       {activeTab === 'drivers' && (
