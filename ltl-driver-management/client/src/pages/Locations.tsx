@@ -2,7 +2,7 @@ import React, { useState, useEffect } from 'react';
 import { useQuery, useQueryClient } from '@tanstack/react-query';
 import { api } from '../services/api';
 import { Location } from '../types';
-import { Plus, Search, Edit, Eye, Trash2, MapPin, Clock, Filter, X } from 'lucide-react';
+import { Plus, Search, Edit, Eye, Trash2, MapPin, Clock, Filter, X, ChevronUp, ChevronDown, ChevronsUpDown } from 'lucide-react';
 
 export const Locations: React.FC = () => {
   const queryClient = useQueryClient();
@@ -12,6 +12,8 @@ export const Locations: React.FC = () => {
   const [editingLocation, setEditingLocation] = useState<Location | null>(null);
   const [deletingLocation, setDeletingLocation] = useState<Location | null>(null);
   const [showAddModal, setShowAddModal] = useState(false);
+  const [sortColumn, setSortColumn] = useState<string>('code');
+  const [sortDirection, setSortDirection] = useState<'asc' | 'desc'>('asc');
 
   const { data: locationsData, isLoading, error } = useQuery({
     queryKey: ['locations', searchTerm, activeFilter],
@@ -27,6 +29,73 @@ export const Locations: React.FC = () => {
   });
 
   const locations = locationsData?.locations || [];
+
+  const handleSort = (column: string) => {
+    if (sortColumn === column) {
+      setSortDirection(sortDirection === 'asc' ? 'desc' : 'asc');
+    } else {
+      setSortColumn(column);
+      setSortDirection('asc');
+    }
+  };
+
+  const sortedLocations = [...locations].sort((a, b) => {
+    let aValue: string | boolean | null = null;
+    let bValue: string | boolean | null = null;
+
+    switch (sortColumn) {
+      case 'code':
+        aValue = a.code || '';
+        bValue = b.code || '';
+        break;
+      case 'name':
+        aValue = a.name || '';
+        bValue = b.name || '';
+        break;
+      case 'phone':
+        aValue = a.phone || '';
+        bValue = b.phone || '';
+        break;
+      case 'isPhysicalTerminal':
+        aValue = a.isPhysicalTerminal;
+        bValue = b.isPhysicalTerminal;
+        break;
+      case 'cityState':
+        aValue = `${a.city || ''}, ${a.state || ''}`;
+        bValue = `${b.city || ''}, ${b.state || ''}`;
+        break;
+      case 'timeZone':
+        aValue = a.timeZone || '';
+        bValue = b.timeZone || '';
+        break;
+      default:
+        return 0;
+    }
+
+    if (typeof aValue === 'boolean' && typeof bValue === 'boolean') {
+      if (aValue === bValue) return 0;
+      if (sortDirection === 'asc') {
+        return aValue ? -1 : 1;
+      }
+      return aValue ? 1 : -1;
+    }
+
+    const aStr = String(aValue).toLowerCase();
+    const bStr = String(bValue).toLowerCase();
+
+    if (aStr < bStr) return sortDirection === 'asc' ? -1 : 1;
+    if (aStr > bStr) return sortDirection === 'asc' ? 1 : -1;
+    return 0;
+  });
+
+  const SortIcon = ({ column }: { column: string }) => {
+    if (sortColumn !== column) {
+      return <ChevronsUpDown className="h-4 w-4 text-gray-400" />;
+    }
+    return sortDirection === 'asc'
+      ? <ChevronUp className="h-4 w-4 text-primary-600" />
+      : <ChevronDown className="h-4 w-4 text-primary-600" />;
+  };
 
   const handleViewLocation = (location: Location) => {
     setViewingLocation(location);
@@ -139,80 +208,157 @@ export const Locations: React.FC = () => {
       </div>
 
       {/* Locations Table */}
-      <div className="bg-white shadow overflow-hidden sm:rounded-md">
+      <div className="bg-white shadow overflow-hidden sm:rounded-lg">
         <div className="px-4 py-5 sm:px-6">
           <h3 className="text-lg leading-6 font-medium text-gray-900">
             Locations ({locations.length})
           </h3>
         </div>
-        <ul className="divide-y divide-gray-200">
-          {locations.map((location) => (
-            <li key={location.id}>
-              <div className="px-4 py-4 flex items-center justify-between sm:px-6">
-                <div className="flex items-center min-w-0 flex-1">
-                  <div className="min-w-0 flex-1">
-                    <div className="flex items-center space-x-3">
-                      <div className="flex-shrink-0">
-                        <span className={`inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium ${
-                          location.active 
-                            ? 'bg-green-100 text-green-800' 
-                            : 'bg-gray-100 text-gray-800'
-                        }`}>
-                          {location.code}
-                        </span>
-                      </div>
-                      <div className="min-w-0 flex-1">
-                        <p className="text-sm font-medium text-gray-900 truncate">
-                          {location.name || location.code}
-                        </p>
-                        <div className="flex items-center text-sm text-gray-500 space-x-4">
-                          {location.city && location.state && (
-                            <div className="flex items-center">
-                              <MapPin className="h-4 w-4 mr-1" />
-                              {location.city}, {location.state}
-                            </div>
-                          )}
-                          {location.timeZone && (
-                            <div className="flex items-center">
-                              <Clock className="h-4 w-4 mr-1" />
-                              {location.timeZone}
-                            </div>
-                          )}
-                        </div>
-                      </div>
-                    </div>
+        <div className="overflow-x-auto">
+          <table className="min-w-full divide-y divide-gray-200">
+            <thead className="bg-gray-50">
+              <tr>
+                <th
+                  scope="col"
+                  className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider cursor-pointer hover:bg-gray-100"
+                  onClick={() => handleSort('code')}
+                >
+                  <div className="flex items-center space-x-1">
+                    <span>Code</span>
+                    <SortIcon column="code" />
                   </div>
-                </div>
-                <div className="flex items-center space-x-2">
-                  <button
-                    onClick={() => handleViewLocation(location)}
-                    className="inline-flex items-center p-2 border border-transparent rounded-full shadow-sm text-white bg-primary-600 hover:bg-primary-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-primary-500"
-                  >
-                    <Eye className="h-4 w-4" />
-                  </button>
-                  <button
-                    onClick={() => handleEditLocation(location)}
-                    className="inline-flex items-center p-2 border border-transparent rounded-full shadow-sm text-white bg-yellow-600 hover:bg-yellow-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-yellow-500"
-                  >
-                    <Edit className="h-4 w-4" />
-                  </button>
-                  <button
-                    onClick={() => handleDeleteLocation(location)}
-                    className="inline-flex items-center p-2 border border-transparent rounded-full shadow-sm text-white bg-red-600 hover:bg-red-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-red-500"
-                  >
-                    <Trash2 className="h-4 w-4" />
-                  </button>
-                </div>
-              </div>
-            </li>
-          ))}
-        </ul>
+                </th>
+                <th
+                  scope="col"
+                  className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider cursor-pointer hover:bg-gray-100"
+                  onClick={() => handleSort('name')}
+                >
+                  <div className="flex items-center space-x-1">
+                    <span>Name</span>
+                    <SortIcon column="name" />
+                  </div>
+                </th>
+                <th
+                  scope="col"
+                  className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider cursor-pointer hover:bg-gray-100"
+                  onClick={() => handleSort('phone')}
+                >
+                  <div className="flex items-center space-x-1">
+                    <span>Phone Number</span>
+                    <SortIcon column="phone" />
+                  </div>
+                </th>
+                <th
+                  scope="col"
+                  className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider cursor-pointer hover:bg-gray-100"
+                  onClick={() => handleSort('isPhysicalTerminal')}
+                >
+                  <div className="flex items-center space-x-1">
+                    <span>Physical Terminal</span>
+                    <SortIcon column="isPhysicalTerminal" />
+                  </div>
+                </th>
+                <th
+                  scope="col"
+                  className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider cursor-pointer hover:bg-gray-100"
+                  onClick={() => handleSort('cityState')}
+                >
+                  <div className="flex items-center space-x-1">
+                    <span>City/State</span>
+                    <SortIcon column="cityState" />
+                  </div>
+                </th>
+                <th
+                  scope="col"
+                  className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider cursor-pointer hover:bg-gray-100"
+                  onClick={() => handleSort('timeZone')}
+                >
+                  <div className="flex items-center space-x-1">
+                    <span>Time Zone</span>
+                    <SortIcon column="timeZone" />
+                  </div>
+                </th>
+                <th scope="col" className="px-6 py-3 text-right text-xs font-medium text-gray-500 uppercase tracking-wider">
+                  Actions
+                </th>
+              </tr>
+            </thead>
+            <tbody className="bg-white divide-y divide-gray-200">
+              {sortedLocations.map((location) => (
+                <tr key={location.id} className="hover:bg-gray-50">
+                  <td className="px-6 py-4 whitespace-nowrap">
+                    <span className={`inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium ${
+                      location.active
+                        ? 'bg-green-100 text-green-800'
+                        : 'bg-gray-100 text-gray-800'
+                    }`}>
+                      {location.code}
+                    </span>
+                  </td>
+                  <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-900">
+                    {location.name || '-'}
+                  </td>
+                  <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-900">
+                    {location.phone || '-'}
+                  </td>
+                  <td className="px-6 py-4 whitespace-nowrap">
+                    {location.isPhysicalTerminal ? (
+                      <span className="inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium bg-blue-100 text-blue-800">
+                        Yes
+                      </span>
+                    ) : (
+                      <span className="text-sm text-gray-400">No</span>
+                    )}
+                  </td>
+                  <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-500">
+                    {location.city && location.state ? (
+                      <div className="flex items-center">
+                        <MapPin className="h-4 w-4 mr-1" />
+                        {location.city}, {location.state}
+                      </div>
+                    ) : '-'}
+                  </td>
+                  <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-500">
+                    {location.timeZone ? (
+                      <div className="flex items-center">
+                        <Clock className="h-4 w-4 mr-1" />
+                        {location.timeZone}
+                      </div>
+                    ) : '-'}
+                  </td>
+                  <td className="px-6 py-4 whitespace-nowrap text-right text-sm font-medium">
+                    <div className="flex items-center justify-end space-x-2">
+                      <button
+                        onClick={() => handleViewLocation(location)}
+                        className="inline-flex items-center p-2 border border-transparent rounded-full shadow-sm text-white bg-primary-600 hover:bg-primary-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-primary-500"
+                      >
+                        <Eye className="h-4 w-4" />
+                      </button>
+                      <button
+                        onClick={() => handleEditLocation(location)}
+                        className="inline-flex items-center p-2 border border-transparent rounded-full shadow-sm text-white bg-yellow-600 hover:bg-yellow-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-yellow-500"
+                      >
+                        <Edit className="h-4 w-4" />
+                      </button>
+                      <button
+                        onClick={() => handleDeleteLocation(location)}
+                        className="inline-flex items-center p-2 border border-transparent rounded-full shadow-sm text-white bg-red-600 hover:bg-red-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-red-500"
+                      >
+                        <Trash2 className="h-4 w-4" />
+                      </button>
+                    </div>
+                  </td>
+                </tr>
+              ))}
+            </tbody>
+          </table>
+        </div>
         {locations.length === 0 && (
           <div className="px-4 py-12 text-center">
             <MapPin className="mx-auto h-12 w-12 text-gray-400" />
             <h3 className="mt-2 text-sm font-medium text-gray-900">No locations found</h3>
             <p className="mt-1 text-sm text-gray-500">
-              {searchTerm || activeFilter !== 'all' 
+              {searchTerm || activeFilter !== 'all'
                 ? 'Try adjusting your search or filter criteria.'
                 : 'Get started by adding a new location.'
               }
@@ -400,7 +546,9 @@ const LocationEditModal: React.FC<LocationEditModalProps> = ({ location, onClose
     latitude: location?.latitude?.toString() || '',
     longitude: location?.longitude?.toString() || '',
     notes: location?.notes || '',
-    active: location?.active ?? true
+    active: location?.active ?? true,
+    isPhysicalTerminal: location?.isPhysicalTerminal ?? false,
+    isVirtualTerminal: location?.isVirtualTerminal ?? false
   });
   const [isSubmitting, setIsSubmitting] = useState(false);
 
@@ -425,7 +573,9 @@ const LocationEditModal: React.FC<LocationEditModalProps> = ({ location, onClose
         latitude: formData.latitude ? parseFloat(formData.latitude) : undefined,
         longitude: formData.longitude ? parseFloat(formData.longitude) : undefined,
         notes: cleanValue(formData.notes),
-        active: formData.active
+        active: formData.active,
+        isPhysicalTerminal: formData.isPhysicalTerminal,
+        isVirtualTerminal: formData.isVirtualTerminal
       };
 
       const response = location
@@ -642,19 +792,45 @@ const LocationEditModal: React.FC<LocationEditModalProps> = ({ location, onClose
             />
           </div>
           
-          <div className="flex items-center">
-            <input
-              type="checkbox"
-              id="active"
-              checked={formData.active}
-              onChange={(e) => setFormData({ ...formData, active: e.target.checked })}
-              className="h-4 w-4 text-primary-600 focus:ring-primary-500 border-gray-300 rounded"
-            />
-            <label htmlFor="active" className="ml-2 block text-sm text-gray-900">
-              Active
-            </label>
+          <div className="flex items-center space-x-6">
+            <div className="flex items-center">
+              <input
+                type="checkbox"
+                id="active"
+                checked={formData.active}
+                onChange={(e) => setFormData({ ...formData, active: e.target.checked })}
+                className="h-4 w-4 text-primary-600 focus:ring-primary-500 border-gray-300 rounded"
+              />
+              <label htmlFor="active" className="ml-2 block text-sm text-gray-900">
+                Active
+              </label>
+            </div>
+            <div className="flex items-center">
+              <input
+                type="checkbox"
+                id="isPhysicalTerminal"
+                checked={formData.isPhysicalTerminal}
+                onChange={(e) => setFormData({ ...formData, isPhysicalTerminal: e.target.checked })}
+                className="h-4 w-4 text-primary-600 focus:ring-primary-500 border-gray-300 rounded"
+              />
+              <label htmlFor="isPhysicalTerminal" className="ml-2 block text-sm text-gray-900">
+                Physical Terminal
+              </label>
+            </div>
+            <div className="flex items-center">
+              <input
+                type="checkbox"
+                id="isVirtualTerminal"
+                checked={formData.isVirtualTerminal}
+                onChange={(e) => setFormData({ ...formData, isVirtualTerminal: e.target.checked })}
+                className="h-4 w-4 text-primary-600 focus:ring-primary-500 border-gray-300 rounded"
+              />
+              <label htmlFor="isVirtualTerminal" className="ml-2 block text-sm text-gray-900">
+                Virtual Terminal
+              </label>
+            </div>
           </div>
-          
+
           <div className="flex justify-end space-x-3 pt-6">
             <button
               type="button"
