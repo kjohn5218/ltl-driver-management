@@ -11,7 +11,11 @@ import {
   assignDriver,
   assignEquipment,
   getDispatchBoard,
-  getDriverTrips
+  getDriverTrips,
+  dispatchTrip,
+  getTripEta,
+  getTripEtaBatch,
+  getVehicleLocation
 } from '../controllers/linehaulTrip.controller';
 import { authenticate, authorize } from '../middleware/auth.middleware';
 import { validateRequest } from '../middleware/validation.middleware';
@@ -38,10 +42,12 @@ router.get(
   '/',
   [
     query('search').optional().trim(),
-    query('status').optional().isIn(['PLANNED', 'ASSIGNED', 'DISPATCHED', 'IN_TRANSIT', 'ARRIVED', 'COMPLETED', 'CANCELLED']),
+    query('status').optional().isIn(['PLANNED', 'ASSIGNED', 'DISPATCHED', 'IN_TRANSIT', 'ARRIVED', 'UNLOADING', 'COMPLETED', 'CANCELLED']),
     query('profileId').optional().isInt({ min: 1 }),
     query('driverId').optional().isInt({ min: 1 }),
     query('carrierId').optional().isInt({ min: 1 }),
+    query('originTerminalId').optional().isInt({ min: 1 }),
+    query('destinationTerminalId').optional().isInt({ min: 1 }),
     query('startDate').optional().isISO8601(),
     query('endDate').optional().isISO8601(),
     query('page').optional().isInt({ min: 1 }),
@@ -64,7 +70,7 @@ router.get(
   '/driver/:driverId',
   [
     param('driverId').isInt({ min: 1 }),
-    query('status').optional().isIn(['PLANNED', 'ASSIGNED', 'DISPATCHED', 'IN_TRANSIT', 'ARRIVED', 'COMPLETED', 'CANCELLED']),
+    query('status').optional().isIn(['PLANNED', 'ASSIGNED', 'DISPATCHED', 'IN_TRANSIT', 'ARRIVED', 'UNLOADING', 'COMPLETED', 'CANCELLED']),
     query('startDate').optional().isISO8601(),
     query('endDate').optional().isISO8601(),
     query('page').optional().isInt({ min: 1 }),
@@ -72,6 +78,33 @@ router.get(
   ],
   validateRequest,
   getDriverTrips
+);
+
+// Get ETA for multiple trips (batch)
+router.post(
+  '/eta/batch',
+  [
+    body('tripIds').isArray({ min: 1 }).withMessage('tripIds must be a non-empty array'),
+    body('tripIds.*').isInt({ min: 1 })
+  ],
+  validateRequest,
+  getTripEtaBatch
+);
+
+// Get ETA for a single trip
+router.get(
+  '/:id/eta',
+  [param('id').isInt({ min: 1 })],
+  validateRequest,
+  getTripEta
+);
+
+// Get vehicle location from GoMotive API
+router.get(
+  '/vehicle-location/:vehicleId',
+  [param('vehicleId').notEmpty().trim()],
+  validateRequest,
+  getVehicleLocation
 );
 
 // Get trip by ID
@@ -88,15 +121,15 @@ router.post(
   authorize(UserRole.ADMIN, UserRole.DISPATCHER),
   [
     body('linehaulProfileId').notEmpty().isInt({ min: 1 }),
-    body('scheduledDeparture').notEmpty().isISO8601(),
-    body('scheduledArrival').optional().isISO8601(),
-    body('primaryDriverId').optional().isInt({ min: 1 }),
+    body('dispatchDate').notEmpty().isISO8601(),
+    body('plannedDeparture').optional().isISO8601(),
+    body('plannedArrival').optional().isISO8601(),
+    body('driverId').optional().isInt({ min: 1 }),
     body('teamDriverId').optional().isInt({ min: 1 }),
     body('truckId').optional().isInt({ min: 1 }),
-    body('primaryTrailerId').optional().isInt({ min: 1 }),
-    body('secondaryTrailerId').optional().isInt({ min: 1 }),
+    body('trailerId').optional().isInt({ min: 1 }),
+    body('trailer2Id').optional().isInt({ min: 1 }),
     body('dollyId').optional().isInt({ min: 1 }),
-    body('carrierId').optional().isInt({ min: 1 }),
     body('notes').optional().trim()
   ],
   validateRequest,
@@ -130,7 +163,7 @@ router.patch(
   authorize(UserRole.ADMIN, UserRole.DISPATCHER),
   [
     param('id').isInt({ min: 1 }),
-    body('status').notEmpty().isIn(['PLANNED', 'ASSIGNED', 'DISPATCHED', 'IN_TRANSIT', 'ARRIVED', 'COMPLETED', 'CANCELLED']),
+    body('status').notEmpty().isIn(['PLANNED', 'ASSIGNED', 'DISPATCHED', 'IN_TRANSIT', 'ARRIVED', 'UNLOADING', 'COMPLETED', 'CANCELLED']),
     body('actualDeparture').optional().isISO8601(),
     body('actualArrival').optional().isISO8601(),
     body('actualMiles').optional().isDecimal(),
@@ -138,6 +171,18 @@ router.patch(
   ],
   validateRequest,
   updateTripStatus
+);
+
+// Dispatch trip (Admin/Dispatcher only) - quick action to dispatch
+router.patch(
+  '/:id/dispatch',
+  authorize(UserRole.ADMIN, UserRole.DISPATCHER),
+  [
+    param('id').isInt({ min: 1 }),
+    body('notes').optional().trim()
+  ],
+  validateRequest,
+  dispatchTrip
 );
 
 // Assign driver to trip (Admin/Dispatcher only)

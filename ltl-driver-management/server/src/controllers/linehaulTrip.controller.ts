@@ -10,6 +10,7 @@ export const getTrips = async (req: Request, res: Response): Promise<void> => {
     const {
       search,
       status,
+      statuses,
       profileId,
       driverId,
       originTerminalId,
@@ -36,6 +37,12 @@ export const getTrips = async (req: Request, res: Response): Promise<void> => {
 
     if (status) {
       where.status = status as TripStatus;
+    }
+
+    // Support filtering by multiple statuses
+    if (statuses) {
+      const statusList = (statuses as string).split(',').map(s => s.trim()) as TripStatus[];
+      where.status = { in: statusList };
     }
 
     if (profileId) {
@@ -109,7 +116,7 @@ export const getTrips = async (req: Request, res: Response): Promise<void> => {
             select: { id: true, name: true }
           },
           truck: {
-            select: { id: true, unitNumber: true, truckType: true }
+            select: { id: true, unitNumber: true, truckType: true, externalFleetId: true }
           },
           trailer: {
             select: { id: true, unitNumber: true, trailerType: true }
@@ -1124,5 +1131,155 @@ export const getTripEtaBatch = async (req: Request, res: Response): Promise<void
   } catch (error) {
     console.error('Error calculating batch ETAs:', error);
     res.status(500).json({ message: 'Failed to calculate batch ETAs' });
+  }
+};
+
+// Get vehicle location from GoMotive API
+export const getVehicleLocation = async (req: Request, res: Response): Promise<void> => {
+  try {
+    const { vehicleId } = req.params;
+
+    // Look up the truck - try by database ID first, then by external fleet ID
+    let truck = await prisma.equipmentTruck.findFirst({
+      where: { id: parseInt(vehicleId, 10) || 0 },
+      select: { id: true, unitNumber: true, externalFleetId: true }
+    });
+
+    // If not found by ID, try by externalFleetId
+    if (!truck) {
+      truck = await prisma.equipmentTruck.findFirst({
+        where: { externalFleetId: vehicleId },
+        select: { id: true, unitNumber: true, externalFleetId: true }
+      });
+    }
+
+    if (!truck) {
+      res.status(404).json({
+        vehicleId,
+        unitNumber: 'Unknown',
+        error: 'Vehicle not found in system'
+      });
+      return;
+    }
+
+    // GoMotive API configuration
+    const goMotiveApiKey = process.env.GOMOTIVE_API_KEY;
+    const goMotiveApiUrl = process.env.GOMOTIVE_API_URL || 'https://api.gomotive.com/v3';
+
+    if (!goMotiveApiKey || !truck.externalFleetId) {
+      console.warn('GOMOTIVE_API_KEY not configured or no externalFleetId, returning mock data');
+      // Return mock data for development
+      res.json({
+        vehicleId: truck.externalFleetId || String(truck.id),
+        unitNumber: truck.unitNumber,
+        location: {
+          latitude: 33.7490 + (Math.random() - 0.5) * 2,
+          longitude: -84.3880 + (Math.random() - 0.5) * 2,
+          address: '123 Interstate Highway',
+          city: 'Atlanta',
+          state: 'GA',
+          speed: Math.floor(Math.random() * 70),
+          heading: Math.floor(Math.random() * 360),
+          timestamp: new Date().toISOString()
+        }
+      });
+      return;
+    }
+
+    // Calculate date range for API (last 24 hours)
+    const endDate = new Date();
+    const startDate = new Date(endDate.getTime() - 24 * 60 * 60 * 1000);
+
+    const apiUrl = `${goMotiveApiUrl}/vehicle_locations/${vehicleId}?start_date=${startDate.toISOString()}&end_date=${endDate.toISOString()}`;
+
+    const response = await fetch(apiUrl, {
+      method: 'GET',
+      headers: {
+        'Authorization': `Bearer ${goMotiveApiKey}`,
+        'Content-Type': 'application/json'
+      }
+    });
+
+    if (!response.ok) {
+      const errorText = await response.text();
+      console.error('GoMotive API error:', response.status, errorText);
+      res.status(response.status).json({
+        vehicleId,
+        unitNumber: truck.unitNumber,
+        error: `GoMotive API error: ${response.status}`
+      });
+      return;
+    }
+
+    const data = await response.json() as {
+      vehicle_locations?: Array<{
+        latitude?: number;
+        lat?: number;
+        longitude?: number;
+        lng?: number;
+        lon?: number;
+        address?: string;
+        located_at?: string;
+        city?: string;
+        state?: string;
+        speed?: number;
+        heading?: number;
+        bearing?: number;
+        timestamp?: string;
+        created_at?: string;
+      }>;
+      locations?: Array<{
+        latitude?: number;
+        lat?: number;
+        longitude?: number;
+        lng?: number;
+        lon?: number;
+        address?: string;
+        located_at?: string;
+        city?: string;
+        state?: string;
+        speed?: number;
+        heading?: number;
+        bearing?: number;
+        timestamp?: string;
+        created_at?: string;
+      }>;
+    };
+
+    // Parse GoMotive response and extract latest location
+    // GoMotive API typically returns an array of location records
+    const locations = data.vehicle_locations || data.locations || [];
+    const latestLocation = locations.length > 0 ? locations[locations.length - 1] : null;
+
+    if (!latestLocation) {
+      res.json({
+        vehicleId,
+        unitNumber: truck.unitNumber,
+        error: 'No location data available'
+      });
+      return;
+    }
+
+    res.json({
+      vehicleId,
+      unitNumber: truck.unitNumber,
+      location: {
+        latitude: latestLocation.latitude || latestLocation.lat,
+        longitude: latestLocation.longitude || latestLocation.lng || latestLocation.lon,
+        address: latestLocation.address || latestLocation.located_at,
+        city: latestLocation.city,
+        state: latestLocation.state,
+        speed: latestLocation.speed,
+        heading: latestLocation.heading || latestLocation.bearing,
+        timestamp: latestLocation.located_at || latestLocation.timestamp || latestLocation.created_at
+      }
+    });
+  } catch (error) {
+    console.error('Error fetching vehicle location:', error);
+    res.status(500).json({
+      vehicleId: req.params.vehicleId,
+      unitNumber: 'Unknown',
+      error: 'Failed to fetch vehicle location'
+    });
   }
 };

@@ -4,6 +4,7 @@ import { LinehaulTrip, TripStatus, TripsResponse } from '../types';
 interface TripFilters {
   search?: string;
   status?: TripStatus;
+  statuses?: TripStatus[];  // Multiple status filter
   profileId?: number;
   driverId?: number;
   originTerminalId?: number;
@@ -27,8 +28,8 @@ interface TripAssignment {
 interface StatusUpdate {
   status: TripStatus;
   notes?: string;
-  actualDepartureTime?: string;
-  actualArrivalTime?: string;
+  actualDeparture?: string;
+  actualArrival?: string;
   actualMiles?: number;
 }
 
@@ -38,6 +39,10 @@ export const linehaulTripService = {
     const params = new URLSearchParams();
     if (filters?.search) params.append('search', filters.search);
     if (filters?.status) params.append('status', filters.status);
+    // Support multiple statuses filter
+    if (filters?.statuses && filters.statuses.length > 0) {
+      params.append('statuses', filters.statuses.join(','));
+    }
     if (filters?.profileId) params.append('profileId', filters.profileId.toString());
     if (filters?.driverId) params.append('driverId', filters.driverId.toString());
     if (filters?.originTerminalId) params.append('originTerminalId', filters.originTerminalId.toString());
@@ -158,5 +163,49 @@ export const linehaulTripService = {
   bulkCreateTrips: async (profileId: number, dates: string[]): Promise<LinehaulTrip[]> => {
     const response = await api.post('/linehaul-trips/bulk-create', { profileId, dates });
     return response.data;
+  },
+
+  // Get ETA for a single trip
+  getTripEta: async (tripId: number): Promise<EtaResult> => {
+    const response = await api.get(`/linehaul-trips/${tripId}/eta`);
+    return response.data;
+  },
+
+  // Get ETA for multiple trips (batch)
+  getTripEtaBatch: async (tripIds: number[]): Promise<{ etas: Record<number, EtaResult> }> => {
+    const response = await api.post('/linehaul-trips/eta/batch', { tripIds });
+    return response.data;
+  },
+
+  // Get vehicle location from GoMotive API
+  getVehicleLocation: async (vehicleId: string): Promise<VehicleLocationResult> => {
+    const response = await api.get(`/linehaul-trips/vehicle-location/${vehicleId}`);
+    return response.data;
   }
 };
+
+export interface EtaResult {
+  estimatedArrival: string | null;
+  source: 'GPS' | 'PROFILE' | 'NONE';
+  distanceRemaining?: number;
+  currentLocation?: {
+    latitude: number;
+    longitude: number;
+  };
+}
+
+export interface VehicleLocationResult {
+  vehicleId: string;
+  unitNumber: string;
+  location?: {
+    latitude: number;
+    longitude: number;
+    address?: string;
+    city?: string;
+    state?: string;
+    speed?: number;
+    heading?: number;
+    timestamp?: string;
+  };
+  error?: string;
+}
