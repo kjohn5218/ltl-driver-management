@@ -8,6 +8,8 @@ import { LinehaulTrip, Loadsheet, TripStatus, Location } from '../../types';
 import { TripStatusBadge } from './TripStatusBadge';
 import { LateReasonModal } from './LateReasonModal';
 import { LateReasonViewModal } from './LateReasonViewModal';
+import { ManifestDetailsModal } from './ManifestDetailsModal';
+import { EditTripModal } from './EditTripModal';
 import { DateRangePicker } from '../common/DateRangePicker';
 import {
   Truck,
@@ -46,6 +48,16 @@ export const OutboundTab: React.FC = () => {
   const [viewTripId, setViewTripId] = useState<number | null>(null);
   const [viewTripNumber, setViewTripNumber] = useState<string>('');
 
+  // Manifest details modal state
+  const [manifestModalOpen, setManifestModalOpen] = useState(false);
+  const [selectedManifestLoadsheets, setSelectedManifestLoadsheets] = useState<Loadsheet[]>([]);
+  const [selectedManifestTripNumber, setSelectedManifestTripNumber] = useState<string>('');
+  const [selectedManifestTripId, setSelectedManifestTripId] = useState<number | undefined>(undefined);
+
+  // Edit trip modal state
+  const [editModalOpen, setEditModalOpen] = useState(false);
+  const [editTripId, setEditTripId] = useState<number | null>(null);
+
   // Fetch locations for filter dropdown
   const { data: locations = [] } = useQuery({
     queryKey: ['locations-list'],
@@ -66,7 +78,7 @@ export const OutboundTab: React.FC = () => {
     refetchInterval: 30000 // Refresh every 30 seconds
   });
 
-  // Fetch loadsheets (without date filter - we'll match by linehaulTripId)
+  // Fetch loadsheets (we'll match by linehaulTripId to the trips)
   const { data: loadsheetsData, refetch: refetchLoadsheets } = useQuery({
     queryKey: ['loadsheets-for-outbound'],
     queryFn: async () => {
@@ -281,6 +293,28 @@ export const OutboundTab: React.FC = () => {
     setViewModalOpen(true);
   };
 
+  // Open manifest details modal
+  const handleManifestClick = (loadsheets: Loadsheet[], tripNumber: string, tripId: number) => {
+    setSelectedManifestLoadsheets(loadsheets);
+    setSelectedManifestTripNumber(tripNumber);
+    setSelectedManifestTripId(tripId);
+    setManifestModalOpen(true);
+  };
+
+  // Open edit trip modal
+  const handleTripNumberClick = (tripId: number) => {
+    setEditTripId(tripId);
+    setEditModalOpen(true);
+  };
+
+  // Handle edit modal save
+  const handleEditModalSaved = async () => {
+    // Refetch trips to reflect changes on both tabs
+    await queryClient.invalidateQueries({ queryKey: ['outbound-trips'] });
+    await queryClient.invalidateQueries({ queryKey: ['inbound-trips'] });
+    await refetchTrips();
+  };
+
   return (
     <div className="space-y-4">
       {/* Filters and Actions */}
@@ -433,9 +467,12 @@ export const OutboundTab: React.FC = () => {
                   return (
                     <tr key={row.trip.id} className="hover:bg-gray-50 dark:hover:bg-gray-700/50">
                       <td className="px-4 py-3 whitespace-nowrap">
-                        <span className="font-medium text-indigo-600 dark:text-indigo-400">
+                        <button
+                          onClick={() => handleTripNumberClick(row.trip.id)}
+                          className="font-medium text-indigo-600 dark:text-indigo-400 hover:text-indigo-800 dark:hover:text-indigo-300 hover:underline cursor-pointer"
+                        >
                           {row.trip.tripNumber}
-                        </span>
+                        </button>
                       </td>
                       <td className="px-4 py-3 whitespace-nowrap">
                         <div className="flex items-center">
@@ -464,17 +501,27 @@ export const OutboundTab: React.FC = () => {
                         </span>
                       </td>
                       <td className="px-4 py-3">
-                        <div className="flex items-center">
-                          <FileText className="h-4 w-4 text-gray-400 mr-2 flex-shrink-0" />
-                          <span className="text-gray-900 dark:text-gray-100 font-medium">
-                            {formatManifests(row.loadsheets)}
-                          </span>
-                          {row.loadsheets.length > 1 && (
-                            <span className="ml-2 bg-blue-100 text-blue-800 dark:bg-blue-900 dark:text-blue-200 px-1.5 py-0.5 rounded text-xs">
-                              {row.loadsheets.length}
+                        {row.loadsheets.length > 0 ? (
+                          <button
+                            onClick={() => handleManifestClick(row.loadsheets, row.trip.tripNumber, row.trip.id)}
+                            className="flex items-center group"
+                          >
+                            <FileText className="h-4 w-4 text-gray-400 mr-2 flex-shrink-0 group-hover:text-indigo-500" />
+                            <span className="text-indigo-600 dark:text-indigo-400 font-medium hover:underline">
+                              {formatManifests(row.loadsheets)}
                             </span>
-                          )}
-                        </div>
+                            {row.loadsheets.length > 1 && (
+                              <span className="ml-2 bg-blue-100 text-blue-800 dark:bg-blue-900 dark:text-blue-200 px-1.5 py-0.5 rounded text-xs">
+                                {row.loadsheets.length}
+                              </span>
+                            )}
+                          </button>
+                        ) : (
+                          <div className="flex items-center">
+                            <FileText className="h-4 w-4 text-gray-400 mr-2 flex-shrink-0" />
+                            <span className="text-gray-500 dark:text-gray-400">-</span>
+                          </div>
+                        )}
                       </td>
                       <td className="px-4 py-3 whitespace-nowrap">
                         <div className="flex items-center text-gray-600 dark:text-gray-400">
@@ -575,6 +622,33 @@ export const OutboundTab: React.FC = () => {
           }}
           tripId={viewTripId}
           tripNumber={viewTripNumber}
+        />
+      )}
+
+      {/* Manifest Details Modal */}
+      <ManifestDetailsModal
+        isOpen={manifestModalOpen}
+        onClose={() => {
+          setManifestModalOpen(false);
+          setSelectedManifestLoadsheets([]);
+          setSelectedManifestTripNumber('');
+          setSelectedManifestTripId(undefined);
+        }}
+        loadsheets={selectedManifestLoadsheets}
+        tripId={selectedManifestTripId}
+        tripNumber={selectedManifestTripNumber}
+      />
+
+      {/* Edit Trip Modal */}
+      {editTripId && (
+        <EditTripModal
+          isOpen={editModalOpen}
+          onClose={() => {
+            setEditModalOpen(false);
+            setEditTripId(null);
+          }}
+          tripId={editTripId}
+          onSaved={handleEditModalSaved}
         />
       )}
     </div>
