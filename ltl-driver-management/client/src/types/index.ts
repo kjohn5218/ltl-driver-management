@@ -14,6 +14,8 @@ export interface User {
   updatedAt: string;
 }
 
+export type DriverStatus = 'AVAILABLE' | 'ON_DUTY' | 'DRIVING' | 'SLEEPER_BERTH' | 'OFF_DUTY' | 'PERSONAL_CONVEYANCE' | 'YARD_MOVE';
+
 export interface CarrierDriver {
   id: number;
   carrierId: number;
@@ -23,10 +25,24 @@ export interface CarrierDriver {
   email?: string;
   licenseNumber?: string;
   active: boolean;
+  // Location assignment
+  locationId?: number;
+  // Dispatch-related fields
+  driverStatus?: DriverStatus;
+  endorsements?: string;
+  currentTerminalCode?: string;
+  externalDriverId?: string;
   carrier?: {
     id: number;
     name: string;
     status: CarrierStatus;
+  };
+  location?: {
+    id: number;
+    code: string;
+    name?: string;
+    city?: string;
+    state?: string;
   };
   createdAt: string;
   updatedAt: string;
@@ -326,6 +342,8 @@ export interface Location {
   longitude?: number;
   notes?: string;
   active: boolean;
+  isPhysicalTerminal: boolean;
+  isVirtualTerminal: boolean;
   createdAt: string;
   updatedAt: string;
 }
@@ -343,7 +361,7 @@ export interface PaginatedResponse<T> {
 // ==================== DISPATCH & FLEET MANAGEMENT ====================
 
 // Enums
-export type TripStatus = 'PLANNED' | 'ASSIGNED' | 'DISPATCHED' | 'IN_TRANSIT' | 'ARRIVED' | 'COMPLETED' | 'CANCELLED';
+export type TripStatus = 'PLANNED' | 'ASSIGNED' | 'DISPATCHED' | 'IN_TRANSIT' | 'ARRIVED' | 'UNLOADING' | 'COMPLETED' | 'CANCELLED';
 export type EquipmentStatus = 'AVAILABLE' | 'DISPATCHED' | 'IN_TRANSIT' | 'MAINTENANCE' | 'OUT_OF_SERVICE';
 export type TruckType = 'DAY_CAB' | 'SLEEPER' | 'STRAIGHT_TRUCK';
 export type TrailerType = 'DRY_VAN_53' | 'DRY_VAN_28' | 'PUP_TRAILER' | 'REEFER_53' | 'REEFER_28' | 'FLATBED' | 'STEP_DECK' | 'TANKER' | 'INTERMODAL';
@@ -353,10 +371,14 @@ export type PayPeriodStatus = 'OPEN' | 'CLOSED' | 'LOCKED' | 'EXPORTED';
 export type TripPayStatus = 'PENDING' | 'CALCULATED' | 'REVIEWED' | 'APPROVED' | 'PAID' | 'DISPUTED';
 export type RateCardType = 'DRIVER' | 'CARRIER' | 'LINEHAUL' | 'OD_PAIR' | 'DEFAULT';
 export type RateMethod = 'PER_MILE' | 'FLAT_RATE' | 'HOURLY' | 'PERCENTAGE';
-export type AccessorialType = 'LAYOVER' | 'DETENTION' | 'BREAKDOWN' | 'HELPER' | 'TRAINER' | 'HAZMAT' | 'TEAM_DRIVER' | 'STOP_CHARGE' | 'FUEL_SURCHARGE' | 'OTHER';
+export type AccessorialType = 'LAYOVER' | 'DETENTION' | 'BREAKDOWN' | 'HELPER' | 'TRAINER' | 'HAZMAT' | 'TEAM_DRIVER' | 'STOP_CHARGE' | 'FUEL_SURCHARGE' | 'DROP_HOOK' | 'CHAIN_UP' | 'OTHER';
 export type DayOfWeek = 'MONDAY' | 'TUESDAY' | 'WEDNESDAY' | 'THURSDAY' | 'FRIDAY' | 'SATURDAY' | 'SUNDAY';
 export type EquipmentType = 'TRUCK' | 'TRAILER' | 'DOLLY';
 export type DelayType = 'WEATHER' | 'TRAFFIC' | 'BREAKDOWN' | 'DETENTION' | 'LOADING' | 'UNLOADING' | 'REST' | 'ACCIDENT' | 'CUSTOMS' | 'DISPATCH' | 'OTHER';
+
+// Arrival and Driver Report Types
+export type WaitTimeReason = 'LATE_MEET_DRIVER' | 'DOCK_DELAY' | 'BREAKDOWN';
+export type EquipmentIssueType = 'TRAILER' | 'DOLLY';
 
 // Terminal
 export interface Terminal {
@@ -516,6 +538,10 @@ export interface LinehaulTrip {
   actualDeparture?: string;
   plannedArrival?: string;
   actualArrival?: string;
+  estimatedArrival?: string;
+  lastKnownLatitude?: number;
+  lastKnownLongitude?: number;
+  lastLocationUpdate?: string;
   status: TripStatus;
   driverId?: number;
   driverExternalId?: string;
@@ -523,7 +549,9 @@ export interface LinehaulTrip {
   truckId?: number;
   trailerId?: number;
   trailer2Id?: number;
+  trailer3Id?: number;
   dollyId?: number;
+  dolly2Id?: number;
   actualMileage?: number;
   notes?: string;
   createdAt: string;
@@ -534,10 +562,21 @@ export interface LinehaulTrip {
   truck?: EquipmentTruck;
   trailer?: EquipmentTrailer;
   trailer2?: EquipmentTrailer;
+  trailer3?: EquipmentTrailer;
   dolly?: EquipmentDolly;
+  dolly2?: EquipmentDolly;
   shipments?: TripShipment[];
   delays?: TripDelay[];
   tripPay?: TripPay;
+  loadsheets?: {
+    id: number;
+    manifestNumber: string;
+    linehaulName?: string;
+    originTerminalCode?: string;
+    destinationTerminalCode?: string;
+  }[];
+  // Linehaul name from first loadsheet (added by API transformation)
+  linehaulName?: string;
   _count?: {
     shipments: number;
     delays: number;
@@ -575,6 +614,64 @@ export interface TripDelay {
   notes?: string;
   createdAt: string;
   updatedAt: string;
+}
+
+// Driver Trip Report - stores driver-submitted arrival information for pay verification
+export interface DriverTripReport {
+  id: number;
+  tripId: number;
+  driverId?: number;
+  dropAndHook?: number;
+  chainUpCycles?: number;
+  waitTimeStart?: string;
+  waitTimeEnd?: string;
+  waitTimeMinutes?: number;
+  waitTimeReason?: WaitTimeReason;
+  notes?: string;
+  verified: boolean;
+  verifiedBy?: number;
+  verifiedAt?: string;
+  payApproved: boolean;
+  payApprovedBy?: number;
+  payApprovedAt?: string;
+  arrivedAt: string;
+  createdAt: string;
+  updatedAt: string;
+  trip?: LinehaulTrip;
+  driver?: CarrierDriver;
+}
+
+// Trip Arrival Data - used when submitting arrival details
+export interface TripArrivalData {
+  dropAndHook?: number;
+  chainUpCycles?: number;
+  waitTimeStart?: string;  // ISO datetime string
+  waitTimeEnd?: string;    // ISO datetime string
+  waitTimeReason?: WaitTimeReason;
+  notes?: string;
+  equipmentIssue?: {
+    equipmentType: EquipmentIssueType;
+    equipmentNumber: string;
+    description: string;
+  };
+}
+
+// Equipment Issue - tracks equipment issues reported by OWNOP drivers
+export interface EquipmentIssue {
+  id: number;
+  tripId: number;
+  driverId?: number;
+  equipmentType: EquipmentIssueType;
+  equipmentNumber: string;
+  description: string;
+  reportedAt: string;
+  resolvedAt?: string;
+  resolvedBy?: number;
+  resolutionNotes?: string;
+  createdAt: string;
+  updatedAt: string;
+  trip?: LinehaulTrip;
+  driver?: CarrierDriver;
 }
 
 // Rate Card
@@ -853,10 +950,13 @@ export interface Loadsheet {
   suggestedTrailerLength?: number;
   pintleHookRequired: boolean;
   targetDispatchTime?: string;
+  scheduledDepartDate?: string;
   linehaulName: string;
   preloadManifest?: string;
   originTerminalId?: number;
   originTerminalCode?: string;
+  destinationTerminalCode?: string;  // Destination for this leg (from route)
+  routeId?: number;                   // Reference to specific route/leg
   linehaulTripId?: number;
   doNotLoadPlacardableHazmat?: boolean;
   doorNumber?: string;
@@ -873,6 +973,8 @@ export interface Loadsheet {
   blankets?: number;
   loaderName?: string;
   sealNumber?: string;
+  pieces?: number;      // Total pieces loaded
+  weight?: number;      // Total weight in lbs
 
   // Trailer Condition
   wallCondition: ConditionStatus;
@@ -967,6 +1069,7 @@ export interface CreateLoadsheetRequest {
   suggestedTrailerLength?: number;
   pintleHookRequired?: boolean;
   targetDispatchTime?: string;
+  scheduledDepartDate?: string;
   preloadManifest?: string;
   originTerminalId?: number;
   originTerminalCode?: string;
@@ -984,6 +1087,8 @@ export interface CreateLoadsheetRequest {
   blankets?: number;
   loaderName?: string;
   sealNumber?: string;
+  pieces?: number;
+  weight?: number;
   wallCondition?: ConditionStatus;
   floorCondition?: ConditionStatus;
   roofCondition?: ConditionStatus;
@@ -1062,6 +1167,7 @@ export interface ManifestFreightItem {
   id: number;
   manifestDataId: number;
   proNumber: string;
+  manifestNumber?: string;  // The loadsheet manifest number this shipment was scanned/loaded to
   destTerminal?: string;
   destTerminalSub?: string;
   scans: number;

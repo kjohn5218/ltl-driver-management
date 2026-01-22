@@ -22,12 +22,15 @@ import { Drivers } from './pages/Drivers';
 import { DocumentUpload } from './pages/DocumentUpload';
 import { Equipment } from './pages/Equipment';
 import { Dispatch } from './pages/Dispatch';
-import { DispatchTrip } from './pages/DispatchTrip';
-import { ArriveTrip } from './pages/ArriveTrip';
 import { TransferScans } from './pages/TransferScans';
 import { PrintHazmatBOL } from './pages/PrintHazmatBOL';
 import { RateCards } from './pages/RateCards';
 import { Payroll } from './pages/Payroll';
+import { Loadsheets } from './pages/Loadsheets';
+import { LoadsheetForm } from './pages/LoadsheetForm';
+import { ContractPowerHome } from './pages/ContractPowerHome';
+import { LateLinehaulReport } from './pages/LateLinehaulReport';
+import { PayRules } from './pages/PayRules';
 
 // Create a client
 const queryClient = new QueryClient({
@@ -93,6 +96,14 @@ const router = createBrowserRouter([
             element: <Locations />
           },
           {
+            path: 'pay-rules',
+            element: <PayRules />
+          },
+          {
+            path: 'contract-power',
+            element: <ContractPowerHome />
+          },
+          {
             path: 'bookings',
             children: [
               {
@@ -114,20 +125,16 @@ const router = createBrowserRouter([
             element: <Reports />
           },
           {
+            path: 'reports/late-linehaul',
+            element: <LateLinehaulReport />
+          },
+          {
             path: 'administration',
             element: <Administration />
           },
           {
             path: 'dispatch',
             element: <Dispatch />
-          },
-          {
-            path: 'dispatch/trip',
-            element: <DispatchTrip />
-          },
-          {
-            path: 'arrive-trip',
-            element: <ArriveTrip />
           },
           {
             path: 'transfer-scans',
@@ -148,6 +155,23 @@ const router = createBrowserRouter([
           {
             path: 'payroll',
             element: <Payroll />
+          },
+          {
+            path: 'loadsheets',
+            children: [
+              {
+                index: true,
+                element: <Loadsheets />
+              },
+              {
+                path: 'new',
+                element: <LoadsheetForm />
+              },
+              {
+                path: ':id',
+                element: <LoadsheetForm />
+              }
+            ]
           }
         ]
       }

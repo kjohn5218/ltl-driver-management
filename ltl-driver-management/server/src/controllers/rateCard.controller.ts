@@ -591,3 +591,421 @@ export const bulkUpdateAccessorialRates = async (req: Request, res: Response): P
     res.status(500).json({ message: 'Failed to update accessorial rates' });
   }
 };
+
+// ==================== IMPORT ====================
+
+// Import rate cards from file upload (CSV/JSON)
+export const importRateCards = async (req: Request, res: Response): Promise<void> => {
+  try {
+    const { rateCards } = req.body;
+
+    if (!Array.isArray(rateCards) || rateCards.length === 0) {
+      res.status(400).json({ message: 'No rate cards provided for import' });
+      return;
+    }
+
+    const results = {
+      created: 0,
+      updated: 0,
+      errors: [] as { index: number; error: string }[]
+    };
+
+    for (let i = 0; i < rateCards.length; i++) {
+      const rc = rateCards[i];
+      try {
+        // Check for existing rate card by externalRateId
+        let existingCard = null;
+        if (rc.externalRateId) {
+          existingCard = await prisma.rateCard.findFirst({
+            where: { externalRateId: rc.externalRateId }
+          });
+        }
+
+        const data = {
+          rateType: rc.rateType as RateCardType,
+          entityId: rc.entityId ? parseInt(rc.entityId, 10) : null,
+          linehaulProfileId: rc.linehaulProfileId ? parseInt(rc.linehaulProfileId, 10) : null,
+          originTerminalId: rc.originTerminalId ? parseInt(rc.originTerminalId, 10) : null,
+          destinationTerminalId: rc.destinationTerminalId ? parseInt(rc.destinationTerminalId, 10) : null,
+          rateMethod: (rc.rateMethod as RateMethod) || 'PER_MILE',
+          rateAmount: new Prisma.Decimal(rc.rateAmount),
+          minimumAmount: rc.minimumAmount ? new Prisma.Decimal(rc.minimumAmount) : null,
+          maximumAmount: rc.maximumAmount ? new Prisma.Decimal(rc.maximumAmount) : null,
+          effectiveDate: new Date(rc.effectiveDate),
+          expirationDate: rc.expirationDate ? new Date(rc.expirationDate) : null,
+          equipmentType: rc.equipmentType || null,
+          priority: rc.priority || 5,
+          externalRateId: rc.externalRateId || null,
+          notes: rc.notes || null,
+          active: rc.active !== undefined ? rc.active : true
+        };
+
+        if (existingCard) {
+          await prisma.rateCard.update({
+            where: { id: existingCard.id },
+            data
+          });
+          results.updated++;
+        } else {
+          const newCard = await prisma.rateCard.create({ data });
+
+          // Create accessorial rates if provided
+          if (rc.accessorialRates && Array.isArray(rc.accessorialRates)) {
+            await prisma.accessorialRate.createMany({
+              data: rc.accessorialRates.map((ar: any) => ({
+                rateCardId: newCard.id,
+                accessorialType: ar.type as AccessorialType,
+                description: ar.description,
+                rateAmount: new Prisma.Decimal(ar.rateAmount),
+                rateMethod: (ar.rateMethod as RateMethod) || 'FLAT_RATE',
+                minimumCharge: ar.minimumCharge ? new Prisma.Decimal(ar.minimumCharge) : null,
+                maximumCharge: ar.maximumCharge ? new Prisma.Decimal(ar.maximumCharge) : null
+              }))
+            });
+          }
+          results.created++;
+        }
+      } catch (err: any) {
+        results.errors.push({ index: i, error: err.message });
+      }
+    }
+
+    res.json({
+      success: true,
+      message: `Import completed: ${results.created} created, ${results.updated} updated, ${results.errors.length} errors`,
+      results
+    });
+  } catch (error) {
+    console.error('Error importing rate cards:', error);
+    res.status(500).json({ message: 'Failed to import rate cards' });
+  }
+};
+
+// Import rate cards from external payroll system (API key authenticated)
+export const importRateCardsExternal = async (req: Request, res: Response): Promise<void> => {
+  try {
+    const { rateCards, accessorialRates } = req.body;
+
+    const results = {
+      rateCardsCreated: 0,
+      rateCardsUpdated: 0,
+      accessorialsCreated: 0,
+      accessorialsUpdated: 0,
+      errors: [] as { type: string; id: string; error: string }[]
+    };
+
+    // Process rate cards
+    if (Array.isArray(rateCards)) {
+      for (const rc of rateCards) {
+        try {
+          // Upsert logic based on externalRateId
+          if (!rc.externalRateId) {
+            results.errors.push({ type: 'rateCard', id: 'unknown', error: 'externalRateId is required for external imports' });
+            continue;
+          }
+
+          const existingCard = await prisma.rateCard.findFirst({
+            where: { externalRateId: rc.externalRateId }
+          });
+
+          const data = {
+            rateType: rc.rateType as RateCardType,
+            entityId: rc.entityId ? parseInt(rc.entityId, 10) : null,
+            linehaulProfileId: rc.linehaulProfileId ? parseInt(rc.linehaulProfileId, 10) : null,
+            originTerminalId: rc.originTerminalId ? parseInt(rc.originTerminalId, 10) : null,
+            destinationTerminalId: rc.destinationTerminalId ? parseInt(rc.destinationTerminalId, 10) : null,
+            rateMethod: (rc.rateMethod as RateMethod) || 'PER_MILE',
+            rateAmount: new Prisma.Decimal(rc.rateAmount),
+            minimumAmount: rc.minimumAmount ? new Prisma.Decimal(rc.minimumAmount) : null,
+            maximumAmount: rc.maximumAmount ? new Prisma.Decimal(rc.maximumAmount) : null,
+            effectiveDate: new Date(rc.effectiveDate),
+            expirationDate: rc.expirationDate ? new Date(rc.expirationDate) : null,
+            equipmentType: rc.equipmentType || null,
+            priority: rc.priority || 5,
+            externalRateId: rc.externalRateId,
+            notes: rc.notes || null,
+            active: rc.active !== undefined ? rc.active : true
+          };
+
+          if (existingCard) {
+            await prisma.rateCard.update({
+              where: { id: existingCard.id },
+              data
+            });
+            results.rateCardsUpdated++;
+          } else {
+            await prisma.rateCard.create({ data });
+            results.rateCardsCreated++;
+          }
+        } catch (err: any) {
+          results.errors.push({ type: 'rateCard', id: rc.externalRateId || 'unknown', error: err.message });
+        }
+      }
+    }
+
+    // Process accessorial rates
+    if (Array.isArray(accessorialRates)) {
+      for (const ar of accessorialRates) {
+        try {
+          if (!ar.externalRateCardId) {
+            results.errors.push({ type: 'accessorial', id: 'unknown', error: 'externalRateCardId is required' });
+            continue;
+          }
+
+          const rateCard = await prisma.rateCard.findFirst({
+            where: { externalRateId: ar.externalRateCardId }
+          });
+
+          if (!rateCard) {
+            results.errors.push({ type: 'accessorial', id: ar.externalRateCardId, error: 'Parent rate card not found' });
+            continue;
+          }
+
+          // Check if accessorial already exists
+          const existingAccessorial = await prisma.accessorialRate.findFirst({
+            where: {
+              rateCardId: rateCard.id,
+              accessorialType: ar.type as AccessorialType
+            }
+          });
+
+          const accessorialData = {
+            accessorialType: ar.type as AccessorialType,
+            description: ar.description,
+            rateAmount: new Prisma.Decimal(ar.rateAmount),
+            rateMethod: (ar.rateMethod as RateMethod) || 'FLAT_RATE',
+            minimumCharge: ar.minimumCharge ? new Prisma.Decimal(ar.minimumCharge) : null,
+            maximumCharge: ar.maximumCharge ? new Prisma.Decimal(ar.maximumCharge) : null
+          };
+
+          if (existingAccessorial) {
+            await prisma.accessorialRate.update({
+              where: { id: existingAccessorial.id },
+              data: accessorialData
+            });
+            results.accessorialsUpdated++;
+          } else {
+            await prisma.accessorialRate.create({
+              data: {
+                rateCardId: rateCard.id,
+                ...accessorialData
+              }
+            });
+            results.accessorialsCreated++;
+          }
+        } catch (err: any) {
+          results.errors.push({ type: 'accessorial', id: ar.externalRateCardId || 'unknown', error: err.message });
+        }
+      }
+    }
+
+    res.json({
+      success: results.errors.length === 0,
+      message: `Import completed: ${results.rateCardsCreated} rate cards created, ${results.rateCardsUpdated} updated; ${results.accessorialsCreated} accessorials created, ${results.accessorialsUpdated} updated; ${results.errors.length} errors`,
+      results
+    });
+  } catch (error) {
+    console.error('Error importing from external system:', error);
+    res.status(500).json({ success: false, message: 'Failed to import from external system' });
+  }
+};
+
+// Get drivers with their rate cards for the Pay Rules UI
+export const getDriversWithRates = async (req: Request, res: Response): Promise<void> => {
+  try {
+    const { search, carrierId, page = '1', limit = '50' } = req.query;
+
+    const pageNum = parseInt(page as string, 10);
+    const limitNum = parseInt(limit as string, 10);
+    const skip = (pageNum - 1) * limitNum;
+
+    const where: any = { active: true };
+
+    if (search) {
+      where.OR = [
+        { name: { contains: search as string, mode: 'insensitive' } },
+        { number: { contains: search as string, mode: 'insensitive' } }
+      ];
+    }
+
+    if (carrierId) {
+      where.carrierId = parseInt(carrierId as string, 10);
+    }
+
+    const [drivers, total] = await Promise.all([
+      prisma.carrierDriver.findMany({
+        where,
+        skip,
+        take: limitNum,
+        orderBy: { name: 'asc' },
+        include: {
+          carrier: { select: { id: true, name: true } }
+        }
+      }),
+      prisma.carrierDriver.count({ where })
+    ]);
+
+    // Get rate cards for these drivers
+    const driverIds = drivers.map(d => d.id);
+    const rateCards = await prisma.rateCard.findMany({
+      where: {
+        rateType: 'DRIVER',
+        entityId: { in: driverIds },
+        active: true
+      },
+      include: {
+        accessorialRates: true
+      }
+    });
+
+    // Map rate cards to drivers
+    const driversWithRates = drivers.map(driver => ({
+      ...driver,
+      rateCard: rateCards.find(rc => rc.entityId === driver.id) || null
+    }));
+
+    res.json({
+      drivers: driversWithRates,
+      pagination: {
+        page: pageNum,
+        limit: limitNum,
+        total,
+        totalPages: Math.ceil(total / limitNum)
+      }
+    });
+  } catch (error) {
+    console.error('Error fetching drivers with rates:', error);
+    res.status(500).json({ message: 'Failed to fetch drivers with rates' });
+  }
+};
+
+// Get carriers with their rate cards for the Pay Rules UI
+export const getCarriersWithRates = async (req: Request, res: Response): Promise<void> => {
+  try {
+    const { search, page = '1', limit = '50' } = req.query;
+
+    const pageNum = parseInt(page as string, 10);
+    const limitNum = parseInt(limit as string, 10);
+    const skip = (pageNum - 1) * limitNum;
+
+    const where: any = { status: 'active' };
+
+    if (search) {
+      where.name = { contains: search as string, mode: 'insensitive' };
+    }
+
+    const [carriers, total] = await Promise.all([
+      prisma.carrier.findMany({
+        where,
+        skip,
+        take: limitNum,
+        orderBy: { name: 'asc' },
+        select: {
+          id: true,
+          name: true,
+          mcNumber: true,
+          status: true
+        }
+      }),
+      prisma.carrier.count({ where })
+    ]);
+
+    // Get rate cards for these carriers
+    const carrierIds = carriers.map(c => c.id);
+    const rateCards = await prisma.rateCard.findMany({
+      where: {
+        rateType: 'CARRIER',
+        entityId: { in: carrierIds },
+        active: true
+      },
+      include: {
+        accessorialRates: true
+      }
+    });
+
+    // Map rate cards to carriers
+    const carriersWithRates = carriers.map(carrier => ({
+      ...carrier,
+      rateCard: rateCards.find(rc => rc.entityId === carrier.id) || null
+    }));
+
+    res.json({
+      carriers: carriersWithRates,
+      pagination: {
+        page: pageNum,
+        limit: limitNum,
+        total,
+        totalPages: Math.ceil(total / limitNum)
+      }
+    });
+  } catch (error) {
+    console.error('Error fetching carriers with rates:', error);
+    res.status(500).json({ message: 'Failed to fetch carriers with rates' });
+  }
+};
+
+// Get linehaul profiles with their rate cards for the Pay Rules UI
+export const getProfilesWithRates = async (req: Request, res: Response): Promise<void> => {
+  try {
+    const { search, page = '1', limit = '50' } = req.query;
+
+    const pageNum = parseInt(page as string, 10);
+    const limitNum = parseInt(limit as string, 10);
+    const skip = (pageNum - 1) * limitNum;
+
+    const where: any = { active: true };
+
+    if (search) {
+      where.OR = [
+        { profileCode: { contains: search as string, mode: 'insensitive' } },
+        { name: { contains: search as string, mode: 'insensitive' } }
+      ];
+    }
+
+    const [profiles, total] = await Promise.all([
+      prisma.linehaulProfile.findMany({
+        where,
+        skip,
+        take: limitNum,
+        orderBy: { profileCode: 'asc' },
+        include: {
+          originTerminal: { select: { code: true, name: true } },
+          destinationTerminal: { select: { code: true, name: true } }
+        }
+      }),
+      prisma.linehaulProfile.count({ where })
+    ]);
+
+    // Get rate cards for these profiles
+    const profileIds = profiles.map(p => p.id);
+    const rateCards = await prisma.rateCard.findMany({
+      where: {
+        rateType: 'LINEHAUL',
+        linehaulProfileId: { in: profileIds },
+        active: true
+      },
+      include: {
+        accessorialRates: true
+      }
+    });
+
+    // Map rate cards to profiles
+    const profilesWithRates = profiles.map(profile => ({
+      ...profile,
+      rateCard: rateCards.find(rc => rc.linehaulProfileId === profile.id) || null
+    }));
+
+    res.json({
+      profiles: profilesWithRates,
+      pagination: {
+        page: pageNum,
+        limit: limitNum,
+        total,
+        totalPages: Math.ceil(total / limitNum)
+      }
+    });
+  } catch (error) {
+    console.error('Error fetching profiles with rates:', error);
+    res.status(500).json({ message: 'Failed to fetch profiles with rates' });
+  }
+};

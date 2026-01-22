@@ -11,8 +11,14 @@ import {
   addAccessorialRate,
   updateAccessorialRate,
   deleteAccessorialRate,
-  bulkUpdateAccessorialRates
+  bulkUpdateAccessorialRates,
+  importRateCards,
+  importRateCardsExternal,
+  getDriversWithRates,
+  getCarriersWithRates,
+  getProfilesWithRates
 } from '../controllers/rateCard.controller';
+import { authenticateApiKey } from '../middleware/apiKey.middleware';
 import { authenticate, authorize } from '../middleware/auth.middleware';
 import { validateRequest } from '../middleware/validation.middleware';
 import { UserRole } from '@prisma/client';
@@ -53,7 +59,59 @@ router.get(
   getRateCards
 );
 
-// Get rate card by ID
+// Import rate cards from file upload (Admin/Payroll Admin only) - MUST be before /:id
+router.post(
+  '/import',
+  authorize(UserRole.ADMIN, UserRole.PAYROLL_ADMIN),
+  [
+    body('rateCards').isArray({ min: 1 }).withMessage('rateCards array is required'),
+    body('rateCards.*.rateType').notEmpty().isIn(['DRIVER', 'CARRIER', 'LINEHAUL', 'OD_PAIR', 'DEFAULT']),
+    body('rateCards.*.rateMethod').notEmpty().isIn(['PER_MILE', 'FLAT_RATE', 'HOURLY', 'PERCENTAGE']),
+    body('rateCards.*.rateAmount').notEmpty().isDecimal(),
+    body('rateCards.*.effectiveDate').notEmpty().isISO8601()
+  ],
+  validateRequest,
+  importRateCards
+);
+
+// Get drivers with their rate cards - MUST be before /:id
+router.get(
+  '/drivers-with-rates',
+  [
+    query('search').optional().trim(),
+    query('carrierId').optional().isInt({ min: 1 }),
+    query('page').optional().isInt({ min: 1 }),
+    query('limit').optional().isInt({ min: 1, max: 500 })
+  ],
+  validateRequest,
+  getDriversWithRates
+);
+
+// Get carriers with their rate cards - MUST be before /:id
+router.get(
+  '/carriers-with-rates',
+  [
+    query('search').optional().trim(),
+    query('page').optional().isInt({ min: 1 }),
+    query('limit').optional().isInt({ min: 1, max: 500 })
+  ],
+  validateRequest,
+  getCarriersWithRates
+);
+
+// Get linehaul profiles with their rate cards - MUST be before /:id
+router.get(
+  '/profiles-with-rates',
+  [
+    query('search').optional().trim(),
+    query('page').optional().isInt({ min: 1 }),
+    query('limit').optional().isInt({ min: 1, max: 500 })
+  ],
+  validateRequest,
+  getProfilesWithRates
+);
+
+// Get rate card by ID - parameterized route must come after specific routes
 router.get(
   '/:id',
   [param('id').isInt({ min: 1 })],
@@ -142,6 +200,8 @@ router.post(
       'TEAM_DRIVER',
       'STOP_CHARGE',
       'FUEL_SURCHARGE',
+      'DROP_HOOK',
+      'CHAIN_UP',
       'OTHER'
     ]),
     body('description').optional().trim(),
@@ -171,6 +231,8 @@ router.put(
       'TEAM_DRIVER',
       'STOP_CHARGE',
       'FUEL_SURCHARGE',
+      'DROP_HOOK',
+      'CHAIN_UP',
       'OTHER'
     ]),
     body('rates.*.rateAmount').notEmpty().isDecimal()
@@ -209,3 +271,20 @@ router.delete(
 );
 
 export default router;
+
+// ==================== EXTERNAL API ROUTES ====================
+// These routes use API key authentication instead of user authentication
+
+export const externalRateCardRouter = Router();
+
+// External import endpoint for payroll system integration
+externalRateCardRouter.post(
+  '/import',
+  authenticateApiKey,
+  [
+    body('rateCards').optional().isArray(),
+    body('accessorialRates').optional().isArray()
+  ],
+  validateRequest,
+  importRateCardsExternal
+);

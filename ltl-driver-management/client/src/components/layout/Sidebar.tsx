@@ -1,5 +1,5 @@
 import React, { useState, useEffect } from 'react';
-import { NavLink } from 'react-router-dom';
+import { NavLink, useLocation } from 'react-router-dom';
 import { useAuth } from '../../contexts/AuthContext';
 import {
   Home,
@@ -22,7 +22,8 @@ import {
   Wallet,
   QrCode,
   Printer,
-  CheckCircle
+  CheckCircle,
+  FileSpreadsheet
 } from 'lucide-react';
 import { clsx } from 'clsx';
 import { api } from '../../services/api';
@@ -34,7 +35,9 @@ interface SidebarProps {
 
 export const Sidebar: React.FC<SidebarProps> = ({ isOpen, onClose }) => {
   const { user } = useAuth();
+  const location = useLocation();
   const [fuelSurchargeRate, setFuelSurchargeRate] = useState<number>(0);
+  const [fuelSurchargeSource, setFuelSurchargeSource] = useState<string>('manual');
   const [isEditing, setIsEditing] = useState(false);
   const [editValue, setEditValue] = useState<string>('');
   const [isLoading, setIsLoading] = useState(false);
@@ -44,22 +47,25 @@ export const Sidebar: React.FC<SidebarProps> = ({ isOpen, onClose }) => {
     { name: 'Dashboard', href: '/dashboard', icon: Home },
     // Dispatch & Fleet Management
     { name: 'Dispatch Board', href: '/dispatch', icon: Send, section: 'dispatch' },
-    { name: 'Dispatch Trip', href: '/dispatch/trip', icon: Truck, section: 'dispatch' },
-    { name: 'Arrive Trip', href: '/arrive-trip', icon: CheckCircle, section: 'dispatch' },
+    { name: 'Dispatch Trip', href: '/dispatch?action=dispatch-trip', icon: Truck, section: 'dispatch' },
+    { name: 'Arrive Trip', href: '/dispatch?action=arrive-trip', icon: CheckCircle, section: 'dispatch' },
     { name: 'Transfer Scans', href: '/transfer-scans', icon: QrCode, section: 'dispatch' },
     { name: 'Print Hazmat BOL', href: '/print-hazmat-bol', icon: Printer, section: 'dispatch' },
+    { name: 'Create Loadsheet', href: '/dispatch?tab=loads&action=create', icon: FileSpreadsheet, section: 'dispatch' },
     { name: 'Equipment', href: '/equipment', icon: Package, section: 'dispatch' },
     // Core Management
     { name: 'Drivers', href: '/drivers', icon: User },
     { name: 'Carriers', href: '/carriers', icon: Truck },
     { name: 'Linehaul Profiles', href: '/routes', icon: Route },
     { name: 'Locations', href: '/locations', icon: MapPin },
+    { name: 'Pay Rules', href: '/pay-rules', icon: DollarSign },
     { name: 'Reports', href: '/reports', icon: BarChart3 },
     // Contract Power
+    { name: 'Contract Power Home', href: '/contract-power', icon: Home, section: 'contractpower' },
     { name: 'Bookings', href: '/bookings', icon: Calendar, section: 'contractpower' },
     { name: 'Invoices', href: '/invoices', icon: FileText, section: 'contractpower' },
+    { name: 'Fuel Surcharge', href: '#fuel-surcharge', icon: Fuel, section: 'contractpower', isFuelSurcharge: true },
     // Payroll
-    { name: 'Rate Cards', href: '/rate-cards', icon: DollarSign, section: 'payroll' },
     { name: 'Payroll', href: '/payroll', icon: Wallet, section: 'payroll' },
     { name: 'Administration', href: '/administration', icon: Users, adminOnly: true },
   ];
@@ -75,9 +81,11 @@ export const Sidebar: React.FC<SidebarProps> = ({ isOpen, onClose }) => {
         const rate = response.data?.fuelSurchargeRate;
         const numericRate = Number(rate);
         setFuelSurchargeRate(isNaN(numericRate) ? 0 : numericRate);
+        setFuelSurchargeSource(response.data?.fuelSurchargeSource || 'manual');
       } catch (error) {
         console.error('Failed to load fuel surcharge rate:', error);
         setFuelSurchargeRate(0); // Set default value on error
+        setFuelSurchargeSource('manual');
       }
     };
 
@@ -102,6 +110,7 @@ export const Sidebar: React.FC<SidebarProps> = ({ isOpen, onClose }) => {
         fuelSurchargeRate: parseFloat(editValue)
       });
       setFuelSurchargeRate(response.data.fuelSurchargeRate);
+      setFuelSurchargeSource('manual');
       setIsEditing(false);
       setError('');
     } catch (error) {
@@ -159,7 +168,7 @@ export const Sidebar: React.FC<SidebarProps> = ({ isOpen, onClose }) => {
         <nav className="mt-6 px-3 space-y-1">
           {navigation.map((item) => {
             // Hide certain items for non-admin/dispatcher users
-            if ((item.name === 'Carriers' || item.name === 'Routes' || item.name === 'Reports') && !isAdminOrDispatcher) {
+            if ((item.name === 'Carriers' || item.name === 'Linehaul Profiles' || item.name === 'Pay Rules' || item.name === 'Reports') && !isAdminOrDispatcher) {
               return null;
             }
 
@@ -178,9 +187,91 @@ export const Sidebar: React.FC<SidebarProps> = ({ isOpen, onClose }) => {
             // Add section divider before Core Management section
             const showCoreDivider = item.name === 'Drivers';
             // Add section divider before Contract Power section
-            const showContractPowerDivider = item.name === 'Bookings' && isAdminOrDispatcher;
+            const showContractPowerDivider = item.name === 'Contract Power Home' && isAdminOrDispatcher;
             // Add section divider before Payroll section
-            const showPayrollDivider = item.name === 'Rate Cards' && isAdminOrDispatcher;
+            const showPayrollDivider = item.name === 'Payroll' && isAdminOrDispatcher;
+
+            // Special rendering for Fuel Surcharge item
+            if ((item as any).isFuelSurcharge) {
+              return (
+                <React.Fragment key={item.name}>
+                  <div className="px-3 py-2">
+                    <div className="flex items-center justify-between">
+                      <div className="flex items-center">
+                        <Fuel className="mr-3 h-5 w-5 flex-shrink-0 text-gray-500 dark:text-gray-400" />
+                        <span className="text-sm font-medium text-gray-700 dark:text-gray-300">Fuel Surcharge</span>
+                      </div>
+                    </div>
+
+                    <div className="ml-8 mt-2 space-y-2">
+                      {!isEditing ? (
+                        <div className="flex items-center justify-between">
+                          <div className="flex items-center gap-2">
+                            <span className="text-sm font-semibold text-gray-900 dark:text-white">
+                              {Number(fuelSurchargeRate || 0).toFixed(2)}%
+                            </span>
+                            {fuelSurchargeSource === 'external' && (
+                              <span className="text-xs px-1.5 py-0.5 bg-blue-100 text-blue-700 rounded">External</span>
+                            )}
+                          </div>
+                          <button
+                            onClick={handleEditClick}
+                            className="p-1 text-gray-400 hover:text-gray-600 transition-colors"
+                            title="Edit fuel surcharge rate (manual entry)"
+                          >
+                            <Edit2 className="h-3.5 w-3.5" />
+                          </button>
+                        </div>
+                      ) : (
+                        <div className="space-y-2">
+                          <div className="flex items-center gap-1">
+                            <input
+                              type="number"
+                              value={editValue}
+                              onChange={(e) => setEditValue(e.target.value)}
+                              className="w-16 px-2 py-1 text-sm border border-gray-300 rounded focus:ring-1 focus:ring-blue-500 focus:border-blue-500 dark:bg-gray-700 dark:border-gray-600 dark:text-white"
+                              placeholder="0.00"
+                              step="0.01"
+                              min="0"
+                              max="100"
+                              disabled={isLoading}
+                            />
+                            <span className="text-sm text-gray-600 dark:text-gray-400">%</span>
+                            <div className="flex gap-1 ml-1">
+                              <button
+                                onClick={handleSaveClick}
+                                disabled={isLoading}
+                                className="p-1 text-green-600 hover:text-green-700 disabled:opacity-50"
+                                title="Save"
+                              >
+                                <Check className="h-3.5 w-3.5" />
+                              </button>
+                              <button
+                                onClick={handleCancelClick}
+                                disabled={isLoading}
+                                className="p-1 text-gray-400 hover:text-gray-600 disabled:opacity-50"
+                                title="Cancel"
+                              >
+                                <X className="h-3.5 w-3.5" />
+                              </button>
+                            </div>
+                          </div>
+                          {error && (
+                            <div className="flex items-center text-xs text-red-600">
+                              <AlertCircle className="h-3 w-3 mr-1" />
+                              {error}
+                            </div>
+                          )}
+                        </div>
+                      )}
+                      <p className="text-xs text-gray-500 dark:text-gray-400">
+                        Applied to Mile+FSC rates
+                      </p>
+                    </div>
+                  </div>
+                </React.Fragment>
+              );
+            }
 
             return (
               <React.Fragment key={item.name}>
@@ -214,14 +305,28 @@ export const Sidebar: React.FC<SidebarProps> = ({ isOpen, onClose }) => {
                 )}
                 <NavLink
                   to={item.href}
-                  className={({ isActive }) =>
-                    clsx(
+                  className={() => {
+                    // Custom active state logic that considers query parameters
+                    const [itemPath, itemSearch] = item.href.split('?');
+                    const currentPath = location.pathname;
+                    const currentSearch = location.search;
+
+                    let isActive = false;
+                    if (itemSearch) {
+                      // Link has query params - must match both pathname and query params
+                      isActive = currentPath === itemPath && currentSearch.includes(`action=${new URLSearchParams(itemSearch).get('action')}`);
+                    } else {
+                      // Link has no query params - match pathname but NOT if current URL has action param
+                      isActive = currentPath === itemPath && !currentSearch.includes('action=');
+                    }
+
+                    return clsx(
                       'group flex items-center px-3 py-2.5 text-sm font-medium rounded-lg transition-colors',
                       isActive
                         ? 'bg-blue-50 dark:bg-blue-900/30 text-blue-700 dark:text-blue-400 border-r-2 border-blue-700 dark:border-blue-400'
                         : 'text-gray-700 dark:text-gray-300 hover:bg-gray-50 dark:hover:bg-gray-700 hover:text-gray-900 dark:hover:text-white'
-                    )
-                  }
+                    );
+                  }}
                 >
                   <item.icon
                     className="mr-3 h-5 w-5 flex-shrink-0 text-gray-500 dark:text-gray-400 group-hover:text-gray-700 dark:group-hover:text-gray-200"
@@ -233,80 +338,6 @@ export const Sidebar: React.FC<SidebarProps> = ({ isOpen, onClose }) => {
             );
           })}
         </nav>
-
-        {/* Fuel Surcharge Section - Only visible to Admin/Dispatcher */}
-        {isAdminOrDispatcher && (
-          <div className="mt-8 px-3">
-            <div className="border-t border-gray-200 pt-6">
-              <div className="flex items-center mb-3">
-                <Fuel className="h-4 w-4 text-gray-500 mr-2" />
-                <h3 className="text-sm font-medium text-gray-700">Fuel Surcharge</h3>
-              </div>
-              
-              <div className="space-y-2">
-                {!isEditing ? (
-                  <div className="flex items-center justify-between">
-                    <span className="text-sm text-gray-600">
-                      {Number(fuelSurchargeRate || 0).toFixed(2)}%
-                    </span>
-                    <button
-                      onClick={handleEditClick}
-                      className="p-1 text-gray-400 hover:text-gray-600 transition-colors"
-                      title="Edit fuel surcharge rate"
-                    >
-                      <Edit2 className="h-3 w-3" />
-                    </button>
-                  </div>
-                ) : (
-                  <div className="space-y-2">
-                    <div className="flex items-center gap-1">
-                      <input
-                        type="number"
-                        value={editValue}
-                        onChange={(e) => setEditValue(e.target.value)}
-                        className="w-16 px-2 py-1 text-sm border border-gray-300 rounded focus:ring-1 focus:ring-blue-500 focus:border-blue-500"
-                        placeholder="0.00"
-                        step="0.01"
-                        min="0"
-                        max="100"
-                        disabled={isLoading}
-                      />
-                      <span className="text-sm text-gray-600">%</span>
-                      <div className="flex gap-1 ml-1">
-                        <button
-                          onClick={handleSaveClick}
-                          disabled={isLoading}
-                          className="p-1 text-green-600 hover:text-green-700 disabled:opacity-50"
-                          title="Save"
-                        >
-                          <Check className="h-3 w-3" />
-                        </button>
-                        <button
-                          onClick={handleCancelClick}
-                          disabled={isLoading}
-                          className="p-1 text-gray-400 hover:text-gray-600 disabled:opacity-50"
-                          title="Cancel"
-                        >
-                          <X className="h-3 w-3" />
-                        </button>
-                      </div>
-                    </div>
-                    {error && (
-                      <div className="flex items-center text-xs text-red-600">
-                        <AlertCircle className="h-3 w-3 mr-1" />
-                        {error}
-                      </div>
-                    )}
-                  </div>
-                )}
-              </div>
-              
-              <p className="text-xs text-gray-500 mt-2">
-                Current fuel surcharge percentage applied to Mile+FSC rates
-              </p>
-            </div>
-          </div>
-        )}
       </div>
     </>
   );

@@ -39,8 +39,14 @@ import equipmentRoutes from './routes/equipment.routes';
 import linehaulProfileRoutes from './routes/linehaulProfile.routes';
 import linehaulTripRoutes from './routes/linehaulTrip.routes';
 import tripOperationsRoutes from './routes/tripOperations.routes';
-import rateCardRoutes from './routes/rateCard.routes';
+import rateCardRoutes, { externalRateCardRouter } from './routes/rateCard.routes';
 import payrollRoutes from './routes/payroll.routes';
+import loadsheetRoutes from './routes/loadsheet.routes';
+import tripDocumentRoutes from './routes/tripDocument.routes';
+import lateDepartureReasonRoutes from './routes/lateDepartureReason.routes';
+
+// External integrations
+import hrIntegrationRoutes from './routes/hrIntegration.routes';
 
 // Load environment variables
 dotenv.config();
@@ -148,6 +154,13 @@ app.use('/api/linehaul-trips', linehaulTripRoutes);
 app.use('/api/trip-operations', tripOperationsRoutes);
 app.use('/api/rate-cards', rateCardRoutes);
 app.use('/api/payroll', payrollRoutes);
+app.use('/api/loadsheets', loadsheetRoutes);
+app.use('/api/trip-documents', tripDocumentRoutes);
+app.use('/api/late-departure-reasons', lateDepartureReasonRoutes);
+
+// External integrations (API key authenticated, no CSRF)
+app.use('/api/hr', hrIntegrationRoutes);
+app.use('/api/external/rate-cards', externalRateCardRouter);
 
 // Error handling middleware
 app.use((err: any, _req: express.Request, res: express.Response, _next: express.NextFunction) => {

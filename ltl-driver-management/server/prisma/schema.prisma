@@ -25,8 +25,14 @@ model User {
   reportedDelays     TripDelay[]
   closedPayPeriods   PayPeriod[]    @relation("PayPeriodCloser")
   exportedPayPeriods PayPeriod[]    @relation("PayPeriodExporter")
-  reviewedTripPays   TripPay[]      @relation("TripPayReviewer")
-  approvedTripPays   TripPay[]      @relation("TripPayApprover")
+  reviewedTripPays      TripPay[]             @relation("TripPayReviewer")
+  approvedTripPays      TripPay[]             @relation("TripPayApprover")
+  createdLateReasons    LateDepartureReason[]
+
+  // Driver trip report relations
+  verifiedReports       DriverTripReport[]    @relation("ReportVerifier")
+  approvedReports       DriverTripReport[]    @relation("PayApprover")
+  resolvedIssues        EquipmentIssue[]      @relation("IssueResolver")
 
   @@map("users")
 }
@@ -126,18 +132,30 @@ model Route {
   originLatitude       Decimal?                @db.Decimal(10, 7)
   originLongitude      Decimal?                @db.Decimal(10, 7)
   originTimeZone       String?
+
+  // Multi-leg profile support
+  legOrder             Int?                    // Sequence number for multi-leg routes (1, 2, 3, etc.)
+  dayOffset            Int?                    @default(0) // Day offset from initial dispatch (0=same day, 1=next day, etc.)
+  isMultiLeg           Boolean                 @default(false) // True if this route is part of a multi-leg profile
+
+  // Relations
   bookings             Booking[]
   preferredBy          CarrierPreferredRoute[]
+  loadsheets           Loadsheet[]
 
+  @@index([name])
+  @@index([name, legOrder])
   @@map("routes")
 }
 
 model SystemSettings {
-  id                Int      @id @default(autoincrement())
-  fuelSurchargeRate Decimal  @default(0.00) @db.Decimal(5, 2)
-  updatedAt         DateTime @updatedAt
-  updatedBy         Int?
-  updatedByUser     User?    @relation(fields: [updatedBy], references: [id])
+  id                      Int      @id @default(autoincrement())
+  fuelSurchargeRate       Decimal  @default(0.00) @db.Decimal(5, 2)
+  fuelSurchargeSource     String   @default("manual") // "manual" or "external"
+  fuelSurchargeExternalId String?  // External source identifier/reference
+  updatedAt               DateTime @updatedAt
+  updatedBy               Int?
+  updatedByUser           User?    @relation(fields: [updatedBy], references: [id])
 
   @@map("system_settings")
 }
@@ -284,6 +302,9 @@ model CarrierDriver {
   currentLongitude    Decimal?     @db.Decimal(10, 7)
   lastStatusUpdate    DateTime?
 
+  // Assigned location (from Locations list)
+  locationId Int?
+
   // Hours of Service (HOS) tracking
   hosDriveTimeRemaining Int? // Minutes remaining
   hosDutyTimeRemaining  Int? // Minutes remaining
@@ -299,14 +320,18 @@ model CarrierDriver {
 
   // Relations
   carrier        Carrier          @relation(fields: [carrierId], references: [id], onDelete: Cascade)
+  location       Location?        @relation(fields: [locationId], references: [id])
   assignedTrucks EquipmentTruck[]
   primaryTrips   LinehaulTrip[]   @relation("PrimaryDriver")
   teamTrips      LinehaulTrip[]   @relation("TeamDriver")
   tripPays       TripPay[]
+  tripReports    DriverTripReport[]
+  equipmentIssues EquipmentIssue[]
 
   @@index([carrierId])
   @@index([driverStatus])
   @@index([externalDriverId])
+  @@index([locationId])
   @@map("carrier_drivers")
 }
 
@@ -374,23 +399,28 @@ model InvoiceAttachment {
 }
 
 model Location {
-  id        Int      @id @default(autoincrement())
-  code      String   @unique
-  name      String?
-  address   String?
-  city      String?
-  state     String?
-  zipCode   String?
-  contact   String?
-  timeZone  String?
-  latitude  Decimal? @db.Decimal(10, 7)
-  longitude Decimal? @db.Decimal(10, 7)
-  active    Boolean  @default(true)
-  createdAt DateTime @default(now())
-  updatedAt DateTime @updatedAt
-  hours     String?
-  phone     String?
-  notes     String?
+  id                 Int      @id @default(autoincrement())
+  code               String   @unique
+  name               String?
+  address            String?
+  city               String?
+  state              String?
+  zipCode            String?
+  contact            String?
+  timeZone           String?
+  latitude           Decimal? @db.Decimal(10, 7)
+  longitude          Decimal? @db.Decimal(10, 7)
+  active             Boolean  @default(true)
+  createdAt          DateTime @default(now())
+  updatedAt          DateTime @updatedAt
+  hours              String?
+  phone              String?
+  notes              String?
+  isPhysicalTerminal Boolean  @default(false)
+  isVirtualTerminal  Boolean  @default(false)
+
+  // Relations
+  drivers CarrierDriver[]
 
   @@map("locations")
 }
@@ -530,6 +560,7 @@ enum TripStatus {
   DISPATCHED
   IN_TRANSIT
   ARRIVED
+  UNLOADING
   COMPLETED
   CANCELLED
 }
@@ -570,6 +601,8 @@ enum AccessorialType {
   TEAM_DRIVER
   STOP_CHARGE
   FUEL_SURCHARGE
+  DROP_HOOK
+  CHAIN_UP
   OTHER
 }
 
@@ -597,6 +630,19 @@ enum DriverStatus {
   OFF_DUTY
   PERSONAL_CONVEYANCE
   YARD_MOVE
+}
+
+// Trip Document Enums
+enum TripDocumentType {
+  LINEHAUL_MANIFEST
+  PLACARD_SHEET
+  HAZMAT_BOL
+}
+
+enum TripDocumentStatus {
+  PENDING
+  GENERATED
+  ERROR
 }
 
 // ============================================
@@ -630,6 +676,10 @@ model Terminal {
   destLinehaulProfiles   LinehaulProfile[]              @relation("DestinationTerminal")
   originRateCards        RateCard[]                     @relation("RateCardOrigin")
   destRateCards          RateCard[]                     @relation("RateCardDestination")
+  loadsheets                       Loadsheet[]
+  okayToLoadProfiles               ProfileOkayToLoad[]            @relation("OkayToLoadProfiles")
+  okayToDispatchProfiles           ProfileOkayToDispatch[]        @relation("OkayToDispatchProfiles")
+  accountableLateDepartureReasons  LateDepartureReason[]
 
   @@map("terminals")
 }
@@ -690,6 +740,7 @@ model EquipmentTrailer {
   nextInspectionDate DateTime?
   maintenanceStatus  String?
   maintenanceNotes   String?
+  pintleHook         Boolean         @default(false)
   createdAt          DateTime        @default(now())
   updatedAt          DateTime        @updatedAt
 
@@ -697,6 +748,7 @@ model EquipmentTrailer {
   currentTerminal Terminal?      @relation(fields: [currentTerminalId], references: [id])
   primaryTrips    LinehaulTrip[] @relation("PrimaryTrailer")
   secondaryTrips  LinehaulTrip[] @relation("SecondaryTrailer")
+  tertiaryTrips   LinehaulTrip[] @relation("TertiaryTrailer")
 
   @@index([currentTerminalId])
   @@index([status])
@@ -720,8 +772,9 @@ model EquipmentDolly {
   updatedAt          DateTime        @updatedAt
 
   // Relations
-  currentTerminal Terminal?      @relation(fields: [currentTerminalId], references: [id])
-  linehaulTrips   LinehaulTrip[]
+  currentTerminal  Terminal?      @relation(fields: [currentTerminalId], references: [id])
+  linehaulTrips    LinehaulTrip[] @relation("PrimaryDolly")
+  linehaulTrips2   LinehaulTrip[] @relation("SecondaryDolly")
 
   @@index([currentTerminalId])
   @@index([status])
@@ -771,10 +824,12 @@ model LinehaulProfile {
   updatedAt             DateTime @updatedAt
 
   // Relations
-  originTerminal      Terminal       @relation("OriginTerminal", fields: [originTerminalId], references: [id])
-  destinationTerminal Terminal       @relation("DestinationTerminal", fields: [destinationTerminalId], references: [id])
-  trips               LinehaulTrip[]
-  rateCards           RateCard[]
+  originTerminal          Terminal                @relation("OriginTerminal", fields: [originTerminalId], references: [id])
+  destinationTerminal     Terminal                @relation("DestinationTerminal", fields: [destinationTerminalId], references: [id])
+  trips                   LinehaulTrip[]
+  rateCards               RateCard[]
+  okayToLoadTerminals     ProfileOkayToLoad[]     @relation("OkayToLoadTerminals")
+  okayToDispatchTerminals ProfileOkayToDispatch[] @relation("OkayToDispatchTerminals")
 
   @@index([originTerminalId])
   @@index([destinationTerminalId])
@@ -804,6 +859,8 @@ model LinehaulTrip {
   trailerId  Int?
   dollyId    Int?
   trailer2Id Int? // For double/triple configs
+  dolly2Id   Int? // Second dolly for triple configs
+  trailer3Id Int? // Third trailer for triple configs
 
   // Load details
   totalWeight     Int?
@@ -839,13 +896,20 @@ model LinehaulTrip {
   teamDriver       CarrierDriver?    @relation("TeamDriver", fields: [teamDriverId], references: [id])
   truck            EquipmentTruck?   @relation(fields: [truckId], references: [id])
   trailer          EquipmentTrailer? @relation("PrimaryTrailer", fields: [trailerId], references: [id])
-  dolly            EquipmentDolly?   @relation(fields: [dollyId], references: [id])
+  dolly            EquipmentDolly?   @relation("PrimaryDolly", fields: [dollyId], references: [id])
   trailer2         EquipmentTrailer? @relation("SecondaryTrailer", fields: [trailer2Id], references: [id])
+  dolly2           EquipmentDolly?   @relation("SecondaryDolly", fields: [dolly2Id], references: [id])
+  trailer3         EquipmentTrailer? @relation("TertiaryTrailer", fields: [trailer3Id], references: [id])
   createdByUser    User?             @relation("TripCreator", fields: [createdBy], references: [id])
   dispatchedByUser User?             @relation("TripDispatcher", fields: [dispatchedBy], references: [id])
-  shipments        TripShipment[]
-  delays           TripDelay[]
-  tripPay          TripPay[]
+  shipments           TripShipment[]
+  delays              TripDelay[]
+  tripPay             TripPay[]
+  loadsheets          Loadsheet[]
+  tripDocuments       TripDocument[]
+  lateDepartureReason LateDepartureReason?
+  driverTripReport    DriverTripReport?
+  equipmentIssues     EquipmentIssue[]
 
   @@index([dispatchDate])
   @@index([status])
@@ -1037,4 +1101,435 @@ model TripPay {
   @@index([driverId])
   @@index([status])
   @@map("trip_pay")
+}
+
+// ============================================
+// LOADSHEET MODULE - ENUMS & MODELS
+// ============================================
+
+enum LoadsheetStatus {
+  DRAFT
+  OPEN
+  LOADING
+  CLOSED
+  DISPATCHED
+}
+
+enum LoadType {
+  PURE
+  MIX
+}
+
+// Loadsheet (Manifest Document)
+model Loadsheet {
+  id                      Int             @id @default(autoincrement())
+  manifestNumber          String          @unique
+
+  // Header Section
+  trailerNumber           String
+  suggestedTrailerLength  Int?            @default(53)
+  pintleHookRequired      Boolean         @default(false)
+  targetDispatchTime      String?         // Time in HH:MM format
+  scheduledDepartDate     String?         // Date in YYYY-MM-DD format
+  linehaulName            String          // e.g., "ABQELP2"
+  preloadManifest         String?
+  originTerminalId        Int?
+  originTerminalCode      String?         // e.g., "ABQ"
+  destinationTerminalCode String?         // e.g., "ELP" - destination for this leg
+  routeId                 Int?            // Reference to specific route/leg for multi-leg profiles
+  linehaulTripId          Int?
+  doorNumber              String?         // Loading door location for scanners
+
+  // Loading Info Section
+  loadDate                DateTime        @default(now())
+  straps                  Int?
+  closeTime               String?         // Time in HH:MM format
+  loadType                LoadType        @default(PURE)
+  loadbars                Int?
+  loaderNumber            String?
+  exceptions              String?
+  capacity                String?         // "0%", "25%", "50%", "75%", "100%"
+  blankets                Int?
+  loaderName              String?
+  sealNumber              String?
+  pieces                  Int?            // Total pieces loaded
+  weight                  Int?            // Total weight in lbs
+
+  // Trailer Condition
+  wallCondition           String          @default("OK")  // "OK" or "REPAIR"
+  floorCondition          String          @default("OK")
+  roofCondition           String          @default("OK")
+  trailerConditionComment String?
+
+  // HAZMAT Placards (stored as JSON array)
+  hazmatPlacards          String?         // JSON: ["CORROSIVE", "FLAMMABLE", etc.]
+
+  // Status and Audit
+  status                  LoadsheetStatus @default(DRAFT)
+  createdBy               Int?
+  createdAt               DateTime        @default(now())
+  updatedAt               DateTime        @updatedAt
+  printedAt               DateTime?
+  lastScanAt              DateTime?       // Last LHLOAD barcode scan timestamp
+
+  // Relations
+  originTerminal          Terminal?       @relation(fields: [originTerminalId], references: [id])
+  route                   Route?          @relation(fields: [routeId], references: [id])
+  linehaulTrip            LinehaulTrip?   @relation(fields: [linehaulTripId], references: [id])
+  hazmatItems             LoadsheetHazmatItem[]
+  dispatchEntries         LoadsheetDispatchEntry[]
+  freightPlacements       LoadsheetFreightPlacement[]
+
+  @@index([manifestNumber])
+  @@index([status])
+  @@index([loadDate])
+  @@index([linehaulTripId])
+  @@index([routeId])
+  @@index([linehaulName, originTerminalCode])
+  @@map("loadsheets")
+}
+
+// Loadsheet Hazmat Items (HM1-HM10)
+model LoadsheetHazmatItem {
+  id          Int       @id @default(autoincrement())
+  loadsheetId Int
+  itemNumber  Int       // 1-10 (HM1-HM10)
+  proNumber   String?
+  hazmatClass String?
+  weight      Int?
+  createdAt   DateTime  @default(now())
+
+  loadsheet   Loadsheet @relation(fields: [loadsheetId], references: [id], onDelete: Cascade)
+
+  @@index([loadsheetId])
+  @@map("loadsheet_hazmat_items")
+}
+
+// Loadsheet Dispatch Entries (grid on right side)
+model LoadsheetDispatchEntry {
+  id               Int       @id @default(autoincrement())
+  loadsheetId      Int
+  rowNumber        Int       // Order in the grid
+  dispatchTime     String?   // Time in HH:MM AM/PM format
+  dispatchTerminal String?   // Terminal code
+  nextTerminal     String?   // Next destination terminal code
+  tractorNumber    String?
+  driverNumber     String?
+  driverName       String?
+  supervisorNumber String?
+  createdAt        DateTime  @default(now())
+
+  loadsheet        Loadsheet @relation(fields: [loadsheetId], references: [id], onDelete: Cascade)
+
+  @@index([loadsheetId])
+  @@map("loadsheet_dispatch_entries")
+}
+
+// Loadsheet Freight Placement (Trailer Diagram)
+model LoadsheetFreightPlacement {
+  id          Int       @id @default(autoincrement())
+  loadsheetId Int
+  rowNumber   Int       // Grid row position
+  loose       String?   // Freight description for loose column
+  left        String?   // Freight description for left side
+  right       String?   // Freight description for right side
+  createdAt   DateTime  @default(now())
+
+  loadsheet   Loadsheet @relation(fields: [loadsheetId], references: [id], onDelete: Cascade)
+
+  @@index([loadsheetId])
+  @@map("loadsheet_freight_placements")
+}
+
+// ============================================
+// LATE DEPARTURE REASON MODULE
+// ============================================
+
+enum LateReasonType {
+  PRE_LOAD
+  DOCK_ISSUE
+  STAFFING
+  DRIVER_ISSUE
+  WEATHER
+  LATE_INBOUND
+  DISPATCH_ISSUE
+}
+
+enum WaitTimeReason {
+  LATE_MEET_DRIVER
+  DOCK_DELAY
+  BREAKDOWN
+}
+
+enum EquipmentIssueType {
+  TRAILER
+  DOLLY
+}
+
+// Late Departure Reason - tracks late departures for trips
+model LateDepartureReason {
+  id                      Int             @id @default(autoincrement())
+  tripId                  Int             @unique // One late reason per trip
+  reason                  LateReasonType
+  willCauseServiceFailure Boolean
+  accountableTerminalId   Int?            // Optional when service failure is No
+  accountableTerminalCode String?         // Stored for historical reference
+  notes                   String?
+  scheduledDepartTime     String?         // Original scheduled time (HH:mm)
+  actualDepartTime        String?         // Actual departure time (HH:mm)
+  minutesLate             Int?            // Calculated minutes late
+  createdBy               Int?
+  createdAt               DateTime        @default(now())
+  updatedAt               DateTime        @updatedAt
+
+  // Relations
+  trip                LinehaulTrip @relation(fields: [tripId], references: [id], onDelete: Cascade)
+  accountableTerminal Terminal?    @relation(fields: [accountableTerminalId], references: [id])
+  creator             User?        @relation(fields: [createdBy], references: [id])
+
+  @@index([tripId])
+  @@index([reason])
+  @@index([accountableTerminalId])
+  @@index([createdAt])
+  @@map("late_departure_reasons")
+}
+
+// ============================================
+// TRIP DOCUMENT MODULE - MODELS
+// ============================================
+
+// Trip Document (metadata for generated documents)
+model TripDocument {
+  id             Int                @id @default(autoincrement())
+  tripId         Int
+  documentType   TripDocumentType
+  documentNumber String             @unique
+  status         TripDocumentStatus @default(PENDING)
+  documentData   String?            @db.Text // Cached JSON data for regeneration
+  generatedAt    DateTime?
+  errorMessage   String?
+  createdAt      DateTime           @default(now())
+  updatedAt      DateTime           @updatedAt
+
+  // Relations
+  trip         LinehaulTrip          @relation(fields: [tripId], references: [id], onDelete: Cascade)
+  manifestData ManifestDocumentData?
+  placardData  PlacardSheetData?
+
+  @@index([tripId])
+  @@index([documentType])
+  @@index([status])
+  @@map("trip_documents")
+}
+
+// Manifest Document Data (Linehaul Manifest specific data)
+model ManifestDocumentData {
+  id                  Int       @id @default(autoincrement())
+  tripDocumentId      Int       @unique
+  tripDisplay         String    // e.g., "5760U - DEN to GJT - TRIP 2854318"
+  manifestNumber      String
+  driverName          String?
+  trailerNumber       String?
+  originCode          String
+  destCode            String
+  effort              String?   // e.g., "1 hr 18 min"
+  timeDue             String?
+  lastLoad            String?
+  totalScans          Int       @default(0)
+  totalPieces         Int       @default(0)
+  totalWeight         Int       @default(0)
+  dispatchedAt        DateTime?
+  arrivedAt           DateTime?
+  createdAt           DateTime  @default(now())
+
+  // Relations
+  tripDocument TripDocument          @relation(fields: [tripDocumentId], references: [id], onDelete: Cascade)
+  freightItems ManifestFreightItem[]
+
+  @@map("manifest_document_data")
+}
+
+// Manifest Freight Items (the table rows in linehaul manifest)
+model ManifestFreightItem {
+  id                 Int       @id @default(autoincrement())
+  manifestDataId     Int
+  proNumber          String
+  manifestNumber     String?   // The loadsheet manifest number this shipment was scanned/loaded to
+  destTerminal       String?
+  destTerminalSub    String?   // Sub-terminal (e.g., "SOUTH2", "NORTH2")
+  scans              Int       @default(1)
+  pieces             Int       @default(0)
+  weight             Int       @default(0)
+  consigneeName      String?
+  consigneeCity      String?
+  shipperName        String?
+  shipperCity        String?
+  expDeliveryDate    DateTime?
+  loadedTerminal     String?
+  unloadedTerminal   String?
+  isHazmat           Boolean   @default(false)
+  hazmatClass        String?
+  sortOrder          Int       @default(0)
+  createdAt          DateTime  @default(now())
+
+  // Relations
+  manifestData ManifestDocumentData @relation(fields: [manifestDataId], references: [id], onDelete: Cascade)
+
+  @@index([manifestDataId])
+  @@map("manifest_freight_items")
+}
+
+// Placard Sheet Data (Hazmat placard information)
+model PlacardSheetData {
+  id             Int      @id @default(autoincrement())
+  tripDocumentId Int      @unique
+  tripDisplay    String
+  trailerNumber  String?
+  createdAt      DateTime @default(now())
+
+  // Relations
+  tripDocument     TripDocument      @relation(fields: [tripDocumentId], references: [id], onDelete: Cascade)
+  hazmatItems      PlacardHazmatItem[]
+  requiredPlacards RequiredPlacard[]
+
+  @@map("placard_sheet_data")
+}
+
+// Placard Hazmat Items (individual hazmat items on placard sheet)
+model PlacardHazmatItem {
+  id            Int      @id @default(autoincrement())
+  placardDataId Int
+  proNumber     String
+  unNumber      String   // UN number (e.g., "UN2794")
+  hazardClass   String   // Class (e.g., "8")
+  packingGroup  String?  // PG (I, II, III)
+  weight        Int?
+  isBulk        Boolean  @default(false)
+  isLimitedQty  Boolean  @default(false)
+  shippingName  String
+  sortOrder     Int      @default(0)
+  createdAt     DateTime @default(now())
+
+  // Relations
+  placardData PlacardSheetData @relation(fields: [placardDataId], references: [id], onDelete: Cascade)
+
+  @@index([placardDataId])
+  @@map("placard_hazmat_items")
+}
+
+// Required Placards (visual placards to display)
+model RequiredPlacard {
+  id            Int      @id @default(autoincrement())
+  placardDataId Int
+  placardClass  String   // "8", "3", "2.1", etc.
+  placardLabel  String   // "CORROSIVE", "FLAMMABLE", etc.
+  createdAt     DateTime @default(now())
+
+  // Relations
+  placardData PlacardSheetData @relation(fields: [placardDataId], references: [id], onDelete: Cascade)
+
+  @@index([placardDataId])
+  @@map("required_placards")
+}
+
+// Okay to Load - Terminals where freight for these destinations can be loaded from profile's origin
+model ProfileOkayToLoad {
+  linehaulProfileId Int
+  terminalId        Int
+  createdAt         DateTime @default(now())
+
+  linehaulProfile LinehaulProfile @relation("OkayToLoadTerminals", fields: [linehaulProfileId], references: [id], onDelete: Cascade)
+  terminal        Terminal        @relation("OkayToLoadProfiles", fields: [terminalId], references: [id], onDelete: Cascade)
+
+  @@id([linehaulProfileId, terminalId])
+  @@index([terminalId])
+  @@map("profile_okay_to_load")
+}
+
+// Okay to Dispatch - Acceptable dispatch destinations from profile's origin
+model ProfileOkayToDispatch {
+  linehaulProfileId Int
+  terminalId        Int
+  createdAt         DateTime @default(now())
+
+  linehaulProfile LinehaulProfile @relation("OkayToDispatchTerminals", fields: [linehaulProfileId], references: [id], onDelete: Cascade)
+  terminal        Terminal        @relation("OkayToDispatchProfiles", fields: [terminalId], references: [id], onDelete: Cascade)
+
+  @@id([linehaulProfileId, terminalId])
+  @@index([terminalId])
+  @@map("profile_okay_to_dispatch")
+}
+
+// ============================================
+// DRIVER TRIP REPORT MODULE - For pay verification
+// ============================================
+
+// Driver Trip Report - stores driver-submitted arrival information for pay verification
+model DriverTripReport {
+  id        Int @id @default(autoincrement())
+  tripId    Int @unique
+  driverId  Int?
+
+  // Operational details
+  dropAndHook   Int?
+  chainUpCycles Int?
+
+  // Wait time tracking
+  waitTimeStart   DateTime?
+  waitTimeEnd     DateTime?
+  waitTimeMinutes Int?            // Calculated from start/end
+  waitTimeReason  WaitTimeReason?
+  notes           String?
+
+  // Pay verification workflow
+  verified        Boolean   @default(false)
+  verifiedBy      Int?
+  verifiedAt      DateTime?
+  payApproved     Boolean   @default(false)
+  payApprovedBy   Int?
+  payApprovedAt   DateTime?
+
+  // Timestamps
+  arrivedAt DateTime  @default(now())
+  createdAt DateTime  @default(now())
+  updatedAt DateTime  @updatedAt
+
+  // Relations
+  trip        LinehaulTrip   @relation(fields: [tripId], references: [id], onDelete: Cascade)
+  driver      CarrierDriver? @relation(fields: [driverId], references: [id])
+  verifier    User?          @relation("ReportVerifier", fields: [verifiedBy], references: [id])
+  payApprover User?          @relation("PayApprover", fields: [payApprovedBy], references: [id])
+
+  @@index([tripId])
+  @@index([driverId])
+  @@index([verified])
+  @@index([payApproved])
+  @@index([arrivedAt])
+  @@map("driver_trip_reports")
+}
+
+// Equipment Issue - tracks equipment issues reported by OWNOP drivers at arrival
+model EquipmentIssue {
+  id              Int                @id @default(autoincrement())
+  tripId          Int
+  driverId        Int?
+  equipmentType   EquipmentIssueType // TRAILER or DOLLY
+  equipmentNumber String
+  description     String
+  reportedAt      DateTime           @default(now())
+  resolvedAt      DateTime?
+  resolvedBy      Int?
+  resolutionNotes String?
+  createdAt       DateTime           @default(now())
+  updatedAt       DateTime           @updatedAt
+
+  // Relations
+  trip     LinehaulTrip   @relation(fields: [tripId], references: [id], onDelete: Cascade)
+  driver   CarrierDriver? @relation(fields: [driverId], references: [id])
+  resolver User?          @relation("IssueResolver", fields: [resolvedBy], references: [id])
+
+  @@index([tripId])
+  @@index([equipmentType])
+  @@index([resolvedAt])
+  @@map("equipment_issues")
 }
