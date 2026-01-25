@@ -1349,6 +1349,7 @@ export const arriveTrip = async (req: Request, res: Response): Promise<void> => 
     const { id } = req.params;
     const tripId = parseInt(id, 10);
     const {
+      actualArrival,
       dropAndHook,
       chainUpCycles,
       waitTimeStart,
@@ -1357,6 +1358,9 @@ export const arriveTrip = async (req: Request, res: Response): Promise<void> => 
       notes,
       equipmentIssue
     } = req.body;
+
+    // Use provided arrival time or default to now
+    const arrivalTime = actualArrival ? new Date(actualArrival) : new Date();
 
     // Get the trip with driver info
     const trip = await prisma.linehaulTrip.findUnique({
@@ -1396,7 +1400,7 @@ export const arriveTrip = async (req: Request, res: Response): Promise<void> => 
         where: { id: tripId },
         data: {
           status: 'ARRIVED',
-          actualArrival: new Date()
+          actualArrival: arrivalTime
         }
       });
 
@@ -1468,7 +1472,7 @@ export const arriveTrip = async (req: Request, res: Response): Promise<void> => 
           waitTimeMinutes,
           waitTimeReason: waitTimeReason || null,
           notes: notes || null,
-          arrivedAt: new Date()
+          arrivedAt: arrivalTime
         }
       });
 
@@ -1482,7 +1486,7 @@ export const arriveTrip = async (req: Request, res: Response): Promise<void> => 
             equipmentType: equipmentIssue.equipmentType,
             equipmentNumber: equipmentIssue.equipmentNumber,
             description: equipmentIssue.description,
-            reportedAt: new Date()
+            reportedAt: arrivalTime
           }
         });
       }

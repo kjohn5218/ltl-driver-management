@@ -643,6 +643,7 @@ export interface DriverTripReport {
 
 // Trip Arrival Data - used when submitting arrival details
 export interface TripArrivalData {
+  actualArrival?: string;  // ISO datetime string - when the trip actually arrived
   dropAndHook?: number;
   chainUpCycles?: number;
   waitTimeStart?: string;  // ISO datetime string

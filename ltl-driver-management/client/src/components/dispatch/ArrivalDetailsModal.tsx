@@ -44,6 +44,7 @@ export const ArrivalDetailsModal: React.FC<ArrivalDetailsModalProps> = ({
   const queryClient = useQueryClient();
 
   // Form state
+  const [arrivalDateTime, setArrivalDateTime] = useState<string>(''); // datetime-local format
   const [dropAndHook, setDropAndHook] = useState<string>('');
   const [chainUpCycles, setChainUpCycles] = useState<string>('');
   const [waitTimeStart, setWaitTimeStart] = useState<string>(''); // datetime-local format
@@ -166,6 +167,7 @@ export const ArrivalDetailsModal: React.FC<ArrivalDetailsModalProps> = ({
 
     // Build the arrival data
     const arrivalData: TripArrivalData = {
+      actualArrival: arrivalDateTime ? new Date(arrivalDateTime).toISOString() : undefined,
       dropAndHook: dropAndHook ? parseInt(dropAndHook, 10) : undefined,
       chainUpCycles: chainUpCycles ? parseInt(chainUpCycles, 10) : undefined,
       waitTimeStart: waitTimeStart ? new Date(waitTimeStart).toISOString() : undefined,
@@ -186,9 +188,21 @@ export const ArrivalDetailsModal: React.FC<ArrivalDetailsModalProps> = ({
     arrivalMutation.mutate(arrivalData);
   };
 
+  // Helper function to format date for datetime-local input
+  const formatDateTimeLocal = (date: Date): string => {
+    const year = date.getFullYear();
+    const month = String(date.getMonth() + 1).padStart(2, '0');
+    const day = String(date.getDate()).padStart(2, '0');
+    const hours = String(date.getHours()).padStart(2, '0');
+    const minutes = String(date.getMinutes()).padStart(2, '0');
+    return `${year}-${month}-${day}T${hours}:${minutes}`;
+  };
+
   // Reset form when modal opens
   useEffect(() => {
     if (isOpen) {
+      // Set arrival date/time to current date/time
+      setArrivalDateTime(formatDateTimeLocal(new Date()));
       setDropAndHook('');
       setChainUpCycles('');
       setWaitTimeStart('');
@@ -219,7 +233,7 @@ export const ArrivalDetailsModal: React.FC<ArrivalDetailsModalProps> = ({
 
   // Get rating label
   const getRatingLabel = (rating: number): string => {
-    const labels = ['', 'Poor', 'Fair', 'Good', 'Great', 'Very Good'];
+    const labels = ['', 'Poor', 'Fair', 'Good', 'Very Good', 'Great'];
     return labels[rating] || '';
   };
 
@@ -392,6 +406,25 @@ export const ArrivalDetailsModal: React.FC<ArrivalDetailsModalProps> = ({
                       {origin} <ArrowRight className="inline h-3 w-3 mx-1" /> {destination}
                     </span>
                   </div>
+                </div>
+              </div>
+
+              {/* Arrival Date & Time Section */}
+              <div>
+                <h4 className="text-sm font-medium text-gray-700 dark:text-gray-300 mb-3 flex items-center">
+                  <Clock className="h-4 w-4 mr-2" />
+                  Arrival Date & Time
+                </h4>
+                <div>
+                  <input
+                    type="datetime-local"
+                    value={arrivalDateTime}
+                    onChange={(e) => setArrivalDateTime(e.target.value)}
+                    className="w-full px-3 py-2 border border-gray-300 dark:border-gray-600 rounded-md bg-white dark:bg-gray-700 text-gray-900 dark:text-gray-100 focus:ring-2 focus:ring-primary-500 focus:border-transparent"
+                  />
+                  <p className="mt-1 text-xs text-gray-500 dark:text-gray-400">
+                    Defaults to current date/time. Adjust if there was a delay in recording the arrival.
+                  </p>
                 </div>
               </div>
 

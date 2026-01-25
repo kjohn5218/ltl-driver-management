@@ -479,7 +479,7 @@ export const Reports: React.FC = () => {
                     const percentage = moraleReport.summary.totalRatings > 0
                       ? (count / moraleReport.summary.totalRatings) * 100
                       : 0;
-                    const labels = ['', 'Poor', 'Fair', 'Good', 'Great', 'Very Good'];
+                    const labels = ['', 'Poor', 'Fair', 'Good', 'Very Good', 'Great'];
 
                     return (
                       <div key={rating} className="flex items-center gap-3">

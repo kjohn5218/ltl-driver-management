@@ -196,6 +196,7 @@ router.post(
   '/:id/arrive',
   [
     param('id').isInt({ min: 1 }),
+    body('actualArrival').optional().isISO8601(),
     body('dropCount').optional().isInt({ min: 0 }),
     body('hookCount').optional().isInt({ min: 0 }),
     body('chainUpCycles').optional().isInt({ min: 0 }),
