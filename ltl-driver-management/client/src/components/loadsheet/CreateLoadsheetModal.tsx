@@ -20,7 +20,8 @@ import {
   Printer,
   CheckCircle,
   AlertTriangle,
-  Search
+  Search,
+  AlertCircle
 } from 'lucide-react';
 import { DuplicateLoadsheetModal } from './DuplicateLoadsheetModal';
 
@@ -179,8 +180,10 @@ export const CreateLoadsheetModal: React.FC<CreateLoadsheetModalProps> = ({
   const [trailerLength, setTrailerLength] = useState<number | undefined>(undefined);
   const [pintleHook, setPintleHook] = useState<boolean>(false);
   const [targetDispatchTime, setTargetDispatchTime] = useState<string>('');
+  const [scheduledDepartDate, setScheduledDepartDate] = useState<string>(new Date().toISOString().split('T')[0]);
   const [doNotLoadPlacardableHazmat, setDoNotLoadPlacardableHazmat] = useState(false);
   const [doorNumber, setDoorNumber] = useState<string>('');
+  const [trailerOutOfService, setTrailerOutOfService] = useState<boolean>(false);
 
   useEffect(() => {
     if (isOpen) {
@@ -197,12 +200,14 @@ export const CreateLoadsheetModal: React.FC<CreateLoadsheetModalProps> = ({
     setTrailerLength(undefined);
     setPintleHook(false);
     setTargetDispatchTime('');
+    setScheduledDepartDate(new Date().toISOString().split('T')[0]);
     setDoNotLoadPlacardableHazmat(false);
     setDoorNumber('');
     setCreatedLoadsheet(null);
     setIsReprint(false);
     setShowDuplicateModal(false);
     setDuplicateLoadsheets([]);
+    setTrailerOutOfService(false);
   };
 
   const handleClose = () => {
@@ -243,9 +248,12 @@ export const CreateLoadsheetModal: React.FC<CreateLoadsheetModalProps> = ({
     if (trailer) {
       setTrailerLength(trailer.lengthFeet);
       setPintleHook(trailer.pintleHook || false);
+      // Check if trailer is out of service
+      setTrailerOutOfService(trailer.status === 'OUT_OF_SERVICE');
     } else {
       setTrailerLength(undefined);
       setPintleHook(false);
+      setTrailerOutOfService(false);
     }
   };
 
@@ -264,6 +272,12 @@ export const CreateLoadsheetModal: React.FC<CreateLoadsheetModalProps> = ({
 
     if (!selectedTrailer || !selectedProfile || !selectedTerminal) {
       toast.error('Trailer number, linehaul name, and origin terminal are required');
+      return;
+    }
+
+    // Prevent creation if trailer is out of service
+    if (trailerOutOfService) {
+      toast.error('Cannot create loadsheet with an out of service trailer. Contact your supervisor for instructions.');
       return;
     }
 
@@ -307,6 +321,7 @@ export const CreateLoadsheetModal: React.FC<CreateLoadsheetModalProps> = ({
         suggestedTrailerLength: trailerLength,
         pintleHookRequired: pintleHook,
         targetDispatchTime: targetDispatchTime || undefined,
+        scheduledDepartDate: scheduledDepartDate || undefined,
         originTerminalId: selectedTerminal.id,
         originTerminalCode: selectedTerminal.code,
         doNotLoadPlacardableHazmat,
@@ -496,16 +511,34 @@ export const CreateLoadsheetModal: React.FC<CreateLoadsheetModalProps> = ({
                         />
 
                         {/* Trailer Number */}
-                        <TypeToFilterDropdown
-                          label="Trailer Number"
-                          required
-                          placeholder="Type to search trailers..."
-                          items={trailers}
-                          value={selectedTrailer}
-                          onChange={handleTrailerSelect}
-                          getDisplayValue={(trailer) => trailer.unitNumber}
-                          getSearchValue={(trailer) => `${trailer.unitNumber} ${trailer.trailerType || ''}`}
-                        />
+                        <div>
+                          <TypeToFilterDropdown
+                            label="Trailer Number"
+                            required
+                            placeholder="Type to search trailers..."
+                            items={trailers}
+                            value={selectedTrailer}
+                            onChange={handleTrailerSelect}
+                            getDisplayValue={(trailer) => trailer.unitNumber}
+                            getSearchValue={(trailer) => `${trailer.unitNumber} ${trailer.trailerType || ''}`}
+                          />
+                          {/* Out of Service Warning */}
+                          {trailerOutOfService && (
+                            <div className="mt-2 p-3 bg-red-50 dark:bg-red-900/20 border border-red-200 dark:border-red-800 rounded-lg">
+                              <div className="flex items-start gap-2">
+                                <AlertCircle className="w-5 h-5 text-red-600 dark:text-red-500 mt-0.5 flex-shrink-0" />
+                                <div>
+                                  <span className="text-sm font-medium text-red-800 dark:text-red-200">
+                                    Equipment Out of Service
+                                  </span>
+                                  <p className="text-xs text-red-700 dark:text-red-300 mt-1">
+                                    The selected trailer is currently out of service. Contact your supervisor for instructions before proceeding.
+                                  </p>
+                                </div>
+                              </div>
+                            </div>
+                          )}
+                        </div>
 
                         {/* Linehaul Name */}
                         <TypeToFilterDropdown
@@ -552,6 +585,19 @@ export const CreateLoadsheetModal: React.FC<CreateLoadsheetModalProps> = ({
                             Loading door location for scanners
                           </p>
                         </div>
+
+                        {/* Scheduled Depart Date */}
+                        <div>
+                          <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">
+                            Scheduled Depart Date
+                          </label>
+                          <input
+                            type="date"
+                            value={scheduledDepartDate}
+                            onChange={(e) => setScheduledDepartDate(e.target.value)}
+                            className="w-full px-3 py-2 border border-gray-300 dark:border-gray-600 rounded-lg bg-white dark:bg-gray-700 text-gray-900 dark:text-white focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
+                          />
+                        </div>
                       </div>
 
                       {/* Hazmat Warning Checkbox */}
@@ -589,7 +635,7 @@ export const CreateLoadsheetModal: React.FC<CreateLoadsheetModalProps> = ({
                         </button>
                         <button
                           type="submit"
-                          disabled={saving || checkingDuplicates}
+                          disabled={saving || checkingDuplicates || trailerOutOfService}
                           className="flex items-center gap-2 px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 disabled:opacity-50 transition-colors"
                         >
                           <Save className="w-4 h-4" />
