@@ -674,6 +674,18 @@ export interface EquipmentIssue {
   driver?: CarrierDriver;
 }
 
+// Driver Morale Rating - tracks driver morale ratings at arrival
+export interface DriverMoraleRating {
+  id: number;
+  tripId: number;
+  driverId: number;
+  rating: number; // 1-5 star rating (1=Poor, 5=Very Good)
+  arrivedAt: string;
+  createdAt: string;
+  trip?: LinehaulTrip;
+  driver?: CarrierDriver;
+}
+
 // Rate Card
 export interface RateCard {
   id: number;

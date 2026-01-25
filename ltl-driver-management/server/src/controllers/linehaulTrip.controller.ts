@@ -31,7 +31,15 @@ export const getTrips = async (req: Request, res: Response): Promise<void> => {
       where.OR = [
         { tripNumber: { contains: search as string, mode: 'insensitive' } },
         { linehaulProfile: { profileCode: { contains: search as string, mode: 'insensitive' } } },
-        { linehaulProfile: { name: { contains: search as string, mode: 'insensitive' } } }
+        { linehaulProfile: { name: { contains: search as string, mode: 'insensitive' } } },
+        // Search by driver name
+        { driver: { name: { contains: search as string, mode: 'insensitive' } } },
+        // Search by driver number
+        { driver: { number: { contains: search as string, mode: 'insensitive' } } },
+        // Search by power unit (truck unit number)
+        { truck: { unitNumber: { contains: search as string, mode: 'insensitive' } } },
+        // Search by manifest number (via loadsheets)
+        { loadsheets: { some: { manifestNumber: { contains: search as string, mode: 'insensitive' } } } }
       ];
     }
 
@@ -64,10 +72,37 @@ export const getTrips = async (req: Request, res: Response): Promise<void> => {
     }
 
     if (destinationTerminalId) {
-      where.linehaulProfile = {
-        ...where.linehaulProfile as object,
-        destinationTerminalId: parseInt(destinationTerminalId as string, 10)
-      };
+      // Look up the terminal code for this ID to support filtering by code
+      const terminal = await prisma.terminal.findUnique({
+        where: { id: parseInt(destinationTerminalId as string, 10) },
+        select: { code: true }
+      });
+
+      if (terminal) {
+        // Match trips where the destination matches via:
+        // 1. The linehaulProfile's destinationTerminalId, OR
+        // 2. The trip's direct destinationTerminalCode, OR
+        // 3. Any associated loadsheet's destinationTerminalCode
+        // 4. LinehaulName contains the destination code (for multi-leg routes)
+        where.AND = [
+          ...(Array.isArray(where.AND) ? where.AND : []),
+          {
+            OR: [
+              { linehaulProfile: { destinationTerminalId: parseInt(destinationTerminalId as string, 10) } },
+              { destinationTerminalCode: terminal.code },
+              { loadsheets: { some: { destinationTerminalCode: terminal.code } } },
+              // Match linehaulName containing the destination code (handles multi-leg like "DENVIL..." or "DEN-VIL-...")
+              { loadsheets: { some: { linehaulName: { contains: terminal.code } } } }
+            ]
+          }
+        ];
+      } else {
+        // Fallback to just profile-based filtering if terminal not found
+        where.linehaulProfile = {
+          ...where.linehaulProfile as object,
+          destinationTerminalId: parseInt(destinationTerminalId as string, 10)
+        };
+      }
     }
 
     if (startDate) {
@@ -124,6 +159,21 @@ export const getTrips = async (req: Request, res: Response): Promise<void> => {
           trailer2: {
             select: { id: true, unitNumber: true, trailerType: true }
           },
+          dolly: {
+            select: { id: true, unitNumber: true, dollyType: true }
+          },
+          dolly2: {
+            select: { id: true, unitNumber: true, dollyType: true }
+          },
+          loadsheets: {
+            select: {
+              id: true,
+              manifestNumber: true,
+              linehaulName: true,
+              originTerminalCode: true,
+              destinationTerminalCode: true
+            }
+          },
           shipments: {
             select: { id: true, pieces: true, weight: true }
           },
@@ -135,8 +185,17 @@ export const getTrips = async (req: Request, res: Response): Promise<void> => {
       prisma.linehaulTrip.count({ where })
     ]);
 
+    // Transform trips to include linehaulName at top level (from first loadsheet)
+    const transformedTrips = trips.map(trip => {
+      const firstLoadsheet = trip.loadsheets?.[0];
+      return {
+        ...trip,
+        linehaulName: firstLoadsheet?.linehaulName || null
+      };
+    });
+
     res.json({
-      trips,
+      trips: transformedTrips,
       pagination: {
         page: pageNum,
         limit: limitNum,
@@ -1281,5 +1340,418 @@ export const getVehicleLocation = async (req: Request, res: Response): Promise<v
       unitNumber: 'Unknown',
       error: 'Failed to fetch vehicle location'
     });
+  }
+};
+
+// Submit arrival details and create driver trip report
+export const arriveTrip = async (req: Request, res: Response): Promise<void> => {
+  try {
+    const { id } = req.params;
+    const tripId = parseInt(id, 10);
+    const {
+      dropAndHook,
+      chainUpCycles,
+      waitTimeStart,
+      waitTimeEnd,
+      waitTimeReason,
+      notes,
+      equipmentIssue
+    } = req.body;
+
+    // Get the trip with driver info
+    const trip = await prisma.linehaulTrip.findUnique({
+      where: { id: tripId },
+      include: {
+        driver: true,
+        truck: true,
+        trailer: true,
+        trailer2: true,
+        dolly: true,
+        dolly2: true,
+        linehaulProfile: {
+          include: {
+            destinationTerminal: { select: { code: true } }
+          }
+        }
+      }
+    });
+
+    if (!trip) {
+      res.status(404).json({ message: 'Trip not found' });
+      return;
+    }
+
+    // Calculate wait time in minutes if both start and end are provided
+    let waitTimeMinutes: number | null = null;
+    if (waitTimeStart && waitTimeEnd) {
+      const start = new Date(waitTimeStart);
+      const end = new Date(waitTimeEnd);
+      waitTimeMinutes = Math.round((end.getTime() - start.getTime()) / (1000 * 60));
+    }
+
+    // Create the driver trip report and update trip status in a transaction
+    const result = await prisma.$transaction(async (tx) => {
+      // Update trip status to ARRIVED
+      const updatedTrip = await tx.linehaulTrip.update({
+        where: { id: tripId },
+        data: {
+          status: 'ARRIVED',
+          actualArrival: new Date()
+        }
+      });
+
+      // Update equipment status to AVAILABLE
+      if (trip.truckId) {
+        await tx.equipmentTruck.update({
+          where: { id: trip.truckId },
+          data: { status: 'AVAILABLE' }
+        });
+      }
+
+      if (trip.trailerId) {
+        await tx.equipmentTrailer.update({
+          where: { id: trip.trailerId },
+          data: { status: 'AVAILABLE' }
+        });
+      }
+
+      if (trip.trailer2Id) {
+        await tx.equipmentTrailer.update({
+          where: { id: trip.trailer2Id },
+          data: { status: 'AVAILABLE' }
+        });
+      }
+
+      if (trip.dollyId) {
+        await tx.equipmentDolly.update({
+          where: { id: trip.dollyId },
+          data: { status: 'AVAILABLE' }
+        });
+      }
+
+      if (trip.dolly2Id) {
+        await tx.equipmentDolly.update({
+          where: { id: trip.dolly2Id },
+          data: { status: 'AVAILABLE' }
+        });
+      }
+
+      // Update driver status to AVAILABLE
+      if (trip.driverId) {
+        await tx.carrierDriver.update({
+          where: { id: trip.driverId },
+          data: { driverStatus: 'AVAILABLE' }
+        });
+      }
+
+      // Release loadsheets for next leg
+      const destinationCode = trip.linehaulProfile?.destinationTerminal?.code;
+      await tx.loadsheet.updateMany({
+        where: { linehaulTripId: tripId },
+        data: {
+          linehaulTripId: null,
+          ...(destinationCode && { originTerminalCode: destinationCode }),
+          destinationTerminalCode: null,
+          status: 'OPEN'
+        }
+      });
+
+      // Create driver trip report
+      const driverReport = await tx.driverTripReport.create({
+        data: {
+          tripId,
+          driverId: trip.driverId,
+          dropAndHook: dropAndHook !== undefined ? parseInt(dropAndHook, 10) : null,
+          chainUpCycles: chainUpCycles !== undefined ? parseInt(chainUpCycles, 10) : null,
+          waitTimeStart: waitTimeStart ? new Date(waitTimeStart) : null,
+          waitTimeEnd: waitTimeEnd ? new Date(waitTimeEnd) : null,
+          waitTimeMinutes,
+          waitTimeReason: waitTimeReason || null,
+          notes: notes || null,
+          arrivedAt: new Date()
+        }
+      });
+
+      // Create equipment issue if provided (for OWNOP trips)
+      let createdIssue = null;
+      if (equipmentIssue && equipmentIssue.equipmentType && equipmentIssue.equipmentNumber && equipmentIssue.description) {
+        createdIssue = await tx.equipmentIssue.create({
+          data: {
+            tripId,
+            driverId: trip.driverId,
+            equipmentType: equipmentIssue.equipmentType,
+            equipmentNumber: equipmentIssue.equipmentNumber,
+            description: equipmentIssue.description,
+            reportedAt: new Date()
+          }
+        });
+      }
+
+      return { trip: updatedTrip, driverReport, equipmentIssue: createdIssue };
+    });
+
+    res.json({
+      message: 'Trip arrived successfully',
+      trip: result.trip,
+      driverReport: result.driverReport,
+      equipmentIssue: result.equipmentIssue
+    });
+  } catch (error) {
+    console.error('Error arriving trip:', error);
+    res.status(500).json({ message: 'Failed to arrive trip' });
+  }
+};
+
+// Get driver trip report for a trip
+export const getDriverTripReport = async (req: Request, res: Response): Promise<void> => {
+  try {
+    const { id } = req.params;
+    const tripId = parseInt(id, 10);
+
+    const report = await prisma.driverTripReport.findUnique({
+      where: { tripId },
+      include: {
+        trip: {
+          select: {
+            tripNumber: true,
+            status: true,
+            actualArrival: true
+          }
+        },
+        driver: {
+          select: { id: true, name: true }
+        }
+      }
+    });
+
+    if (!report) {
+      res.status(404).json({ message: 'Driver trip report not found' });
+      return;
+    }
+
+    res.json(report);
+  } catch (error) {
+    console.error('Error fetching driver trip report:', error);
+    res.status(500).json({ message: 'Failed to fetch driver trip report' });
+  }
+};
+
+// Get equipment issues for a trip
+export const getTripEquipmentIssues = async (req: Request, res: Response): Promise<void> => {
+  try {
+    const { id } = req.params;
+    const tripId = parseInt(id, 10);
+
+    const issues = await prisma.equipmentIssue.findMany({
+      where: { tripId },
+      include: {
+        driver: {
+          select: { id: true, name: true }
+        },
+        resolver: {
+          select: { id: true, name: true }
+        }
+      },
+      orderBy: { reportedAt: 'desc' }
+    });
+
+    res.json(issues);
+  } catch (error) {
+    console.error('Error fetching equipment issues:', error);
+    res.status(500).json({ message: 'Failed to fetch equipment issues' });
+  }
+};
+
+// Check if this is the driver's second arrival in 24 hours
+export const checkDriverArrivalCount = async (req: Request, res: Response): Promise<void> => {
+  try {
+    const { driverId } = req.params;
+    const driverIdNum = parseInt(driverId, 10);
+
+    // Get arrivals in the last 24 hours for this driver
+    const twentyFourHoursAgo = new Date(Date.now() - 24 * 60 * 60 * 1000);
+
+    const arrivalCount = await prisma.linehaulTrip.count({
+      where: {
+        driverId: driverIdNum,
+        status: { in: ['ARRIVED', 'UNLOADING', 'COMPLETED'] },
+        actualArrival: {
+          gte: twentyFourHoursAgo
+        }
+      }
+    });
+
+    res.json({
+      driverId: driverIdNum,
+      arrivalCount,
+      isSecondArrival: arrivalCount >= 1 // >= 1 because we check BEFORE recording the current arrival
+    });
+  } catch (error) {
+    console.error('Error checking driver arrival count:', error);
+    res.status(500).json({ message: 'Failed to check driver arrival count' });
+  }
+};
+
+// Save driver morale rating
+export const saveMoraleRating = async (req: Request, res: Response): Promise<void> => {
+  try {
+    const { tripId, driverId, rating } = req.body;
+
+    if (!tripId || !driverId || !rating) {
+      res.status(400).json({ message: 'tripId, driverId, and rating are required' });
+      return;
+    }
+
+    if (rating < 1 || rating > 5) {
+      res.status(400).json({ message: 'Rating must be between 1 and 5' });
+      return;
+    }
+
+    // Check if rating already exists for this trip
+    const existingRating = await prisma.driverMoraleRating.findUnique({
+      where: { tripId: parseInt(tripId, 10) }
+    });
+
+    if (existingRating) {
+      res.status(400).json({ message: 'Morale rating already exists for this trip' });
+      return;
+    }
+
+    const moraleRating = await prisma.driverMoraleRating.create({
+      data: {
+        tripId: parseInt(tripId, 10),
+        driverId: parseInt(driverId, 10),
+        rating: parseInt(rating, 10),
+        arrivedAt: new Date()
+      },
+      include: {
+        driver: {
+          select: { id: true, name: true }
+        }
+      }
+    });
+
+    res.status(201).json(moraleRating);
+  } catch (error) {
+    console.error('Error saving morale rating:', error);
+    res.status(500).json({ message: 'Failed to save morale rating' });
+  }
+};
+
+// Get morale report data
+export const getMoraleReport = async (req: Request, res: Response): Promise<void> => {
+  try {
+    const { startDate, endDate, driverId, page = '1', limit = '50' } = req.query;
+
+    const pageNum = parseInt(page as string, 10);
+    const limitNum = parseInt(limit as string, 10);
+    const skip = (pageNum - 1) * limitNum;
+
+    const where: Prisma.DriverMoraleRatingWhereInput = {};
+
+    if (driverId) {
+      where.driverId = parseInt(driverId as string, 10);
+    }
+
+    if (startDate) {
+      where.arrivedAt = {
+        ...where.arrivedAt as object,
+        gte: new Date(startDate as string)
+      };
+    }
+
+    if (endDate) {
+      const endOfDay = new Date(endDate as string);
+      endOfDay.setUTCHours(23, 59, 59, 999);
+      where.arrivedAt = {
+        ...where.arrivedAt as object,
+        lte: endOfDay
+      };
+    }
+
+    const [ratings, total, aggregations] = await Promise.all([
+      prisma.driverMoraleRating.findMany({
+        where,
+        skip,
+        take: limitNum,
+        orderBy: { arrivedAt: 'desc' },
+        include: {
+          driver: {
+            select: { id: true, name: true }
+          },
+          trip: {
+            select: {
+              tripNumber: true,
+              linehaulProfile: {
+                select: {
+                  originTerminal: { select: { code: true } },
+                  destinationTerminal: { select: { code: true } }
+                }
+              }
+            }
+          }
+        }
+      }),
+      prisma.driverMoraleRating.count({ where }),
+      prisma.driverMoraleRating.aggregate({
+        where,
+        _avg: { rating: true },
+        _count: { rating: true }
+      })
+    ]);
+
+    // Get rating distribution
+    const ratingDistribution = await prisma.driverMoraleRating.groupBy({
+      by: ['rating'],
+      where,
+      _count: { rating: true }
+    });
+
+    // Get average rating by driver
+    const driverAverages = await prisma.driverMoraleRating.groupBy({
+      by: ['driverId'],
+      where,
+      _avg: { rating: true },
+      _count: { rating: true }
+    });
+
+    // Get driver names for the averages
+    const driverIds = driverAverages.map(d => d.driverId);
+    const drivers = await prisma.carrierDriver.findMany({
+      where: { id: { in: driverIds } },
+      select: { id: true, name: true }
+    });
+
+    const driverAveragesWithNames = driverAverages.map(avg => {
+      const driver = drivers.find(d => d.id === avg.driverId);
+      return {
+        driverId: avg.driverId,
+        driverName: driver?.name || 'Unknown',
+        averageRating: avg._avg.rating,
+        ratingCount: avg._count.rating
+      };
+    }).sort((a, b) => (b.averageRating || 0) - (a.averageRating || 0));
+
+    res.json({
+      ratings,
+      pagination: {
+        page: pageNum,
+        limit: limitNum,
+        total,
+        totalPages: Math.ceil(total / limitNum)
+      },
+      summary: {
+        averageRating: aggregations._avg.rating,
+        totalRatings: aggregations._count.rating,
+        ratingDistribution: ratingDistribution.reduce((acc, curr) => {
+          acc[curr.rating] = curr._count.rating;
+          return acc;
+        }, {} as Record<number, number>),
+        driverAverages: driverAveragesWithNames
+      }
+    });
+  } catch (error) {
+    console.error('Error fetching morale report:', error);
+    res.status(500).json({ message: 'Failed to fetch morale report' });
   }
 };

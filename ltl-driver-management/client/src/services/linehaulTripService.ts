@@ -1,5 +1,5 @@
 import { api } from './api';
-import { LinehaulTrip, TripStatus, TripsResponse } from '../types';
+import { LinehaulTrip, TripStatus, TripsResponse, TripArrivalData, DriverTripReport, EquipmentIssue } from '../types';
 
 interface TripFilters {
   search?: string;
@@ -181,6 +181,49 @@ export const linehaulTripService = {
   getVehicleLocation: async (vehicleId: string): Promise<VehicleLocationResult> => {
     const response = await api.get(`/linehaul-trips/vehicle-location/${vehicleId}`);
     return response.data;
+  },
+
+  // Submit arrival details and create driver trip report
+  submitArrival: async (tripId: number, arrivalData: TripArrivalData): Promise<ArrivalResponse> => {
+    const response = await api.post(`/linehaul-trips/${tripId}/arrive`, arrivalData);
+    return response.data;
+  },
+
+  // Get driver trip report for a trip
+  getDriverReport: async (tripId: number): Promise<DriverTripReport> => {
+    const response = await api.get(`/linehaul-trips/${tripId}/driver-report`);
+    return response.data;
+  },
+
+  // Get equipment issues for a trip
+  getEquipmentIssues: async (tripId: number): Promise<EquipmentIssue[]> => {
+    const response = await api.get(`/linehaul-trips/${tripId}/equipment-issues`);
+    return response.data;
+  },
+
+  // Check driver arrival count in last 24 hours
+  checkDriverArrivalCount: async (driverId: number): Promise<DriverArrivalCountResult> => {
+    const response = await api.get(`/linehaul-trips/driver/${driverId}/arrival-count`);
+    return response.data;
+  },
+
+  // Save morale rating
+  saveMoraleRating: async (data: SaveMoraleRatingRequest): Promise<MoraleRating> => {
+    const response = await api.post('/linehaul-trips/morale-rating', data);
+    return response.data;
+  },
+
+  // Get morale report
+  getMoraleReport: async (filters?: MoraleReportFilters): Promise<MoraleReportResponse> => {
+    const params = new URLSearchParams();
+    if (filters?.startDate) params.append('startDate', filters.startDate);
+    if (filters?.endDate) params.append('endDate', filters.endDate);
+    if (filters?.driverId) params.append('driverId', filters.driverId.toString());
+    if (filters?.page) params.append('page', filters.page.toString());
+    if (filters?.limit) params.append('limit', filters.limit.toString());
+
+    const response = await api.get(`/linehaul-trips/reports/morale?${params.toString()}`);
+    return response.data;
   }
 };
 
@@ -208,4 +251,73 @@ export interface VehicleLocationResult {
     timestamp?: string;
   };
   error?: string;
+}
+
+export interface ArrivalResponse {
+  message: string;
+  trip: LinehaulTrip;
+  driverReport: DriverTripReport;
+  equipmentIssue?: EquipmentIssue | null;
+}
+
+export interface DriverArrivalCountResult {
+  driverId: number;
+  arrivalCount: number;
+  isSecondArrival: boolean;
+}
+
+export interface SaveMoraleRatingRequest {
+  tripId: number;
+  driverId: number;
+  rating: number;
+}
+
+export interface MoraleRating {
+  id: number;
+  tripId: number;
+  driverId: number;
+  rating: number;
+  arrivedAt: string;
+  createdAt: string;
+  driver?: {
+    id: number;
+    name: string;
+  };
+}
+
+export interface MoraleReportFilters {
+  startDate?: string;
+  endDate?: string;
+  driverId?: number;
+  page?: number;
+  limit?: number;
+}
+
+export interface MoraleReportResponse {
+  ratings: Array<MoraleRating & {
+    trip?: {
+      tripNumber: string;
+      linehaulProfile?: {
+        originTerminal?: { code: string };
+        destinationTerminal?: { code: string };
+      };
+    };
+  }>;
+  pagination: {
+    page: number;
+    limit: number;
+    total: number;
+    totalPages: number;
+  };
+  summary: {
+    averageRating: number | null;
+    totalRatings: number;
+    ratingDistribution: Record<number, number>;
+    driverAverages: Array<{
+      driverId: number;
+      driverName: string;
+      averageRating: number | null;
+      ratingCount: number;
+    }>;
+  };
 }

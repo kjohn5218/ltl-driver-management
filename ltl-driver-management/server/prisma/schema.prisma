@@ -327,6 +327,7 @@ model CarrierDriver {
   tripPays       TripPay[]
   tripReports    DriverTripReport[]
   equipmentIssues EquipmentIssue[]
+  moraleRatings  DriverMoraleRating[]
 
   @@index([carrierId])
   @@index([driverStatus])
@@ -910,6 +911,7 @@ model LinehaulTrip {
   lateDepartureReason LateDepartureReason?
   driverTripReport    DriverTripReport?
   equipmentIssues     EquipmentIssue[]
+  moraleRating        DriverMoraleRating?
 
   @@index([dispatchDate])
   @@index([status])
@@ -1532,4 +1534,23 @@ model EquipmentIssue {
   @@index([equipmentType])
   @@index([resolvedAt])
   @@map("equipment_issues")
+}
+
+// Driver Morale Rating - tracks driver morale ratings at arrival (second arrival in 24 hours)
+model DriverMoraleRating {
+  id        Int      @id @default(autoincrement())
+  tripId    Int      @unique
+  driverId  Int
+  rating    Int      // 1-5 star rating (1=Poor, 5=Very Good)
+  arrivedAt DateTime @default(now())
+  createdAt DateTime @default(now())
+
+  // Relations
+  trip   LinehaulTrip  @relation(fields: [tripId], references: [id], onDelete: Cascade)
+  driver CarrierDriver @relation(fields: [driverId], references: [id], onDelete: Cascade)
+
+  @@index([driverId])
+  @@index([arrivedAt])
+  @@index([rating])
+  @@map("driver_morale_ratings")
 }

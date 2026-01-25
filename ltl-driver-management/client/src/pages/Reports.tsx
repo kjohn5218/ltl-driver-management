@@ -2,7 +2,9 @@ import React, { useState } from 'react';
 import { useQuery } from '@tanstack/react-query';
 import { api } from '../services/api';
 import { BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer, PieChart, Pie, Cell, LineChart, Line } from 'recharts';
-import { Download, Target, Truck, Package, Clock, DollarSign, Route, Activity } from 'lucide-react';
+import { Download, Target, Truck, Package, Clock, DollarSign, Route, Activity, AlertTriangle, Star, Smile } from 'lucide-react';
+import { Link } from 'react-router-dom';
+import { linehaulTripService, MoraleReportResponse } from '../services/linehaulTripService';
 
 interface DashboardMetrics {
   totalCarriers: number;
@@ -23,12 +25,30 @@ interface DashboardMetrics {
 
 export const Reports: React.FC = () => {
   const [dateRange, setDateRange] = useState('30');
-  
+
   const { data: metrics, isLoading: metricsLoading } = useQuery({
     queryKey: ['dashboard-metrics'],
     queryFn: async () => {
       const response = await api.get('/reports/dashboard');
       return response.data as DashboardMetrics;
+    }
+  });
+
+  // Morale report query - last 30 days
+  const thirtyDaysAgo = new Date();
+  thirtyDaysAgo.setDate(thirtyDaysAgo.getDate() - 30);
+
+  const { data: moraleReport } = useQuery({
+    queryKey: ['morale-report', dateRange],
+    queryFn: async () => {
+      const endDate = new Date();
+      const startDate = new Date();
+      startDate.setDate(startDate.getDate() - parseInt(dateRange));
+      return linehaulTripService.getMoraleReport({
+        startDate: startDate.toISOString().split('T')[0],
+        endDate: endDate.toISOString().split('T')[0],
+        limit: 100
+      });
     }
   });
 
@@ -95,6 +115,13 @@ export const Reports: React.FC = () => {
           <p className="text-gray-600">Cost analysis and resource booking optimization for LTL operations</p>
         </div>
         <div className="flex items-center gap-3">
+          <Link
+            to="/reports/late-linehaul"
+            className="inline-flex items-center px-3 py-2 border border-amber-300 bg-amber-50 text-amber-700 rounded-md hover:bg-amber-100 text-sm font-medium"
+          >
+            <AlertTriangle className="w-4 h-4 mr-2" />
+            Late Linehaul Report
+          </Link>
           <select
             className="px-3 py-2 border border-gray-300 rounded-md focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
             value={dateRange}
@@ -400,6 +427,183 @@ export const Reports: React.FC = () => {
             <p className="text-xs text-purple-700">{metrics?.unbookedRoutes || 0} routes need LTL resources</p>
           </div>
         </div>
+      </div>
+
+      {/* Driver Morale Report */}
+      <div className="bg-white p-6 rounded-lg shadow-sm border border-gray-200">
+        <h3 className="text-lg font-medium text-gray-900 mb-4 flex items-center gap-2">
+          <Smile className="h-5 w-5 text-yellow-500" />
+          Driver Morale Report
+        </h3>
+
+        {moraleReport && moraleReport.summary.totalRatings > 0 ? (
+          <div className="space-y-6">
+            {/* Summary Stats */}
+            <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
+              <div className="text-center p-4 bg-yellow-50 rounded-lg">
+                <div className="flex justify-center items-center mb-2">
+                  <Star className="h-8 w-8 text-yellow-500 fill-yellow-500" />
+                </div>
+                <p className="text-2xl font-semibold text-gray-900">
+                  {moraleReport.summary.averageRating?.toFixed(1) || 'N/A'}
+                </p>
+                <p className="text-sm text-gray-600">Average Rating</p>
+              </div>
+              <div className="text-center p-4 bg-blue-50 rounded-lg">
+                <div className="flex justify-center items-center mb-2">
+                  <Activity className="h-8 w-8 text-blue-600" />
+                </div>
+                <p className="text-2xl font-semibold text-gray-900">
+                  {moraleReport.summary.totalRatings}
+                </p>
+                <p className="text-sm text-gray-600">Total Responses</p>
+              </div>
+              <div className="text-center p-4 bg-green-50 rounded-lg">
+                <div className="flex justify-center items-center mb-2">
+                  <Smile className="h-8 w-8 text-green-600" />
+                </div>
+                <p className="text-2xl font-semibold text-gray-900">
+                  {moraleReport.summary.ratingDistribution[4] || 0 + (moraleReport.summary.ratingDistribution[5] || 0)}
+                </p>
+                <p className="text-sm text-gray-600">Positive Ratings (4-5 Stars)</p>
+              </div>
+            </div>
+
+            <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
+              {/* Rating Distribution */}
+              <div className="border border-gray-200 rounded-lg p-4">
+                <h4 className="text-sm font-medium text-gray-700 mb-4">Rating Distribution</h4>
+                <div className="space-y-3">
+                  {[5, 4, 3, 2, 1].map((rating) => {
+                    const count = moraleReport.summary.ratingDistribution[rating] || 0;
+                    const percentage = moraleReport.summary.totalRatings > 0
+                      ? (count / moraleReport.summary.totalRatings) * 100
+                      : 0;
+                    const labels = ['', 'Poor', 'Fair', 'Good', 'Great', 'Very Good'];
+
+                    return (
+                      <div key={rating} className="flex items-center gap-3">
+                        <div className="flex items-center gap-1 w-24">
+                          {[...Array(rating)].map((_, i) => (
+                            <Star key={i} className="h-4 w-4 text-yellow-400 fill-yellow-400" />
+                          ))}
+                          {[...Array(5 - rating)].map((_, i) => (
+                            <Star key={i} className="h-4 w-4 text-gray-200" />
+                          ))}
+                        </div>
+                        <div className="flex-1 h-4 bg-gray-100 rounded-full overflow-hidden">
+                          <div
+                            className={`h-full rounded-full ${
+                              rating >= 4 ? 'bg-green-500' :
+                              rating === 3 ? 'bg-yellow-500' :
+                              'bg-red-500'
+                            }`}
+                            style={{ width: `${percentage}%` }}
+                          />
+                        </div>
+                        <span className="text-sm text-gray-600 w-16 text-right">
+                          {count} ({percentage.toFixed(0)}%)
+                        </span>
+                      </div>
+                    );
+                  })}
+                </div>
+              </div>
+
+              {/* Top/Bottom Drivers */}
+              <div className="border border-gray-200 rounded-lg p-4">
+                <h4 className="text-sm font-medium text-gray-700 mb-4">Driver Morale Rankings</h4>
+                <div className="space-y-3">
+                  {moraleReport.summary.driverAverages.slice(0, 5).map((driver, index) => (
+                    <div key={driver.driverId} className="flex items-center justify-between p-2 border border-gray-100 rounded">
+                      <div className="flex items-center gap-2">
+                        <span className={`w-6 h-6 rounded-full flex items-center justify-center text-xs font-medium ${
+                          index === 0 ? 'bg-yellow-100 text-yellow-800' :
+                          index === 1 ? 'bg-gray-100 text-gray-800' :
+                          index === 2 ? 'bg-orange-100 text-orange-800' :
+                          'bg-gray-50 text-gray-600'
+                        }`}>
+                          {index + 1}
+                        </span>
+                        <span className="text-sm font-medium text-gray-900">{driver.driverName}</span>
+                      </div>
+                      <div className="flex items-center gap-2">
+                        <div className="flex items-center">
+                          <Star className="h-4 w-4 text-yellow-400 fill-yellow-400" />
+                          <span className="ml-1 text-sm font-medium text-gray-900">
+                            {driver.averageRating?.toFixed(1) || 'N/A'}
+                          </span>
+                        </div>
+                        <span className="text-xs text-gray-500">({driver.ratingCount} ratings)</span>
+                      </div>
+                    </div>
+                  ))}
+                  {moraleReport.summary.driverAverages.length === 0 && (
+                    <p className="text-sm text-gray-500 text-center py-4">No driver ratings yet</p>
+                  )}
+                </div>
+              </div>
+            </div>
+
+            {/* Recent Ratings Table */}
+            <div className="border border-gray-200 rounded-lg overflow-hidden">
+              <div className="px-4 py-3 bg-gray-50 border-b border-gray-200">
+                <h4 className="text-sm font-medium text-gray-700">Recent Feedback</h4>
+              </div>
+              <div className="overflow-x-auto">
+                <table className="min-w-full divide-y divide-gray-200">
+                  <thead className="bg-gray-50">
+                    <tr>
+                      <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Date</th>
+                      <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Driver</th>
+                      <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Trip</th>
+                      <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Route</th>
+                      <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Rating</th>
+                    </tr>
+                  </thead>
+                  <tbody className="bg-white divide-y divide-gray-200">
+                    {moraleReport.ratings.slice(0, 10).map((rating) => (
+                      <tr key={rating.id}>
+                        <td className="px-4 py-3 text-sm text-gray-900">
+                          {new Date(rating.arrivedAt).toLocaleDateString()}
+                        </td>
+                        <td className="px-4 py-3 text-sm text-gray-900">
+                          {rating.driver?.name || 'Unknown'}
+                        </td>
+                        <td className="px-4 py-3 text-sm text-gray-900">
+                          {rating.trip?.tripNumber || '-'}
+                        </td>
+                        <td className="px-4 py-3 text-sm text-gray-900">
+                          {rating.trip?.linehaulProfile?.originTerminal?.code && rating.trip?.linehaulProfile?.destinationTerminal?.code
+                            ? `${rating.trip.linehaulProfile.originTerminal.code} → ${rating.trip.linehaulProfile.destinationTerminal.code}`
+                            : '-'}
+                        </td>
+                        <td className="px-4 py-3">
+                          <div className="flex items-center">
+                            {[...Array(rating.rating)].map((_, i) => (
+                              <Star key={i} className="h-4 w-4 text-yellow-400 fill-yellow-400" />
+                            ))}
+                            {[...Array(5 - rating.rating)].map((_, i) => (
+                              <Star key={i} className="h-4 w-4 text-gray-200" />
+                            ))}
+                          </div>
+                        </td>
+                      </tr>
+                    ))}
+                  </tbody>
+                </table>
+              </div>
+            </div>
+          </div>
+        ) : (
+          <div className="text-center py-8">
+            <Smile className="h-12 w-12 text-gray-300 mx-auto mb-3" />
+            <p className="text-gray-500">No morale ratings collected yet.</p>
+            <p className="text-sm text-gray-400 mt-1">
+              Ratings are collected when drivers complete their second arrival in a 24-hour period.
+            </p>
+          </div>
+        )}
       </div>
     </div>
   );

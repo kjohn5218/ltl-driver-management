@@ -15,7 +15,13 @@ import {
   dispatchTrip,
   getTripEta,
   getTripEtaBatch,
-  getVehicleLocation
+  getVehicleLocation,
+  arriveTrip,
+  getDriverTripReport,
+  getTripEquipmentIssues,
+  checkDriverArrivalCount,
+  saveMoraleRating,
+  getMoraleReport
 } from '../controllers/linehaulTrip.controller';
 import { authenticate, authorize } from '../middleware/auth.middleware';
 import { validateRequest } from '../middleware/validation.middleware';
@@ -185,6 +191,43 @@ router.patch(
   dispatchTrip
 );
 
+// Arrive trip - submit arrival details and driver report
+router.post(
+  '/:id/arrive',
+  [
+    param('id').isInt({ min: 1 }),
+    body('dropCount').optional().isInt({ min: 0 }),
+    body('hookCount').optional().isInt({ min: 0 }),
+    body('chainUpCycles').optional().isInt({ min: 0 }),
+    body('waitTimeStart').optional().isISO8601(),
+    body('waitTimeEnd').optional().isISO8601(),
+    body('waitTimeReason').optional().isIn(['LATE_MEET_DRIVER', 'DOCK_DELAY', 'BREAKDOWN']),
+    body('notes').optional().trim(),
+    body('equipmentIssue').optional().isObject(),
+    body('equipmentIssue.equipmentType').optional().isIn(['TRAILER', 'DOLLY']),
+    body('equipmentIssue.equipmentNumber').optional().trim(),
+    body('equipmentIssue.description').optional().trim()
+  ],
+  validateRequest,
+  arriveTrip
+);
+
+// Get driver trip report for a trip
+router.get(
+  '/:id/driver-report',
+  [param('id').isInt({ min: 1 })],
+  validateRequest,
+  getDriverTripReport
+);
+
+// Get equipment issues for a trip
+router.get(
+  '/:id/equipment-issues',
+  [param('id').isInt({ min: 1 })],
+  validateRequest,
+  getTripEquipmentIssues
+);
+
 // Assign driver to trip (Admin/Dispatcher only)
 router.patch(
   '/:id/assign-driver',
@@ -220,6 +263,40 @@ router.delete(
   [param('id').isInt({ min: 1 })],
   validateRequest,
   deleteTrip
+);
+
+// Check driver arrival count in last 24 hours
+router.get(
+  '/driver/:driverId/arrival-count',
+  [param('driverId').isInt({ min: 1 })],
+  validateRequest,
+  checkDriverArrivalCount
+);
+
+// Save morale rating
+router.post(
+  '/morale-rating',
+  [
+    body('tripId').isInt({ min: 1 }),
+    body('driverId').isInt({ min: 1 }),
+    body('rating').isInt({ min: 1, max: 5 })
+  ],
+  validateRequest,
+  saveMoraleRating
+);
+
+// Get morale report
+router.get(
+  '/reports/morale',
+  [
+    query('startDate').optional().isISO8601(),
+    query('endDate').optional().isISO8601(),
+    query('driverId').optional().isInt({ min: 1 }),
+    query('page').optional().isInt({ min: 1 }),
+    query('limit').optional().isInt({ min: 1, max: 500 })
+  ],
+  validateRequest,
+  getMoraleReport
 );
 
 export default router;
