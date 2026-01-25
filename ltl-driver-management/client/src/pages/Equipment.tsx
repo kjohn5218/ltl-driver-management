@@ -33,12 +33,6 @@ import {
 
 type TabType = 'trucks' | 'trailers' | 'dollies';
 
-const tabs: { id: TabType; label: string; icon: React.ReactNode }[] = [
-  { id: 'trucks', label: 'Trucks', icon: <Truck className="w-4 h-4" /> },
-  { id: 'trailers', label: 'Trailers', icon: <Container className="w-4 h-4" /> },
-  { id: 'dollies', label: 'Dollies', icon: <Link2 className="w-4 h-4" /> }
-];
-
 const statusFilterOptions: { value: EquipmentStatus | ''; label: string }[] = [
   { value: '', label: 'All Statuses' },
   { value: 'AVAILABLE', label: 'Available' },
@@ -520,26 +514,65 @@ export const Equipment: React.FC = () => {
       />
 
       {/* Tabs */}
-      <div className="border-b border-gray-200">
-        <nav className="-mb-px flex space-x-8">
-          {tabs.map((tab) => (
+      <div className="bg-white shadow rounded-lg">
+        <div className="border-b border-gray-200">
+          <nav className="flex -mb-px gap-1 p-1">
             <button
-              key={tab.id}
-              onClick={() => handleTabChange(tab.id)}
-              className={`
-                flex items-center py-4 px-1 border-b-2 font-medium text-sm
-                ${
-                  activeTab === tab.id
-                    ? 'border-indigo-500 text-indigo-600'
-                    : 'border-transparent text-gray-500 hover:text-gray-700 hover:border-gray-300'
-                }
-              `}
+              onClick={() => handleTabChange('trucks')}
+              className={`flex items-center px-6 py-3 text-sm font-medium rounded-t-lg transition-all ${
+                activeTab === 'trucks'
+                  ? 'bg-blue-100 text-blue-700 border-b-2 border-blue-500'
+                  : 'bg-blue-50 text-blue-600 hover:bg-blue-100 border-b-2 border-transparent'
+              }`}
             >
-              {tab.icon}
-              <span className="ml-2">{tab.label}</span>
+              <Truck className="w-4 h-4 mr-2" />
+              Trucks
+              <span className={`ml-2 px-2 py-0.5 rounded-full text-xs ${
+                activeTab === 'trucks'
+                  ? 'bg-blue-200 text-blue-800'
+                  : 'bg-blue-100 text-blue-700'
+              }`}>
+                {trucks.length}
+              </span>
             </button>
-          ))}
-        </nav>
+            <button
+              onClick={() => handleTabChange('trailers')}
+              className={`flex items-center px-6 py-3 text-sm font-medium rounded-t-lg transition-all ${
+                activeTab === 'trailers'
+                  ? 'bg-green-100 text-green-700 border-b-2 border-green-500'
+                  : 'bg-green-50 text-green-600 hover:bg-green-100 border-b-2 border-transparent'
+              }`}
+            >
+              <Container className="w-4 h-4 mr-2" />
+              Trailers
+              <span className={`ml-2 px-2 py-0.5 rounded-full text-xs ${
+                activeTab === 'trailers'
+                  ? 'bg-green-200 text-green-800'
+                  : 'bg-green-100 text-green-700'
+              }`}>
+                {trailers.length}
+              </span>
+            </button>
+            <button
+              onClick={() => handleTabChange('dollies')}
+              className={`flex items-center px-6 py-3 text-sm font-medium rounded-t-lg transition-all ${
+                activeTab === 'dollies'
+                  ? 'bg-orange-100 text-orange-700 border-b-2 border-orange-500'
+                  : 'bg-orange-50 text-orange-600 hover:bg-orange-100 border-b-2 border-transparent'
+              }`}
+            >
+              <Link2 className="w-4 h-4 mr-2" />
+              Dollies
+              <span className={`ml-2 px-2 py-0.5 rounded-full text-xs ${
+                activeTab === 'dollies'
+                  ? 'bg-orange-200 text-orange-800'
+                  : 'bg-orange-100 text-orange-700'
+              }`}>
+                {dollies.length}
+              </span>
+            </button>
+          </nav>
+        </div>
       </div>
 
       <div className="bg-white shadow rounded-lg">
