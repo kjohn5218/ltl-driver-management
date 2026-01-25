@@ -27,6 +27,7 @@ import {
   Edit,
   Trash2,
   Upload,
+  Download,
   Search,
   FileText,
   Link,
@@ -53,7 +54,18 @@ const RATE_METHODS: { value: RateMethod; label: string }[] = [
 
 const ACCESSORIAL_TYPES: { value: AccessorialType; label: string }[] = [
   { value: 'DROP_HOOK', label: 'Drop & Hook' },
+  { value: 'DROP_HOOK_SINGLE', label: 'Drop & Hook (Single)' },
+  { value: 'DROP_HOOK_DOUBLE_TRIPLE', label: 'Drop & Hook (Double/Triple)' },
   { value: 'CHAIN_UP', label: 'Chain Up' },
+  { value: 'WAIT_TIME', label: 'Wait Time' },
+  { value: 'SINGLE_TRAILER', label: 'Single Trailer' },
+  { value: 'DOUBLE_TRAILER', label: 'Double Trailer' },
+  { value: 'TRIPLE_TRAILER', label: 'Triple Trailer' },
+  { value: 'CUT_PAY', label: 'Cut Pay' },
+  { value: 'CUT_PAY_SINGLE_MILES', label: 'Cut Pay Miles (Single)' },
+  { value: 'CUT_PAY_DOUBLE_MILES', label: 'Cut Pay Miles (Double)' },
+  { value: 'CUT_PAY_TRIPLE_MILES', label: 'Cut Pay Miles (Triple)' },
+  { value: 'FUEL_SURCHARGE', label: 'Fuel Surcharge' },
   { value: 'LAYOVER', label: 'Layover' },
   { value: 'DETENTION', label: 'Detention' },
   { value: 'BREAKDOWN', label: 'Breakdown' },
@@ -62,9 +74,28 @@ const ACCESSORIAL_TYPES: { value: AccessorialType; label: string }[] = [
   { value: 'HAZMAT', label: 'Hazmat' },
   { value: 'TEAM_DRIVER', label: 'Team Driver' },
   { value: 'STOP_CHARGE', label: 'Stop Charge' },
-  { value: 'FUEL_SURCHARGE', label: 'Fuel Surcharge' },
   { value: 'OTHER', label: 'Other' }
 ];
+
+// Default rates interface
+interface DefaultRates {
+  id?: number;
+  baseRate?: number;
+  rateMethod?: string;
+  dropHook?: { rateAmount: number; rateMethod?: string };
+  dropHookSingle?: { rateAmount: number; rateMethod?: string };
+  dropHookDoubleTriple?: { rateAmount: number; rateMethod?: string };
+  chainUp?: { rateAmount: number; rateMethod?: string };
+  fuelSurcharge?: { rateAmount: number; rateMethod?: string };
+  waitTime?: { rateAmount: number; rateMethod?: string };
+  singleTrailer?: { rateAmount: number; rateMethod?: string };
+  doubleTrailer?: { rateAmount: number; rateMethod?: string };
+  tripleTrailer?: { rateAmount: number; rateMethod?: string };
+  cutPay?: { rateAmount: number; rateMethod?: string };
+  cutPaySingleMiles?: { rateAmount: number; rateMethod?: string };
+  cutPayDoubleMiles?: { rateAmount: number; rateMethod?: string };
+  cutPayTripleMiles?: { rateAmount: number; rateMethod?: string };
+}
 
 export const PayRules: React.FC = () => {
   const { user } = useAuth();
@@ -76,6 +107,12 @@ export const PayRules: React.FC = () => {
   const [drivers, setDrivers] = useState<CarrierDriver[]>([]);
   const [carriers, setCarriers] = useState<Carrier[]>([]);
   const [loading, setLoading] = useState(true);
+
+  // Default rates states
+  const [defaultRates, setDefaultRates] = useState<DefaultRates | null>(null);
+  const [systemFuelSurcharge, setSystemFuelSurcharge] = useState<number>(0);
+  const [isDefaultRatesModalOpen, setIsDefaultRatesModalOpen] = useState(false);
+  const [defaultRatesLoading, setDefaultRatesLoading] = useState(true);
 
   // Filter states
   const [searchTerm, setSearchTerm] = useState('');
@@ -114,6 +151,7 @@ export const PayRules: React.FC = () => {
 
   useEffect(() => {
     fetchReferenceData();
+    fetchDefaultRates();
   }, []);
 
   useEffect(() => {
@@ -123,6 +161,30 @@ export const PayRules: React.FC = () => {
   useEffect(() => {
     fetchRateCards();
   }, [currentPage, searchTerm, typeFilter, methodFilter, activeFilter]);
+
+  const fetchDefaultRates = async () => {
+    setDefaultRatesLoading(true);
+    try {
+      const response = await payRulesService.getDefaultRates();
+      setDefaultRates(response.defaultRates);
+      setSystemFuelSurcharge(response.systemFuelSurcharge || 0);
+    } catch (error) {
+      console.error('Failed to fetch default rates:', error);
+    } finally {
+      setDefaultRatesLoading(false);
+    }
+  };
+
+  const handleSaveDefaultRates = async (data: DefaultRates) => {
+    try {
+      await payRulesService.updateDefaultRates(data);
+      toast.success('Default rates updated successfully');
+      setIsDefaultRatesModalOpen(false);
+      fetchDefaultRates();
+    } catch (error: any) {
+      toast.error(error.response?.data?.message || 'Failed to update default rates');
+    }
+  };
 
   const fetchReferenceData = async () => {
     try {
@@ -540,12 +602,161 @@ export const PayRules: React.FC = () => {
     );
   };
 
+  const formatCurrencyDisplay = (amount: number | undefined, method?: string) => {
+    if (amount === undefined) return '-';
+    if (method === 'PERCENTAGE') return `${amount}%`;
+    if (method === 'HOURLY') return `$${amount.toFixed(2)}/hr`;
+    if (method === 'PER_MILE') return `$${amount.toFixed(2)}/mi`;
+    return `$${amount.toFixed(2)}`;
+  };
+
   return (
     <div className="space-y-6">
       <PageHeader
         title="Pay Rules"
         subtitle="Manage driver rates, carrier rates, linehaul profile rates, O/D pair rates, and accessorial charges"
       />
+
+      {/* Default Pay Rates Section */}
+      <div className="bg-white shadow rounded-lg">
+        <div className="px-6 py-4 border-b border-gray-200 flex items-center justify-between">
+          <div className="flex items-center space-x-2">
+            <Settings className="w-5 h-5 text-gray-500" />
+            <h2 className="text-lg font-medium text-gray-900">Default Pay Rates</h2>
+          </div>
+          {isAdmin && (
+            <button
+              onClick={() => setIsDefaultRatesModalOpen(true)}
+              className="inline-flex items-center px-3 py-1.5 text-sm text-indigo-600 border border-indigo-600 rounded hover:bg-indigo-50"
+            >
+              <Edit className="w-4 h-4 mr-1" />
+              Edit
+            </button>
+          )}
+        </div>
+
+        {defaultRatesLoading ? (
+          <div className="p-6 text-center text-gray-500">Loading default rates...</div>
+        ) : defaultRates ? (
+          <div className="p-6">
+            <div className="grid grid-cols-2 md:grid-cols-4 gap-4 mb-6">
+              <div className="bg-gray-50 rounded-lg p-4">
+                <div className="text-sm text-gray-500 mb-1">Base Rate</div>
+                <div className="text-lg font-semibold text-gray-900">
+                  {formatCurrencyDisplay(defaultRates.baseRate, defaultRates.rateMethod)}
+                </div>
+              </div>
+              <div className="bg-gray-50 rounded-lg p-4">
+                <div className="text-sm text-gray-500 mb-1">Fuel Surcharge*</div>
+                <div className="text-lg font-semibold text-purple-600">
+                  {systemFuelSurcharge}%
+                </div>
+              </div>
+              <div className="bg-gray-50 rounded-lg p-4">
+                <div className="text-sm text-gray-500 mb-1">Drop & Hook (Single)</div>
+                <div className="text-lg font-semibold text-gray-900">
+                  {formatCurrencyDisplay(defaultRates.dropHookSingle?.rateAmount)}
+                </div>
+              </div>
+              <div className="bg-gray-50 rounded-lg p-4">
+                <div className="text-sm text-gray-500 mb-1">Drop & Hook (Dbl/Trpl)</div>
+                <div className="text-lg font-semibold text-gray-900">
+                  {formatCurrencyDisplay(defaultRates.dropHookDoubleTriple?.rateAmount)}
+                </div>
+              </div>
+            </div>
+
+            <div className="grid grid-cols-2 md:grid-cols-4 gap-4 mb-6">
+              <div className="bg-gray-50 rounded-lg p-4">
+                <div className="text-sm text-gray-500 mb-1">Chain Up</div>
+                <div className="text-lg font-semibold text-gray-900">
+                  {formatCurrencyDisplay(defaultRates.chainUp?.rateAmount)}
+                </div>
+              </div>
+              <div className="bg-gray-50 rounded-lg p-4">
+                <div className="text-sm text-gray-500 mb-1">Wait Time</div>
+                <div className="text-lg font-semibold text-gray-900">
+                  {formatCurrencyDisplay(defaultRates.waitTime?.rateAmount, 'HOURLY')}
+                </div>
+              </div>
+              <div className="bg-gray-50 rounded-lg p-4">
+                <div className="text-sm text-gray-500 mb-1">Cut Pay</div>
+                <div className="text-lg font-semibold text-orange-600">
+                  {formatCurrencyDisplay(defaultRates.cutPay?.rateAmount, 'HOURLY')}
+                </div>
+              </div>
+              <div />
+            </div>
+
+            {/* Trailer Configuration Rates */}
+            <div className="border-t pt-4">
+              <h3 className="text-sm font-medium text-gray-700 mb-3">Trailer Configuration Rates</h3>
+              <div className="grid grid-cols-3 gap-4">
+                <div className="bg-blue-50 rounded-lg p-4 text-center">
+                  <div className="text-sm text-blue-600 mb-1">Single</div>
+                  <div className="text-lg font-semibold text-blue-800">
+                    {formatCurrencyDisplay(defaultRates.singleTrailer?.rateAmount, 'PER_MILE')}
+                  </div>
+                </div>
+                <div className="bg-blue-50 rounded-lg p-4 text-center">
+                  <div className="text-sm text-blue-600 mb-1">Double</div>
+                  <div className="text-lg font-semibold text-blue-800">
+                    {formatCurrencyDisplay(defaultRates.doubleTrailer?.rateAmount, 'PER_MILE')}
+                  </div>
+                </div>
+                <div className="bg-blue-50 rounded-lg p-4 text-center">
+                  <div className="text-sm text-blue-600 mb-1">Triple</div>
+                  <div className="text-lg font-semibold text-blue-800">
+                    {formatCurrencyDisplay(defaultRates.tripleTrailer?.rateAmount, 'PER_MILE')}
+                  </div>
+                </div>
+              </div>
+            </div>
+
+            {/* Cut Pay Miles Rates */}
+            <div className="border-t pt-4 mt-4">
+              <h3 className="text-sm font-medium text-gray-700 mb-3">Cut Pay Miles Rates</h3>
+              <div className="grid grid-cols-3 gap-4">
+                <div className="bg-orange-50 rounded-lg p-4 text-center">
+                  <div className="text-sm text-orange-600 mb-1">Single</div>
+                  <div className="text-lg font-semibold text-orange-800">
+                    {formatCurrencyDisplay(defaultRates.cutPaySingleMiles?.rateAmount, 'PER_MILE')}
+                  </div>
+                </div>
+                <div className="bg-orange-50 rounded-lg p-4 text-center">
+                  <div className="text-sm text-orange-600 mb-1">Double</div>
+                  <div className="text-lg font-semibold text-orange-800">
+                    {formatCurrencyDisplay(defaultRates.cutPayDoubleMiles?.rateAmount, 'PER_MILE')}
+                  </div>
+                </div>
+                <div className="bg-orange-50 rounded-lg p-4 text-center">
+                  <div className="text-sm text-orange-600 mb-1">Triple</div>
+                  <div className="text-lg font-semibold text-orange-800">
+                    {formatCurrencyDisplay(defaultRates.cutPayTripleMiles?.rateAmount, 'PER_MILE')}
+                  </div>
+                </div>
+              </div>
+            </div>
+
+            <p className="text-xs text-gray-400 mt-4">
+              * Fuel Surcharge is tied to system fuel surcharge rate (Settings &gt; Fuel Surcharge)
+            </p>
+          </div>
+        ) : (
+          <div className="p-6 text-center">
+            <p className="text-gray-500 mb-4">No default rates configured</p>
+            {isAdmin && (
+              <button
+                onClick={() => setIsDefaultRatesModalOpen(true)}
+                className="inline-flex items-center px-4 py-2 text-white bg-indigo-600 rounded-lg hover:bg-indigo-700"
+              >
+                <Plus className="w-4 h-4 mr-2" />
+                Configure Default Rates
+              </button>
+            )}
+          </div>
+        )}
+      </div>
 
       {/* Filters and Actions Bar */}
       <div className="bg-white shadow rounded-lg p-4">
@@ -1036,75 +1247,418 @@ export const PayRules: React.FC = () => {
         onClose={() => setIsImportModalOpen(false)}
         title="Import Pay Rules"
       >
-        <div className="space-y-4">
-          <p className="text-gray-600">
-            Upload a CSV or JSON file to import pay rules from your payroll system.
-          </p>
-          <div className="border-2 border-dashed border-gray-300 rounded-lg p-8 text-center">
-            <Upload className="w-12 h-12 mx-auto text-gray-400 mb-4" />
-            <p className="text-gray-600 mb-2">Drop your file here or click to browse</p>
-            <input
-              type="file"
-              accept=".csv,.json"
-              className="hidden"
-              id="import-file"
-              onChange={async (e) => {
-                const file = e.target.files?.[0];
-                if (!file) return;
-
-                try {
-                  const text = await file.text();
-                  let rateCards: ImportRateCardData[];
-
-                  if (file.name.endsWith('.json')) {
-                    const data = JSON.parse(text);
-                    rateCards = Array.isArray(data) ? data : data.rateCards;
-                  } else {
-                    const lines = text.split('\n');
-                    const headers = lines[0].split(',').map(h => h.trim());
-                    rateCards = lines.slice(1).filter(line => line.trim()).map(line => {
-                      const values = line.split(',');
-                      const obj: any = {};
-                      headers.forEach((h, i) => {
-                        obj[h] = values[i]?.trim();
-                      });
-                      return {
-                        rateType: obj.rateType || 'DRIVER',
-                        entityId: obj.entityId ? parseInt(obj.entityId) : undefined,
-                        linehaulProfileId: obj.linehaulProfileId ? parseInt(obj.linehaulProfileId) : undefined,
-                        rateMethod: obj.rateMethod || 'PER_MILE',
-                        rateAmount: parseFloat(obj.rateAmount) || 0,
-                        effectiveDate: obj.effectiveDate || new Date().toISOString().split('T')[0],
-                        externalRateId: obj.externalRateId
-                      };
-                    });
-                  }
-
-                  const result = await payRulesService.importRateCards(rateCards);
-                  toast.success(result.message);
-                  setIsImportModalOpen(false);
-                  fetchRateCards();
-                } catch (error: any) {
-                  toast.error(error.message || 'Failed to import file');
-                }
-              }}
-            />
-            <label
-              htmlFor="import-file"
-              className="inline-block px-4 py-2 text-indigo-600 border border-indigo-600 rounded-lg cursor-pointer hover:bg-indigo-50"
-            >
-              Select File
-            </label>
+        <div className="space-y-6">
+          {/* Step 1: Download Template */}
+          <div>
+            <div className="flex items-center gap-2 mb-3">
+              <div className="w-6 h-6 rounded-full bg-indigo-600 text-white flex items-center justify-center text-sm font-medium">
+                1
+              </div>
+              <h3 className="text-sm font-medium text-gray-900">Download Template</h3>
+            </div>
+            <div className="bg-gray-50 border border-gray-200 rounded-lg p-4">
+              <p className="text-sm text-gray-600 mb-3">
+                Download the CSV template to ensure your data is formatted correctly for import.
+              </p>
+              <button
+                onClick={() => {
+                  const headers = ['rateType', 'entityId', 'linehaulProfileId', 'originTerminalId', 'destinationTerminalId', 'rateMethod', 'rateAmount', 'minimumAmount', 'maximumAmount', 'effectiveDate', 'expirationDate', 'equipmentType', 'priority', 'notes', 'externalRateId'];
+                  const exampleRows = [
+                    ['DRIVER', '123', '', '', '', 'PER_MILE', '0.55', '', '', '2026-01-01', '', '', '5', 'Driver rate example', 'EXT-001'],
+                    ['LINEHAUL', '', '45', '', '', 'FLAT_RATE', '350.00', '300.00', '500.00', '2026-01-01', '2026-12-31', '', '3', 'Linehaul profile rate', 'EXT-002'],
+                    ['OD_PAIR', '', '', '10', '20', 'PER_MILE', '0.60', '', '', '2026-01-01', '', '', '4', 'O/D pair rate example', 'EXT-003']
+                  ];
+                  const csvContent = [headers.join(','), ...exampleRows.map(row => row.join(','))].join('\n');
+                  const blob = new Blob([csvContent], { type: 'text/csv' });
+                  const url = window.URL.createObjectURL(blob);
+                  const link = document.createElement('a');
+                  link.href = url;
+                  link.download = 'pay_rules_import_template.csv';
+                  document.body.appendChild(link);
+                  link.click();
+                  document.body.removeChild(link);
+                  window.URL.revokeObjectURL(url);
+                  toast.success('Template downloaded');
+                }}
+                className="inline-flex items-center px-4 py-2 text-indigo-600 border border-indigo-600 rounded-lg hover:bg-indigo-50"
+              >
+                <Download className="w-4 h-4 mr-2" />
+                Download CSV Template
+              </button>
+            </div>
           </div>
-          <div className="text-sm text-gray-500">
-            <p className="font-medium mb-1">Supported formats:</p>
-            <ul className="list-disc list-inside">
-              <li>CSV with headers: rateType, entityId, rateMethod, rateAmount, effectiveDate</li>
-              <li>JSON array of rate card objects</li>
+
+          {/* Step 2: Upload File */}
+          <div>
+            <div className="flex items-center gap-2 mb-3">
+              <div className="w-6 h-6 rounded-full bg-indigo-600 text-white flex items-center justify-center text-sm font-medium">
+                2
+              </div>
+              <h3 className="text-sm font-medium text-gray-900">Upload File</h3>
+            </div>
+            <div className="border-2 border-dashed border-gray-300 rounded-lg p-6 text-center">
+              <Upload className="w-10 h-10 mx-auto text-gray-400 mb-3" />
+              <p className="text-sm text-gray-600 mb-2">Drop your file here or click to browse</p>
+              <input
+                type="file"
+                accept=".csv,.json"
+                className="hidden"
+                id="import-file"
+                onChange={async (e) => {
+                  const file = e.target.files?.[0];
+                  if (!file) return;
+
+                  try {
+                    const text = await file.text();
+                    let rateCards: ImportRateCardData[];
+
+                    if (file.name.endsWith('.json')) {
+                      const data = JSON.parse(text);
+                      rateCards = Array.isArray(data) ? data : data.rateCards;
+                    } else {
+                      const lines = text.split('\n');
+                      const headers = lines[0].split(',').map(h => h.trim());
+                      rateCards = lines.slice(1).filter(line => line.trim()).map(line => {
+                        const values = line.split(',');
+                        const obj: any = {};
+                        headers.forEach((h, i) => {
+                          obj[h] = values[i]?.trim();
+                        });
+                        return {
+                          rateType: obj.rateType || 'DRIVER',
+                          entityId: obj.entityId ? parseInt(obj.entityId) : undefined,
+                          linehaulProfileId: obj.linehaulProfileId ? parseInt(obj.linehaulProfileId) : undefined,
+                          originTerminalId: obj.originTerminalId ? parseInt(obj.originTerminalId) : undefined,
+                          destinationTerminalId: obj.destinationTerminalId ? parseInt(obj.destinationTerminalId) : undefined,
+                          rateMethod: obj.rateMethod || 'PER_MILE',
+                          rateAmount: parseFloat(obj.rateAmount) || 0,
+                          minimumAmount: obj.minimumAmount ? parseFloat(obj.minimumAmount) : undefined,
+                          maximumAmount: obj.maximumAmount ? parseFloat(obj.maximumAmount) : undefined,
+                          effectiveDate: obj.effectiveDate || new Date().toISOString().split('T')[0],
+                          expirationDate: obj.expirationDate || undefined,
+                          equipmentType: obj.equipmentType || undefined,
+                          priority: obj.priority ? parseInt(obj.priority) : undefined,
+                          notes: obj.notes || undefined,
+                          externalRateId: obj.externalRateId
+                        };
+                      });
+                    }
+
+                    const result = await payRulesService.importRateCards(rateCards);
+                    toast.success(result.message);
+                    setIsImportModalOpen(false);
+                    fetchRateCards();
+                  } catch (error: any) {
+                    toast.error(error.message || 'Failed to import file');
+                  }
+                }}
+              />
+              <label
+                htmlFor="import-file"
+                className="inline-block px-4 py-2 text-indigo-600 border border-indigo-600 rounded-lg cursor-pointer hover:bg-indigo-50"
+              >
+                Select File
+              </label>
+            </div>
+          </div>
+
+          {/* Supported formats info */}
+          <div className="bg-blue-50 border border-blue-200 rounded-lg p-4">
+            <p className="text-sm font-medium text-blue-800 mb-2">Supported Rate Types:</p>
+            <ul className="text-sm text-blue-700 grid grid-cols-2 gap-1">
+              <li><span className="font-mono text-xs bg-blue-100 px-1 rounded">DRIVER</span> - Driver-specific rate</li>
+              <li><span className="font-mono text-xs bg-blue-100 px-1 rounded">CARRIER</span> - Carrier rate</li>
+              <li><span className="font-mono text-xs bg-blue-100 px-1 rounded">LINEHAUL</span> - Linehaul profile rate</li>
+              <li><span className="font-mono text-xs bg-blue-100 px-1 rounded">OD_PAIR</span> - Origin/Destination pair</li>
+              <li><span className="font-mono text-xs bg-blue-100 px-1 rounded">DEFAULT</span> - Default fallback rate</li>
+            </ul>
+            <p className="text-sm font-medium text-blue-800 mt-3 mb-2">Supported Rate Methods:</p>
+            <ul className="text-sm text-blue-700 grid grid-cols-2 gap-1">
+              <li><span className="font-mono text-xs bg-blue-100 px-1 rounded">PER_MILE</span></li>
+              <li><span className="font-mono text-xs bg-blue-100 px-1 rounded">FLAT_RATE</span></li>
+              <li><span className="font-mono text-xs bg-blue-100 px-1 rounded">HOURLY</span></li>
+              <li><span className="font-mono text-xs bg-blue-100 px-1 rounded">PERCENTAGE</span></li>
             </ul>
           </div>
         </div>
       </Modal>
+
+      {/* Default Rates Modal */}
+      <Modal
+        isOpen={isDefaultRatesModalOpen}
+        onClose={() => setIsDefaultRatesModalOpen(false)}
+        title="Edit Default Pay Rates"
+      >
+        <DefaultRatesForm
+          initialData={defaultRates}
+          systemFuelSurcharge={systemFuelSurcharge}
+          onSave={handleSaveDefaultRates}
+          onCancel={() => setIsDefaultRatesModalOpen(false)}
+        />
+      </Modal>
+    </div>
+  );
+};
+
+// Default Rates Form Component
+interface DefaultRatesFormProps {
+  initialData: DefaultRates | null;
+  systemFuelSurcharge: number;
+  onSave: (data: DefaultRates) => void;
+  onCancel: () => void;
+}
+
+const DefaultRatesForm: React.FC<DefaultRatesFormProps> = ({
+  initialData,
+  systemFuelSurcharge,
+  onSave,
+  onCancel
+}) => {
+  const [formData, setFormData] = useState<DefaultRates>({
+    baseRate: initialData?.baseRate || 0,
+    rateMethod: initialData?.rateMethod || 'PER_MILE',
+    dropHook: initialData?.dropHook || { rateAmount: 0 },
+    dropHookSingle: initialData?.dropHookSingle || { rateAmount: 0 },
+    dropHookDoubleTriple: initialData?.dropHookDoubleTriple || { rateAmount: 0 },
+    chainUp: initialData?.chainUp || { rateAmount: 0 },
+    waitTime: initialData?.waitTime || { rateAmount: 0, rateMethod: 'HOURLY' },
+    singleTrailer: initialData?.singleTrailer || { rateAmount: 0, rateMethod: 'PER_MILE' },
+    doubleTrailer: initialData?.doubleTrailer || { rateAmount: 0, rateMethod: 'PER_MILE' },
+    tripleTrailer: initialData?.tripleTrailer || { rateAmount: 0, rateMethod: 'PER_MILE' },
+    cutPay: initialData?.cutPay || { rateAmount: 0, rateMethod: 'HOURLY' },
+    cutPaySingleMiles: initialData?.cutPaySingleMiles || { rateAmount: 0, rateMethod: 'PER_MILE' },
+    cutPayDoubleMiles: initialData?.cutPayDoubleMiles || { rateAmount: 0, rateMethod: 'PER_MILE' },
+    cutPayTripleMiles: initialData?.cutPayTripleMiles || { rateAmount: 0, rateMethod: 'PER_MILE' }
+  });
+
+  const handleSubmit = () => {
+    onSave(formData);
+  };
+
+  return (
+    <div className="space-y-6">
+      {/* Base Rate Section */}
+      <div className="border-b pb-4">
+        <h3 className="text-sm font-medium text-gray-700 mb-3">Base Rate</h3>
+        <div className="grid grid-cols-2 gap-4">
+          <div>
+            <label className="block text-xs text-gray-500 mb-1">Rate Method</label>
+            <select
+              value={formData.rateMethod}
+              onChange={(e) => setFormData({ ...formData, rateMethod: e.target.value })}
+              className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-indigo-500 text-sm"
+            >
+              <option value="PER_MILE">Per Mile</option>
+              <option value="FLAT_RATE">Flat Rate</option>
+              <option value="HOURLY">Hourly</option>
+            </select>
+          </div>
+          <div>
+            <label className="block text-xs text-gray-500 mb-1">Amount ($)</label>
+            <input
+              type="number"
+              step="0.01"
+              value={formData.baseRate || ''}
+              onChange={(e) => setFormData({ ...formData, baseRate: parseFloat(e.target.value) || 0 })}
+              className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-indigo-500 text-sm"
+            />
+          </div>
+        </div>
+      </div>
+
+      {/* Fuel Surcharge (Read-only, tied to system) */}
+      <div className="border-b pb-4">
+        <h3 className="text-sm font-medium text-gray-700 mb-3">Fuel Surcharge</h3>
+        <div className="bg-purple-50 p-3 rounded-lg">
+          <div className="flex items-center justify-between">
+            <span className="text-sm text-purple-700">Current System Rate:</span>
+            <span className="text-lg font-semibold text-purple-700">{systemFuelSurcharge}%</span>
+          </div>
+          <p className="text-xs text-purple-500 mt-1">
+            This rate is managed in Settings &gt; Fuel Surcharge
+          </p>
+        </div>
+      </div>
+
+      {/* Accessorial Rates */}
+      <div className="border-b pb-4">
+        <h3 className="text-sm font-medium text-gray-700 mb-3">Accessorial Rates</h3>
+        <div className="grid grid-cols-2 gap-4">
+          <div>
+            <label className="block text-xs text-gray-500 mb-1">Drop & Hook - Single ($)</label>
+            <input
+              type="number"
+              step="0.01"
+              value={formData.dropHookSingle?.rateAmount || ''}
+              onChange={(e) => setFormData({
+                ...formData,
+                dropHookSingle: { ...formData.dropHookSingle, rateAmount: parseFloat(e.target.value) || 0 }
+              })}
+              className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-indigo-500 text-sm"
+            />
+          </div>
+          <div>
+            <label className="block text-xs text-gray-500 mb-1">Drop & Hook - Dbl/Trpl ($)</label>
+            <input
+              type="number"
+              step="0.01"
+              value={formData.dropHookDoubleTriple?.rateAmount || ''}
+              onChange={(e) => setFormData({
+                ...formData,
+                dropHookDoubleTriple: { ...formData.dropHookDoubleTriple, rateAmount: parseFloat(e.target.value) || 0 }
+              })}
+              className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-indigo-500 text-sm"
+            />
+          </div>
+          <div>
+            <label className="block text-xs text-gray-500 mb-1">Chain Up ($)</label>
+            <input
+              type="number"
+              step="0.01"
+              value={formData.chainUp?.rateAmount || ''}
+              onChange={(e) => setFormData({
+                ...formData,
+                chainUp: { ...formData.chainUp, rateAmount: parseFloat(e.target.value) || 0 }
+              })}
+              className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-indigo-500 text-sm"
+            />
+          </div>
+          <div>
+            <label className="block text-xs text-gray-500 mb-1">Wait Time ($/hr)</label>
+            <input
+              type="number"
+              step="0.01"
+              value={formData.waitTime?.rateAmount || ''}
+              onChange={(e) => setFormData({
+                ...formData,
+                waitTime: { rateAmount: parseFloat(e.target.value) || 0, rateMethod: 'HOURLY' }
+              })}
+              className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-indigo-500 text-sm"
+            />
+          </div>
+          <div>
+            <label className="block text-xs text-gray-500 mb-1">Cut Pay ($/hr)</label>
+            <input
+              type="number"
+              step="0.01"
+              value={formData.cutPay?.rateAmount || ''}
+              onChange={(e) => setFormData({
+                ...formData,
+                cutPay: { rateAmount: parseFloat(e.target.value) || 0, rateMethod: 'HOURLY' }
+              })}
+              className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-indigo-500 text-sm"
+            />
+          </div>
+        </div>
+      </div>
+
+      {/* Trailer Configuration Rates */}
+      <div>
+        <h3 className="text-sm font-medium text-gray-700 mb-3">Trailer Configuration Rates ($/mi)</h3>
+        <div className="grid grid-cols-3 gap-4">
+          <div>
+            <label className="block text-xs text-gray-500 mb-1">Single</label>
+            <input
+              type="number"
+              step="0.01"
+              value={formData.singleTrailer?.rateAmount || ''}
+              onChange={(e) => setFormData({
+                ...formData,
+                singleTrailer: { rateAmount: parseFloat(e.target.value) || 0, rateMethod: 'PER_MILE' }
+              })}
+              className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-indigo-500 text-sm"
+            />
+          </div>
+          <div>
+            <label className="block text-xs text-gray-500 mb-1">Double</label>
+            <input
+              type="number"
+              step="0.01"
+              value={formData.doubleTrailer?.rateAmount || ''}
+              onChange={(e) => setFormData({
+                ...formData,
+                doubleTrailer: { rateAmount: parseFloat(e.target.value) || 0, rateMethod: 'PER_MILE' }
+              })}
+              className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-indigo-500 text-sm"
+            />
+          </div>
+          <div>
+            <label className="block text-xs text-gray-500 mb-1">Triple</label>
+            <input
+              type="number"
+              step="0.01"
+              value={formData.tripleTrailer?.rateAmount || ''}
+              onChange={(e) => setFormData({
+                ...formData,
+                tripleTrailer: { rateAmount: parseFloat(e.target.value) || 0, rateMethod: 'PER_MILE' }
+              })}
+              className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-indigo-500 text-sm"
+            />
+          </div>
+        </div>
+      </div>
+
+      {/* Cut Pay Miles Rates */}
+      <div className="border-b pb-4">
+        <h3 className="text-sm font-medium text-gray-700 mb-3">Cut Pay Miles Rates ($/mi)</h3>
+        <div className="grid grid-cols-3 gap-4">
+          <div>
+            <label className="block text-xs text-gray-500 mb-1">Single</label>
+            <input
+              type="number"
+              step="0.01"
+              value={formData.cutPaySingleMiles?.rateAmount || ''}
+              onChange={(e) => setFormData({
+                ...formData,
+                cutPaySingleMiles: { rateAmount: parseFloat(e.target.value) || 0, rateMethod: 'PER_MILE' }
+              })}
+              className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-indigo-500 text-sm"
+            />
+          </div>
+          <div>
+            <label className="block text-xs text-gray-500 mb-1">Double</label>
+            <input
+              type="number"
+              step="0.01"
+              value={formData.cutPayDoubleMiles?.rateAmount || ''}
+              onChange={(e) => setFormData({
+                ...formData,
+                cutPayDoubleMiles: { rateAmount: parseFloat(e.target.value) || 0, rateMethod: 'PER_MILE' }
+              })}
+              className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-indigo-500 text-sm"
+            />
+          </div>
+          <div>
+            <label className="block text-xs text-gray-500 mb-1">Triple</label>
+            <input
+              type="number"
+              step="0.01"
+              value={formData.cutPayTripleMiles?.rateAmount || ''}
+              onChange={(e) => setFormData({
+                ...formData,
+                cutPayTripleMiles: { rateAmount: parseFloat(e.target.value) || 0, rateMethod: 'PER_MILE' }
+              })}
+              className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-indigo-500 text-sm"
+            />
+          </div>
+        </div>
+      </div>
+
+      {/* Buttons */}
+      <div className="flex justify-end space-x-3 pt-4 border-t">
+        <button
+          onClick={onCancel}
+          className="px-4 py-2 text-gray-700 border border-gray-300 rounded-lg hover:bg-gray-50"
+        >
+          Cancel
+        </button>
+        <button
+          onClick={handleSubmit}
+          className="px-4 py-2 text-white bg-indigo-600 rounded-lg hover:bg-indigo-700"
+        >
+          Save Default Rates
+        </button>
+      </div>
     </div>
   );
 };
