@@ -3,17 +3,28 @@ import { useQuery, useQueryClient } from '@tanstack/react-query';
 import { api } from '../services/api';
 import { Location } from '../types';
 import { Plus, Search, Edit, Eye, Trash2, MapPin, Clock, Filter, X, ChevronUp, ChevronDown, ChevronsUpDown } from 'lucide-react';
+import { usePersistedFilters } from '../hooks/usePersistedFilters';
 
 export const Locations: React.FC = () => {
   const queryClient = useQueryClient();
-  const [searchTerm, setSearchTerm] = useState('');
-  const [activeFilter, setActiveFilter] = useState('all');
+
+  // Filters - persisted to localStorage
+  const [filters, , updateFilter] = usePersistedFilters('locations-filters', {
+    searchTerm: '',
+    activeFilter: 'all',
+    sortColumn: 'code',
+    sortDirection: 'asc' as 'asc' | 'desc',
+  });
+  const { searchTerm, activeFilter, sortColumn, sortDirection } = filters;
+  const setSearchTerm = (v: string) => updateFilter('searchTerm', v);
+  const setActiveFilter = (v: string) => updateFilter('activeFilter', v);
+  const setSortColumn = (v: string) => updateFilter('sortColumn', v);
+  const setSortDirection = (v: 'asc' | 'desc') => updateFilter('sortDirection', v);
+
   const [viewingLocation, setViewingLocation] = useState<Location | null>(null);
   const [editingLocation, setEditingLocation] = useState<Location | null>(null);
   const [deletingLocation, setDeletingLocation] = useState<Location | null>(null);
   const [showAddModal, setShowAddModal] = useState(false);
-  const [sortColumn, setSortColumn] = useState<string>('code');
-  const [sortDirection, setSortDirection] = useState<'asc' | 'desc'>('asc');
 
   const { data: locationsData, isLoading, error } = useQuery({
     queryKey: ['locations', searchTerm, activeFilter],

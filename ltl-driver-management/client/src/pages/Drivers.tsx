@@ -13,7 +13,8 @@ import { carrierService } from '../services/carrierService';
 import { CarrierDriver, Carrier } from '../types';
 import { useAuth } from '../contexts/AuthContext';
 import { toast } from 'react-hot-toast';
-import { Plus, Edit, Trash2, Phone, Mail, Truck, Upload } from 'lucide-react';
+import { Plus, Edit, Trash2, Phone, Mail, Truck, Upload, MapPin } from 'lucide-react';
+import { usePersistedState } from '../hooks/usePersistedFilters';
 
 export const Drivers: React.FC = () => {
   const navigate = useNavigate();
@@ -21,7 +22,7 @@ export const Drivers: React.FC = () => {
   const [drivers, setDrivers] = useState<CarrierDriver[]>([]);
   const [carriers, setCarriers] = useState<Carrier[]>([]);
   const [loading, setLoading] = useState(true);
-  const [searchTerm, setSearchTerm] = useState('');
+  const [searchTerm, setSearchTerm] = usePersistedState('drivers-search', '');
   const [currentPage, setCurrentPage] = useState(1);
   const [totalPages, setTotalPages] = useState(1);
   const [isCreateModalOpen, setIsCreateModalOpen] = useState(false);
@@ -157,6 +158,29 @@ export const Drivers: React.FC = () => {
             <>
               <Mail className="w-4 h-4 mr-1" />
               {driver.email}
+            </>
+          ) : (
+            '-'
+          )}
+        </div>
+      )
+    },
+    {
+      header: 'Location',
+      accessor: 'locationId' as keyof CarrierDriver,
+      cell: (driver: CarrierDriver) => (
+        <div className="flex items-center text-gray-600">
+          {driver.location ? (
+            <>
+              <MapPin className="w-4 h-4 mr-1" />
+              <span title={driver.location.name || driver.location.code}>
+                {driver.location.code}
+                {driver.location.city && driver.location.state && (
+                  <span className="text-gray-400 ml-1">
+                    ({driver.location.city}, {driver.location.state})
+                  </span>
+                )}
+              </span>
             </>
           ) : (
             '-'

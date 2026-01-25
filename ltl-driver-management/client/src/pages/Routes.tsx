@@ -1,19 +1,33 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useMemo } from 'react';
 import { useQuery, useQueryClient } from '@tanstack/react-query';
 import { api } from '../services/api';
-import { Route } from '../types';
-import { Plus, Search, Edit, Eye, Trash2, MapPin, Clock, DollarSign, Filter, X, Calculator, Copy } from 'lucide-react';
+import { Route, Terminal } from '../types';
+import { Plus, Search, Edit, Eye, Trash2, MapPin, Clock, DollarSign, Filter, X, Calculator, Copy, ChevronDown, ChevronUp } from 'lucide-react';
 import { calculateRoute, calculateArrivalTime, formatRunTime, hasAddressInfo } from '../utils/routeCalculations';
 import { LocationWithTooltip, RouteDetails } from '../components/LocationDisplay';
 import { LocationAutocomplete } from '../components/LocationAutocomplete';
 import { Location } from '../types';
+import { linehaulProfileService } from '../services/linehaulProfileService';
+import { terminalService } from '../services/terminalService';
+import { locationService } from '../services/locationService';
+import toast from 'react-hot-toast';
+import { usePersistedFilters } from '../hooks/usePersistedFilters';
 
 
 export const Routes: React.FC = () => {
   const queryClient = useQueryClient();
-  const [searchTerm, setSearchTerm] = useState('');
-  const [originFilter, setOriginFilter] = useState('');
-  const [activeFilter, setActiveFilter] = useState('all');
+
+  // Filters - persisted to localStorage
+  const [filters, , updateFilter] = usePersistedFilters('routes-filters', {
+    searchTerm: '',
+    originFilter: '',
+    activeFilter: 'all',
+  });
+  const { searchTerm, originFilter, activeFilter } = filters;
+  const setSearchTerm = (v: string) => updateFilter('searchTerm', v);
+  const setOriginFilter = (v: string) => updateFilter('originFilter', v);
+  const setActiveFilter = (v: string) => updateFilter('activeFilter', v);
+
   const [viewingRoute, setViewingRoute] = useState<Route | null>(null);
   const [editingRoute, setEditingRoute] = useState<Route | null>(null);
   const [deletingRoute, setDeletingRoute] = useState<Route | null>(null);
@@ -136,15 +150,15 @@ export const Routes: React.FC = () => {
       {/* Header */}
       <div className="flex justify-between items-center">
         <div>
-          <h1 className="text-2xl font-bold text-gray-900">Routes</h1>
-          <p className="text-gray-600">Manage routes and schedules</p>
+          <h1 className="text-2xl font-bold text-gray-900">Linehaul Profiles</h1>
+          <p className="text-gray-600">Manage linehaul profiles and schedules</p>
         </div>
         <button 
           onClick={handleOpenAddModal}
           className="btn-primary flex items-center gap-2"
         >
           <Plus className="w-4 h-4" />
-          Add Route
+          Add Linehaul Profile
         </button>
       </div>
 
@@ -154,7 +168,7 @@ export const Routes: React.FC = () => {
           <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 text-gray-400 w-4 h-4" />
           <input
             type="text"
-            placeholder="Search routes..."
+            placeholder="Search linehaul profiles..."
             className="w-full pl-10 pr-4 py-2 border border-gray-300 rounded-md focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
             value={searchTerm}
             onChange={(e) => setSearchTerm(e.target.value)}
@@ -175,7 +189,7 @@ export const Routes: React.FC = () => {
           value={activeFilter}
           onChange={(e) => setActiveFilter(e.target.value)}
         >
-          <option value="all">All Routes</option>
+          <option value="all">All Linehaul Profiles</option>
           <option value="active">Active Only</option>
           <option value="inactive">Inactive Only</option>
         </select>
@@ -187,7 +201,7 @@ export const Routes: React.FC = () => {
           <thead className="bg-gray-50">
             <tr>
               <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
-                Route
+                Linehaul Name
               </th>
               <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
                 Origin → Destination
@@ -255,21 +269,21 @@ export const Routes: React.FC = () => {
                     <button 
                       onClick={() => handleEditRoute(route)}
                       className="text-gray-500 hover:text-blue-600 transition-colors" 
-                      title="Edit Route"
+                      title="Edit Linehaul Profile"
                     >
                       <Edit className="w-4 h-4" />
                     </button>
                     <button 
                       onClick={() => handleCopyRoute(route)}
                       className="text-gray-500 hover:text-green-600 transition-colors" 
-                      title="Copy Route"
+                      title="Copy Linehaul Profile"
                     >
                       <Copy className="w-4 h-4" />
                     </button>
                     <button 
                       onClick={() => handleDeleteRoute(route)}
                       className="text-gray-500 hover:text-red-600 transition-colors" 
-                      title="Delete Route"
+                      title="Delete Linehaul Profile"
                     >
                       <Trash2 className="w-4 h-4" />
                     </button>
@@ -284,9 +298,9 @@ export const Routes: React.FC = () => {
       {filteredRoutes.length === 0 && !isLoading && (
         <div className="text-center py-12">
           <p className="text-gray-500">
-            {routes.length === 0 
-              ? "No routes available. Please check your connection or contact support."
-              : "No routes found matching your search criteria."
+            {routes.length === 0
+              ? "No linehaul profiles available. Please check your connection or contact support."
+              : "No linehaul profiles found matching your search criteria."
             }
           </p>
           <p className="text-sm text-gray-400 mt-2">
@@ -350,7 +364,7 @@ const RouteViewModal: React.FC<RouteViewModalProps> = ({ route, onClose }) => {
     <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50">
       <div className="bg-white rounded-lg p-6 w-full max-w-2xl max-h-[90vh] overflow-y-auto">
         <div className="flex justify-between items-center mb-6">
-          <h2 className="text-xl font-bold text-gray-900">Route Details #{route.id}</h2>
+          <h2 className="text-xl font-bold text-gray-900">Linehaul Profile Details #{route.id}</h2>
           <button 
             onClick={onClose}
             className="text-gray-400 hover:text-gray-600"
@@ -472,9 +486,98 @@ const RouteEditModal: React.FC<RouteEditModalProps> = ({ route, onClose, onSave 
     departureTime: route.departureTime || '',
     arrivalTime: route.arrivalTime || ''
   });
-  
+
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [isCalculating, setIsCalculating] = useState(false);
+
+  // Okay to Load/Dispatch state
+  const [okayToLoadIds, setOkayToLoadIds] = useState<number[]>([]);
+  const [okayToDispatchIds, setOkayToDispatchIds] = useState<number[]>([]);
+  const [showOkayToLoad, setShowOkayToLoad] = useState(false);
+  const [showOkayToDispatch, setShowOkayToDispatch] = useState(false);
+  const [terminalSearch, setTerminalSearch] = useState('');
+
+  // Fetch terminal locations for checkbox lists (locations with Physical or Virtual Terminal checked)
+  const { data: allTerminals } = useQuery({
+    queryKey: ['terminal-locations'],
+    queryFn: () => locationService.getTerminalLocations()
+  });
+
+  // Fetch existing okay-to-load terminals
+  const { data: okayToLoadData } = useQuery({
+    queryKey: ['okay-to-load', route.id],
+    queryFn: () => linehaulProfileService.getOkayToLoadTerminals(route.id),
+    enabled: !!route.id
+  });
+
+  // Fetch existing okay-to-dispatch terminals
+  const { data: okayToDispatchData } = useQuery({
+    queryKey: ['okay-to-dispatch', route.id],
+    queryFn: () => linehaulProfileService.getOkayToDispatchTerminals(route.id),
+    enabled: !!route.id
+  });
+
+  // Initialize okay-to-load IDs from fetched data
+  useEffect(() => {
+    if (okayToLoadData?.okayToLoadTerminals) {
+      setOkayToLoadIds(okayToLoadData.okayToLoadTerminals.map(t => t.id));
+    }
+  }, [okayToLoadData]);
+
+  // Initialize okay-to-dispatch IDs from fetched data
+  useEffect(() => {
+    if (okayToDispatchData?.okayToDispatchTerminals) {
+      setOkayToDispatchIds(okayToDispatchData.okayToDispatchTerminals.map(t => t.id));
+    }
+  }, [okayToDispatchData]);
+
+  // Filter terminals based on search
+  const filteredTerminals = useMemo(() => {
+    if (!allTerminals) return [];
+    if (!terminalSearch) return allTerminals;
+    const search = terminalSearch.toLowerCase();
+    return allTerminals.filter(t =>
+      t.code.toLowerCase().includes(search) ||
+      (t.name && t.name.toLowerCase().includes(search)) ||
+      (t.city && t.city.toLowerCase().includes(search))
+    );
+  }, [allTerminals, terminalSearch]);
+
+  // Toggle terminal in okay-to-load
+  const toggleOkayToLoad = (terminalId: number) => {
+    setOkayToLoadIds(prev =>
+      prev.includes(terminalId)
+        ? prev.filter(id => id !== terminalId)
+        : [...prev, terminalId]
+    );
+  };
+
+  // Toggle terminal in okay-to-dispatch
+  const toggleOkayToDispatch = (terminalId: number) => {
+    setOkayToDispatchIds(prev =>
+      prev.includes(terminalId)
+        ? prev.filter(id => id !== terminalId)
+        : [...prev, terminalId]
+    );
+  };
+
+  // Select/deselect all terminals for okay-to-load
+  const selectAllOkayToLoad = () => {
+    if (filteredTerminals.length === okayToLoadIds.length) {
+      setOkayToLoadIds([]);
+    } else {
+      setOkayToLoadIds(filteredTerminals.map(t => t.id));
+    }
+  };
+
+  // Select/deselect all terminals for okay-to-dispatch
+  const selectAllOkayToDispatch = () => {
+    if (filteredTerminals.length === okayToDispatchIds.length) {
+      setOkayToDispatchIds([]);
+    } else {
+      setOkayToDispatchIds(filteredTerminals.map(t => t.id));
+    }
+  };
 
   // Auto-calculate arrival time when departure time or run time changes
   useEffect(() => {
@@ -606,10 +709,22 @@ const RouteEditModal: React.FC<RouteEditModalProps> = ({ route, onClose, onSave 
       };
       
       const response = await api.put(`/routes/${route.id}`, payload);
+
+      // Save okay-to-load and okay-to-dispatch terminals
+      try {
+        await Promise.all([
+          linehaulProfileService.updateOkayToLoadTerminals(route.id, okayToLoadIds),
+          linehaulProfileService.updateOkayToDispatchTerminals(route.id, okayToDispatchIds)
+        ]);
+      } catch (terminalError) {
+        console.error('Error saving terminal selections:', terminalError);
+        toast.error('Route saved but terminal selections may not have been updated');
+      }
+
       onSave(response.data);
     } catch (error) {
       console.error('Error updating route:', error);
-      // TODO: Add proper error handling similar to AddRouteModal
+      toast.error('Failed to update linehaul profile');
     } finally {
       setIsSubmitting(false);
     }
@@ -619,7 +734,7 @@ const RouteEditModal: React.FC<RouteEditModalProps> = ({ route, onClose, onSave 
     <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50">
       <div className="bg-white rounded-lg p-6 w-full max-w-2xl max-h-[90vh] overflow-y-auto">
         <div className="flex justify-between items-center mb-6">
-          <h2 className="text-xl font-bold text-gray-900">Edit Route #{route.id}</h2>
+          <h2 className="text-xl font-bold text-gray-900">Edit Linehaul Profile #{route.id}</h2>
           <button 
             onClick={onClose}
             className="text-gray-400 hover:text-gray-600"
@@ -630,7 +745,7 @@ const RouteEditModal: React.FC<RouteEditModalProps> = ({ route, onClose, onSave 
         
         <form onSubmit={handleSubmit} className="space-y-4">
           <div>
-            <label className="block text-sm font-medium text-gray-700 mb-1">Route Name</label>
+            <label className="block text-sm font-medium text-gray-700 mb-1">Linehaul Name</label>
             <input
               type="text"
               required
@@ -827,18 +942,6 @@ const RouteEditModal: React.FC<RouteEditModalProps> = ({ route, onClose, onSave 
           </div>
 
           <div>
-            <label className="block text-sm font-medium text-gray-700 mb-1">Standard Rate ($)</label>
-            <input
-              type="number"
-              step="0.01"
-              value={formData.standardRate}
-              onChange={(e) => setFormData({ ...formData, standardRate: e.target.value })}
-              className="w-full px-3 py-2 border border-gray-300 rounded-md focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
-              placeholder="Optional"
-            />
-          </div>
-
-          <div>
             <label className="block text-sm font-medium text-gray-700 mb-1">Frequency</label>
             <input
               type="text"
@@ -848,7 +951,7 @@ const RouteEditModal: React.FC<RouteEditModalProps> = ({ route, onClose, onSave 
               placeholder="e.g., Daily, Weekly, etc."
             />
           </div>
-          
+
           <div className="grid grid-cols-2 gap-4">
             <div>
               <label className="block text-sm font-medium text-gray-700 mb-1">Departure Time</label>
@@ -869,7 +972,127 @@ const RouteEditModal: React.FC<RouteEditModalProps> = ({ route, onClose, onSave 
               />
             </div>
           </div>
-          
+
+          {/* Okay to Load Section */}
+          <div className="border border-gray-200 rounded-md">
+            <button
+              type="button"
+              onClick={() => setShowOkayToLoad(!showOkayToLoad)}
+              className="w-full px-4 py-3 flex items-center justify-between text-left bg-gray-50 hover:bg-gray-100 rounded-t-md"
+            >
+              <div>
+                <span className="text-sm font-medium text-gray-700">Okay to Load</span>
+                <span className="ml-2 text-xs text-gray-500">({okayToLoadIds.length} selected)</span>
+              </div>
+              {showOkayToLoad ? <ChevronUp className="w-4 h-4 text-gray-500" /> : <ChevronDown className="w-4 h-4 text-gray-500" />}
+            </button>
+            {showOkayToLoad && (
+              <div className="p-4 border-t border-gray-200">
+                <p className="text-xs text-gray-500 mb-3">Freight for selected locations can be loaded on the trailer from this origin.</p>
+                <div className="flex items-center gap-2 mb-3">
+                  <Search className="w-4 h-4 text-gray-400" />
+                  <input
+                    type="text"
+                    placeholder="Search terminals..."
+                    value={terminalSearch}
+                    onChange={(e) => setTerminalSearch(e.target.value)}
+                    className="flex-1 px-2 py-1 text-sm border border-gray-300 rounded focus:ring-1 focus:ring-blue-500"
+                  />
+                  <button
+                    type="button"
+                    onClick={selectAllOkayToLoad}
+                    className="text-xs text-blue-600 hover:text-blue-800 whitespace-nowrap"
+                  >
+                    {okayToLoadIds.length === allTerminals?.length ? 'Deselect All' : 'Select All'}
+                  </button>
+                </div>
+                <div className="max-h-48 overflow-y-auto border border-gray-200 rounded">
+                  {filteredTerminals.map((terminal) => (
+                    <label
+                      key={terminal.id}
+                      className="flex items-center px-3 py-2 hover:bg-gray-50 cursor-pointer border-b border-gray-100 last:border-b-0"
+                    >
+                      <input
+                        type="checkbox"
+                        checked={okayToLoadIds.includes(terminal.id)}
+                        onChange={() => toggleOkayToLoad(terminal.id)}
+                        className="mr-3"
+                      />
+                      <span className="text-sm">
+                        <span className="font-medium">{terminal.code}</span>
+                        <span className="text-gray-500 ml-2">{terminal.name}</span>
+                        {terminal.city && <span className="text-gray-400 ml-1">- {terminal.city}, {terminal.state}</span>}
+                      </span>
+                    </label>
+                  ))}
+                  {filteredTerminals.length === 0 && (
+                    <div className="px-3 py-2 text-sm text-gray-500">No terminals found</div>
+                  )}
+                </div>
+              </div>
+            )}
+          </div>
+
+          {/* Okay to Dispatch Section */}
+          <div className="border border-gray-200 rounded-md">
+            <button
+              type="button"
+              onClick={() => setShowOkayToDispatch(!showOkayToDispatch)}
+              className="w-full px-4 py-3 flex items-center justify-between text-left bg-gray-50 hover:bg-gray-100 rounded-t-md"
+            >
+              <div>
+                <span className="text-sm font-medium text-gray-700">Okay to Dispatch</span>
+                <span className="ml-2 text-xs text-gray-500">({okayToDispatchIds.length} selected)</span>
+              </div>
+              {showOkayToDispatch ? <ChevronUp className="w-4 h-4 text-gray-500" /> : <ChevronDown className="w-4 h-4 text-gray-500" />}
+            </button>
+            {showOkayToDispatch && (
+              <div className="p-4 border-t border-gray-200">
+                <p className="text-xs text-gray-500 mb-3">Selected locations are acceptable dispatch destinations from this origin.</p>
+                <div className="flex items-center gap-2 mb-3">
+                  <Search className="w-4 h-4 text-gray-400" />
+                  <input
+                    type="text"
+                    placeholder="Search terminals..."
+                    value={terminalSearch}
+                    onChange={(e) => setTerminalSearch(e.target.value)}
+                    className="flex-1 px-2 py-1 text-sm border border-gray-300 rounded focus:ring-1 focus:ring-blue-500"
+                  />
+                  <button
+                    type="button"
+                    onClick={selectAllOkayToDispatch}
+                    className="text-xs text-blue-600 hover:text-blue-800 whitespace-nowrap"
+                  >
+                    {okayToDispatchIds.length === allTerminals?.length ? 'Deselect All' : 'Select All'}
+                  </button>
+                </div>
+                <div className="max-h-48 overflow-y-auto border border-gray-200 rounded">
+                  {filteredTerminals.map((terminal) => (
+                    <label
+                      key={terminal.id}
+                      className="flex items-center px-3 py-2 hover:bg-gray-50 cursor-pointer border-b border-gray-100 last:border-b-0"
+                    >
+                      <input
+                        type="checkbox"
+                        checked={okayToDispatchIds.includes(terminal.id)}
+                        onChange={() => toggleOkayToDispatch(terminal.id)}
+                        className="mr-3"
+                      />
+                      <span className="text-sm">
+                        <span className="font-medium">{terminal.code}</span>
+                        <span className="text-gray-500 ml-2">{terminal.name}</span>
+                        {terminal.city && <span className="text-gray-400 ml-1">- {terminal.city}, {terminal.state}</span>}
+                      </span>
+                    </label>
+                  ))}
+                  {filteredTerminals.length === 0 && (
+                    <div className="px-3 py-2 text-sm text-gray-500">No terminals found</div>
+                  )}
+                </div>
+              </div>
+            )}
+          </div>
+
           <div>
             <label className="flex items-center">
               <input
@@ -878,12 +1101,12 @@ const RouteEditModal: React.FC<RouteEditModalProps> = ({ route, onClose, onSave 
                 onChange={(e) => setFormData({ ...formData, active: e.target.checked })}
                 className="mr-2"
               />
-              <span className="text-sm font-medium text-gray-700">Active Route</span>
+              <span className="text-sm font-medium text-gray-700">Active Linehaul Profile</span>
             </label>
           </div>
-          
+
           <div className="flex justify-end gap-3 mt-6 pt-4 border-t">
-            <button 
+            <button
               type="button"
               onClick={onClose}
               className="px-4 py-2 bg-gray-500 text-white rounded hover:bg-gray-600"
@@ -891,7 +1114,7 @@ const RouteEditModal: React.FC<RouteEditModalProps> = ({ route, onClose, onSave 
             >
               Cancel
             </button>
-            <button 
+            <button
               type="submit"
               className="px-4 py-2 bg-blue-600 text-white rounded hover:bg-blue-700 disabled:bg-blue-400"
               disabled={isSubmitting}
@@ -917,7 +1140,7 @@ const RouteDeleteModal: React.FC<RouteDeleteModalProps> = ({ route, onClose, onC
     <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50">
       <div className="bg-white rounded-lg p-6 w-full max-w-md">
         <div className="flex justify-between items-center mb-4">
-          <h2 className="text-lg font-bold text-gray-900">Delete Route</h2>
+          <h2 className="text-lg font-bold text-gray-900">Delete Linehaul Profile</h2>
           <button 
             onClick={onClose}
             className="text-gray-400 hover:text-gray-600"
@@ -928,7 +1151,7 @@ const RouteDeleteModal: React.FC<RouteDeleteModalProps> = ({ route, onClose, onC
         
         <div className="mb-6">
           <p className="text-sm text-gray-600 mb-2">
-            Are you sure you want to delete this route?
+            Are you sure you want to delete this linehaul profile?
           </p>
           <div className="bg-gray-50 p-3 rounded">
             <p className="font-medium text-gray-900">{route.name}</p>
@@ -946,11 +1169,11 @@ const RouteDeleteModal: React.FC<RouteDeleteModalProps> = ({ route, onClose, onC
           >
             Cancel
           </button>
-          <button 
+          <button
             onClick={onConfirm}
             className="px-4 py-2 bg-red-600 text-white rounded hover:bg-red-700"
           >
-            Delete Route
+            Delete Linehaul Profile
           </button>
         </div>
       </div>
@@ -1011,7 +1234,70 @@ const AddRouteModal: React.FC<AddRouteModalProps> = ({ onClose, onSave, copyFrom
   const [errorMessage, setErrorMessage] = useState<string | null>(null);
   const [selectedOriginLocation, setSelectedOriginLocation] = useState<Location | null>(null);
   const [selectedDestinationLocation, setSelectedDestinationLocation] = useState<Location | null>(null);
-  
+
+  // Okay to Load/Dispatch state for AddRouteModal
+  const [okayToLoadIds, setOkayToLoadIds] = useState<number[]>([]);
+  const [okayToDispatchIds, setOkayToDispatchIds] = useState<number[]>([]);
+  const [showOkayToLoad, setShowOkayToLoad] = useState(false);
+  const [showOkayToDispatch, setShowOkayToDispatch] = useState(false);
+  const [addTerminalSearch, setAddTerminalSearch] = useState('');
+
+  // Fetch terminal locations for checkbox lists (locations with Physical or Virtual Terminal checked)
+  const { data: allTerminals } = useQuery({
+    queryKey: ['terminal-locations-add'],
+    queryFn: () => locationService.getTerminalLocations()
+  });
+
+  // Filter terminals based on search
+  const addFilteredTerminals = useMemo(() => {
+    if (!allTerminals) return [];
+    if (!addTerminalSearch) return allTerminals;
+    const search = addTerminalSearch.toLowerCase();
+    return allTerminals.filter(t =>
+      t.code.toLowerCase().includes(search) ||
+      (t.name && t.name.toLowerCase().includes(search)) ||
+      (t.city && t.city.toLowerCase().includes(search))
+    );
+  }, [allTerminals, addTerminalSearch]);
+
+  // Toggle terminal in okay-to-load
+  const toggleOkayToLoad = (terminalId: number) => {
+    setOkayToLoadIds(prev =>
+      prev.includes(terminalId)
+        ? prev.filter(id => id !== terminalId)
+        : [...prev, terminalId]
+    );
+  };
+
+  // Toggle terminal in okay-to-dispatch
+  const toggleOkayToDispatch = (terminalId: number) => {
+    setOkayToDispatchIds(prev =>
+      prev.includes(terminalId)
+        ? prev.filter(id => id !== terminalId)
+        : [...prev, terminalId]
+    );
+  };
+
+  // Select/deselect all terminals for okay-to-load
+  const selectAllOkayToLoad = () => {
+    if (!allTerminals) return;
+    if (okayToLoadIds.length === allTerminals.length) {
+      setOkayToLoadIds([]);
+    } else {
+      setOkayToLoadIds(allTerminals.map(t => t.id));
+    }
+  };
+
+  // Select/deselect all terminals for okay-to-dispatch
+  const selectAllOkayToDispatch = () => {
+    if (!allTerminals) return;
+    if (okayToDispatchIds.length === allTerminals.length) {
+      setOkayToDispatchIds([]);
+    } else {
+      setOkayToDispatchIds(allTerminals.map(t => t.id));
+    }
+  };
+
   const handleCopyFromRoute = (route: Route) => {
     setFormData({
       name: `${route.name}_copy`,
@@ -1232,7 +1518,23 @@ const AddRouteModal: React.FC<AddRouteModalProps> = ({ onClose, onSave, copyFrom
       
       console.log('Submitting route payload:', payload);
       const response = await api.post('/routes', payload);
-      onSave(response.data);
+      const createdProfile = response.data;
+
+      // Save okay-to-load and okay-to-dispatch terminals if any are selected
+      if (okayToLoadIds.length > 0 || okayToDispatchIds.length > 0) {
+        try {
+          await Promise.all([
+            okayToLoadIds.length > 0 ? linehaulProfileService.updateOkayToLoadTerminals(createdProfile.id, okayToLoadIds) : Promise.resolve(),
+            okayToDispatchIds.length > 0 ? linehaulProfileService.updateOkayToDispatchTerminals(createdProfile.id, okayToDispatchIds) : Promise.resolve()
+          ]);
+        } catch (terminalError) {
+          console.error('Error saving terminal selections:', terminalError);
+          // Profile was created, but terminal selections failed - still consider it a success
+          toast.error('Profile created but terminal selections may not have been saved');
+        }
+      }
+
+      onSave(createdProfile);
     } catch (error: any) {
       console.error('Error creating route:', error);
       
@@ -1250,9 +1552,9 @@ const AddRouteModal: React.FC<AddRouteModalProps> = ({ onClose, onSave, copyFrom
       } else if (error.response?.status === 401) {
         setErrorMessage('You are not authenticated. Please log in again.');
       } else if (error.response?.status === 403) {
-        setErrorMessage('You do not have permission to create routes. Only Admins and Dispatchers can create routes.');
+        setErrorMessage('You do not have permission to create linehaul profiles. Only Admins and Dispatchers can create linehaul profiles.');
       } else {
-        setErrorMessage('Failed to create route. Please check your input and try again.');
+        setErrorMessage('Failed to create linehaul profile. Please check your input and try again.');
       }
     } finally {
       setIsSubmitting(false);
@@ -1264,7 +1566,7 @@ const AddRouteModal: React.FC<AddRouteModalProps> = ({ onClose, onSave, copyFrom
       <div className="bg-white rounded-lg p-6 w-full max-w-2xl max-h-[90vh] overflow-y-auto">
         <div className="flex justify-between items-center mb-6">
           <h2 className="text-xl font-bold text-gray-900">
-            {copyFromRoute ? `Copy Route: ${copyFromRoute.name}` : 'Add New Route'}
+            {copyFromRoute ? `Copy Linehaul Profile: ${copyFromRoute.name}` : 'Add New Linehaul Profile'}
           </h2>
           <button 
             onClick={onClose}
@@ -1279,11 +1581,11 @@ const AddRouteModal: React.FC<AddRouteModalProps> = ({ onClose, onSave, copyFrom
             <div className="flex items-center gap-2">
               <Copy className="w-4 h-4 text-blue-600" />
               <span className="text-sm text-blue-800">
-                Copying from route: <strong>{copyFromRoute.name}</strong> ({copyFromRoute.origin} → {copyFromRoute.destination})
+                Copying from linehaul profile: <strong>{copyFromRoute.name}</strong> ({copyFromRoute.origin} → {copyFromRoute.destination})
               </span>
             </div>
             <p className="text-xs text-blue-600 mt-1">
-              Modify the information below to create your new route.
+              Modify the information below to create your new linehaul profile.
             </p>
           </div>
         )}
@@ -1291,13 +1593,13 @@ const AddRouteModal: React.FC<AddRouteModalProps> = ({ onClose, onSave, copyFrom
         {!copyFromRoute && (
           <div className="mb-4">
             <div className="flex items-center gap-2 mb-2">
-              <label className="block text-sm font-medium text-gray-700">Copy from existing route (optional)</label>
+              <label className="block text-sm font-medium text-gray-700">Copy from existing linehaul profile (optional)</label>
               <button
                 type="button"
                 onClick={() => setShowRouteSelector(!showRouteSelector)}
                 className="text-sm text-blue-600 hover:text-blue-800 underline"
               >
-                {showRouteSelector ? 'Hide' : 'Select Route to Copy'}
+                {showRouteSelector ? 'Hide' : 'Select Profile to Copy'}
               </button>
             </div>
             
@@ -1307,7 +1609,7 @@ const AddRouteModal: React.FC<AddRouteModalProps> = ({ onClose, onSave, copyFrom
                   <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 text-gray-400 w-4 h-4" />
                   <input
                     type="text"
-                    placeholder="Search routes by name, origin, or destination..."
+                    placeholder="Search linehaul profiles by name, origin, or destination..."
                     className="w-full pl-10 pr-4 py-2 border border-gray-300 rounded-md focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
                     value={routeSearchInput}
                     onChange={(e) => setRouteSearchInput(e.target.value)}
@@ -1346,7 +1648,7 @@ const AddRouteModal: React.FC<AddRouteModalProps> = ({ onClose, onSave, copyFrom
                       ))
                     ) : (
                       <div className="p-3 text-gray-500 text-sm">
-                        No routes found matching "{routeSearchInput}"
+                        No linehaul profiles found matching "{routeSearchInput}"
                       </div>
                     )}
                   </div>
@@ -1364,7 +1666,7 @@ const AddRouteModal: React.FC<AddRouteModalProps> = ({ onClose, onSave, copyFrom
           )}
           
           <div>
-            <label className="block text-sm font-medium text-gray-700 mb-1">Route Name *</label>
+            <label className="block text-sm font-medium text-gray-700 mb-1">Linehaul Name *</label>
             <input
               type="text"
               required
@@ -1581,18 +1883,6 @@ const AddRouteModal: React.FC<AddRouteModalProps> = ({ onClose, onSave, copyFrom
           </div>
 
           <div>
-            <label className="block text-sm font-medium text-gray-700 mb-1">Standard Rate ($)</label>
-            <input
-              type="number"
-              step="0.01"
-              value={formData.standardRate}
-              onChange={(e) => setFormData({ ...formData, standardRate: e.target.value })}
-              className="w-full px-3 py-2 border border-gray-300 rounded-md focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
-              placeholder="Optional standard rate"
-            />
-          </div>
-
-          <div>
             <label className="block text-sm font-medium text-gray-700 mb-1">Frequency</label>
             <input
               type="text"
@@ -1602,7 +1892,7 @@ const AddRouteModal: React.FC<AddRouteModalProps> = ({ onClose, onSave, copyFrom
               placeholder="e.g., Daily, Weekly, etc."
             />
           </div>
-          
+
           <div className="grid grid-cols-2 gap-4">
             <div>
               <label className="block text-sm font-medium text-gray-700 mb-1">Departure Time</label>
@@ -1623,7 +1913,127 @@ const AddRouteModal: React.FC<AddRouteModalProps> = ({ onClose, onSave, copyFrom
               />
             </div>
           </div>
-          
+
+          {/* Okay to Load Section */}
+          <div className="border border-gray-200 rounded-md">
+            <button
+              type="button"
+              onClick={() => setShowOkayToLoad(!showOkayToLoad)}
+              className="w-full px-4 py-3 flex items-center justify-between text-left bg-gray-50 hover:bg-gray-100 rounded-t-md"
+            >
+              <div>
+                <span className="text-sm font-medium text-gray-700">Okay to Load</span>
+                <span className="ml-2 text-xs text-gray-500">({okayToLoadIds.length} selected)</span>
+              </div>
+              {showOkayToLoad ? <ChevronUp className="w-4 h-4 text-gray-500" /> : <ChevronDown className="w-4 h-4 text-gray-500" />}
+            </button>
+            {showOkayToLoad && (
+              <div className="p-4 border-t border-gray-200">
+                <p className="text-xs text-gray-500 mb-3">Freight for selected locations can be loaded on the trailer from this origin.</p>
+                <div className="flex items-center gap-2 mb-3">
+                  <Search className="w-4 h-4 text-gray-400" />
+                  <input
+                    type="text"
+                    placeholder="Search terminals..."
+                    value={addTerminalSearch}
+                    onChange={(e) => setAddTerminalSearch(e.target.value)}
+                    className="flex-1 px-2 py-1 text-sm border border-gray-300 rounded focus:ring-1 focus:ring-blue-500"
+                  />
+                  <button
+                    type="button"
+                    onClick={selectAllOkayToLoad}
+                    className="text-xs text-blue-600 hover:text-blue-800 whitespace-nowrap"
+                  >
+                    {okayToLoadIds.length === allTerminals?.length ? 'Deselect All' : 'Select All'}
+                  </button>
+                </div>
+                <div className="max-h-48 overflow-y-auto border border-gray-200 rounded">
+                  {addFilteredTerminals.map((terminal) => (
+                    <label
+                      key={terminal.id}
+                      className="flex items-center px-3 py-2 hover:bg-gray-50 cursor-pointer border-b border-gray-100 last:border-b-0"
+                    >
+                      <input
+                        type="checkbox"
+                        checked={okayToLoadIds.includes(terminal.id)}
+                        onChange={() => toggleOkayToLoad(terminal.id)}
+                        className="mr-3"
+                      />
+                      <span className="text-sm">
+                        <span className="font-medium">{terminal.code}</span>
+                        <span className="text-gray-500 ml-2">{terminal.name}</span>
+                        {terminal.city && <span className="text-gray-400 ml-1">- {terminal.city}, {terminal.state}</span>}
+                      </span>
+                    </label>
+                  ))}
+                  {addFilteredTerminals.length === 0 && (
+                    <div className="px-3 py-2 text-sm text-gray-500">No terminals found</div>
+                  )}
+                </div>
+              </div>
+            )}
+          </div>
+
+          {/* Okay to Dispatch Section */}
+          <div className="border border-gray-200 rounded-md">
+            <button
+              type="button"
+              onClick={() => setShowOkayToDispatch(!showOkayToDispatch)}
+              className="w-full px-4 py-3 flex items-center justify-between text-left bg-gray-50 hover:bg-gray-100 rounded-t-md"
+            >
+              <div>
+                <span className="text-sm font-medium text-gray-700">Okay to Dispatch</span>
+                <span className="ml-2 text-xs text-gray-500">({okayToDispatchIds.length} selected)</span>
+              </div>
+              {showOkayToDispatch ? <ChevronUp className="w-4 h-4 text-gray-500" /> : <ChevronDown className="w-4 h-4 text-gray-500" />}
+            </button>
+            {showOkayToDispatch && (
+              <div className="p-4 border-t border-gray-200">
+                <p className="text-xs text-gray-500 mb-3">Selected locations are acceptable dispatch destinations from this origin.</p>
+                <div className="flex items-center gap-2 mb-3">
+                  <Search className="w-4 h-4 text-gray-400" />
+                  <input
+                    type="text"
+                    placeholder="Search terminals..."
+                    value={addTerminalSearch}
+                    onChange={(e) => setAddTerminalSearch(e.target.value)}
+                    className="flex-1 px-2 py-1 text-sm border border-gray-300 rounded focus:ring-1 focus:ring-blue-500"
+                  />
+                  <button
+                    type="button"
+                    onClick={selectAllOkayToDispatch}
+                    className="text-xs text-blue-600 hover:text-blue-800 whitespace-nowrap"
+                  >
+                    {okayToDispatchIds.length === allTerminals?.length ? 'Deselect All' : 'Select All'}
+                  </button>
+                </div>
+                <div className="max-h-48 overflow-y-auto border border-gray-200 rounded">
+                  {addFilteredTerminals.map((terminal) => (
+                    <label
+                      key={terminal.id}
+                      className="flex items-center px-3 py-2 hover:bg-gray-50 cursor-pointer border-b border-gray-100 last:border-b-0"
+                    >
+                      <input
+                        type="checkbox"
+                        checked={okayToDispatchIds.includes(terminal.id)}
+                        onChange={() => toggleOkayToDispatch(terminal.id)}
+                        className="mr-3"
+                      />
+                      <span className="text-sm">
+                        <span className="font-medium">{terminal.code}</span>
+                        <span className="text-gray-500 ml-2">{terminal.name}</span>
+                        {terminal.city && <span className="text-gray-400 ml-1">- {terminal.city}, {terminal.state}</span>}
+                      </span>
+                    </label>
+                  ))}
+                  {addFilteredTerminals.length === 0 && (
+                    <div className="px-3 py-2 text-sm text-gray-500">No terminals found</div>
+                  )}
+                </div>
+              </div>
+            )}
+          </div>
+
           <div>
             <label className="flex items-center">
               <input
@@ -1632,12 +2042,12 @@ const AddRouteModal: React.FC<AddRouteModalProps> = ({ onClose, onSave, copyFrom
                 onChange={(e) => setFormData({ ...formData, active: e.target.checked })}
                 className="mr-2"
               />
-              <span className="text-sm font-medium text-gray-700">Active Route</span>
+              <span className="text-sm font-medium text-gray-700">Active Linehaul Profile</span>
             </label>
           </div>
-          
+
           <div className="flex justify-end gap-3 mt-6 pt-4 border-t">
-            <button 
+            <button
               type="button"
               onClick={onClose}
               className="px-4 py-2 bg-gray-500 text-white rounded hover:bg-gray-600"
@@ -1645,12 +2055,12 @@ const AddRouteModal: React.FC<AddRouteModalProps> = ({ onClose, onSave, copyFrom
             >
               Cancel
             </button>
-            <button 
+            <button
               type="submit"
               className="px-4 py-2 bg-blue-600 text-white rounded hover:bg-blue-700 disabled:bg-blue-400"
               disabled={isSubmitting}
             >
-              {isSubmitting ? 'Creating...' : 'Create Route'}
+              {isSubmitting ? 'Creating...' : 'Create Linehaul Profile'}
             </button>
           </div>
         </form>

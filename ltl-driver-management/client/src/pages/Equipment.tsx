@@ -19,6 +19,7 @@ import {
 } from '../types';
 import { useAuth } from '../contexts/AuthContext';
 import { toast } from 'react-hot-toast';
+import { usePersistedFilters } from '../hooks/usePersistedFilters';
 import {
   Plus,
   Edit,
@@ -49,11 +50,21 @@ const statusFilterOptions: { value: EquipmentStatus | ''; label: string }[] = [
 
 export const Equipment: React.FC = () => {
   const { user } = useAuth();
-  const [activeTab, setActiveTab] = useState<TabType>('trucks');
+
+  // Filters - persisted to localStorage
+  const [filters, , updateFilter] = usePersistedFilters('equipment-filters', {
+    activeTab: 'trucks' as TabType,
+    searchTerm: '',
+    statusFilter: '' as EquipmentStatus | '',
+    terminalFilter: '' as number | '',
+  });
+  const { activeTab, searchTerm, statusFilter, terminalFilter } = filters;
+  const setActiveTab = (v: TabType) => updateFilter('activeTab', v);
+  const setSearchTerm = (v: string) => updateFilter('searchTerm', v);
+  const setStatusFilter = (v: EquipmentStatus | '') => updateFilter('statusFilter', v);
+  const setTerminalFilter = (v: number | '') => updateFilter('terminalFilter', v);
+
   const [loading, setLoading] = useState(true);
-  const [searchTerm, setSearchTerm] = useState('');
-  const [statusFilter, setStatusFilter] = useState<EquipmentStatus | ''>('');
-  const [terminalFilter, setTerminalFilter] = useState<number | ''>('');
   const [currentPage, setCurrentPage] = useState(1);
   const [totalPages, setTotalPages] = useState(1);
 
