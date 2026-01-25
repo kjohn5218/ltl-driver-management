@@ -1,8 +1,9 @@
-import React, { useState, useRef } from 'react';
+import React, { useState, useRef, useEffect } from 'react';
 import { toast } from 'react-hot-toast';
 import { Upload, Download, AlertCircle, Check, X } from 'lucide-react';
 import { driverService } from '../../services/driverService';
-import { Carrier } from '../../types';
+import { locationService } from '../../services/locationService';
+import { Carrier, Location } from '../../types';
 
 interface DriverImportProps {
   carriers: Carrier[];
@@ -24,12 +25,26 @@ export const DriverImport: React.FC<DriverImportProps> = ({
   const [file, setFile] = useState<File | null>(null);
   const [importing, setImporting] = useState(false);
   const [result, setResult] = useState<ImportResult | null>(null);
+  const [locations, setLocations] = useState<Location[]>([]);
   const fileInputRef = useRef<HTMLInputElement>(null);
 
+  useEffect(() => {
+    fetchLocations();
+  }, []);
+
+  const fetchLocations = async () => {
+    try {
+      const locationsList = await locationService.getLocationsList();
+      setLocations(locationsList);
+    } catch (error) {
+      console.error('Failed to fetch locations:', error);
+    }
+  };
+
   const downloadTemplate = () => {
-    const csvContent = `Carrier Name,Driver Name,Driver Number,Phone Number,Email,License Number
-OLR TRANSPORTATION INC,John Doe,101,555-123-4567,john.doe@email.com,DL123456789
-ABC CARRIER,Jane Smith,102,555-987-6543,jane.smith@email.com,DL987654321`;
+    const csvContent = `Carrier Name,Driver Name,Driver Number,Phone Number,Email,License Number,Location Code,Hazmat Endorsement
+OLR TRANSPORTATION INC,John Doe,101,555-123-4567,john.doe@email.com,DL123456789,ABQ,Yes
+ABC CARRIER,Jane Smith,102,555-987-6543,jane.smith@email.com,DL987654321,DEN,No`;
 
     const blob = new Blob([csvContent], { type: 'text/csv;charset=utf-8;' });
     const link = document.createElement('a');
@@ -120,6 +135,24 @@ ABC CARRIER,Jane Smith,102,555-987-6543,jane.smith@email.com,DL987654321`;
             continue;
           }
 
+          // Look up location by code if provided
+          let locationId: number | undefined;
+          const locationCode = row['Location Code'];
+          if (locationCode) {
+            const location = locations.find(l =>
+              l.code.toLowerCase().trim() === locationCode.toLowerCase().trim()
+            );
+            if (location) {
+              locationId = location.id;
+            } else {
+              errors.push(`Row ${rowNumber}: Location code "${locationCode}" not found (driver will be created without location)`);
+            }
+          }
+
+          // Parse hazmat endorsement
+          const hazmatValue = row['Hazmat Endorsement']?.toLowerCase().trim();
+          const hazmatEndorsement = hazmatValue === 'yes' || hazmatValue === 'true' || hazmatValue === '1';
+
           // Create driver
           const driverData = {
             carrierId: carrier.id,
@@ -127,7 +160,9 @@ ABC CARRIER,Jane Smith,102,555-987-6543,jane.smith@email.com,DL987654321`;
             number: row['Driver Number'] || undefined,
             phoneNumber: row['Phone Number'] || undefined,
             email: row['Email'] || undefined,
-            licenseNumber: row['License Number'] || undefined
+            licenseNumber: row['License Number'] || undefined,
+            locationId,
+            hazmatEndorsement
           };
 
           await driverService.createDriver(driverData);
@@ -170,8 +205,10 @@ ABC CARRIER,Jane Smith,102,555-987-6543,jane.smith@email.com,DL987654321`;
               <ul className="list-disc list-inside space-y-1">
                 <li>Upload a CSV or Excel file with driver information</li>
                 <li>Required columns: Carrier Name, Driver Name</li>
-                <li>Optional columns: Driver Number, Phone Number, Email, License Number</li>
+                <li>Optional columns: Driver Number, Phone Number, Email, License Number, Location Code, Hazmat Endorsement</li>
                 <li>Carrier names must match exactly with existing carriers</li>
+                <li>Location codes must match existing terminal/location codes</li>
+                <li>Hazmat Endorsement: Use "Yes" or "No"</li>
                 <li>Download the template below for the correct format</li>
               </ul>
             </div>

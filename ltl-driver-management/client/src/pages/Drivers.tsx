@@ -13,7 +13,7 @@ import { carrierService } from '../services/carrierService';
 import { CarrierDriver, Carrier } from '../types';
 import { useAuth } from '../contexts/AuthContext';
 import { toast } from 'react-hot-toast';
-import { Plus, Edit, Trash2, Phone, Mail, Truck, Upload, MapPin } from 'lucide-react';
+import { Plus, Edit, Trash2, Phone, Mail, Truck, Upload, MapPin, AlertTriangle } from 'lucide-react';
 import { usePersistedState } from '../hooks/usePersistedFilters';
 
 export const Drivers: React.FC = () => {
@@ -184,6 +184,22 @@ export const Drivers: React.FC = () => {
             </>
           ) : (
             '-'
+          )}
+        </div>
+      )
+    },
+    {
+      header: 'Hazmat',
+      accessor: 'hazmatEndorsement' as keyof CarrierDriver,
+      cell: (driver: CarrierDriver) => (
+        <div className="flex items-center">
+          {driver.hazmatEndorsement ? (
+            <span className="inline-flex items-center px-2 py-0.5 rounded text-xs font-medium bg-orange-100 text-orange-800">
+              <AlertTriangle className="w-3 h-3 mr-1" />
+              Hazmat
+            </span>
+          ) : (
+            <span className="text-gray-400">-</span>
           )}
         </div>
       )

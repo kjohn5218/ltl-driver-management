@@ -26,6 +26,8 @@ interface CreateDriverData {
   phoneNumber?: string;
   email?: string;
   licenseNumber?: string;
+  locationId?: number;
+  hazmatEndorsement?: boolean;
 }
 
 interface UpdateDriverData {
@@ -36,6 +38,8 @@ interface UpdateDriverData {
   licenseNumber?: string;
   active?: boolean;
   carrierId?: number;
+  locationId?: number | null;
+  hazmatEndorsement?: boolean;
 }
 
 export const driverService = {
