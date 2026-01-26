@@ -1040,59 +1040,61 @@ export const DriverSelfService: React.FC = () => {
           )}
         </div>
 
-        {/* Equipment Issue */}
-        <div className="bg-white rounded-xl shadow-sm p-4">
-          <div className="flex items-center justify-between mb-3">
-            <h3 className="font-medium text-gray-900">Equipment Issue</h3>
-            <label className="relative inline-flex items-center cursor-pointer">
-              <input
-                type="checkbox"
-                checked={hasEquipmentIssue}
-                onChange={(e) => setHasEquipmentIssue(e.target.checked)}
-                className="sr-only peer"
-              />
-              <div className="w-11 h-6 bg-gray-200 peer-focus:outline-none peer-focus:ring-4 peer-focus:ring-blue-300 rounded-full peer peer-checked:after:translate-x-full peer-checked:after:border-white after:content-[''] after:absolute after:top-[2px] after:left-[2px] after:bg-white after:border-gray-300 after:border after:rounded-full after:h-5 after:w-5 after:transition-all peer-checked:bg-blue-600"></div>
-            </label>
-          </div>
-
-          {hasEquipmentIssue && (
-            <div className="space-y-3">
-              <div>
-                <label className="block text-sm text-gray-500 mb-1">Equipment Type</label>
-                <select
-                  value={equipmentIssueType}
-                  onChange={(e) => setEquipmentIssueType(e.target.value)}
-                  className="w-full px-3 py-2 border border-gray-300 rounded-lg"
-                >
-                  <option value="">Select type</option>
-                  {EQUIPMENT_ISSUE_TYPES.map(t => (
-                    <option key={t.value} value={t.value}>{t.label}</option>
-                  ))}
-                </select>
-              </div>
-              <div>
-                <label className="block text-sm text-gray-500 mb-1">Equipment Number</label>
+        {/* Equipment Issue - Only show for owner operators (OWNOP) */}
+        {selectedTrip?.truck?.unitNumber === 'OWNOP' && (
+          <div className="bg-white rounded-xl shadow-sm p-4">
+            <div className="flex items-center justify-between mb-3">
+              <h3 className="font-medium text-gray-900">Equipment Issue</h3>
+              <label className="relative inline-flex items-center cursor-pointer">
                 <input
-                  type="text"
-                  value={equipmentIssueNumber}
-                  onChange={(e) => setEquipmentIssueNumber(e.target.value)}
-                  placeholder="e.g., TRL-1234"
-                  className="w-full px-3 py-2 border border-gray-300 rounded-lg"
+                  type="checkbox"
+                  checked={hasEquipmentIssue}
+                  onChange={(e) => setHasEquipmentIssue(e.target.checked)}
+                  className="sr-only peer"
                 />
-              </div>
-              <div>
-                <label className="block text-sm text-gray-500 mb-1">Description</label>
-                <textarea
-                  value={equipmentIssueDescription}
-                  onChange={(e) => setEquipmentIssueDescription(e.target.value)}
-                  placeholder="Describe the issue..."
-                  rows={2}
-                  className="w-full px-3 py-2 border border-gray-300 rounded-lg resize-none"
-                />
-              </div>
+                <div className="w-11 h-6 bg-gray-200 peer-focus:outline-none peer-focus:ring-4 peer-focus:ring-blue-300 rounded-full peer peer-checked:after:translate-x-full peer-checked:after:border-white after:content-[''] after:absolute after:top-[2px] after:left-[2px] after:bg-white after:border-gray-300 after:border after:rounded-full after:h-5 after:w-5 after:transition-all peer-checked:bg-blue-600"></div>
+              </label>
             </div>
-          )}
-        </div>
+
+            {hasEquipmentIssue && (
+              <div className="space-y-3">
+                <div>
+                  <label className="block text-sm text-gray-500 mb-1">Equipment Type</label>
+                  <select
+                    value={equipmentIssueType}
+                    onChange={(e) => setEquipmentIssueType(e.target.value)}
+                    className="w-full px-3 py-2 border border-gray-300 rounded-lg"
+                  >
+                    <option value="">Select type</option>
+                    {EQUIPMENT_ISSUE_TYPES.map(t => (
+                      <option key={t.value} value={t.value}>{t.label}</option>
+                    ))}
+                  </select>
+                </div>
+                <div>
+                  <label className="block text-sm text-gray-500 mb-1">Equipment Number</label>
+                  <input
+                    type="text"
+                    value={equipmentIssueNumber}
+                    onChange={(e) => setEquipmentIssueNumber(e.target.value)}
+                    placeholder="e.g., TRL-1234"
+                    className="w-full px-3 py-2 border border-gray-300 rounded-lg"
+                  />
+                </div>
+                <div>
+                  <label className="block text-sm text-gray-500 mb-1">Description</label>
+                  <textarea
+                    value={equipmentIssueDescription}
+                    onChange={(e) => setEquipmentIssueDescription(e.target.value)}
+                    placeholder="Describe the issue..."
+                    rows={2}
+                    className="w-full px-3 py-2 border border-gray-300 rounded-lg resize-none"
+                  />
+                </div>
+              </div>
+            )}
+          </div>
+        )}
 
         {/* Notes */}
         <div className="bg-white rounded-xl shadow-sm p-4">
@@ -1106,24 +1108,26 @@ export const DriverSelfService: React.FC = () => {
           />
         </div>
 
-        {/* Morale Rating */}
-        <div className="bg-white rounded-xl shadow-sm p-4">
-          <label className="block font-medium text-gray-900 mb-3 text-center">How was your trip?</label>
-          <div className="flex justify-center gap-2">
-            {[1, 2, 3, 4, 5].map((star) => (
-              <button
-                key={star}
-                type="button"
-                onClick={() => setMoraleRating(star)}
-                className={`p-2 rounded-full transition-colors ${
-                  moraleRating >= star ? 'text-yellow-400' : 'text-gray-300'
-                }`}
-              >
-                <Star className="w-8 h-8" fill={moraleRating >= star ? 'currentColor' : 'none'} />
-              </button>
-            ))}
+        {/* Morale Rating - Only show for company drivers (not OWNOP) */}
+        {selectedTrip?.truck?.unitNumber !== 'OWNOP' && (
+          <div className="bg-white rounded-xl shadow-sm p-4">
+            <label className="block font-medium text-gray-900 mb-3 text-center">How was your trip?</label>
+            <div className="flex justify-center gap-2">
+              {[1, 2, 3, 4, 5].map((star) => (
+                <button
+                  key={star}
+                  type="button"
+                  onClick={() => setMoraleRating(star)}
+                  className={`p-2 rounded-full transition-colors ${
+                    moraleRating >= star ? 'text-yellow-400' : 'text-gray-300'
+                  }`}
+                >
+                  <Star className="w-8 h-8" fill={moraleRating >= star ? 'currentColor' : 'none'} />
+                </button>
+              ))}
+            </div>
           </div>
-        </div>
+        )}
 
         {/* Submit button */}
         <div className="fixed bottom-0 left-0 right-0 p-4 bg-white border-t shadow-lg">
