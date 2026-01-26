@@ -134,6 +134,16 @@ export const createCutPayRequest = async (req: Request, res: Response): Promise<
       notes
     } = req.body;
 
+    // Debug logging
+    console.log('Cut pay request body:', {
+      driverId,
+      cutPayType,
+      hoursRequested,
+      milesRequested,
+      trailerConfig,
+      reason
+    });
+
     // Validate driver exists
     const driver = await prisma.carrierDriver.findUnique({
       where: { id: driverId }

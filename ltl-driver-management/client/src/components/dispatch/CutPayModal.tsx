@@ -110,7 +110,7 @@ export const CutPayModal: React.FC<CutPayModalProps> = ({
         ? cutPayReasonOther
         : CUT_PAY_REASONS.find(r => r.value === cutPayReason)?.label || cutPayReason;
 
-      await cutPayService.createCutPayRequest({
+      const requestData = {
         driverId: selectedDriver.id,
         trailerConfig: cutPayTrailerConfig,
         cutPayType: cutPayType,
@@ -118,7 +118,11 @@ export const CutPayModal: React.FC<CutPayModalProps> = ({
         milesRequested: cutPayType === 'MILES' ? parseFloat(cutPayMiles) : undefined,
         reason: reasonText,
         notes: notes || undefined
-      });
+      };
+
+      console.log('Submitting cut pay request:', requestData);
+
+      await cutPayService.createCutPayRequest(requestData);
 
       toast.success('Cut pay request submitted successfully');
       queryClient.invalidateQueries({ queryKey: ['cut-pay-requests'] });
@@ -126,6 +130,8 @@ export const CutPayModal: React.FC<CutPayModalProps> = ({
       onClose();
     } catch (error: any) {
       console.error('Error creating cut pay request:', error);
+      console.error('Error response:', error.response?.data);
+      console.error('Error status:', error.response?.status);
       const errorMessage = error.response?.data?.message || 'Failed to create cut pay request';
       toast.error(errorMessage);
     } finally {
