@@ -1,5 +1,16 @@
 import { api } from './api';
-import { PayPeriod, TripPay, PayPeriodStatus, TripPayStatus, PayPeriodsResponse, TripPaysResponse } from '../types';
+import {
+  PayPeriod,
+  TripPay,
+  PayPeriodStatus,
+  TripPayStatus,
+  PayPeriodsResponse,
+  TripPaysResponse,
+  UnifiedPayrollResponse,
+  PayrollFilters,
+  PayrollLineItemUpdate,
+  PayrollExportOptions
+} from '../types';
 
 interface PayPeriodFilters {
   status?: PayPeriodStatus;
@@ -178,6 +189,53 @@ export const payrollService = {
     byStatus: Record<TripPayStatus, { count: number; amount: number }>;
   }> => {
     const response = await api.get(`/payroll/pay-periods/${payPeriodId}/summary`);
+    return response.data;
+  },
+
+  // ==================== UNIFIED PAYROLL ====================
+
+  // Get unified payroll items (TripPay + CutPayRequest combined)
+  getUnifiedPayrollItems: async (filters?: PayrollFilters): Promise<UnifiedPayrollResponse> => {
+    const params = new URLSearchParams();
+    if (filters?.startDate) params.append('startDate', filters.startDate);
+    if (filters?.endDate) params.append('endDate', filters.endDate);
+    if (filters?.locationId) params.append('locationId', filters.locationId.toString());
+    if (filters?.statuses?.length) {
+      filters.statuses.forEach(s => params.append('statuses', s));
+    }
+    if (filters?.driverId) params.append('driverId', filters.driverId.toString());
+    if (filters?.search) params.append('search', filters.search);
+    if (filters?.source) params.append('source', filters.source);
+    if (filters?.page) params.append('page', filters.page.toString());
+    if (filters?.limit) params.append('limit', filters.limit.toString());
+
+    const response = await api.get(`/payroll/unified?${params.toString()}`);
+    return response.data;
+  },
+
+  // Update a payroll line item (trip or cut)
+  updatePayrollLineItem: async (
+    type: 'trip' | 'cut',
+    id: number,
+    data: PayrollLineItemUpdate
+  ): Promise<TripPay | any> => {
+    const response = await api.patch(`/payroll/line-items/${type}/${id}`, data);
+    return response.data;
+  },
+
+  // Bulk approve payroll items
+  bulkApprovePayrollItems: async (
+    items: Array<{ type: 'trip' | 'cut'; id: number }>
+  ): Promise<{ approved: number; tripApproved: number; cutApproved: number }> => {
+    const response = await api.post('/payroll/bulk-approve', { items });
+    return response.data;
+  },
+
+  // Export payroll to XLS for Workday
+  exportPayrollToXls: async (options?: PayrollExportOptions): Promise<Blob> => {
+    const response = await api.post('/payroll/export/xls', options || {}, {
+      responseType: 'blob'
+    });
     return response.data;
   }
 };

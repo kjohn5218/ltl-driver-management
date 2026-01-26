@@ -30,6 +30,7 @@ export interface CarrierDriver {
   // Dispatch-related fields
   driverStatus?: DriverStatus;
   endorsements?: string;
+  hazmatEndorsement?: boolean;
   currentTerminalCode?: string;
   externalDriverId?: string;
   carrier?: {
@@ -371,7 +372,7 @@ export type PayPeriodStatus = 'OPEN' | 'CLOSED' | 'LOCKED' | 'EXPORTED';
 export type TripPayStatus = 'PENDING' | 'CALCULATED' | 'REVIEWED' | 'APPROVED' | 'PAID' | 'DISPUTED';
 export type RateCardType = 'DRIVER' | 'CARRIER' | 'LINEHAUL' | 'OD_PAIR' | 'DEFAULT';
 export type RateMethod = 'PER_MILE' | 'FLAT_RATE' | 'HOURLY' | 'PERCENTAGE';
-export type AccessorialType = 'LAYOVER' | 'DETENTION' | 'BREAKDOWN' | 'HELPER' | 'TRAINER' | 'HAZMAT' | 'TEAM_DRIVER' | 'STOP_CHARGE' | 'FUEL_SURCHARGE' | 'DROP_HOOK' | 'CHAIN_UP' | 'OTHER';
+export type AccessorialType = 'LAYOVER' | 'DETENTION' | 'BREAKDOWN' | 'HELPER' | 'TRAINER' | 'HAZMAT' | 'TEAM_DRIVER' | 'STOP_CHARGE' | 'FUEL_SURCHARGE' | 'DROP_HOOK' | 'DROP_HOOK_SINGLE' | 'DROP_HOOK_DOUBLE_TRIPLE' | 'CHAIN_UP' | 'WAIT_TIME' | 'SINGLE_TRAILER' | 'DOUBLE_TRAILER' | 'TRIPLE_TRAILER' | 'CUT_PAY' | 'CUT_PAY_SINGLE_MILES' | 'CUT_PAY_DOUBLE_MILES' | 'CUT_PAY_TRIPLE_MILES' | 'OTHER';
 export type DayOfWeek = 'MONDAY' | 'TUESDAY' | 'WEDNESDAY' | 'THURSDAY' | 'FRIDAY' | 'SATURDAY' | 'SUNDAY';
 export type EquipmentType = 'TRUCK' | 'TRAILER' | 'DOLLY';
 export type DelayType = 'WEATHER' | 'TRAFFIC' | 'BREAKDOWN' | 'DETENTION' | 'LOADING' | 'UNLOADING' | 'REST' | 'ACCIDENT' | 'CUSTOMS' | 'DISPATCH' | 'OTHER';
@@ -1235,4 +1236,83 @@ export interface RequiredPlacard {
 export interface TripDocumentsResponse {
   documents: TripDocument[];
   hasHazmat: boolean;
+}
+
+// ==================== UNIFIED PAYROLL ====================
+
+export type PayrollSource = 'TRIP_PAY' | 'CUT_PAY';
+
+export interface PayrollLineItem {
+  id: string;
+  source: PayrollSource;
+  sourceId: number;
+  driverId: number;
+  driverName: string;
+  driverNumber?: string;
+  workdayEmployeeId?: string;
+  date: string;
+  origin?: string;
+  destination?: string;
+  tripNumber?: string;
+  basePay: number;
+  mileagePay: number;
+  dropAndHookPay: number;
+  chainUpPay: number;
+  waitTimePay: number;
+  otherAccessorialPay: number;
+  bonusPay: number;
+  deductions: number;
+  totalGrossPay: number;
+  cutPayType?: string;
+  cutPayHours?: number;
+  cutPayMiles?: number;
+  trailerConfig?: string;
+  reason?: string;
+  status: string;
+  notes?: string;
+}
+
+export interface PayrollFilters {
+  startDate?: string;
+  endDate?: string;
+  locationId?: number;
+  statuses?: string[];
+  driverId?: number;
+  search?: string;
+  source?: 'trip' | 'cut' | 'all';
+  page?: number;
+  limit?: number;
+}
+
+export interface PayrollSummary {
+  totalCount: number;
+  unapprovedCount: number;
+}
+
+export interface UnifiedPayrollResponse {
+  items: PayrollLineItem[];
+  pagination: {
+    page: number;
+    limit: number;
+    total: number;
+    totalPages: number;
+  };
+  summary: PayrollSummary;
+}
+
+export interface PayrollLineItemUpdate {
+  basePay?: number;
+  mileagePay?: number;
+  accessorialPay?: number;
+  bonusPay?: number;
+  deductions?: number;
+  totalPay?: number;
+  rateApplied?: number;
+  notes?: string;
+}
+
+export interface PayrollExportOptions {
+  startDate?: string;
+  endDate?: string;
+  onlyApproved?: boolean;
 }

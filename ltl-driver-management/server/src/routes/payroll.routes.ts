@@ -14,7 +14,12 @@ import {
   updateTripPayStatus,
   bulkApproveTripPays,
   getDriverPaySummary,
-  exportPayPeriod
+  exportPayPeriod,
+  // Unified Payroll
+  getUnifiedPayrollItems,
+  updatePayrollLineItem,
+  bulkApprovePayrollItems,
+  exportPayrollToXls
 } from '../controllers/payroll.controller';
 import { authenticate, authorize } from '../middleware/auth.middleware';
 import { validateRequest } from '../middleware/validation.middleware';
@@ -161,6 +166,72 @@ router.get(
   ],
   validateRequest,
   getDriverPaySummary
+);
+
+// ==================== UNIFIED PAYROLL ====================
+
+// Get unified payroll items (TripPay + CutPayRequest combined)
+router.get(
+  '/unified',
+  [
+    query('startDate').optional().isISO8601(),
+    query('endDate').optional().isISO8601(),
+    query('locationId').optional().isInt({ min: 1 }),
+    query('statuses').optional(),
+    query('driverId').optional().isInt({ min: 1 }),
+    query('search').optional().trim(),
+    query('source').optional().isIn(['trip', 'cut', 'all']),
+    query('page').optional().isInt({ min: 1 }),
+    query('limit').optional().isInt({ min: 1, max: 500 })
+  ],
+  validateRequest,
+  getUnifiedPayrollItems
+);
+
+// Update payroll line item (trip or cut)
+router.patch(
+  '/line-items/:type/:id',
+  authorize(UserRole.ADMIN, UserRole.PAYROLL_ADMIN, UserRole.PAYROLL_CLERK),
+  [
+    param('type').isIn(['trip', 'cut']),
+    param('id').isInt({ min: 1 }),
+    body('basePay').optional().isDecimal(),
+    body('mileagePay').optional().isDecimal(),
+    body('accessorialPay').optional().isDecimal(),
+    body('bonusPay').optional().isDecimal(),
+    body('deductions').optional().isDecimal(),
+    body('totalPay').optional().isDecimal(),
+    body('rateApplied').optional().isDecimal(),
+    body('notes').optional().trim()
+  ],
+  validateRequest,
+  updatePayrollLineItem
+);
+
+// Bulk approve payroll items
+router.post(
+  '/bulk-approve',
+  authorize(UserRole.ADMIN, UserRole.PAYROLL_ADMIN),
+  [
+    body('items').isArray({ min: 1 }),
+    body('items.*.type').isIn(['trip', 'cut']),
+    body('items.*.id').isInt({ min: 1 })
+  ],
+  validateRequest,
+  bulkApprovePayrollItems
+);
+
+// Export payroll to XLS for Workday
+router.post(
+  '/export/xls',
+  authorize(UserRole.ADMIN, UserRole.PAYROLL_ADMIN),
+  [
+    body('startDate').optional().isISO8601(),
+    body('endDate').optional().isISO8601(),
+    body('onlyApproved').optional().isBoolean()
+  ],
+  validateRequest,
+  exportPayrollToXls
 );
 
 export default router;
