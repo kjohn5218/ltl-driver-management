@@ -1,5 +1,6 @@
 import { Request, Response } from 'express';
 import { prisma } from '../index';
+import { Prisma, CutPayType } from '@prisma/client';
 
 /**
  * Public Driver Controller
@@ -836,5 +837,148 @@ export const getTripDetails = async (req: Request, res: Response): Promise<void>
   } catch (error) {
     console.error('Error fetching trip details:', error);
     res.status(500).json({ message: 'Failed to fetch trip details' });
+  }
+};
+
+// Create cut pay request (driver self-service)
+export const createCutPayRequest = async (req: Request, res: Response): Promise<void> => {
+  try {
+    const {
+      driverId,
+      trailerConfig,
+      cutPayType,
+      hoursRequested,
+      milesRequested,
+      reason,
+      notes
+    } = req.body;
+
+    const driverIdNum = parseInt(driverId, 10);
+
+    // Validate driver exists
+    const driver = await prisma.carrierDriver.findUnique({
+      where: { id: driverIdNum },
+      select: {
+        id: true,
+        name: true,
+        number: true,
+        active: true
+      }
+    });
+
+    if (!driver) {
+      res.status(404).json({ message: 'Driver not found' });
+      return;
+    }
+
+    if (!driver.active) {
+      res.status(400).json({ message: 'Driver is not active' });
+      return;
+    }
+
+    // Determine cut pay type and validate appropriate field
+    const payType: CutPayType = cutPayType === 'MILES' ? 'MILES' : 'HOURS';
+
+    if (payType === 'HOURS' && (!hoursRequested || parseFloat(hoursRequested) <= 0)) {
+      res.status(400).json({ message: 'Hours requested is required for cut pay by hours' });
+      return;
+    }
+
+    if (payType === 'MILES' && (!milesRequested || parseFloat(milesRequested) <= 0)) {
+      res.status(400).json({ message: 'Miles requested is required for cut pay by miles' });
+      return;
+    }
+
+    // Validate trailer config
+    const validTrailerConfigs = ['SINGLE', 'DOUBLE', 'TRIPLE'];
+    const config = trailerConfig && validTrailerConfigs.includes(trailerConfig) ? trailerConfig : 'SINGLE';
+
+    // Create the cut pay request
+    const request = await prisma.cutPayRequest.create({
+      data: {
+        driverId: driverIdNum,
+        trailerConfig: config,
+        cutPayType: payType,
+        hoursRequested: payType === 'HOURS' ? new Prisma.Decimal(hoursRequested) : null,
+        milesRequested: payType === 'MILES' ? new Prisma.Decimal(milesRequested) : null,
+        reason: reason || null,
+        notes: notes || null,
+        status: 'PENDING'
+      },
+      include: {
+        driver: {
+          select: {
+            id: true,
+            name: true,
+            number: true
+          }
+        }
+      }
+    });
+
+    res.status(201).json({
+      message: 'Cut pay request submitted successfully',
+      request
+    });
+  } catch (error) {
+    console.error('Error creating cut pay request:', error);
+    res.status(500).json({ message: 'Failed to create cut pay request' });
+  }
+};
+
+// Get driver's cut pay requests
+export const getDriverCutPayRequests = async (req: Request, res: Response): Promise<void> => {
+  try {
+    const { driverId } = req.params;
+    const driverIdNum = parseInt(driverId, 10);
+
+    // Verify driver exists
+    const driver = await prisma.carrierDriver.findUnique({
+      where: { id: driverIdNum },
+      select: { id: true, name: true, number: true }
+    });
+
+    if (!driver) {
+      res.status(404).json({ message: 'Driver not found' });
+      return;
+    }
+
+    // Get cut pay requests from past 30 days
+    const thirtyDaysAgo = new Date();
+    thirtyDaysAgo.setDate(thirtyDaysAgo.getDate() - 30);
+
+    const requests = await prisma.cutPayRequest.findMany({
+      where: {
+        driverId: driverIdNum,
+        requestDate: {
+          gte: thirtyDaysAgo
+        }
+      },
+      orderBy: { requestDate: 'desc' },
+      select: {
+        id: true,
+        requestDate: true,
+        status: true,
+        trailerConfig: true,
+        cutPayType: true,
+        hoursRequested: true,
+        milesRequested: true,
+        reason: true,
+        totalPay: true,
+        createdAt: true
+      }
+    });
+
+    res.json({
+      driver: {
+        id: driver.id,
+        name: driver.name,
+        number: driver.number
+      },
+      requests
+    });
+  } catch (error) {
+    console.error('Error fetching driver cut pay requests:', error);
+    res.status(500).json({ message: 'Failed to fetch cut pay requests' });
   }
 };

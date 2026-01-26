@@ -1,5 +1,5 @@
 import React, { useState, useEffect, useMemo } from 'react';
-import { Truck, MapPin, Clock, CheckCircle, ChevronRight, ArrowLeft, Star, LogOut, Flag, Search, Plus, X, Package } from 'lucide-react';
+import { Truck, MapPin, Clock, CheckCircle, ChevronRight, ArrowLeft, Star, LogOut, Flag, Search, Plus, X, Package, Scissors, Route } from 'lucide-react';
 import toast, { Toaster } from 'react-hot-toast';
 
 // API base URL
@@ -84,9 +84,24 @@ const EQUIPMENT_ISSUE_TYPES = [
   { value: 'DOLLY', label: 'Dolly' }
 ];
 
+// Cut pay reason options
+const CUT_PAY_REASONS = [
+  { value: 'LOW_FREIGHT_VOLUME', label: 'Low freight volume' },
+  { value: 'EQUIPMENT_UNAVAILABLE', label: 'Equipment unavailable' },
+  { value: 'WEATHER_DELAY', label: 'Weather delay' },
+  { value: 'OTHER', label: 'Other' }
+];
+
+// Trailer config options
+const TRAILER_CONFIGS = [
+  { value: 'SINGLE', label: 'Single' },
+  { value: 'DOUBLE', label: 'Double' },
+  { value: 'TRIPLE', label: 'Triple' }
+];
+
 export const DriverSelfService: React.FC = () => {
   // State management
-  const [step, setStep] = useState<'verify' | 'trips' | 'dispatch' | 'arrive'>('verify');
+  const [step, setStep] = useState<'verify' | 'trips' | 'dispatch' | 'arrive' | 'cutpay'>('verify');
   const [isLoading, setIsLoading] = useState(false);
 
   // Driver verification state
@@ -124,6 +139,15 @@ export const DriverSelfService: React.FC = () => {
   const [equipmentIssueNumber, setEquipmentIssueNumber] = useState('');
   const [equipmentIssueDescription, setEquipmentIssueDescription] = useState('');
   const [moraleRating, setMoraleRating] = useState<number>(0);
+
+  // Cut pay form state
+  const [cutPayType, setCutPayType] = useState<'HOURS' | 'MILES'>('HOURS');
+  const [cutPayHours, setCutPayHours] = useState('');
+  const [cutPayMiles, setCutPayMiles] = useState('');
+  const [cutPayTrailerConfig, setCutPayTrailerConfig] = useState('SINGLE');
+  const [cutPayReason, setCutPayReason] = useState('LOW_FREIGHT_VOLUME');
+  const [cutPayReasonOther, setCutPayReasonOther] = useState('');
+  const [cutPayNotes, setCutPayNotes] = useState('');
 
   // Verify driver
   const handleVerify = async (e: React.FormEvent) => {
@@ -355,6 +379,74 @@ export const DriverSelfService: React.FC = () => {
     setMoraleRating(0);
   };
 
+  // Reset cut pay form
+  const resetCutPayForm = () => {
+    setCutPayType('HOURS');
+    setCutPayHours('');
+    setCutPayMiles('');
+    setCutPayTrailerConfig('SINGLE');
+    setCutPayReason('LOW_FREIGHT_VOLUME');
+    setCutPayReasonOther('');
+    setCutPayNotes('');
+  };
+
+  // Submit cut pay request
+  const handleCutPaySubmit = async (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!driver) return;
+
+    // Validate based on cut pay type
+    if (cutPayType === 'HOURS' && (!cutPayHours || parseFloat(cutPayHours) <= 0)) {
+      toast.error('Please enter cut hours');
+      return;
+    }
+
+    if (cutPayType === 'MILES' && (!cutPayMiles || parseFloat(cutPayMiles) <= 0)) {
+      toast.error('Please enter cut miles');
+      return;
+    }
+
+    if (cutPayReason === 'OTHER' && !cutPayReasonOther.trim()) {
+      toast.error('Please specify the reason');
+      return;
+    }
+
+    setIsLoading(true);
+
+    try {
+      const reasonText = cutPayReason === 'OTHER'
+        ? cutPayReasonOther
+        : CUT_PAY_REASONS.find(r => r.value === cutPayReason)?.label || cutPayReason;
+
+      const response = await fetch(`${API_BASE}/cut-pay`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          driverId: driver.id,
+          trailerConfig: cutPayTrailerConfig,
+          cutPayType: cutPayType,
+          hoursRequested: cutPayType === 'HOURS' ? parseFloat(cutPayHours) : undefined,
+          milesRequested: cutPayType === 'MILES' ? parseFloat(cutPayMiles) : undefined,
+          reason: reasonText,
+          notes: cutPayNotes || undefined
+        })
+      });
+
+      if (!response.ok) {
+        const error = await response.json();
+        throw new Error(error.message || 'Failed to submit cut pay request');
+      }
+
+      toast.success('Cut pay request submitted successfully!');
+      resetCutPayForm();
+      setStep('trips');
+    } catch (error: any) {
+      toast.error(error.message || 'Failed to submit cut pay request');
+    } finally {
+      setIsLoading(false);
+    }
+  };
+
   // Logout
   const handleLogout = () => {
     setDriver(null);
@@ -524,15 +616,25 @@ export const DriverSelfService: React.FC = () => {
 
       {/* Content */}
       <div className="p-4">
-        {/* Dispatch New Trip Button */}
-        <button
-          onClick={openDispatchForm}
-          disabled={isLoading}
-          className="w-full mb-4 py-4 bg-green-600 text-white font-semibold rounded-xl hover:bg-green-700 disabled:opacity-50 flex items-center justify-center shadow-md"
-        >
-          <Plus className="w-5 h-5 mr-2" />
-          Dispatch New Trip
-        </button>
+        {/* Action Buttons */}
+        <div className="grid grid-cols-2 gap-3 mb-4">
+          <button
+            onClick={openDispatchForm}
+            disabled={isLoading}
+            className="py-4 bg-green-600 text-white font-semibold rounded-xl hover:bg-green-700 disabled:opacity-50 flex items-center justify-center shadow-md"
+          >
+            <Plus className="w-5 h-5 mr-2" />
+            Dispatch Trip
+          </button>
+          <button
+            onClick={() => setStep('cutpay')}
+            disabled={isLoading}
+            className="py-4 bg-orange-600 text-white font-semibold rounded-xl hover:bg-orange-700 disabled:opacity-50 flex items-center justify-center shadow-md"
+          >
+            <Scissors className="w-5 h-5 mr-2" />
+            Request Cut Pay
+          </button>
+        </div>
 
         <h2 className="text-lg font-semibold text-gray-900 mb-4">Your Trips (Last 7 Days)</h2>
 
@@ -1150,6 +1252,181 @@ export const DriverSelfService: React.FC = () => {
     </div>
   );
 
+  // Render cut pay form
+  const renderCutPayForm = () => (
+    <div className="min-h-screen bg-gray-50 pb-24">
+      {/* Header */}
+      <div className="bg-orange-600 text-white px-4 py-4 sticky top-0 z-10">
+        <button
+          onClick={() => { resetCutPayForm(); setStep('trips'); }}
+          className="flex items-center text-orange-100 hover:text-white mb-2"
+        >
+          <ArrowLeft className="w-4 h-4 mr-1" />
+          Back
+        </button>
+        <div className="flex items-center">
+          <Scissors className="w-6 h-6 mr-2" />
+          <div>
+            <h1 className="text-xl font-semibold">Request Cut Pay</h1>
+            <p className="text-orange-100 text-sm">Driver: {driver?.name}</p>
+          </div>
+        </div>
+      </div>
+
+      {/* Content */}
+      <form onSubmit={handleCutPaySubmit} className="p-4 space-y-4">
+        {/* Info Card */}
+        <div className="bg-orange-50 border border-orange-200 rounded-xl p-4">
+          <p className="text-sm text-orange-800">
+            Submit a cut pay request when no work is available. This request will be reviewed and approved by dispatch.
+          </p>
+        </div>
+
+        {/* Cut Pay Type Selection */}
+        <div className="bg-white rounded-xl shadow-sm p-4">
+          <h3 className="font-medium text-gray-900 mb-3">Cut Pay Type *</h3>
+          <div className="grid grid-cols-2 gap-3">
+            <button
+              type="button"
+              onClick={() => setCutPayType('HOURS')}
+              className={`py-3 px-4 rounded-lg border-2 flex items-center justify-center font-medium transition-colors ${
+                cutPayType === 'HOURS'
+                  ? 'border-orange-600 bg-orange-50 text-orange-700'
+                  : 'border-gray-300 bg-white text-gray-700'
+              }`}
+            >
+              <Clock className="w-5 h-5 mr-2" />
+              Hours
+            </button>
+            <button
+              type="button"
+              onClick={() => setCutPayType('MILES')}
+              className={`py-3 px-4 rounded-lg border-2 flex items-center justify-center font-medium transition-colors ${
+                cutPayType === 'MILES'
+                  ? 'border-orange-600 bg-orange-50 text-orange-700'
+                  : 'border-gray-300 bg-white text-gray-700'
+              }`}
+            >
+              <Route className="w-5 h-5 mr-2" />
+              Miles
+            </button>
+          </div>
+        </div>
+
+        {/* Hours or Miles Input */}
+        <div className="bg-white rounded-xl shadow-sm p-4">
+          {cutPayType === 'HOURS' ? (
+            <div>
+              <label className="block font-medium text-gray-900 mb-2">Cut Hours *</label>
+              <div className="relative">
+                <Clock className="absolute left-3 top-1/2 transform -translate-y-1/2 h-5 w-5 text-gray-400" />
+                <input
+                  type="number"
+                  step="0.5"
+                  min="0.5"
+                  max="12"
+                  value={cutPayHours}
+                  onChange={(e) => setCutPayHours(e.target.value)}
+                  placeholder="Enter hours..."
+                  className="w-full pl-11 pr-4 py-3 border border-gray-300 rounded-lg text-lg"
+                />
+              </div>
+              <p className="text-sm text-gray-500 mt-1">Enter hours between 0.5 and 12</p>
+            </div>
+          ) : (
+            <div>
+              <label className="block font-medium text-gray-900 mb-2">Cut Miles *</label>
+              <div className="relative">
+                <Route className="absolute left-3 top-1/2 transform -translate-y-1/2 h-5 w-5 text-gray-400" />
+                <input
+                  type="number"
+                  step="1"
+                  min="1"
+                  max="1000"
+                  value={cutPayMiles}
+                  onChange={(e) => setCutPayMiles(e.target.value)}
+                  placeholder="Enter miles..."
+                  className="w-full pl-11 pr-4 py-3 border border-gray-300 rounded-lg text-lg"
+                />
+              </div>
+              <p className="text-sm text-gray-500 mt-1">Enter miles between 1 and 1000</p>
+            </div>
+          )}
+        </div>
+
+        {/* Trailer Configuration */}
+        <div className="bg-white rounded-xl shadow-sm p-4">
+          <label className="block font-medium text-gray-900 mb-2">Trailer Configuration *</label>
+          <select
+            value={cutPayTrailerConfig}
+            onChange={(e) => setCutPayTrailerConfig(e.target.value)}
+            className="w-full px-4 py-3 border border-gray-300 rounded-lg text-lg"
+          >
+            {TRAILER_CONFIGS.map(config => (
+              <option key={config.value} value={config.value}>{config.label}</option>
+            ))}
+          </select>
+        </div>
+
+        {/* Reason */}
+        <div className="bg-white rounded-xl shadow-sm p-4">
+          <label className="block font-medium text-gray-900 mb-2">Reason *</label>
+          <select
+            value={cutPayReason}
+            onChange={(e) => setCutPayReason(e.target.value)}
+            className="w-full px-4 py-3 border border-gray-300 rounded-lg text-lg"
+          >
+            {CUT_PAY_REASONS.map(reason => (
+              <option key={reason.value} value={reason.value}>{reason.label}</option>
+            ))}
+          </select>
+
+          {cutPayReason === 'OTHER' && (
+            <div className="mt-3">
+              <input
+                type="text"
+                value={cutPayReasonOther}
+                onChange={(e) => setCutPayReasonOther(e.target.value)}
+                placeholder="Specify reason..."
+                className="w-full px-4 py-3 border border-gray-300 rounded-lg"
+              />
+            </div>
+          )}
+        </div>
+
+        {/* Notes */}
+        <div className="bg-white rounded-xl shadow-sm p-4">
+          <label className="block font-medium text-gray-900 mb-2">Notes (Optional)</label>
+          <textarea
+            value={cutPayNotes}
+            onChange={(e) => setCutPayNotes(e.target.value)}
+            placeholder="Any additional notes..."
+            rows={3}
+            className="w-full px-4 py-3 border border-gray-300 rounded-lg resize-none"
+          />
+        </div>
+
+        {/* Submit button */}
+        <div className="fixed bottom-0 left-0 right-0 p-4 bg-white border-t shadow-lg">
+          <button
+            type="submit"
+            disabled={isLoading}
+            className="w-full py-4 bg-orange-600 text-white font-semibold rounded-lg hover:bg-orange-700 disabled:opacity-50 flex items-center justify-center"
+          >
+            {isLoading ? (
+              <span className="animate-pulse">Submitting...</span>
+            ) : (
+              <>
+                <Scissors className="w-5 h-5 mr-2" />
+                Submit Cut Pay Request
+              </>
+            )}
+          </button>
+        </div>
+      </form>
+    </div>
+  );
+
   return (
     <>
       <Toaster position="top-center" />
@@ -1157,6 +1434,7 @@ export const DriverSelfService: React.FC = () => {
       {step === 'trips' && driver && renderTripsList()}
       {step === 'dispatch' && driver && renderDispatchForm()}
       {step === 'arrive' && selectedTrip && renderArrivalForm()}
+      {step === 'cutpay' && driver && renderCutPayForm()}
     </>
   );
 };

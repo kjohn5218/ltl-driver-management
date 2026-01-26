@@ -8,7 +8,9 @@ import {
   getAvailableLoadsheets,
   getAvailableEquipment,
   getLinehaulProfiles,
-  createAndDispatchTrip
+  createAndDispatchTrip,
+  createCutPayRequest,
+  getDriverCutPayRequests
 } from '../controllers/publicDriver.controller';
 
 /**
@@ -44,5 +46,11 @@ router.post('/trip/:tripId/dispatch', dispatchTrip);
 
 // Arrive a trip (driver submits arrival details)
 router.post('/trip/:tripId/arrive', arriveTrip);
+
+// Create a cut pay request
+router.post('/cut-pay', createCutPayRequest);
+
+// Get driver's cut pay requests
+router.get('/cut-pay/:driverId', getDriverCutPayRequests);
 
 export default router;

@@ -34,6 +34,9 @@ model User {
   approvedReports       DriverTripReport[]    @relation("PayApprover")
   resolvedIssues        EquipmentIssue[]      @relation("IssueResolver")
 
+  // Cut pay relations
+  approvedCutPayRequests CutPayRequest[]      @relation("CutPayApprover")
+
   @@map("users")
 }
 
@@ -291,6 +294,7 @@ model CarrierDriver {
   licenseState          String?
   licenseExpiration     DateTime?
   endorsements          String? // Comma-separated: hazmat, tanker, doubles, etc.
+  hazmatEndorsement     Boolean  @default(false) // Has valid hazmat endorsement
   medicalCardExpiration DateTime?
   dateOfHire            DateTime?
   dateOfBirth           DateTime?
@@ -318,6 +322,11 @@ model CarrierDriver {
   homeTerminalCode String?
   teamDriverId     Int? // Preferred team partner
 
+  // Workday integration fields
+  workdayEmployeeId String?   // Workday employee ID
+  workdayLastSync   DateTime? // Last sync timestamp
+  workdayRateInfo   String?   @db.Text // JSON blob of rate info from Workday
+
   // Relations
   carrier        Carrier          @relation(fields: [carrierId], references: [id], onDelete: Cascade)
   location       Location?        @relation(fields: [locationId], references: [id])
@@ -328,11 +337,13 @@ model CarrierDriver {
   tripReports    DriverTripReport[]
   equipmentIssues EquipmentIssue[]
   moraleRatings  DriverMoraleRating[]
+  cutPayRequests CutPayRequest[]
 
   @@index([carrierId])
   @@index([driverStatus])
   @@index([externalDriverId])
   @@index([locationId])
+  @@index([workdayEmployeeId])
   @@map("carrier_drivers")
 }
 
@@ -603,8 +614,25 @@ enum AccessorialType {
   STOP_CHARGE
   FUEL_SURCHARGE
   DROP_HOOK
+  DROP_HOOK_SINGLE
+  DROP_HOOK_DOUBLE_TRIPLE
   CHAIN_UP
+  WAIT_TIME
+  SINGLE_TRAILER
+  DOUBLE_TRAILER
+  TRIPLE_TRAILER
+  CUT_PAY
+  CUT_PAY_SINGLE_MILES
+  CUT_PAY_DOUBLE_MILES
+  CUT_PAY_TRIPLE_MILES
   OTHER
+}
+
+enum CutPayStatus {
+  PENDING
+  APPROVED
+  REJECTED
+  PAID
 }
 
 enum PayPeriodStatus {
@@ -912,6 +940,7 @@ model LinehaulTrip {
   driverTripReport    DriverTripReport?
   equipmentIssues     EquipmentIssue[]
   moraleRating        DriverMoraleRating?
+  cutPayRequests      CutPayRequest[]
 
   @@index([dispatchDate])
   @@index([status])
@@ -1553,4 +1582,67 @@ model DriverMoraleRating {
   @@index([arrivedAt])
   @@index([rating])
   @@map("driver_morale_ratings")
+}
+
+// ============================================
+// CUT PAY REQUEST MODULE
+// ============================================
+
+// Cut Pay Type - determines if cut pay is calculated by hours or miles
+enum CutPayType {
+  HOURS
+  MILES
+}
+
+// Cut Pay Request - tracks when drivers are cut (not working due to low freight)
+model CutPayRequest {
+  id              Int          @id @default(autoincrement())
+  driverId        Int
+  requestDate     DateTime     @default(now())
+  tripId          Int?         // Optional reference to planned/cancelled trip
+  status          CutPayStatus @default(PENDING)
+  trailerConfig   String?      // SINGLE, DOUBLE, TRIPLE
+  cutPayType      CutPayType   @default(HOURS) // HOURS or MILES
+  hoursRequested  Decimal?     @db.Decimal(4, 2) // Hours cut (when cutPayType is HOURS)
+  milesRequested  Decimal?     @db.Decimal(6, 1) // Miles cut (when cutPayType is MILES)
+  reason          String?
+  approvedBy      Int?
+  approvedAt      DateTime?
+  rateApplied     Decimal?     @db.Decimal(8, 2)
+  totalPay        Decimal?     @db.Decimal(8, 2)
+  notes           String?
+  createdAt       DateTime     @default(now())
+  updatedAt       DateTime     @updatedAt
+
+  // Relations
+  driver   CarrierDriver @relation(fields: [driverId], references: [id])
+  trip     LinehaulTrip? @relation(fields: [tripId], references: [id])
+  approver User?         @relation("CutPayApprover", fields: [approvedBy], references: [id])
+
+  @@index([driverId])
+  @@index([status])
+  @@index([requestDate])
+  @@map("cut_pay_requests")
+}
+
+// ============================================
+// WORKDAY INTEGRATION MODULE
+// ============================================
+
+// Workday Paycode Configuration - maps internal pay types to Workday paycodes
+model WorkdayPaycode {
+  id            Int      @id @default(autoincrement())
+  code          String   @unique // e.g., "LH_SINGLE_MILES"
+  workdayId     String   // Workday ID like "252c7e64604d1000ad393115c9fd0000"
+  description   String
+  payType       String   // MILES, DROP_HOOK, CHAIN_UP, STOP_HOURS, TRIP_PAY, CUT_PAY, CUT_MILES
+  trailerConfig String?  // SINGLE, DOUBLE, TRIPLE, or null for generic
+  isCutPay      Boolean  @default(false)
+  active        Boolean  @default(true)
+  createdAt     DateTime @default(now())
+  updatedAt     DateTime @updatedAt
+
+  @@index([payType])
+  @@index([trailerConfig])
+  @@map("workday_paycodes")
 }
