@@ -1,6 +1,7 @@
 import { Request, Response } from 'express';
 import { prisma } from '../index';
 import { Prisma, CutPayStatus, CutPayType } from '@prisma/client';
+import { createPayrollLineItemFromCutPay } from '../services/payroll.service';
 
 // Get all cut pay requests with filtering
 export const getCutPayRequests = async (req: Request, res: Response): Promise<void> => {
@@ -213,6 +214,9 @@ export const createCutPayRequest = async (req: Request, res: Response): Promise<
         }
       }
     });
+
+    // Create PayrollLineItem for the cut pay request
+    await createPayrollLineItemFromCutPay(request.id);
 
     res.status(201).json(request);
   } catch (error) {

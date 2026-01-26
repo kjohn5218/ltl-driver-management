@@ -1,7 +1,8 @@
 import { Request, Response } from 'express';
 import { prisma } from '../index';
-import { Prisma, PayPeriodStatus, TripPayStatus, CutPayStatus } from '@prisma/client';
+import { Prisma, PayPeriodStatus, TripPayStatus, PayrollSourceType, PayrollLineItemStatus } from '@prisma/client';
 import ExcelJS from 'exceljs';
+import { createPayrollLineItemFromTripPay, updatePayrollLineItemFromTripPay } from '../services/payroll.service';
 
 // ==================== PAY PERIODS ====================
 
@@ -543,6 +544,8 @@ export const calculateTripPay = async (req: Request, res: Response): Promise<voi
           calculatedAt: new Date()
         }
       });
+      // Update PayrollLineItem
+      await updatePayrollLineItemFromTripPay(tripPay.id);
     } else {
       tripPay = await prisma.tripPay.create({
         data: {
@@ -559,6 +562,8 @@ export const calculateTripPay = async (req: Request, res: Response): Promise<voi
           calculatedAt: new Date()
         }
       });
+      // Create PayrollLineItem
+      await createPayrollLineItemFromTripPay(tripPay.id);
     }
 
     res.json({
@@ -862,38 +867,7 @@ export const exportPayPeriod = async (req: Request, res: Response): Promise<void
 
 // ==================== UNIFIED PAYROLL ====================
 
-// Unified payroll line item interface
-interface UnifiedPayrollItem {
-  id: string;
-  source: 'TRIP_PAY' | 'CUT_PAY';
-  sourceId: number;
-  driverId: number;
-  driverName: string;
-  driverNumber?: string;
-  workdayEmployeeId?: string;
-  date: string;
-  origin?: string;
-  destination?: string;
-  tripNumber?: string;
-  basePay: number;
-  mileagePay: number;
-  dropAndHookPay: number;
-  chainUpPay: number;
-  waitTimePay: number;
-  otherAccessorialPay: number;
-  bonusPay: number;
-  deductions: number;
-  totalGrossPay: number;
-  cutPayType?: string;
-  cutPayHours?: number;
-  cutPayMiles?: number;
-  trailerConfig?: string;
-  reason?: string;
-  status: string;
-  notes?: string;
-}
-
-// Get unified payroll items combining TripPay and CutPayRequest
+// Get unified payroll items from PayrollLineItem table
 export const getUnifiedPayrollItems = async (req: Request, res: Response): Promise<void> => {
   try {
     const {
@@ -910,236 +884,120 @@ export const getUnifiedPayrollItems = async (req: Request, res: Response): Promi
 
     const pageNum = parseInt(page as string, 10);
     const limitNum = parseInt(limit as string, 10);
+    const skip = (pageNum - 1) * limitNum;
 
-    const items: UnifiedPayrollItem[] = [];
+    // Build where clause for PayrollLineItem
+    const where: Prisma.PayrollLineItemWhereInput = {};
 
-    // Parse location ID for driver location filter
-    const driverLocationId = locationId ? parseInt(locationId as string, 10) : undefined;
-
-    // Parse statuses
-    const statusArray = statuses
-      ? (Array.isArray(statuses) ? statuses : [statuses]) as string[]
-      : [];
-
-    // Fetch TripPay records
-    if (!source || source === 'all' || source === 'trip') {
-      const tripPayWhere: Prisma.TripPayWhereInput = {};
-
-      if (driverId) {
-        tripPayWhere.driverId = parseInt(driverId as string, 10);
-      }
-
-      if (statusArray.length > 0) {
-        tripPayWhere.status = { in: statusArray as TripPayStatus[] };
-      }
-
-      if (startDate || endDate) {
-        tripPayWhere.trip = {
-          dispatchDate: {
-            ...(startDate && { gte: new Date(startDate as string) }),
-            ...(endDate && { lte: new Date(endDate as string) })
-          }
-        };
-      }
-
-      // Location filter for driver's assigned location
-      if (driverLocationId) {
-        tripPayWhere.driver = {
-          ...tripPayWhere.driver as any,
-          locationId: driverLocationId
-        };
-      }
-
-      // Search filter
-      if (search) {
-        tripPayWhere.OR = [
-          { driver: { name: { contains: search as string, mode: 'insensitive' } } },
-          { driver: { number: { contains: search as string, mode: 'insensitive' } } },
-          { trip: { tripNumber: { contains: search as string, mode: 'insensitive' } } }
-        ];
-      }
-
-      const tripPays = await prisma.tripPay.findMany({
-        where: tripPayWhere,
-        include: {
-          trip: {
-            include: {
-              linehaulProfile: {
-                include: {
-                  originTerminal: { select: { code: true, name: true } },
-                  destinationTerminal: { select: { code: true, name: true } }
-                }
-              },
-              driverTripReport: {
-                select: { dropAndHook: true, chainUpCycles: true, waitTimeMinutes: true }
-              }
-            }
-          },
-          driver: {
-            select: { id: true, name: true, number: true, workdayEmployeeId: true }
-          }
-        },
-        orderBy: { trip: { dispatchDate: 'desc' } }
-      });
-
-      for (const tp of tripPays) {
-        // Calculate accessorial breakdown from driver trip report
-        const report = tp.trip?.driverTripReport;
-        const dropAndHook = report?.dropAndHook || 0;
-        const chainUp = report?.chainUpCycles || 0;
-        const waitTimeMinutes = report?.waitTimeMinutes || 0;
-
-        // Estimate individual accessorial pay (simplified - actual would come from rate card)
-        const totalAccessorial = Number(tp.accessorialPay || 0);
-        const dropHookPay = dropAndHook > 0 ? dropAndHook * 25 : 0; // Estimate $25/drop-hook
-        const chainUpPayAmount = chainUp > 0 ? chainUp * 15 : 0; // Estimate $15/chain-up
-        const waitTimePay = waitTimeMinutes > 0 ? (waitTimeMinutes / 60) * 18 : 0; // Estimate $18/hr
-        const otherPay = Math.max(0, totalAccessorial - dropHookPay - chainUpPayAmount - waitTimePay);
-
-        items.push({
-          id: `trip-${tp.id}`,
-          source: 'TRIP_PAY',
-          sourceId: tp.id,
-          driverId: tp.driverId || 0,
-          driverName: tp.driver?.name || 'Unknown',
-          driverNumber: tp.driver?.number || undefined,
-          workdayEmployeeId: tp.driver?.workdayEmployeeId || undefined,
-          date: tp.trip?.dispatchDate?.toISOString().split('T')[0] || '',
-          origin: tp.trip?.linehaulProfile?.originTerminal?.code,
-          destination: tp.trip?.linehaulProfile?.destinationTerminal?.code,
-          tripNumber: tp.trip?.tripNumber,
-          basePay: Number(tp.basePay || 0),
-          mileagePay: Number(tp.mileagePay || 0),
-          dropAndHookPay: dropHookPay,
-          chainUpPay: chainUpPayAmount,
-          waitTimePay: waitTimePay,
-          otherAccessorialPay: otherPay,
-          bonusPay: Number(tp.bonusPay || 0),
-          deductions: Number(tp.deductions || 0),
-          totalGrossPay: Number(tp.totalGrossPay || 0),
-          status: tp.status,
-          notes: tp.notes || undefined
-        });
-      }
+    // Source type filter
+    if (source === 'trip') {
+      where.sourceType = PayrollSourceType.TRIP_PAY;
+    } else if (source === 'cut') {
+      where.sourceType = PayrollSourceType.CUT_PAY;
     }
 
-    // Fetch CutPayRequest records
-    if (!source || source === 'all' || source === 'cut') {
-      const cutPayWhere: Prisma.CutPayRequestWhereInput = {};
-
-      if (driverId) {
-        cutPayWhere.driverId = parseInt(driverId as string, 10);
-      }
-
-      // Map status filter for cut pay
-      if (statusArray.length > 0) {
-        const cutPayStatuses: CutPayStatus[] = [];
-        for (const s of statusArray) {
-          if (s === 'PENDING' || s === 'CALCULATED') cutPayStatuses.push('PENDING');
-          if (s === 'APPROVED' || s === 'REVIEWED') cutPayStatuses.push('APPROVED');
-          if (s === 'PAID') cutPayStatuses.push('PAID');
-        }
-        if (cutPayStatuses.length > 0) {
-          cutPayWhere.status = { in: [...new Set(cutPayStatuses)] };
-        }
-      }
-
-      if (startDate || endDate) {
-        cutPayWhere.requestDate = {
-          ...(startDate && { gte: new Date(startDate as string) }),
-          ...(endDate && { lte: new Date(endDate as string) })
-        };
-      }
-
-      // Search filter
-      if (search) {
-        cutPayWhere.OR = [
-          { driver: { name: { contains: search as string, mode: 'insensitive' } } },
-          { driver: { number: { contains: search as string, mode: 'insensitive' } } }
-        ];
-      }
-
-      // Location filter for driver's assigned location
-      if (driverLocationId) {
-        cutPayWhere.driver = {
-          ...cutPayWhere.driver as any,
-          locationId: driverLocationId
-        };
-      }
-
-      const cutPayRequests = await prisma.cutPayRequest.findMany({
-        where: cutPayWhere,
-        include: {
-          driver: {
-            select: { id: true, name: true, number: true, workdayEmployeeId: true }
-          }
-        },
-        orderBy: { requestDate: 'desc' }
-      });
-
-      for (const cp of cutPayRequests) {
-        // Map cut pay status to unified status
-        let mappedStatus = cp.status as string;
-        if (cp.status === 'PENDING') mappedStatus = 'PENDING';
-        if (cp.status === 'APPROVED') mappedStatus = 'APPROVED';
-        if (cp.status === 'PAID') mappedStatus = 'PAID';
-        if (cp.status === 'REJECTED') mappedStatus = 'DISPUTED';
-
-        items.push({
-          id: `cut-${cp.id}`,
-          source: 'CUT_PAY',
-          sourceId: cp.id,
-          driverId: cp.driverId,
-          driverName: cp.driver?.name || 'Unknown',
-          driverNumber: cp.driver?.number || undefined,
-          workdayEmployeeId: cp.driver?.workdayEmployeeId || undefined,
-          date: cp.requestDate.toISOString().split('T')[0],
-          origin: undefined, // Cut pay doesn't have origin/destination
-          destination: undefined,
-          tripNumber: cp.tripId ? `Trip-${cp.tripId}` : undefined,
-          basePay: 0,
-          mileagePay: 0,
-          dropAndHookPay: 0,
-          chainUpPay: 0,
-          waitTimePay: 0,
-          otherAccessorialPay: 0,
-          bonusPay: 0,
-          deductions: 0,
-          totalGrossPay: Number(cp.totalPay || 0),
-          cutPayType: cp.cutPayType,
-          cutPayHours: cp.hoursRequested ? Number(cp.hoursRequested) : undefined,
-          cutPayMiles: cp.milesRequested ? Number(cp.milesRequested) : undefined,
-          trailerConfig: cp.trailerConfig || undefined,
-          reason: cp.reason || undefined,
-          status: mappedStatus,
-          notes: cp.notes || undefined
-        });
-      }
+    // Driver filter
+    if (driverId) {
+      where.driverId = parseInt(driverId as string, 10);
     }
 
-    // Sort by date descending
-    items.sort((a, b) => new Date(b.date).getTime() - new Date(a.date).getTime());
+    // Status filter
+    if (statuses) {
+      const statusArray = (Array.isArray(statuses) ? statuses : [statuses]) as PayrollLineItemStatus[];
+      where.status = { in: statusArray };
+    }
 
-    // Paginate
-    const total = items.length;
-    const startIndex = (pageNum - 1) * limitNum;
-    const paginatedItems = items.slice(startIndex, startIndex + limitNum);
+    // Date range filter
+    if (startDate || endDate) {
+      where.date = {
+        ...(startDate && { gte: new Date(startDate as string) }),
+        ...(endDate && { lte: new Date(endDate as string) })
+      };
+    }
 
-    // Calculate totals - simplified to total count and unapproved count
-    const summary = {
-      totalCount: items.length,
-      unapprovedCount: items.filter(i => i.status === 'PENDING' || i.status === 'CALCULATED' || i.status === 'REVIEWED').length
-    };
+    // Location filter (driver's assigned location)
+    if (locationId) {
+      where.driver = {
+        locationId: parseInt(locationId as string, 10)
+      };
+    }
+
+    // Search filter
+    if (search) {
+      where.OR = [
+        { driverName: { contains: search as string, mode: 'insensitive' } },
+        { driverNumber: { contains: search as string, mode: 'insensitive' } },
+        { tripNumber: { contains: search as string, mode: 'insensitive' } }
+      ];
+    }
+
+    // Fetch items with pagination
+    const [items, total] = await Promise.all([
+      prisma.payrollLineItem.findMany({
+        where,
+        skip,
+        take: limitNum,
+        orderBy: { date: 'desc' },
+        include: {
+          driver: {
+            select: { id: true, name: true, number: true, workdayEmployeeId: true, locationId: true }
+          }
+        }
+      }),
+      prisma.payrollLineItem.count({ where })
+    ]);
+
+    // Get unapproved count
+    const unapprovedCount = await prisma.payrollLineItem.count({
+      where: {
+        ...where,
+        status: { in: ['PENDING', 'CALCULATED', 'REVIEWED'] }
+      }
+    });
+
+    // Transform items for response
+    const transformedItems = items.map(item => ({
+      id: `${item.sourceType === 'TRIP_PAY' ? 'trip' : 'cut'}-${item.tripPayId || item.cutPayRequestId}`,
+      source: item.sourceType,
+      sourceId: item.tripPayId || item.cutPayRequestId || item.id,
+      driverId: item.driverId,
+      driverName: item.driverName || item.driver?.name || 'Unknown',
+      driverNumber: item.driverNumber || item.driver?.number,
+      workdayEmployeeId: item.workdayEmployeeId || item.driver?.workdayEmployeeId,
+      date: item.date.toISOString().split('T')[0],
+      origin: item.origin,
+      destination: item.destination,
+      tripNumber: item.tripNumber,
+      basePay: Number(item.basePay),
+      mileagePay: Number(item.mileagePay),
+      dropAndHookPay: Number(item.dropAndHookPay),
+      chainUpPay: Number(item.chainUpPay),
+      waitTimePay: Number(item.waitTimePay),
+      otherAccessorialPay: Number(item.otherAccessorialPay),
+      bonusPay: Number(item.bonusPay),
+      deductions: Number(item.deductions),
+      totalGrossPay: Number(item.totalGrossPay),
+      cutPayType: item.cutPayType,
+      cutPayHours: item.cutPayHours ? Number(item.cutPayHours) : undefined,
+      cutPayMiles: item.cutPayMiles ? Number(item.cutPayMiles) : undefined,
+      trailerConfig: item.trailerConfig,
+      rateApplied: item.rateApplied ? Number(item.rateApplied) : undefined,
+      status: item.status,
+      notes: item.notes
+    }));
 
     res.json({
-      items: paginatedItems,
+      items: transformedItems,
       pagination: {
         page: pageNum,
         limit: limitNum,
         total,
         totalPages: Math.ceil(total / limitNum)
       },
-      summary
+      summary: {
+        totalCount: total,
+        unapprovedCount
+      }
     });
   } catch (error) {
     console.error('Error fetching unified payroll items:', error);
@@ -1147,7 +1005,7 @@ export const getUnifiedPayrollItems = async (req: Request, res: Response): Promi
   }
 };
 
-// Update a payroll line item (TripPay or CutPayRequest)
+// Update a payroll line item
 export const updatePayrollLineItem = async (req: Request, res: Response): Promise<void> => {
   try {
     const { type, id } = req.params;
@@ -1155,27 +1013,41 @@ export const updatePayrollLineItem = async (req: Request, res: Response): Promis
     const itemId = parseInt(id, 10);
 
     if (type === 'trip') {
-      // Update TripPay
-      const existingTripPay = await prisma.tripPay.findUnique({ where: { id: itemId } });
-      if (!existingTripPay) {
-        res.status(404).json({ message: 'Trip pay not found' });
+      // Find the PayrollLineItem by tripPayId
+      const payrollItem = await prisma.payrollLineItem.findUnique({
+        where: { tripPayId: itemId }
+      });
+
+      if (!payrollItem) {
+        res.status(404).json({ message: 'Payroll line item not found' });
         return;
       }
 
-      // Calculate new total if individual amounts changed
-      let newTotal = Number(existingTripPay.totalGrossPay);
-      if (basePay !== undefined || mileagePay !== undefined || accessorialPay !== undefined || bonusPay !== undefined || deductions !== undefined) {
-        const newBasePay = basePay !== undefined ? basePay : Number(existingTripPay.basePay || 0);
-        const newMileagePay = mileagePay !== undefined ? mileagePay : Number(existingTripPay.mileagePay || 0);
-        const newAccessorialPay = accessorialPay !== undefined ? accessorialPay : Number(existingTripPay.accessorialPay || 0);
-        const newBonusPay = bonusPay !== undefined ? bonusPay : Number(existingTripPay.bonusPay || 0);
-        const newDeductions = deductions !== undefined ? deductions : Number(existingTripPay.deductions || 0);
-        newTotal = newBasePay + newMileagePay + newAccessorialPay + newBonusPay - newDeductions;
-      } else if (totalPay !== undefined) {
-        newTotal = totalPay;
-      }
+      // Calculate new total
+      const newBasePay = basePay !== undefined ? basePay : Number(payrollItem.basePay);
+      const newMileagePay = mileagePay !== undefined ? mileagePay : Number(payrollItem.mileagePay);
+      const totalAccessorial = Number(payrollItem.dropAndHookPay) + Number(payrollItem.chainUpPay) + Number(payrollItem.waitTimePay) + Number(payrollItem.otherAccessorialPay);
+      const newAccessorialPay = accessorialPay !== undefined ? accessorialPay : totalAccessorial;
+      const newBonusPay = bonusPay !== undefined ? bonusPay : Number(payrollItem.bonusPay);
+      const newDeductions = deductions !== undefined ? deductions : Number(payrollItem.deductions);
+      const newTotal = totalPay !== undefined ? totalPay : (newBasePay + newMileagePay + newAccessorialPay + newBonusPay - newDeductions);
 
-      const updatedTripPay = await prisma.tripPay.update({
+      // Update PayrollLineItem
+      const updatedItem = await prisma.payrollLineItem.update({
+        where: { tripPayId: itemId },
+        data: {
+          ...(basePay !== undefined && { basePay: new Prisma.Decimal(basePay) }),
+          ...(mileagePay !== undefined && { mileagePay: new Prisma.Decimal(mileagePay) }),
+          ...(bonusPay !== undefined && { bonusPay: new Prisma.Decimal(bonusPay) }),
+          ...(deductions !== undefined && { deductions: new Prisma.Decimal(deductions) }),
+          totalGrossPay: new Prisma.Decimal(newTotal),
+          ...(notes !== undefined && { notes }),
+          status: 'REVIEWED'
+        }
+      });
+
+      // Also update the source TripPay record
+      await prisma.tripPay.update({
         where: { id: itemId },
         data: {
           ...(basePay !== undefined && { basePay: new Prisma.Decimal(basePay) }),
@@ -1185,20 +1057,34 @@ export const updatePayrollLineItem = async (req: Request, res: Response): Promis
           ...(deductions !== undefined && { deductions: new Prisma.Decimal(deductions) }),
           totalGrossPay: new Prisma.Decimal(newTotal),
           ...(notes !== undefined && { notes }),
-          status: 'REVIEWED' // Mark as reviewed after edit
+          status: 'REVIEWED'
         }
       });
 
-      res.json(updatedTripPay);
+      res.json(updatedItem);
     } else if (type === 'cut') {
-      // Update CutPayRequest
-      const existingCutPay = await prisma.cutPayRequest.findUnique({ where: { id: itemId } });
-      if (!existingCutPay) {
-        res.status(404).json({ message: 'Cut pay request not found' });
+      // Find the PayrollLineItem by cutPayRequestId
+      const payrollItem = await prisma.payrollLineItem.findUnique({
+        where: { cutPayRequestId: itemId }
+      });
+
+      if (!payrollItem) {
+        res.status(404).json({ message: 'Payroll line item not found' });
         return;
       }
 
-      const updatedCutPay = await prisma.cutPayRequest.update({
+      // Update PayrollLineItem
+      const updatedItem = await prisma.payrollLineItem.update({
+        where: { cutPayRequestId: itemId },
+        data: {
+          ...(totalPay !== undefined && { totalGrossPay: new Prisma.Decimal(totalPay) }),
+          ...(rateApplied !== undefined && { rateApplied: new Prisma.Decimal(rateApplied) }),
+          ...(notes !== undefined && { notes })
+        }
+      });
+
+      // Also update the source CutPayRequest record
+      await prisma.cutPayRequest.update({
         where: { id: itemId },
         data: {
           ...(totalPay !== undefined && { totalPay: new Prisma.Decimal(totalPay) }),
@@ -1207,7 +1093,7 @@ export const updatePayrollLineItem = async (req: Request, res: Response): Promis
         }
       });
 
-      res.json(updatedCutPay);
+      res.json(updatedItem);
     } else {
       res.status(400).json({ message: 'Invalid type. Must be "trip" or "cut"' });
     }
@@ -1230,6 +1116,20 @@ export const bulkApprovePayrollItems = async (req: Request, res: Response): Prom
     const cutIds = items.filter((i: any) => i.type === 'cut').map((i: any) => i.id);
 
     if (tripIds.length > 0) {
+      // Update PayrollLineItem records
+      await prisma.payrollLineItem.updateMany({
+        where: {
+          tripPayId: { in: tripIds },
+          status: { in: ['PENDING', 'CALCULATED', 'REVIEWED'] }
+        },
+        data: {
+          status: 'APPROVED',
+          approvedAt: new Date(),
+          approvedBy: userId
+        }
+      });
+
+      // Update source TripPay records
       const result = await prisma.tripPay.updateMany({
         where: {
           id: { in: tripIds },
@@ -1245,6 +1145,20 @@ export const bulkApprovePayrollItems = async (req: Request, res: Response): Prom
     }
 
     if (cutIds.length > 0) {
+      // Update PayrollLineItem records
+      await prisma.payrollLineItem.updateMany({
+        where: {
+          cutPayRequestId: { in: cutIds },
+          status: { in: ['PENDING'] }
+        },
+        data: {
+          status: 'APPROVED',
+          approvedAt: new Date(),
+          approvedBy: userId
+        }
+      });
+
+      // Update source CutPayRequest records
       const result = await prisma.cutPayRequest.updateMany({
         where: {
           id: { in: cutIds },
@@ -1276,55 +1190,22 @@ export const exportPayrollToXls = async (req: Request, res: Response): Promise<v
   try {
     const { startDate, endDate, onlyApproved = true } = req.body;
 
-    // Fetch TripPay records
-    const tripPayWhere: Prisma.TripPayWhereInput = {};
+    // Build where clause for PayrollLineItem
+    const where: Prisma.PayrollLineItemWhereInput = {};
     if (onlyApproved) {
-      tripPayWhere.status = 'APPROVED';
+      where.status = 'APPROVED';
     }
     if (startDate || endDate) {
-      tripPayWhere.trip = {
-        dispatchDate: {
-          ...(startDate && { gte: new Date(startDate) }),
-          ...(endDate && { lte: new Date(endDate) })
-        }
-      };
-    }
-
-    const tripPays = await prisma.tripPay.findMany({
-      where: tripPayWhere,
-      include: {
-        trip: {
-          include: {
-            linehaulProfile: {
-              include: {
-                originTerminal: true,
-                destinationTerminal: true
-              }
-            },
-            driverTripReport: true
-          }
-        },
-        driver: true
-      },
-      orderBy: { trip: { dispatchDate: 'asc' } }
-    });
-
-    // Fetch CutPayRequest records
-    const cutPayWhere: Prisma.CutPayRequestWhereInput = {};
-    if (onlyApproved) {
-      cutPayWhere.status = 'APPROVED';
-    }
-    if (startDate || endDate) {
-      cutPayWhere.requestDate = {
+      where.date = {
         ...(startDate && { gte: new Date(startDate) }),
         ...(endDate && { lte: new Date(endDate) })
       };
     }
 
-    const cutPayRequests = await prisma.cutPayRequest.findMany({
-      where: cutPayWhere,
-      include: { driver: true },
-      orderBy: { requestDate: 'asc' }
+    // Fetch PayrollLineItem records
+    const payrollItems = await prisma.payrollLineItem.findMany({
+      where,
+      orderBy: { date: 'asc' }
     });
 
     // Fetch Workday paycodes
@@ -1352,36 +1233,25 @@ export const exportPayrollToXls = async (req: Request, res: Response): Promise<v
 
     // Group by driver
     const driverSummary: Record<number, any> = {};
-    for (const tp of tripPays) {
-      if (!tp.driverId) continue;
-      if (!driverSummary[tp.driverId]) {
-        driverSummary[tp.driverId] = {
-          employeeId: tp.driver?.workdayEmployeeId || '',
-          driverName: tp.driver?.name || '',
-          driverNumber: tp.driver?.number || '',
+    for (const item of payrollItems) {
+      if (!driverSummary[item.driverId]) {
+        driverSummary[item.driverId] = {
+          employeeId: item.workdayEmployeeId || '',
+          driverName: item.driverName || '',
+          driverNumber: item.driverNumber || '',
           tripPayCount: 0,
           tripPayTotal: 0,
           cutPayCount: 0,
           cutPayTotal: 0
         };
       }
-      driverSummary[tp.driverId].tripPayCount++;
-      driverSummary[tp.driverId].tripPayTotal += Number(tp.totalGrossPay || 0);
-    }
-    for (const cp of cutPayRequests) {
-      if (!driverSummary[cp.driverId]) {
-        driverSummary[cp.driverId] = {
-          employeeId: cp.driver?.workdayEmployeeId || '',
-          driverName: cp.driver?.name || '',
-          driverNumber: cp.driver?.number || '',
-          tripPayCount: 0,
-          tripPayTotal: 0,
-          cutPayCount: 0,
-          cutPayTotal: 0
-        };
+      if (item.sourceType === 'TRIP_PAY') {
+        driverSummary[item.driverId].tripPayCount++;
+        driverSummary[item.driverId].tripPayTotal += Number(item.totalGrossPay);
+      } else {
+        driverSummary[item.driverId].cutPayCount++;
+        driverSummary[item.driverId].cutPayTotal += Number(item.totalGrossPay);
       }
-      driverSummary[cp.driverId].cutPayCount++;
-      driverSummary[cp.driverId].cutPayTotal += Number(cp.totalPay || 0);
     }
 
     for (const d of Object.values(driverSummary)) {
@@ -1412,98 +1282,95 @@ export const exportPayrollToXls = async (req: Request, res: Response): Promise<v
       );
     };
 
-    // Add trip pay detail lines
-    for (const tp of tripPays) {
-      const trailerConfig = tp.trip?.linehaulProfile?.equipmentConfig || 'SINGLE';
-      const mappedConfig = trailerConfig === 'DOUBLE' ? 'DOUBLE' : trailerConfig === 'TRIPLE' ? 'TRIPLE' : 'SINGLE';
+    // Add detail lines
+    for (const item of payrollItems) {
+      if (item.sourceType === 'TRIP_PAY') {
+        const trailerConfig = item.trailerConfig || 'SINGLE';
 
-      // Mileage pay line
-      if (Number(tp.mileagePay) > 0) {
-        const mileagePaycode = findPaycode('MILES', mappedConfig);
-        detailSheet.addRow({
-          employeeId: tp.driver?.workdayEmployeeId || '',
-          paycode: mileagePaycode?.code || `LH_${mappedConfig}_MILES`,
-          workdayId: mileagePaycode?.workdayId || '',
-          amount: Number(tp.mileagePay),
-          quantity: tp.trip?.actualMileage || tp.trip?.linehaulProfile?.distanceMiles || 0,
-          date: tp.trip?.dispatchDate?.toISOString().split('T')[0] || '',
-          reference: tp.trip?.tripNumber || '',
-          description: `Mileage Pay - ${tp.trip?.linehaulProfile?.originTerminal?.code} to ${tp.trip?.linehaulProfile?.destinationTerminal?.code}`
-        });
-      }
+        // Mileage pay line
+        if (Number(item.mileagePay) > 0) {
+          const mileagePaycode = findPaycode('MILES', trailerConfig);
+          detailSheet.addRow({
+            employeeId: item.workdayEmployeeId || '',
+            paycode: mileagePaycode?.code || `LH_${trailerConfig}_MILES`,
+            workdayId: mileagePaycode?.workdayId || '',
+            amount: Number(item.mileagePay),
+            quantity: item.totalMiles ? Number(item.totalMiles) : 0,
+            date: item.date.toISOString().split('T')[0],
+            reference: item.tripNumber || '',
+            description: `Mileage Pay - ${item.origin || '?'} to ${item.destination || '?'}`
+          });
+        }
 
-      // Drop & Hook pay
-      const report = tp.trip?.driverTripReport;
-      if (report?.dropAndHook && report.dropAndHook > 0) {
-        const dropHookPaycode = findPaycode('DROP_HOOK', mappedConfig);
-        detailSheet.addRow({
-          employeeId: tp.driver?.workdayEmployeeId || '',
-          paycode: dropHookPaycode?.code || `DROP_HOOK_${mappedConfig}`,
-          workdayId: dropHookPaycode?.workdayId || '',
-          amount: report.dropAndHook * 25, // Estimate
-          quantity: report.dropAndHook,
-          date: tp.trip?.dispatchDate?.toISOString().split('T')[0] || '',
-          reference: tp.trip?.tripNumber || '',
-          description: `Drop & Hook (${report.dropAndHook})`
-        });
-      }
+        // Drop & Hook pay
+        if (Number(item.dropAndHookPay) > 0) {
+          const dropHookPaycode = findPaycode('DROP_HOOK', trailerConfig);
+          detailSheet.addRow({
+            employeeId: item.workdayEmployeeId || '',
+            paycode: dropHookPaycode?.code || `DROP_HOOK_${trailerConfig}`,
+            workdayId: dropHookPaycode?.workdayId || '',
+            amount: Number(item.dropAndHookPay),
+            quantity: 1,
+            date: item.date.toISOString().split('T')[0],
+            reference: item.tripNumber || '',
+            description: 'Drop & Hook'
+          });
+        }
 
-      // Chain Up pay
-      if (report?.chainUpCycles && report.chainUpCycles > 0) {
-        const chainUpPaycode = findPaycode('CHAIN_UP');
-        detailSheet.addRow({
-          employeeId: tp.driver?.workdayEmployeeId || '',
-          paycode: chainUpPaycode?.code || 'CHAIN_UP',
-          workdayId: chainUpPaycode?.workdayId || '',
-          amount: report.chainUpCycles * 15, // Estimate
-          quantity: report.chainUpCycles,
-          date: tp.trip?.dispatchDate?.toISOString().split('T')[0] || '',
-          reference: tp.trip?.tripNumber || '',
-          description: `Chain Up (${report.chainUpCycles} cycles)`
-        });
-      }
+        // Chain Up pay
+        if (Number(item.chainUpPay) > 0) {
+          const chainUpPaycode = findPaycode('CHAIN_UP');
+          detailSheet.addRow({
+            employeeId: item.workdayEmployeeId || '',
+            paycode: chainUpPaycode?.code || 'CHAIN_UP',
+            workdayId: chainUpPaycode?.workdayId || '',
+            amount: Number(item.chainUpPay),
+            quantity: 1,
+            date: item.date.toISOString().split('T')[0],
+            reference: item.tripNumber || '',
+            description: 'Chain Up'
+          });
+        }
 
-      // Stop Hours / Wait Time
-      if (report?.waitTimeMinutes && report.waitTimeMinutes > 0) {
-        const stopHoursPaycode = findPaycode('STOP_HOURS');
-        const hours = report.waitTimeMinutes / 60;
-        detailSheet.addRow({
-          employeeId: tp.driver?.workdayEmployeeId || '',
-          paycode: stopHoursPaycode?.code || 'STOP_HOURS',
-          workdayId: stopHoursPaycode?.workdayId || '',
-          amount: hours * 18, // Estimate
-          quantity: hours,
-          date: tp.trip?.dispatchDate?.toISOString().split('T')[0] || '',
-          reference: tp.trip?.tripNumber || '',
-          description: `Wait Time (${hours.toFixed(2)} hours)`
-        });
-      }
-    }
-
-    // Add cut pay detail lines
-    for (const cp of cutPayRequests) {
-      const config = cp.trailerConfig || 'SINGLE';
-      let paycode;
-      let description;
-
-      if (cp.cutPayType === 'HOURS') {
-        paycode = findPaycode('CUT_PAY');
-        description = `Cut Pay - ${cp.hoursRequested} hours (${cp.reason || 'N/A'})`;
+        // Wait Time pay
+        if (Number(item.waitTimePay) > 0) {
+          const stopHoursPaycode = findPaycode('STOP_HOURS');
+          detailSheet.addRow({
+            employeeId: item.workdayEmployeeId || '',
+            paycode: stopHoursPaycode?.code || 'STOP_HOURS',
+            workdayId: stopHoursPaycode?.workdayId || '',
+            amount: Number(item.waitTimePay),
+            quantity: 1,
+            date: item.date.toISOString().split('T')[0],
+            reference: item.tripNumber || '',
+            description: 'Wait Time'
+          });
+        }
       } else {
-        paycode = findPaycode('CUT_MILES', config);
-        description = `Cut Pay Miles - ${cp.milesRequested} miles ${config} (${cp.reason || 'N/A'})`;
-      }
+        // Cut pay
+        const config = item.trailerConfig || 'SINGLE';
+        let paycode;
+        let description;
 
-      detailSheet.addRow({
-        employeeId: cp.driver?.workdayEmployeeId || '',
-        paycode: paycode?.code || (cp.cutPayType === 'HOURS' ? 'CUT_PAY' : `CUT_PAY_${config}_MILES`),
-        workdayId: paycode?.workdayId || '',
-        amount: Number(cp.totalPay || 0),
-        quantity: cp.cutPayType === 'HOURS' ? Number(cp.hoursRequested || 0) : Number(cp.milesRequested || 0),
-        date: cp.requestDate.toISOString().split('T')[0],
-        reference: cp.tripId ? `Trip-${cp.tripId}` : `CutPay-${cp.id}`,
-        description
-      });
+        if (item.cutPayType === 'HOURS') {
+          paycode = findPaycode('CUT_PAY');
+          description = `Cut Pay - ${item.cutPayHours} hours`;
+        } else {
+          paycode = findPaycode('CUT_MILES', config);
+          description = `Cut Pay Miles - ${item.cutPayMiles} miles ${config}`;
+        }
+
+        detailSheet.addRow({
+          employeeId: item.workdayEmployeeId || '',
+          paycode: paycode?.code || (item.cutPayType === 'HOURS' ? 'CUT_PAY' : `CUT_PAY_${config}_MILES`),
+          workdayId: paycode?.workdayId || '',
+          amount: Number(item.totalGrossPay),
+          quantity: item.cutPayType === 'HOURS' ? Number(item.cutPayHours || 0) : Number(item.cutPayMiles || 0),
+          date: item.date.toISOString().split('T')[0],
+          reference: item.tripNumber || `CutPay-${item.cutPayRequestId}`,
+          description
+        });
+      }
     }
 
     // Set response headers for Excel download

@@ -37,6 +37,10 @@ model User {
   // Cut pay relations
   approvedCutPayRequests CutPayRequest[]      @relation("CutPayApprover")
 
+  // Payroll line item relations
+  reviewedPayrollLineItems  PayrollLineItem[] @relation("PayrollLineItemReviewer")
+  approvedPayrollLineItems  PayrollLineItem[] @relation("PayrollLineItemApprover")
+
   @@map("users")
 }
 
@@ -338,6 +342,7 @@ model CarrierDriver {
   equipmentIssues EquipmentIssue[]
   moraleRatings  DriverMoraleRating[]
   cutPayRequests CutPayRequest[]
+  payrollLineItems PayrollLineItem[] @relation("PayrollLineItems")
 
   @@index([carrierId])
   @@index([driverStatus])
@@ -651,6 +656,20 @@ enum TripPayStatus {
   DISPUTED
 }
 
+enum PayrollSourceType {
+  TRIP_PAY
+  CUT_PAY
+}
+
+enum PayrollLineItemStatus {
+  PENDING
+  CALCULATED
+  REVIEWED
+  APPROVED
+  PAID
+  DISPUTED
+}
+
 enum DriverStatus {
   AVAILABLE
   ON_DUTY
@@ -941,6 +960,7 @@ model LinehaulTrip {
   equipmentIssues     EquipmentIssue[]
   moraleRating        DriverMoraleRating?
   cutPayRequests      CutPayRequest[]
+  payrollLineItems    PayrollLineItem[] @relation("PayrollLineItems")
 
   @@index([dispatchDate])
   @@index([status])
@@ -1071,9 +1091,10 @@ model PayPeriod {
   updatedAt     DateTime        @updatedAt
 
   // Relations
-  closedByUser   User?     @relation("PayPeriodCloser", fields: [closedBy], references: [id])
-  exportedByUser User?     @relation("PayPeriodExporter", fields: [exportedBy], references: [id])
-  tripPays       TripPay[]
+  closedByUser     User?             @relation("PayPeriodCloser", fields: [closedBy], references: [id])
+  exportedByUser   User?             @relation("PayPeriodExporter", fields: [exportedBy], references: [id])
+  tripPays         TripPay[]
+  payrollLineItems PayrollLineItem[]
 
   @@index([periodStart])
   @@index([periodEnd])
@@ -1120,18 +1141,102 @@ model TripPay {
   updatedAt DateTime @updatedAt
 
   // Relations
-  trip      LinehaulTrip   @relation(fields: [tripId], references: [id], onDelete: Cascade)
-  payPeriod PayPeriod?     @relation(fields: [payPeriodId], references: [id])
-  driver    CarrierDriver? @relation(fields: [driverId], references: [id])
-  rateCard  RateCard?      @relation(fields: [rateCardId], references: [id])
-  reviewer  User?          @relation("TripPayReviewer", fields: [reviewedBy], references: [id])
-  approver  User?          @relation("TripPayApprover", fields: [approvedBy], references: [id])
+  trip            LinehaulTrip     @relation(fields: [tripId], references: [id], onDelete: Cascade)
+  payPeriod       PayPeriod?       @relation(fields: [payPeriodId], references: [id])
+  driver          CarrierDriver?   @relation(fields: [driverId], references: [id])
+  rateCard        RateCard?        @relation(fields: [rateCardId], references: [id])
+  reviewer        User?            @relation("TripPayReviewer", fields: [reviewedBy], references: [id])
+  approver        User?            @relation("TripPayApprover", fields: [approvedBy], references: [id])
+  payrollLineItem PayrollLineItem?
 
   @@index([tripId])
   @@index([payPeriodId])
   @@index([driverId])
   @@index([status])
   @@map("trip_pay")
+}
+
+// Unified Payroll Line Items - stores all payroll entries (trip pay + cut pay)
+model PayrollLineItem {
+  id                Int                   @id @default(autoincrement())
+
+  // Source tracking
+  sourceType        PayrollSourceType
+  tripPayId         Int?                  @unique // Reference to TripPay if source is TRIP_PAY
+  cutPayRequestId   Int?                  @unique // Reference to CutPayRequest if source is CUT_PAY
+
+  // Core fields
+  driverId          Int
+  tripId            Int?                  // LinehaulTrip reference (for trip pay or cut pay linked to trip)
+  payPeriodId       Int?
+  date              DateTime              // Dispatch date for trips, request date for cut pay
+
+  // Driver info (denormalized for reporting)
+  driverName        String?
+  driverNumber      String?
+  workdayEmployeeId String?
+
+  // Trip info (for trip pay)
+  tripNumber        String?
+  origin            String?               // Origin terminal code
+  destination       String?               // Destination terminal code
+  totalMiles        Decimal?              @db.Decimal(8, 1)
+
+  // Pay breakdown
+  basePay           Decimal               @default(0) @db.Decimal(10, 2)
+  mileagePay        Decimal               @default(0) @db.Decimal(10, 2)
+
+  // Accessorial breakdown
+  dropAndHookPay    Decimal               @default(0) @db.Decimal(10, 2)
+  chainUpPay        Decimal               @default(0) @db.Decimal(10, 2)
+  waitTimePay       Decimal               @default(0) @db.Decimal(10, 2)
+  otherAccessorialPay Decimal             @default(0) @db.Decimal(10, 2)
+
+  // Additional pay
+  bonusPay          Decimal               @default(0) @db.Decimal(10, 2)
+  deductions        Decimal               @default(0) @db.Decimal(10, 2)
+  totalGrossPay     Decimal               @default(0) @db.Decimal(10, 2)
+
+  // Cut pay specific fields
+  cutPayType        CutPayType?           // HOURS or MILES
+  cutPayHours       Decimal?              @db.Decimal(6, 2)
+  cutPayMiles       Decimal?              @db.Decimal(8, 1)
+  trailerConfig     String?               // SINGLE, DOUBLE, TRIPLE
+  rateApplied       Decimal?              @db.Decimal(10, 4)
+
+  // Status tracking
+  status            PayrollLineItemStatus @default(PENDING)
+  calculatedAt      DateTime?
+  reviewedBy        Int?
+  reviewedAt        DateTime?
+  approvedBy        Int?
+  approvedAt        DateTime?
+  paidAt            DateTime?
+
+  // Payroll export
+  externalPayrollId String?
+  exportedAt        DateTime?
+
+  notes             String?
+  createdAt         DateTime              @default(now())
+  updatedAt         DateTime              @updatedAt
+
+  // Relations
+  driver            CarrierDriver         @relation("PayrollLineItems", fields: [driverId], references: [id])
+  trip              LinehaulTrip?         @relation("PayrollLineItems", fields: [tripId], references: [id])
+  payPeriod         PayPeriod?            @relation(fields: [payPeriodId], references: [id])
+  tripPay           TripPay?              @relation(fields: [tripPayId], references: [id])
+  cutPayRequest     CutPayRequest?        @relation(fields: [cutPayRequestId], references: [id])
+  reviewer          User?                 @relation("PayrollLineItemReviewer", fields: [reviewedBy], references: [id])
+  approver          User?                 @relation("PayrollLineItemApprover", fields: [approvedBy], references: [id])
+
+  @@index([sourceType])
+  @@index([driverId])
+  @@index([tripId])
+  @@index([payPeriodId])
+  @@index([date])
+  @@index([status])
+  @@map("payroll_line_items")
 }
 
 // ============================================
@@ -1615,9 +1720,10 @@ model CutPayRequest {
   updatedAt       DateTime     @updatedAt
 
   // Relations
-  driver   CarrierDriver @relation(fields: [driverId], references: [id])
-  trip     LinehaulTrip? @relation(fields: [tripId], references: [id])
-  approver User?         @relation("CutPayApprover", fields: [approvedBy], references: [id])
+  driver          CarrierDriver    @relation(fields: [driverId], references: [id])
+  trip            LinehaulTrip?    @relation(fields: [tripId], references: [id])
+  approver        User?            @relation("CutPayApprover", fields: [approvedBy], references: [id])
+  payrollLineItem PayrollLineItem?
 
   @@index([driverId])
   @@index([status])

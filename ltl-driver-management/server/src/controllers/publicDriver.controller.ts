@@ -1,6 +1,7 @@
 import { Request, Response } from 'express';
 import { prisma } from '../index';
 import { Prisma, CutPayType } from '@prisma/client';
+import { createPayrollLineItemFromCutPay } from '../services/payroll.service';
 
 /**
  * Public Driver Controller
@@ -923,6 +924,9 @@ export const createCutPayRequest = async (req: Request, res: Response): Promise<
         }
       }
     });
+
+    // Create PayrollLineItem for the cut pay request
+    await createPayrollLineItemFromCutPay(request.id);
 
     res.status(201).json({
       message: 'Cut pay request submitted successfully',
