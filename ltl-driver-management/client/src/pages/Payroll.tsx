@@ -30,8 +30,6 @@ import {
   FileSpreadsheet
 } from 'lucide-react';
 
-type TabType = 'all' | 'trip' | 'cut';
-
 const statusConfig: Record<string, { label: string; color: string }> = {
   PENDING: { label: 'Pending', color: 'default' },
   CALCULATED: { label: 'Calculated', color: 'info' },
@@ -47,9 +45,6 @@ export const Payroll: React.FC = () => {
   const [summary, setSummary] = useState<PayrollSummary | null>(null);
   const [locations, setLocations] = useState<Location[]>([]);
   const [loading, setLoading] = useState(true);
-
-  // Tabs
-  const [activeTab, setActiveTab] = useState<TabType>('all');
 
   // Filters
   const [filters, setFilters] = useState<PayrollFilters>({
@@ -102,7 +97,7 @@ export const Payroll: React.FC = () => {
     if (filters.startDate && filters.endDate) {
       fetchPayrollItems();
     }
-  }, [filters, currentPage, activeTab]);
+  }, [filters, currentPage]);
 
   const fetchLocations = async () => {
     try {
@@ -118,7 +113,7 @@ export const Payroll: React.FC = () => {
       setLoading(true);
       const response = await payrollService.getUnifiedPayrollItems({
         ...filters,
-        source: activeTab,
+        source: 'all',
         page: currentPage,
         limit: filters.limit
       });
@@ -457,34 +452,12 @@ export const Payroll: React.FC = () => {
         </div>
       )}
 
-      {/* Tabs and Actions */}
+      {/* Actions and Filters */}
       <div className="bg-white dark:bg-gray-800 shadow rounded-lg">
         <div className="border-b border-gray-200 dark:border-gray-700">
-          <div className="flex items-center justify-between px-4">
-            <nav className="flex space-x-4" aria-label="Tabs">
-              {[
-                { key: 'all', label: 'All Items' },
-                { key: 'trip', label: 'Trip Pay' },
-                { key: 'cut', label: 'Cut Pay' }
-              ].map((tab) => (
-                <button
-                  key={tab.key}
-                  onClick={() => {
-                    setActiveTab(tab.key as TabType);
-                    setCurrentPage(1);
-                  }}
-                  className={`py-4 px-1 border-b-2 font-medium text-sm ${
-                    activeTab === tab.key
-                      ? 'border-indigo-500 text-indigo-600 dark:text-indigo-400'
-                      : 'border-transparent text-gray-500 hover:text-gray-700 hover:border-gray-300 dark:text-gray-400 dark:hover:text-gray-300'
-                  }`}
-                >
-                  {tab.label}
-                </button>
-              ))}
-            </nav>
-
-            <div className="flex items-center space-x-2 py-2">
+          <div className="flex items-center justify-between px-4 py-3">
+            <h3 className="text-lg font-medium text-gray-900 dark:text-gray-100">Payroll Items</h3>
+            <div className="flex items-center space-x-2">
               {canApprove && selectedIds.length > 0 && (
                 <button
                   onClick={handleBulkApprove}
