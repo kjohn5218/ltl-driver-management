@@ -85,6 +85,9 @@ export const ArrivalDetailsModal: React.FC<ArrivalDetailsModalProps> = ({
     return { minutes: diffMins, formatted: `${hours}h ${mins}m` };
   }, [waitTimeStart, waitTimeEnd]);
 
+  // Check if wait time is selected (both start and end are provided)
+  const hasWaitTime = Boolean(waitTimeStart && waitTimeEnd);
+
   // Get manifest numbers from loadsheets
   const manifestNumbers = trip.loadsheets?.map(ls => ls.manifestNumber).join(', ') || '-';
 
@@ -164,6 +167,18 @@ export const ArrivalDetailsModal: React.FC<ArrivalDetailsModalProps> = ({
 
   const handleSubmit = (e: React.FormEvent) => {
     e.preventDefault();
+
+    // Validate required fields when wait time is selected
+    if (hasWaitTime) {
+      if (!waitTimeReason) {
+        toast.error('Wait Time Reason is required when wait time is entered');
+        return;
+      }
+      if (!notes.trim()) {
+        toast.error('Notes are required when wait time is entered');
+        return;
+      }
+    }
 
     // Build the arrival data
     const arrivalData: TripArrivalData = {
@@ -507,11 +522,17 @@ export const ArrivalDetailsModal: React.FC<ArrivalDetailsModalProps> = ({
                   <div>
                     <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">
                       Wait Time Reason
+                      {hasWaitTime && <span className="text-red-500 ml-1">*</span>}
                     </label>
                     <select
                       value={waitTimeReason}
                       onChange={(e) => setWaitTimeReason(e.target.value as WaitTimeReason | '')}
-                      className="w-full px-3 py-2 border border-gray-300 dark:border-gray-600 rounded-md bg-white dark:bg-gray-700 text-gray-900 dark:text-gray-100 focus:ring-2 focus:ring-primary-500 focus:border-transparent"
+                      required={hasWaitTime}
+                      className={`w-full px-3 py-2 border rounded-md bg-white dark:bg-gray-700 text-gray-900 dark:text-gray-100 focus:ring-2 focus:ring-primary-500 focus:border-transparent ${
+                        hasWaitTime && !waitTimeReason
+                          ? 'border-red-300 dark:border-red-600'
+                          : 'border-gray-300 dark:border-gray-600'
+                      }`}
                     >
                       <option value="">Select reason...</option>
                       {waitTimeReasonOptions.map((option) => (
@@ -524,13 +545,19 @@ export const ArrivalDetailsModal: React.FC<ArrivalDetailsModalProps> = ({
                   <div className="col-span-2">
                     <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">
                       Notes
+                      {hasWaitTime && <span className="text-red-500 ml-1">*</span>}
                     </label>
                     <textarea
                       value={notes}
                       onChange={(e) => setNotes(e.target.value)}
-                      placeholder="Additional notes..."
+                      placeholder={hasWaitTime ? "Required - describe the wait time..." : "Additional notes..."}
+                      required={hasWaitTime}
                       rows={2}
-                      className="w-full px-3 py-2 border border-gray-300 dark:border-gray-600 rounded-md bg-white dark:bg-gray-700 text-gray-900 dark:text-gray-100 focus:ring-2 focus:ring-primary-500 focus:border-transparent"
+                      className={`w-full px-3 py-2 border rounded-md bg-white dark:bg-gray-700 text-gray-900 dark:text-gray-100 focus:ring-2 focus:ring-primary-500 focus:border-transparent ${
+                        hasWaitTime && !notes.trim()
+                          ? 'border-red-300 dark:border-red-600'
+                          : 'border-gray-300 dark:border-gray-600'
+                      }`}
                     />
                   </div>
                 </div>
