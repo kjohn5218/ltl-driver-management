@@ -159,12 +159,20 @@ export const createCutPayRequest = async (req: Request, res: Response): Promise<
     // Determine cut pay type and validate appropriate field
     const payType: CutPayType = cutPayType === 'MILES' ? 'MILES' : 'HOURS';
 
-    if (payType === 'HOURS' && (!hoursRequested || hoursRequested <= 0)) {
+    // Parse numeric values - handle both string and number inputs
+    const parsedHours = hoursRequested !== undefined && hoursRequested !== null
+      ? parseFloat(String(hoursRequested))
+      : NaN;
+    const parsedMiles = milesRequested !== undefined && milesRequested !== null
+      ? parseFloat(String(milesRequested))
+      : NaN;
+
+    if (payType === 'HOURS' && (isNaN(parsedHours) || parsedHours <= 0)) {
       res.status(400).json({ message: 'Hours requested is required for cut pay by hours' });
       return;
     }
 
-    if (payType === 'MILES' && (!milesRequested || milesRequested <= 0)) {
+    if (payType === 'MILES' && (isNaN(parsedMiles) || parsedMiles <= 0)) {
       res.status(400).json({ message: 'Miles requested is required for cut pay by miles' });
       return;
     }
@@ -176,8 +184,8 @@ export const createCutPayRequest = async (req: Request, res: Response): Promise<
         tripId: tripId || null,
         trailerConfig: trailerConfig || 'SINGLE',
         cutPayType: payType,
-        hoursRequested: payType === 'HOURS' ? new Prisma.Decimal(hoursRequested) : null,
-        milesRequested: payType === 'MILES' ? new Prisma.Decimal(milesRequested) : null,
+        hoursRequested: payType === 'HOURS' ? new Prisma.Decimal(parsedHours) : null,
+        milesRequested: payType === 'MILES' ? new Prisma.Decimal(parsedMiles) : null,
         reason,
         notes,
         status: 'PENDING'
