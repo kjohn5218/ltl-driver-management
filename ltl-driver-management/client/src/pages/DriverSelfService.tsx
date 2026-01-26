@@ -444,9 +444,7 @@ export const DriverSelfService: React.FC = () => {
     <div className="min-h-screen bg-gradient-to-b from-blue-600 to-blue-800 flex items-center justify-center p-4">
       <div className="bg-white rounded-2xl shadow-xl w-full max-w-md p-6">
         <div className="text-center mb-8">
-          <div className="w-16 h-16 bg-blue-100 rounded-full flex items-center justify-center mx-auto mb-4">
-            <Truck className="w-8 h-8 text-blue-600" />
-          </div>
+          <img src="/ccfs-logo.svg" alt="CCFS Logo" className="h-12 mx-auto mb-4" />
           <h1 className="text-2xl font-bold text-gray-900">Driver Portal</h1>
           <p className="text-gray-500 mt-2">Dispatch and arrive your trips</p>
         </div>
@@ -508,9 +506,12 @@ export const DriverSelfService: React.FC = () => {
       {/* Header */}
       <div className="bg-blue-600 text-white px-4 py-4 sticky top-0 z-10">
         <div className="flex items-center justify-between">
-          <div>
-            <p className="text-blue-100 text-sm">Welcome back</p>
-            <h1 className="text-xl font-semibold">{driver?.name}</h1>
+          <div className="flex items-center">
+            <img src="/ccfs-logo-white.svg" alt="CCFS" className="h-8 mr-3" />
+            <div>
+              <p className="text-blue-100 text-sm">Welcome back</p>
+              <h1 className="text-xl font-semibold">{driver?.name}</h1>
+            </div>
           </div>
           <button
             onClick={handleLogout}
