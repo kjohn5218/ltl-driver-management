@@ -31,6 +31,7 @@ import { LoadsheetForm } from './pages/LoadsheetForm';
 import { ContractPowerHome } from './pages/ContractPowerHome';
 import { LateLinehaulReport } from './pages/LateLinehaulReport';
 import { PayRules } from './pages/PayRules';
+import { DriverSelfService } from './pages/DriverSelfService';
 
 // Create a client
 const queryClient = new QueryClient({
@@ -63,6 +64,10 @@ const router = createBrowserRouter([
   {
     path: '/documents/upload/:token',
     element: <DocumentUpload />
+  },
+  {
+    path: '/driver',
+    element: <DriverSelfService />
   },
   {
     path: '/',

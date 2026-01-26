@@ -48,7 +48,8 @@ export const csrfProtection = (req: Request, res: Response, next: NextFunction):
     '/api/auth/register',
     '/api/health',
     '/api/bookings/confirmation',
-    '/api/documents/upload'
+    '/api/documents/upload',
+    '/api/public/driver'
   ];
   
   if (publicEndpoints.some(endpoint => req.path.startsWith(endpoint))) {

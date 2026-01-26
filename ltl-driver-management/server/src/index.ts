@@ -44,9 +44,14 @@ import payrollRoutes from './routes/payroll.routes';
 import loadsheetRoutes from './routes/loadsheet.routes';
 import tripDocumentRoutes from './routes/tripDocument.routes';
 import lateDepartureReasonRoutes from './routes/lateDepartureReason.routes';
+import cutPayRoutes from './routes/cutPay.routes';
+import workdayRoutes, { externalWorkdayRouter } from './routes/workday.routes';
 
 // External integrations
 import hrIntegrationRoutes from './routes/hrIntegration.routes';
+
+// Public driver routes (no SSO auth required)
+import publicDriverRoutes from './routes/publicDriver.routes';
 
 // Load environment variables
 dotenv.config();
@@ -157,10 +162,16 @@ app.use('/api/payroll', payrollRoutes);
 app.use('/api/loadsheets', loadsheetRoutes);
 app.use('/api/trip-documents', tripDocumentRoutes);
 app.use('/api/late-departure-reasons', lateDepartureReasonRoutes);
+app.use('/api/cut-pay-requests', cutPayRoutes);
+app.use('/api/workday', workdayRoutes);
 
 // External integrations (API key authenticated, no CSRF)
 app.use('/api/hr', hrIntegrationRoutes);
 app.use('/api/external/rate-cards', externalRateCardRouter);
+app.use('/api/external/workday', externalWorkdayRouter);
+
+// Public driver routes (driver number + phone verification, no SSO/CSRF required)
+app.use('/api/public/driver', publicDriverRoutes);
 
 // Error handling middleware
 app.use((err: any, _req: express.Request, res: express.Response, _next: express.NextFunction) => {
