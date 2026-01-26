@@ -137,6 +137,10 @@ app.use('/api/documents/upload', uploadLimiter);
 // Apply general API rate limiting
 app.use('/api/', apiLimiter);
 
+// Public driver routes (driver number + phone verification, no SSO/CSRF required)
+// IMPORTANT: Must be registered BEFORE authenticated routes
+app.use('/api/public/driver', publicDriverRoutes);
+
 // Routes
 app.use('/api/auth', authRoutes);
 app.use('/api/carriers', carrierRoutes);
@@ -169,9 +173,6 @@ app.use('/api/workday', workdayRoutes);
 app.use('/api/hr', hrIntegrationRoutes);
 app.use('/api/external/rate-cards', externalRateCardRouter);
 app.use('/api/external/workday', externalWorkdayRouter);
-
-// Public driver routes (driver number + phone verification, no SSO/CSRF required)
-app.use('/api/public/driver', publicDriverRoutes);
 
 // Error handling middleware
 app.use((err: any, _req: express.Request, res: express.Response, _next: express.NextFunction) => {
