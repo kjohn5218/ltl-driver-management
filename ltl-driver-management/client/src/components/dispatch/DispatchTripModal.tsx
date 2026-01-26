@@ -1,6 +1,6 @@
 import React, { useState, useMemo, useCallback, useEffect } from 'react';
 import { useQuery, useQueryClient } from '@tanstack/react-query';
-import { Truck, AlertTriangle, CheckCircle, X, Search, Loader2, Clock, Scissors, Route } from 'lucide-react';
+import { Truck, AlertTriangle, CheckCircle, X, Search, Loader2, Clock, Scissors, Route as RouteIcon } from 'lucide-react';
 import toast from 'react-hot-toast';
 import { Modal } from '../common/Modal';
 import { linehaulTripService } from '../../services/linehaulTripService';
@@ -1028,7 +1028,7 @@ export const DispatchTripModal: React.FC<DispatchTripModalProps> = ({
                                 onChange={() => setCutPayType('MILES')}
                                 className="h-4 w-4 text-orange-600 focus:ring-orange-500 border-gray-300"
                               />
-                              <Route className="h-4 w-4 ml-2 mr-1 text-gray-500" />
+                              <RouteIcon className="h-4 w-4 ml-2 mr-1 text-gray-500" />
                               <span className="text-gray-700 dark:text-gray-300">Miles</span>
                             </label>
                           </div>
@@ -1061,7 +1061,7 @@ export const DispatchTripModal: React.FC<DispatchTripModalProps> = ({
                                 Cut Miles *
                               </label>
                               <div className="relative">
-                                <Route className="absolute left-3 top-1/2 transform -translate-y-1/2 h-4 w-4 text-gray-400" />
+                                <RouteIcon className="absolute left-3 top-1/2 transform -translate-y-1/2 h-4 w-4 text-gray-400" />
                                 <input
                                   type="number"
                                   step="1"
