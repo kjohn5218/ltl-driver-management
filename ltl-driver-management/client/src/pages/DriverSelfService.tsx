@@ -1,8 +1,8 @@
-import React, { useState, useEffect } from 'react';
-import { Truck, MapPin, Clock, CheckCircle, AlertCircle, ChevronRight, ArrowLeft, Star, LogOut, Play, Flag } from 'lucide-react';
+import React, { useState, useEffect, useMemo } from 'react';
+import { Truck, MapPin, Clock, CheckCircle, ChevronRight, ArrowLeft, Star, LogOut, Flag, Search, Plus, X, Package } from 'lucide-react';
 import toast, { Toaster } from 'react-hot-toast';
 
-// API base URL - use relative path for same-origin requests
+// API base URL
 const API_BASE = '/api/public/driver';
 
 // Types
@@ -34,11 +34,23 @@ interface Loadsheet {
   id: number;
   manifestNumber: string;
   linehaulName?: string;
+  trailerNumber?: string;
   originTerminalCode?: string;
   destinationTerminalCode?: string;
-  sealNumber?: string;
   pieces?: number;
   weight?: number;
+}
+
+interface EquipmentTruck {
+  id: number;
+  unitNumber: string;
+  truckType: string;
+}
+
+interface EquipmentDolly {
+  id: number;
+  unitNumber: string;
+  dollyType: string;
 }
 
 interface Trip {
@@ -48,6 +60,7 @@ interface Trip {
   dispatchDate: string;
   plannedDeparture?: string;
   actualDeparture?: string;
+  actualArrival?: string;
   plannedArrival?: string;
   linehaulProfile?: LinehaulProfile;
   truck?: { id: number; unitNumber: string };
@@ -85,6 +98,19 @@ export const DriverSelfService: React.FC = () => {
   const [trips, setTrips] = useState<Trip[]>([]);
   const [selectedTrip, setSelectedTrip] = useState<Trip | null>(null);
 
+  // Dispatch form state
+  const [availableLoadsheets, setAvailableLoadsheets] = useState<Loadsheet[]>([]);
+  const [availableTrucks, setAvailableTrucks] = useState<EquipmentTruck[]>([]);
+  const [availableDollies, setAvailableDollies] = useState<EquipmentDolly[]>([]);
+  const [selectedLoadsheets, setSelectedLoadsheets] = useState<Loadsheet[]>([]);
+  const [selectedDolly, setSelectedDolly] = useState<EquipmentDolly | null>(null);
+  const [selectedTruck, setSelectedTruck] = useState<EquipmentTruck | null>(null);
+  const [isOwnerOperator, setIsOwnerOperator] = useState(false);
+  const [dispatchNotes, setDispatchNotes] = useState('');
+  const [loadsheetSearch, setLoadsheetSearch] = useState('');
+  const [truckSearch, setTruckSearch] = useState('');
+  const [dollySearch, setDollySearch] = useState('');
+
   // Arrival form state
   const [dropAndHook, setDropAndHook] = useState('');
   const [chainUpCycles, setChainUpCycles] = useState('');
@@ -92,7 +118,7 @@ export const DriverSelfService: React.FC = () => {
   const [waitTimeStart, setWaitTimeStart] = useState('');
   const [waitTimeEnd, setWaitTimeEnd] = useState('');
   const [waitTimeReason, setWaitTimeReason] = useState('');
-  const [notes, setNotes] = useState('');
+  const [arrivalNotes, setArrivalNotes] = useState('');
   const [hasEquipmentIssue, setHasEquipmentIssue] = useState(false);
   const [equipmentIssueType, setEquipmentIssueType] = useState('');
   const [equipmentIssueNumber, setEquipmentIssueNumber] = useState('');
@@ -128,7 +154,7 @@ export const DriverSelfService: React.FC = () => {
     }
   };
 
-  // Load driver's trips
+  // Load driver's trips (past 7 days)
   const loadTrips = async (driverId: number) => {
     try {
       const response = await fetch(`${API_BASE}/trips/${driverId}`);
@@ -140,16 +166,97 @@ export const DriverSelfService: React.FC = () => {
     }
   };
 
-  // Dispatch a trip
-  const handleDispatch = async () => {
-    if (!selectedTrip || !driver) return;
+  // Load equipment and loadsheets for dispatch
+  const loadDispatchData = async () => {
+    try {
+      const [loadsheetsRes, equipmentRes] = await Promise.all([
+        fetch(`${API_BASE}/loadsheets`),
+        fetch(`${API_BASE}/equipment`)
+      ]);
+
+      if (loadsheetsRes.ok) {
+        const loadsheets = await loadsheetsRes.json();
+        setAvailableLoadsheets(loadsheets);
+      }
+
+      if (equipmentRes.ok) {
+        const equipment = await equipmentRes.json();
+        setAvailableTrucks(equipment.trucks || []);
+        setAvailableDollies(equipment.dollies || []);
+      }
+    } catch (error) {
+      console.error('Error loading dispatch data:', error);
+    }
+  };
+
+  // Filter loadsheets based on search
+  const filteredLoadsheets = useMemo(() => {
+    if (!loadsheetSearch.trim()) return availableLoadsheets.slice(0, 20);
+    const search = loadsheetSearch.toLowerCase();
+    return availableLoadsheets
+      .filter(ls =>
+        ls.manifestNumber?.toLowerCase().includes(search) ||
+        ls.linehaulName?.toLowerCase().includes(search) ||
+        ls.trailerNumber?.toLowerCase().includes(search)
+      )
+      .slice(0, 20);
+  }, [availableLoadsheets, loadsheetSearch]);
+
+  // Filter trucks based on search
+  const filteredTrucks = useMemo(() => {
+    if (!truckSearch.trim()) return availableTrucks.slice(0, 20);
+    const search = truckSearch.toLowerCase();
+    return availableTrucks
+      .filter(t => t.unitNumber?.toLowerCase().includes(search))
+      .slice(0, 20);
+  }, [availableTrucks, truckSearch]);
+
+  // Filter dollies based on search
+  const filteredDollies = useMemo(() => {
+    if (!dollySearch.trim()) return availableDollies.slice(0, 20);
+    const search = dollySearch.toLowerCase();
+    return availableDollies
+      .filter(d => d.unitNumber?.toLowerCase().includes(search))
+      .slice(0, 20);
+  }, [availableDollies, dollySearch]);
+
+  // Get origin/destination from selected loadsheets
+  const { originCode, destCode } = useMemo(() => {
+    if (selectedLoadsheets.length === 0) {
+      return { originCode: null, destCode: null };
+    }
+    const first = selectedLoadsheets[0];
+    const last = selectedLoadsheets[selectedLoadsheets.length - 1];
+    return {
+      originCode: first.originTerminalCode || null,
+      destCode: last.destinationTerminalCode || null
+    };
+  }, [selectedLoadsheets]);
+
+  // Create and dispatch trip
+  const handleDispatch = async (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!driver || selectedLoadsheets.length === 0) return;
+
+    if (!isOwnerOperator && !selectedTruck) {
+      toast.error('Please select a power unit');
+      return;
+    }
+
     setIsLoading(true);
 
     try {
-      const response = await fetch(`${API_BASE}/trip/${selectedTrip.id}/dispatch`, {
+      const response = await fetch(`${API_BASE}/dispatch`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ driverId: driver.id })
+        body: JSON.stringify({
+          driverId: driver.id,
+          loadsheetIds: selectedLoadsheets.map(ls => ls.id),
+          dollyId: selectedDolly?.id,
+          truckId: selectedTruck?.id,
+          isOwnerOperator,
+          notes: dispatchNotes
+        })
       });
 
       if (!response.ok) {
@@ -158,14 +265,26 @@ export const DriverSelfService: React.FC = () => {
       }
 
       toast.success('Trip dispatched successfully! Drive safe!');
+      resetDispatchForm();
       await loadTrips(driver.id);
-      setSelectedTrip(null);
       setStep('trips');
     } catch (error: any) {
       toast.error(error.message || 'Failed to dispatch trip');
     } finally {
       setIsLoading(false);
     }
+  };
+
+  // Reset dispatch form
+  const resetDispatchForm = () => {
+    setSelectedLoadsheets([]);
+    setSelectedDolly(null);
+    setSelectedTruck(null);
+    setIsOwnerOperator(false);
+    setDispatchNotes('');
+    setLoadsheetSearch('');
+    setTruckSearch('');
+    setDollySearch('');
   };
 
   // Arrive a trip
@@ -179,7 +298,7 @@ export const DriverSelfService: React.FC = () => {
         driverId: driver.id,
         dropAndHook: dropAndHook ? parseInt(dropAndHook) : undefined,
         chainUpCycles: chainUpCycles ? parseInt(chainUpCycles) : undefined,
-        notes: notes || undefined,
+        notes: arrivalNotes || undefined,
         moraleRating: moraleRating > 0 ? moraleRating : undefined
       };
 
@@ -228,7 +347,7 @@ export const DriverSelfService: React.FC = () => {
     setWaitTimeStart('');
     setWaitTimeEnd('');
     setWaitTimeReason('');
-    setNotes('');
+    setArrivalNotes('');
     setHasEquipmentIssue(false);
     setEquipmentIssueType('');
     setEquipmentIssueNumber('');
@@ -243,14 +362,23 @@ export const DriverSelfService: React.FC = () => {
     setSelectedTrip(null);
     setDriverNumber('');
     setPhoneLast4('');
+    resetDispatchForm();
     resetArrivalForm();
     setStep('verify');
   };
 
-  // Select trip for action
-  const selectTrip = (trip: Trip, action: 'dispatch' | 'arrive') => {
+  // Open dispatch form
+  const openDispatchForm = async () => {
+    setIsLoading(true);
+    await loadDispatchData();
+    setIsLoading(false);
+    setStep('dispatch');
+  };
+
+  // Select trip for arrive
+  const selectTripForArrive = (trip: Trip) => {
     setSelectedTrip(trip);
-    setStep(action);
+    setStep('arrive');
   };
 
   // Format date for display
@@ -265,6 +393,16 @@ export const DriverSelfService: React.FC = () => {
     });
   };
 
+  // Format date only
+  const formatDate = (dateStr?: string) => {
+    if (!dateStr) return '-';
+    return new Date(dateStr).toLocaleDateString('en-US', {
+      weekday: 'short',
+      month: 'short',
+      day: 'numeric'
+    });
+  };
+
   // Get status badge color
   const getStatusColor = (status: string) => {
     switch (status) {
@@ -274,10 +412,31 @@ export const DriverSelfService: React.FC = () => {
       case 'IN_TRANSIT':
         return 'bg-blue-100 text-blue-800';
       case 'ARRIVED':
+      case 'COMPLETED':
         return 'bg-green-100 text-green-800';
+      case 'CANCELLED':
+        return 'bg-red-100 text-red-800';
       default:
         return 'bg-gray-100 text-gray-800';
     }
+  };
+
+  // Add loadsheet to selection
+  const addLoadsheet = (loadsheet: Loadsheet) => {
+    if (selectedLoadsheets.length >= 3) {
+      toast.error('Maximum 3 manifests allowed');
+      return;
+    }
+    if (selectedLoadsheets.find(ls => ls.id === loadsheet.id)) {
+      return;
+    }
+    setSelectedLoadsheets([...selectedLoadsheets, loadsheet]);
+    setLoadsheetSearch('');
+  };
+
+  // Remove loadsheet from selection
+  const removeLoadsheet = (loadsheetId: number) => {
+    setSelectedLoadsheets(selectedLoadsheets.filter(ls => ls.id !== loadsheetId));
   };
 
   // Render verification form
@@ -364,20 +523,24 @@ export const DriverSelfService: React.FC = () => {
 
       {/* Content */}
       <div className="p-4">
-        <h2 className="text-lg font-semibold text-gray-900 mb-4">Your Active Trips</h2>
+        {/* Dispatch New Trip Button */}
+        <button
+          onClick={openDispatchForm}
+          disabled={isLoading}
+          className="w-full mb-4 py-4 bg-green-600 text-white font-semibold rounded-xl hover:bg-green-700 disabled:opacity-50 flex items-center justify-center shadow-md"
+        >
+          <Plus className="w-5 h-5 mr-2" />
+          Dispatch New Trip
+        </button>
+
+        <h2 className="text-lg font-semibold text-gray-900 mb-4">Your Trips (Last 7 Days)</h2>
 
         {trips.length === 0 ? (
           <div className="bg-white rounded-xl p-8 text-center shadow-sm">
             <div className="w-16 h-16 bg-gray-100 rounded-full flex items-center justify-center mx-auto mb-4">
               <Truck className="w-8 h-8 text-gray-400" />
             </div>
-            <p className="text-gray-500">No active trips at this time</p>
-            <button
-              onClick={() => loadTrips(driver!.id)}
-              className="mt-4 text-blue-600 font-medium"
-            >
-              Refresh
-            </button>
+            <p className="text-gray-500">No trips in the last 7 days</p>
           </div>
         ) : (
           <div className="space-y-4">
@@ -386,9 +549,14 @@ export const DriverSelfService: React.FC = () => {
                 <div className="p-4">
                   {/* Trip header */}
                   <div className="flex items-center justify-between mb-3">
-                    <span className="font-mono text-sm text-gray-500">
-                      #{trip.tripNumber}
-                    </span>
+                    <div>
+                      <span className="font-mono text-sm text-gray-500">
+                        #{trip.tripNumber}
+                      </span>
+                      <span className="text-xs text-gray-400 ml-2">
+                        {formatDate(trip.dispatchDate)}
+                      </span>
+                    </div>
                     <span className={`px-2 py-1 rounded-full text-xs font-medium ${getStatusColor(trip.status)}`}>
                       {trip.status.replace('_', ' ')}
                     </span>
@@ -443,33 +611,29 @@ export const DriverSelfService: React.FC = () => {
                     </div>
                   )}
 
-                  {/* Scheduled time */}
+                  {/* Times */}
                   <div className="flex items-center text-sm text-gray-500 mb-4">
                     <Clock className="w-4 h-4 mr-1" />
-                    {formatDateTime(trip.plannedDeparture || trip.dispatchDate)}
+                    {trip.actualDeparture ? (
+                      <span>Departed: {formatDateTime(trip.actualDeparture)}</span>
+                    ) : (
+                      <span>Scheduled: {formatDateTime(trip.plannedDeparture || trip.dispatchDate)}</span>
+                    )}
+                    {trip.actualArrival && (
+                      <span className="ml-3">Arrived: {formatDateTime(trip.actualArrival)}</span>
+                    )}
                   </div>
 
-                  {/* Action buttons */}
-                  <div className="flex gap-2">
-                    {(trip.status === 'ASSIGNED' || trip.status === 'DISPATCHED') && (
-                      <button
-                        onClick={() => selectTrip(trip, 'dispatch')}
-                        className="flex-1 py-3 bg-green-600 text-white font-medium rounded-lg hover:bg-green-700 flex items-center justify-center"
-                      >
-                        <Play className="w-4 h-4 mr-2" />
-                        Start Trip
-                      </button>
-                    )}
-                    {trip.status === 'IN_TRANSIT' && (
-                      <button
-                        onClick={() => selectTrip(trip, 'arrive')}
-                        className="flex-1 py-3 bg-blue-600 text-white font-medium rounded-lg hover:bg-blue-700 flex items-center justify-center"
-                      >
-                        <Flag className="w-4 h-4 mr-2" />
-                        Arrive
-                      </button>
-                    )}
-                  </div>
+                  {/* Action buttons - Only show Arrive for IN_TRANSIT trips */}
+                  {trip.status === 'IN_TRANSIT' && (
+                    <button
+                      onClick={() => selectTripForArrive(trip)}
+                      className="w-full py-3 bg-blue-600 text-white font-medium rounded-lg hover:bg-blue-700 flex items-center justify-center"
+                    >
+                      <Flag className="w-4 h-4 mr-2" />
+                      Arrive Trip
+                    </button>
+                  )}
                 </div>
               </div>
             ))}
@@ -487,93 +651,275 @@ export const DriverSelfService: React.FC = () => {
     </div>
   );
 
-  // Render dispatch confirmation
-  const renderDispatchConfirm = () => (
-    <div className="min-h-screen bg-gray-50">
+  // Render dispatch form
+  const renderDispatchForm = () => (
+    <div className="min-h-screen bg-gray-50 pb-24">
       {/* Header */}
       <div className="bg-blue-600 text-white px-4 py-4 sticky top-0 z-10">
         <button
-          onClick={() => { setSelectedTrip(null); setStep('trips'); }}
+          onClick={() => { resetDispatchForm(); setStep('trips'); }}
           className="flex items-center text-blue-100 hover:text-white mb-2"
         >
           <ArrowLeft className="w-4 h-4 mr-1" />
           Back
         </button>
-        <h1 className="text-xl font-semibold">Start Trip</h1>
+        <h1 className="text-xl font-semibold">Dispatch New Trip</h1>
+        <p className="text-blue-100 text-sm">Driver: {driver?.name}</p>
       </div>
 
       {/* Content */}
-      <div className="p-4">
-        {selectedTrip && (
-          <div className="bg-white rounded-xl shadow-sm p-4 mb-4">
-            <div className="text-center mb-6">
-              <div className="w-16 h-16 bg-green-100 rounded-full flex items-center justify-center mx-auto mb-4">
-                <Truck className="w-8 h-8 text-green-600" />
-              </div>
-              <h2 className="text-xl font-bold text-gray-900">Ready to Depart?</h2>
-              <p className="text-gray-500 mt-2">Confirm you're starting trip #{selectedTrip.tripNumber}</p>
-            </div>
+      <form onSubmit={handleDispatch} className="p-4 space-y-4">
+        {/* Manifest Selection */}
+        <div className="bg-white rounded-xl shadow-sm p-4">
+          <h3 className="font-medium text-gray-900 mb-3 flex items-center">
+            <Package className="w-5 h-5 mr-2 text-blue-500" />
+            Select Manifests (up to 3) *
+          </h3>
 
-            {/* Trip details */}
-            <div className="bg-gray-50 rounded-lg p-4 mb-6">
-              <div className="flex items-center justify-center mb-4">
-                <span className="text-lg font-bold">
-                  {selectedTrip.linehaulProfile?.originTerminal?.code}
-                </span>
-                <ChevronRight className="w-5 h-5 mx-2 text-gray-400" />
-                <span className="text-lg font-bold">
-                  {selectedTrip.linehaulProfile?.destinationTerminal?.code}
-                </span>
-              </div>
-
-              <div className="grid grid-cols-2 gap-4 text-sm">
-                <div>
-                  <span className="text-gray-500">Power Unit</span>
-                  <p className="font-medium">{selectedTrip.truck?.unitNumber || '-'}</p>
-                </div>
-                <div>
-                  <span className="text-gray-500">Trailer</span>
-                  <p className="font-medium">{selectedTrip.trailer?.unitNumber || '-'}</p>
-                </div>
-                {selectedTrip.loadsheets && selectedTrip.loadsheets.length > 0 && (
-                  <div className="col-span-2">
-                    <span className="text-gray-500">Manifests</span>
-                    <p className="font-medium">
-                      {selectedTrip.loadsheets.map(ls => ls.manifestNumber).join(', ')}
-                    </p>
+          {/* Selected manifests */}
+          {selectedLoadsheets.length > 0 && (
+            <div className="mb-3 space-y-2">
+              {selectedLoadsheets.map((ls, index) => (
+                <div key={ls.id} className="flex items-center justify-between bg-green-50 p-3 rounded-lg">
+                  <div>
+                    <span className="text-xs text-gray-500">Manifest {index + 1}</span>
+                    <p className="font-medium text-gray-900">{ls.manifestNumber}</p>
+                    <p className="text-sm text-gray-500">{ls.linehaulName} - {ls.trailerNumber}</p>
                   </div>
-                )}
-              </div>
+                  <button
+                    type="button"
+                    onClick={() => removeLoadsheet(ls.id)}
+                    className="p-2 text-red-500 hover:bg-red-50 rounded"
+                  >
+                    <X className="w-4 h-4" />
+                  </button>
+                </div>
+              ))}
             </div>
+          )}
 
-            {/* Actions */}
-            <div className="space-y-3">
-              <button
-                onClick={handleDispatch}
-                disabled={isLoading}
-                className="w-full py-4 bg-green-600 text-white font-semibold rounded-lg hover:bg-green-700 disabled:opacity-50 flex items-center justify-center"
-              >
-                {isLoading ? (
-                  <span className="animate-pulse">Processing...</span>
-                ) : (
-                  <>
-                    <CheckCircle className="w-5 h-5 mr-2" />
-                    Confirm Departure
-                  </>
-                )}
-              </button>
+          {/* Search and add */}
+          {selectedLoadsheets.length < 3 && (
+            <div className="relative">
+              <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 h-4 w-4 text-gray-400" />
+              <input
+                type="text"
+                value={loadsheetSearch}
+                onChange={(e) => setLoadsheetSearch(e.target.value)}
+                placeholder="Search by manifest number..."
+                className="w-full pl-10 pr-3 py-3 border border-gray-300 rounded-lg"
+              />
+              {loadsheetSearch && (
+                <div className="absolute z-10 w-full mt-1 bg-white border border-gray-300 rounded-lg shadow-lg max-h-60 overflow-auto">
+                  {filteredLoadsheets.length > 0 ? (
+                    filteredLoadsheets
+                      .filter(ls => !selectedLoadsheets.find(s => s.id === ls.id))
+                      .map((ls) => (
+                        <button
+                          key={ls.id}
+                          type="button"
+                          onClick={() => addLoadsheet(ls)}
+                          className="w-full px-4 py-3 text-left hover:bg-gray-50 border-b last:border-b-0"
+                        >
+                          <span className="font-medium">{ls.manifestNumber}</span>
+                          <span className="text-gray-500 ml-2 text-sm">
+                            {ls.linehaulName} - {ls.trailerNumber}
+                          </span>
+                        </button>
+                      ))
+                  ) : (
+                    <div className="px-4 py-3 text-gray-500">No manifests found</div>
+                  )}
+                </div>
+              )}
+            </div>
+          )}
+        </div>
 
-              <button
-                onClick={() => { setSelectedTrip(null); setStep('trips'); }}
-                disabled={isLoading}
-                className="w-full py-3 border border-gray-300 text-gray-700 font-medium rounded-lg hover:bg-gray-50"
-              >
-                Cancel
-              </button>
+        {/* Origin & Destination (auto-populated) */}
+        {selectedLoadsheets.length > 0 && (
+          <div className="bg-white rounded-xl shadow-sm p-4">
+            <div className="grid grid-cols-2 gap-4">
+              <div>
+                <label className="block text-sm text-gray-500 mb-1">Origin</label>
+                <div className="px-3 py-2 bg-gray-100 rounded-lg font-medium">
+                  {originCode || '-'}
+                </div>
+              </div>
+              <div>
+                <label className="block text-sm text-gray-500 mb-1">Destination</label>
+                <div className="px-3 py-2 bg-gray-100 rounded-lg font-medium">
+                  {destCode || '-'}
+                </div>
+              </div>
             </div>
           </div>
         )}
-      </div>
+
+        {/* Dolly Selection */}
+        {selectedLoadsheets.length > 0 && (
+          <div className="bg-white rounded-xl shadow-sm p-4">
+            <h3 className="font-medium text-gray-900 mb-3">Converter Dolly</h3>
+
+            {selectedDolly ? (
+              <div className="flex items-center justify-between bg-green-50 p-3 rounded-lg">
+                <div>
+                  <p className="font-medium text-gray-900">{selectedDolly.unitNumber}</p>
+                  <p className="text-sm text-gray-500">{selectedDolly.dollyType}</p>
+                </div>
+                <button
+                  type="button"
+                  onClick={() => { setSelectedDolly(null); setDollySearch(''); }}
+                  className="p-2 text-red-500 hover:bg-red-50 rounded"
+                >
+                  <X className="w-4 h-4" />
+                </button>
+              </div>
+            ) : (
+              <div className="relative">
+                <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 h-4 w-4 text-gray-400" />
+                <input
+                  type="text"
+                  value={dollySearch}
+                  onChange={(e) => setDollySearch(e.target.value)}
+                  placeholder="Search dollies..."
+                  className="w-full pl-10 pr-3 py-3 border border-gray-300 rounded-lg"
+                />
+                {dollySearch && (
+                  <div className="absolute z-10 w-full mt-1 bg-white border border-gray-300 rounded-lg shadow-lg max-h-60 overflow-auto">
+                    {filteredDollies.length > 0 ? (
+                      filteredDollies.map((dolly) => (
+                        <button
+                          key={dolly.id}
+                          type="button"
+                          onClick={() => { setSelectedDolly(dolly); setDollySearch(''); }}
+                          className="w-full px-4 py-3 text-left hover:bg-gray-50 border-b last:border-b-0"
+                        >
+                          <span className="font-medium">{dolly.unitNumber}</span>
+                          <span className="text-gray-500 ml-2">- {dolly.dollyType}</span>
+                        </button>
+                      ))
+                    ) : (
+                      <div className="px-4 py-3 text-gray-500">No dollies found</div>
+                    )}
+                  </div>
+                )}
+              </div>
+            )}
+          </div>
+        )}
+
+        {/* Owner Operator Toggle */}
+        {selectedLoadsheets.length > 0 && (
+          <div className="bg-white rounded-xl shadow-sm p-4">
+            <div className="flex items-center justify-between mb-3">
+              <h3 className="font-medium text-gray-900">Owner Operator?</h3>
+              <label className="relative inline-flex items-center cursor-pointer">
+                <input
+                  type="checkbox"
+                  checked={isOwnerOperator}
+                  onChange={(e) => {
+                    setIsOwnerOperator(e.target.checked);
+                    if (e.target.checked) {
+                      setSelectedTruck(null);
+                      setTruckSearch('');
+                    }
+                  }}
+                  className="sr-only peer"
+                />
+                <div className="w-11 h-6 bg-gray-200 peer-focus:outline-none peer-focus:ring-4 peer-focus:ring-blue-300 rounded-full peer peer-checked:after:translate-x-full peer-checked:after:border-white after:content-[''] after:absolute after:top-[2px] after:left-[2px] after:bg-white after:border-gray-300 after:border after:rounded-full after:h-5 after:w-5 after:transition-all peer-checked:bg-blue-600"></div>
+              </label>
+            </div>
+
+            {isOwnerOperator ? (
+              <div className="px-3 py-2 bg-blue-50 rounded-lg text-blue-700 font-medium">
+                OWNOP (Owner Operator)
+              </div>
+            ) : (
+              <>
+                <label className="block text-sm text-gray-500 mb-2">Power Unit *</label>
+                {selectedTruck ? (
+                  <div className="flex items-center justify-between bg-green-50 p-3 rounded-lg">
+                    <div>
+                      <p className="font-medium text-gray-900">{selectedTruck.unitNumber}</p>
+                      <p className="text-sm text-gray-500">{selectedTruck.truckType}</p>
+                    </div>
+                    <button
+                      type="button"
+                      onClick={() => { setSelectedTruck(null); setTruckSearch(''); }}
+                      className="p-2 text-red-500 hover:bg-red-50 rounded"
+                    >
+                      <X className="w-4 h-4" />
+                    </button>
+                  </div>
+                ) : (
+                  <div className="relative">
+                    <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 h-4 w-4 text-gray-400" />
+                    <input
+                      type="text"
+                      value={truckSearch}
+                      onChange={(e) => setTruckSearch(e.target.value)}
+                      placeholder="Search power units..."
+                      className="w-full pl-10 pr-3 py-3 border border-gray-300 rounded-lg"
+                    />
+                    {truckSearch && (
+                      <div className="absolute z-10 w-full mt-1 bg-white border border-gray-300 rounded-lg shadow-lg max-h-60 overflow-auto">
+                        {filteredTrucks.length > 0 ? (
+                          filteredTrucks.map((truck) => (
+                            <button
+                              key={truck.id}
+                              type="button"
+                              onClick={() => { setSelectedTruck(truck); setTruckSearch(''); }}
+                              className="w-full px-4 py-3 text-left hover:bg-gray-50 border-b last:border-b-0"
+                            >
+                              <span className="font-medium">{truck.unitNumber}</span>
+                              <span className="text-gray-500 ml-2">- {truck.truckType}</span>
+                            </button>
+                          ))
+                        ) : (
+                          <div className="px-4 py-3 text-gray-500">No trucks found</div>
+                        )}
+                      </div>
+                    )}
+                  </div>
+                )}
+              </>
+            )}
+          </div>
+        )}
+
+        {/* Notes */}
+        {selectedLoadsheets.length > 0 && (
+          <div className="bg-white rounded-xl shadow-sm p-4">
+            <label className="block font-medium text-gray-900 mb-2">Notes (Optional)</label>
+            <textarea
+              value={dispatchNotes}
+              onChange={(e) => setDispatchNotes(e.target.value)}
+              placeholder="Any notes for this trip..."
+              rows={3}
+              className="w-full px-3 py-2 border border-gray-300 rounded-lg resize-none"
+            />
+          </div>
+        )}
+
+        {/* Submit button */}
+        <div className="fixed bottom-0 left-0 right-0 p-4 bg-white border-t shadow-lg">
+          <button
+            type="submit"
+            disabled={isLoading || selectedLoadsheets.length === 0 || (!isOwnerOperator && !selectedTruck)}
+            className="w-full py-4 bg-green-600 text-white font-semibold rounded-lg hover:bg-green-700 disabled:opacity-50 flex items-center justify-center"
+          >
+            {isLoading ? (
+              <span className="animate-pulse">Dispatching...</span>
+            ) : (
+              <>
+                <Truck className="w-5 h-5 mr-2" />
+                Dispatch Trip
+              </>
+            )}
+          </button>
+        </div>
+      </form>
     </div>
   );
 
@@ -751,8 +1097,8 @@ export const DriverSelfService: React.FC = () => {
         <div className="bg-white rounded-xl shadow-sm p-4">
           <label className="block font-medium text-gray-900 mb-2">Notes (Optional)</label>
           <textarea
-            value={notes}
-            onChange={(e) => setNotes(e.target.value)}
+            value={arrivalNotes}
+            onChange={(e) => setArrivalNotes(e.target.value)}
             placeholder="Any additional notes..."
             rows={3}
             className="w-full px-3 py-2 border border-gray-300 rounded-lg resize-none"
@@ -804,7 +1150,7 @@ export const DriverSelfService: React.FC = () => {
       <Toaster position="top-center" />
       {step === 'verify' && renderVerifyForm()}
       {step === 'trips' && driver && renderTripsList()}
-      {step === 'dispatch' && selectedTrip && renderDispatchConfirm()}
+      {step === 'dispatch' && driver && renderDispatchForm()}
       {step === 'arrive' && selectedTrip && renderArrivalForm()}
     </>
   );

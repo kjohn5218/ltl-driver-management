@@ -62,8 +62,8 @@ export const verifyDriver = async (req: Request, res: Response): Promise<void> =
   }
 };
 
-// Get driver's active trips (DISPATCHED and IN_TRANSIT status)
-export const getDriverActiveTrips = async (req: Request, res: Response): Promise<void> => {
+// Get driver's trips from past 7 days
+export const getDriverTrips = async (req: Request, res: Response): Promise<void> => {
   try {
     const { driverId } = req.params;
     const driverIdNum = parseInt(driverId, 10);
@@ -71,7 +71,7 @@ export const getDriverActiveTrips = async (req: Request, res: Response): Promise
     // Verify driver exists
     const driver = await prisma.carrierDriver.findUnique({
       where: { id: driverIdNum },
-      select: { id: true, name: true }
+      select: { id: true, name: true, number: true }
     });
 
     if (!driver) {
@@ -79,18 +79,22 @@ export const getDriverActiveTrips = async (req: Request, res: Response): Promise
       return;
     }
 
-    // Get trips that are ready to dispatch or in transit
+    // Get trips from past 7 days
+    const sevenDaysAgo = new Date();
+    sevenDaysAgo.setDate(sevenDaysAgo.getDate() - 7);
+    sevenDaysAgo.setHours(0, 0, 0, 0);
+
     const trips = await prisma.linehaulTrip.findMany({
       where: {
         OR: [
           { driverId: driverIdNum },
           { teamDriverId: driverIdNum }
         ],
-        status: {
-          in: ['ASSIGNED', 'DISPATCHED', 'IN_TRANSIT']
+        dispatchDate: {
+          gte: sevenDaysAgo
         }
       },
-      orderBy: { dispatchDate: 'asc' },
+      orderBy: { dispatchDate: 'desc' },
       include: {
         linehaulProfile: {
           select: {
@@ -128,7 +132,8 @@ export const getDriverActiveTrips = async (req: Request, res: Response): Promise
             linehaulName: true,
             originTerminalCode: true,
             destinationTerminalCode: true,
-            sealNumber: true
+            sealNumber: true,
+            trailerNumber: true
           }
         }
       }
@@ -137,13 +142,283 @@ export const getDriverActiveTrips = async (req: Request, res: Response): Promise
     res.json({
       driver: {
         id: driver.id,
-        name: driver.name
+        name: driver.name,
+        number: driver.number
       },
       trips
     });
   } catch (error) {
-    console.error('Error fetching driver active trips:', error);
+    console.error('Error fetching driver trips:', error);
     res.status(500).json({ message: 'Failed to fetch driver trips' });
+  }
+};
+
+// Get available loadsheets for dispatch
+export const getAvailableLoadsheets = async (_req: Request, res: Response): Promise<void> => {
+  try {
+    const loadsheets = await prisma.loadsheet.findMany({
+      where: {
+        status: { in: ['OPEN', 'CLOSED', 'LOADING'] },
+        linehaulTripId: null
+      },
+      select: {
+        id: true,
+        manifestNumber: true,
+        linehaulName: true,
+        trailerNumber: true,
+        originTerminalCode: true,
+        destinationTerminalCode: true,
+        pieces: true,
+        weight: true
+      },
+      orderBy: { manifestNumber: 'asc' },
+      take: 100
+    });
+
+    res.json(loadsheets);
+  } catch (error) {
+    console.error('Error fetching loadsheets:', error);
+    res.status(500).json({ message: 'Failed to fetch loadsheets' });
+  }
+};
+
+// Get available equipment (trucks and dollies) for dispatch
+export const getAvailableEquipment = async (_req: Request, res: Response): Promise<void> => {
+  try {
+    const [trucks, dollies, trailers] = await Promise.all([
+      prisma.equipmentTruck.findMany({
+        where: { status: 'AVAILABLE' },
+        select: { id: true, unitNumber: true, truckType: true },
+        orderBy: { unitNumber: 'asc' },
+        take: 100
+      }),
+      prisma.equipmentDolly.findMany({
+        where: { status: 'AVAILABLE' },
+        select: { id: true, unitNumber: true, dollyType: true },
+        orderBy: { unitNumber: 'asc' },
+        take: 100
+      }),
+      prisma.equipmentTrailer.findMany({
+        select: { id: true, unitNumber: true, trailerType: true },
+        orderBy: { unitNumber: 'asc' },
+        take: 500
+      })
+    ]);
+
+    res.json({ trucks, dollies, trailers });
+  } catch (error) {
+    console.error('Error fetching equipment:', error);
+    res.status(500).json({ message: 'Failed to fetch equipment' });
+  }
+};
+
+// Get linehaul profiles for dispatch
+export const getLinehaulProfiles = async (_req: Request, res: Response): Promise<void> => {
+  try {
+    const profiles = await prisma.linehaulProfile.findMany({
+      where: { active: true },
+      select: {
+        id: true,
+        profileCode: true,
+        name: true,
+        originTerminal: { select: { code: true, name: true } },
+        destinationTerminal: { select: { code: true, name: true } }
+      },
+      orderBy: { profileCode: 'asc' }
+    });
+
+    res.json(profiles);
+  } catch (error) {
+    console.error('Error fetching profiles:', error);
+    res.status(500).json({ message: 'Failed to fetch profiles' });
+  }
+};
+
+// Create and dispatch a trip (for driver self-service)
+export const createAndDispatchTrip = async (req: Request, res: Response): Promise<void> => {
+  try {
+    const {
+      driverId,
+      loadsheetIds,
+      dollyId,
+      dolly2Id,
+      truckId,
+      isOwnerOperator,
+      notes
+    } = req.body;
+
+    const driverIdNum = parseInt(driverId, 10);
+
+    // Verify driver exists
+    const driver = await prisma.carrierDriver.findUnique({
+      where: { id: driverIdNum }
+    });
+
+    if (!driver) {
+      res.status(404).json({ message: 'Driver not found' });
+      return;
+    }
+
+    // Validate loadsheets
+    if (!loadsheetIds || loadsheetIds.length === 0) {
+      res.status(400).json({ message: 'At least one manifest is required' });
+      return;
+    }
+
+    // Get loadsheets
+    const loadsheets = await prisma.loadsheet.findMany({
+      where: { id: { in: loadsheetIds.map((id: string | number) => parseInt(String(id), 10)) } }
+    });
+
+    if (loadsheets.length === 0) {
+      res.status(400).json({ message: 'No valid loadsheets found' });
+      return;
+    }
+
+    const firstLoadsheet = loadsheets[0];
+
+    // Find matching linehaul profile
+    const profile = await prisma.linehaulProfile.findFirst({
+      where: {
+        OR: [
+          { profileCode: firstLoadsheet.linehaulName },
+          { name: firstLoadsheet.linehaulName }
+        ],
+        active: true
+      }
+    });
+
+    if (!profile) {
+      res.status(400).json({ message: `Could not find linehaul profile for "${firstLoadsheet.linehaulName}"` });
+      return;
+    }
+
+    // Find trailer IDs from loadsheet trailer numbers
+    let trailerId: number | undefined;
+    let trailer2Id: number | undefined;
+
+    if (firstLoadsheet.trailerNumber) {
+      const trailer = await prisma.equipmentTrailer.findFirst({
+        where: { unitNumber: { equals: firstLoadsheet.trailerNumber, mode: 'insensitive' } }
+      });
+      if (trailer) trailerId = trailer.id;
+    }
+
+    if (loadsheets.length > 1 && loadsheets[1].trailerNumber) {
+      const trailer2 = await prisma.equipmentTrailer.findFirst({
+        where: { unitNumber: { equals: loadsheets[1].trailerNumber, mode: 'insensitive' } }
+      });
+      if (trailer2) trailer2Id = trailer2.id;
+    }
+
+    // Generate trip number
+    const date = new Date();
+    const dateStr = date.toISOString().slice(0, 10).replace(/-/g, '');
+    const lastTrip = await prisma.linehaulTrip.findFirst({
+      where: { tripNumber: { startsWith: dateStr } },
+      orderBy: { tripNumber: 'desc' }
+    });
+    let sequence = 1;
+    if (lastTrip) {
+      const lastSeq = parseInt(lastTrip.tripNumber.slice(-3), 10);
+      sequence = lastSeq + 1;
+    }
+    const tripNumber = `${dateStr}${sequence.toString().padStart(3, '0')}`;
+
+    // Create trip and update statuses in transaction
+    const result = await prisma.$transaction(async (tx) => {
+      // Create the trip
+      const trip = await tx.linehaulTrip.create({
+        data: {
+          tripNumber,
+          linehaulProfileId: profile.id,
+          dispatchDate: new Date(),
+          actualDeparture: new Date(),
+          driverId: driverIdNum,
+          truckId: isOwnerOperator ? undefined : (truckId ? parseInt(String(truckId), 10) : undefined),
+          trailerId,
+          trailer2Id,
+          dollyId: dollyId ? parseInt(String(dollyId), 10) : undefined,
+          dolly2Id: dolly2Id ? parseInt(String(dolly2Id), 10) : undefined,
+          notes: (notes || '') + (isOwnerOperator ? '\nOwner Operator' : ''),
+          status: 'IN_TRANSIT'
+        }
+      });
+
+      // Update loadsheets
+      for (const ls of loadsheets) {
+        await tx.loadsheet.update({
+          where: { id: ls.id },
+          data: { linehaulTripId: trip.id, status: 'DISPATCHED' }
+        });
+      }
+
+      // Update equipment status
+      if (trip.truckId) {
+        await tx.equipmentTruck.update({
+          where: { id: trip.truckId },
+          data: { status: 'IN_TRANSIT' }
+        });
+      }
+      if (trip.trailerId) {
+        await tx.equipmentTrailer.update({
+          where: { id: trip.trailerId },
+          data: { status: 'IN_TRANSIT' }
+        });
+      }
+      if (trip.trailer2Id) {
+        await tx.equipmentTrailer.update({
+          where: { id: trip.trailer2Id },
+          data: { status: 'IN_TRANSIT' }
+        });
+      }
+      if (trip.dollyId) {
+        await tx.equipmentDolly.update({
+          where: { id: trip.dollyId },
+          data: { status: 'IN_TRANSIT' }
+        });
+      }
+      if (trip.dolly2Id) {
+        await tx.equipmentDolly.update({
+          where: { id: trip.dolly2Id },
+          data: { status: 'IN_TRANSIT' }
+        });
+      }
+
+      // Update driver status
+      await tx.carrierDriver.update({
+        where: { id: driverIdNum },
+        data: { driverStatus: 'DRIVING' }
+      });
+
+      return trip;
+    });
+
+    // Get full trip details
+    const fullTrip = await prisma.linehaulTrip.findUnique({
+      where: { id: result.id },
+      include: {
+        linehaulProfile: {
+          select: {
+            profileCode: true,
+            name: true,
+            originTerminal: { select: { code: true, name: true } },
+            destinationTerminal: { select: { code: true, name: true } }
+          }
+        },
+        truck: { select: { id: true, unitNumber: true } },
+        trailer: { select: { id: true, unitNumber: true } },
+        loadsheets: { select: { id: true, manifestNumber: true } }
+      }
+    });
+
+    res.status(201).json({
+      message: 'Trip created and dispatched successfully',
+      trip: fullTrip
+    });
+  } catch (error) {
+    console.error('Error creating trip:', error);
+    res.status(500).json({ message: 'Failed to create trip' });
   }
 };
 
