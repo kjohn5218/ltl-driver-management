@@ -51,7 +51,7 @@ export const CutPayModal: React.FC<CutPayModalProps> = ({
     enabled: isOpen
   });
 
-  const drivers = driversData?.data || [];
+  const drivers = driversData?.drivers || [];
 
   // Filter drivers based on search
   const filteredDrivers = useMemo(() => {

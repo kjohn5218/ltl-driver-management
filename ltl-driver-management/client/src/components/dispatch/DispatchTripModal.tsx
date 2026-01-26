@@ -1,6 +1,6 @@
 import React, { useState, useMemo, useCallback, useEffect } from 'react';
 import { useQuery, useQueryClient } from '@tanstack/react-query';
-import { Truck, AlertTriangle, CheckCircle, X, Search, Loader2, Clock, Scissors, Route as RouteIcon } from 'lucide-react';
+import { Truck, AlertTriangle, CheckCircle, X, Search, Loader2 } from 'lucide-react';
 import toast from 'react-hot-toast';
 import { Modal } from '../common/Modal';
 import { linehaulTripService } from '../../services/linehaulTripService';
@@ -8,18 +8,9 @@ import { equipmentService } from '../../services/equipmentService';
 import { loadsheetService } from '../../services/loadsheetService';
 import { driverService } from '../../services/driverService';
 import { linehaulProfileService } from '../../services/linehaulProfileService';
-import { cutPayService, TrailerConfig, CutPayType } from '../../services/cutPayService';
 import { api } from '../../services/api';
 import { Loadsheet, EquipmentTruck, EquipmentTrailer, EquipmentDolly, CarrierDriver, LinehaulProfile, Route } from '../../types';
 import { TripDocumentsModal } from './TripDocumentsModal';
-
-// Cut pay reason options
-const CUT_PAY_REASONS = [
-  { value: 'LOW_FREIGHT_VOLUME', label: 'Low freight volume' },
-  { value: 'EQUIPMENT_UNAVAILABLE', label: 'Equipment unavailable' },
-  { value: 'WEATHER_DELAY', label: 'Weather delay' },
-  { value: 'OTHER', label: 'Other' }
-];
 
 interface DispatchTripModalProps {
   isOpen: boolean;
@@ -66,15 +57,6 @@ export const DispatchTripModal: React.FC<DispatchTripModalProps> = ({
   // Notes
   const [notes, setNotes] = useState('');
 
-  // Cut pay request state
-  const [isCutPayRequest, setIsCutPayRequest] = useState(false);
-  const [cutPayType, setCutPayType] = useState<CutPayType>('HOURS');
-  const [cutPayHours, setCutPayHours] = useState<string>('');
-  const [cutPayMiles, setCutPayMiles] = useState<string>('');
-  const [cutPayTrailerConfig, setCutPayTrailerConfig] = useState<TrailerConfig>('SINGLE');
-  const [cutPayReason, setCutPayReason] = useState<string>('LOW_FREIGHT_VOLUME');
-  const [cutPayReasonOther, setCutPayReasonOther] = useState<string>('');
-
   // Submission state
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [showConfirmModal, setShowConfirmModal] = useState(false);
@@ -98,13 +80,6 @@ export const DispatchTripModal: React.FC<DispatchTripModalProps> = ({
       setDollySearches(['', '', '']);
       setDollyDropdownOpen([false, false, false]);
       setNotes('');
-      setIsCutPayRequest(false);
-      setCutPayType('HOURS');
-      setCutPayHours('');
-      setCutPayMiles('');
-      setCutPayTrailerConfig('SINGLE');
-      setCutPayReason('LOW_FREIGHT_VOLUME');
-      setCutPayReasonOther('');
       setIsSubmitting(false);
       setShowConfirmModal(false);
       setShowDocumentsModal(false);
@@ -438,60 +413,13 @@ export const DispatchTripModal: React.FC<DispatchTripModalProps> = ({
   const handleSubmitClick = async (e: React.FormEvent) => {
     e.preventDefault();
 
-    // Validate driver is required for both trip and cut pay
+    // Validate driver is required
     if (!selectedDriver) {
       toast.error('Please select a driver');
       return;
     }
 
-    // Handle cut pay request
-    if (isCutPayRequest) {
-      if (cutPayType === 'HOURS' && (!cutPayHours || parseFloat(cutPayHours) <= 0)) {
-        toast.error('Please enter cut hours');
-        return;
-      }
-
-      if (cutPayType === 'MILES' && (!cutPayMiles || parseFloat(cutPayMiles) <= 0)) {
-        toast.error('Please enter cut miles');
-        return;
-      }
-
-      if (cutPayReason === 'OTHER' && !cutPayReasonOther.trim()) {
-        toast.error('Please specify the reason');
-        return;
-      }
-
-      setIsSubmitting(true);
-      try {
-        const reasonText = cutPayReason === 'OTHER'
-          ? cutPayReasonOther
-          : CUT_PAY_REASONS.find(r => r.value === cutPayReason)?.label || cutPayReason;
-
-        await cutPayService.createCutPayRequest({
-          driverId: selectedDriver.id,
-          trailerConfig: cutPayTrailerConfig,
-          cutPayType: cutPayType,
-          hoursRequested: cutPayType === 'HOURS' ? parseFloat(cutPayHours) : undefined,
-          milesRequested: cutPayType === 'MILES' ? parseFloat(cutPayMiles) : undefined,
-          reason: reasonText,
-          notes: notes || undefined
-        });
-
-        toast.success('Cut pay request submitted successfully');
-        queryClient.invalidateQueries({ queryKey: ['cut-pay-requests'] });
-        onSuccess?.();
-        onClose();
-      } catch (error: any) {
-        console.error('Error creating cut pay request:', error);
-        const errorMessage = error.response?.data?.message || 'Failed to create cut pay request';
-        toast.error(errorMessage);
-      } finally {
-        setIsSubmitting(false);
-      }
-      return;
-    }
-
-    // Normal trip dispatch - require manifest
+    // Require manifest
     const hasManifestSelected = manifestEntries.some(entry => entry.loadsheet);
     if (!hasManifestSelected) {
       toast.error('Please add at least one manifest');
@@ -976,160 +904,7 @@ export const DispatchTripModal: React.FC<DispatchTripModalProps> = ({
                   )}
                 </div>
 
-                {/* Cut Pay Toggle - Show after driver is selected */}
-                {selectedDriver && (
-                  <div className="border border-orange-200 dark:border-orange-700 rounded-lg p-4 bg-orange-50 dark:bg-orange-900/20">
-                    <div className="flex items-center justify-between mb-3">
-                      <div className="flex items-center">
-                        <Scissors className="h-5 w-5 text-orange-500 mr-2" />
-                        <label className="text-sm font-medium text-gray-700 dark:text-gray-300">
-                          Driver Cut (No Work Available)
-                        </label>
-                      </div>
-                      <label className="relative inline-flex items-center cursor-pointer">
-                        <input
-                          type="checkbox"
-                          checked={isCutPayRequest}
-                          onChange={(e) => setIsCutPayRequest(e.target.checked)}
-                          className="sr-only peer"
-                        />
-                        <div className="w-11 h-6 bg-gray-200 peer-focus:outline-none peer-focus:ring-4 peer-focus:ring-orange-300 dark:peer-focus:ring-orange-800 rounded-full peer dark:bg-gray-700 peer-checked:after:translate-x-full peer-checked:after:border-white after:content-[''] after:absolute after:top-[2px] after:left-[2px] after:bg-white after:border-gray-300 after:border after:rounded-full after:h-5 after:w-5 after:transition-all dark:border-gray-600 peer-checked:bg-orange-600"></div>
-                      </label>
-                    </div>
-
-                    {isCutPayRequest && (
-                      <div className="space-y-4 mt-4 pt-4 border-t border-orange-200 dark:border-orange-700">
-                        <p className="text-sm text-orange-700 dark:text-orange-300">
-                          This will create a cut pay request for the driver instead of dispatching a trip.
-                        </p>
-
-                        {/* Cut Pay Type Toggle */}
-                        <div>
-                          <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-2">
-                            Cut Pay Type *
-                          </label>
-                          <div className="flex space-x-4">
-                            <label className="flex items-center">
-                              <input
-                                type="radio"
-                                name="cutPayType"
-                                checked={cutPayType === 'HOURS'}
-                                onChange={() => setCutPayType('HOURS')}
-                                className="h-4 w-4 text-orange-600 focus:ring-orange-500 border-gray-300"
-                              />
-                              <Clock className="h-4 w-4 ml-2 mr-1 text-gray-500" />
-                              <span className="text-gray-700 dark:text-gray-300">Hours</span>
-                            </label>
-                            <label className="flex items-center">
-                              <input
-                                type="radio"
-                                name="cutPayType"
-                                checked={cutPayType === 'MILES'}
-                                onChange={() => setCutPayType('MILES')}
-                                className="h-4 w-4 text-orange-600 focus:ring-orange-500 border-gray-300"
-                              />
-                              <RouteIcon className="h-4 w-4 ml-2 mr-1 text-gray-500" />
-                              <span className="text-gray-700 dark:text-gray-300">Miles</span>
-                            </label>
-                          </div>
-                        </div>
-
-                        <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                          {/* Hours or Miles based on selection */}
-                          {cutPayType === 'HOURS' ? (
-                            <div>
-                              <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">
-                                Cut Hours *
-                              </label>
-                              <div className="relative">
-                                <Clock className="absolute left-3 top-1/2 transform -translate-y-1/2 h-4 w-4 text-gray-400" />
-                                <input
-                                  type="number"
-                                  step="0.5"
-                                  min="0.5"
-                                  max="12"
-                                  value={cutPayHours}
-                                  onChange={(e) => setCutPayHours(e.target.value)}
-                                  placeholder="Enter hours..."
-                                  className="w-full pl-10 pr-3 py-2 border border-gray-300 dark:border-gray-600 rounded-md bg-white dark:bg-gray-700 text-gray-900 dark:text-gray-100 focus:ring-2 focus:ring-orange-500 focus:border-transparent"
-                                />
-                              </div>
-                            </div>
-                          ) : (
-                            <div>
-                              <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">
-                                Cut Miles *
-                              </label>
-                              <div className="relative">
-                                <RouteIcon className="absolute left-3 top-1/2 transform -translate-y-1/2 h-4 w-4 text-gray-400" />
-                                <input
-                                  type="number"
-                                  step="1"
-                                  min="1"
-                                  max="1000"
-                                  value={cutPayMiles}
-                                  onChange={(e) => setCutPayMiles(e.target.value)}
-                                  placeholder="Enter miles..."
-                                  className="w-full pl-10 pr-3 py-2 border border-gray-300 dark:border-gray-600 rounded-md bg-white dark:bg-gray-700 text-gray-900 dark:text-gray-100 focus:ring-2 focus:ring-orange-500 focus:border-transparent"
-                                />
-                              </div>
-                            </div>
-                          )}
-
-                          {/* Trailer Configuration */}
-                          <div>
-                            <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">
-                              Trailer Configuration *
-                            </label>
-                            <select
-                              value={cutPayTrailerConfig}
-                              onChange={(e) => setCutPayTrailerConfig(e.target.value as TrailerConfig)}
-                              className="w-full px-3 py-2 border border-gray-300 dark:border-gray-600 rounded-md bg-white dark:bg-gray-700 text-gray-900 dark:text-gray-100 focus:ring-2 focus:ring-orange-500 focus:border-transparent"
-                            >
-                              <option value="SINGLE">Single</option>
-                              <option value="DOUBLE">Double</option>
-                              <option value="TRIPLE">Triple</option>
-                            </select>
-                          </div>
-                        </div>
-
-                        {/* Reason */}
-                        <div>
-                          <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">
-                            Reason *
-                          </label>
-                          <select
-                            value={cutPayReason}
-                            onChange={(e) => setCutPayReason(e.target.value)}
-                            className="w-full px-3 py-2 border border-gray-300 dark:border-gray-600 rounded-md bg-white dark:bg-gray-700 text-gray-900 dark:text-gray-100 focus:ring-2 focus:ring-orange-500 focus:border-transparent"
-                          >
-                            {CUT_PAY_REASONS.map(reason => (
-                              <option key={reason.value} value={reason.value}>{reason.label}</option>
-                            ))}
-                          </select>
-                        </div>
-
-                        {cutPayReason === 'OTHER' && (
-                          <div>
-                            <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">
-                              Specify Reason *
-                            </label>
-                            <input
-                              type="text"
-                              value={cutPayReasonOther}
-                              onChange={(e) => setCutPayReasonOther(e.target.value)}
-                              placeholder="Enter reason..."
-                              className="w-full px-3 py-2 border border-gray-300 dark:border-gray-600 rounded-md bg-white dark:bg-gray-700 text-gray-900 dark:text-gray-100 focus:ring-2 focus:ring-orange-500 focus:border-transparent"
-                            />
-                          </div>
-                        )}
-                      </div>
-                    )}
-                  </div>
-                )}
-
-                {/* Owner Operator & Power Unit - Hide when cut pay is selected */}
-                {!isCutPayRequest && (
+                {/* Owner Operator & Power Unit */}
                 <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
                   <div>
                     <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-3">
@@ -1219,7 +994,6 @@ export const DispatchTripModal: React.FC<DispatchTripModalProps> = ({
                     )}
                   </div>
                 </div>
-                )}
 
                 {/* Notes */}
                 <div>
@@ -1248,23 +1022,10 @@ export const DispatchTripModal: React.FC<DispatchTripModalProps> = ({
                 <button
                   type="submit"
                   disabled={isSubmitting}
-                  className={`inline-flex items-center px-4 py-2 border border-transparent text-sm font-medium rounded-md text-white focus:outline-none focus:ring-2 focus:ring-offset-2 disabled:opacity-50 ${
-                    isCutPayRequest
-                      ? 'bg-orange-600 hover:bg-orange-700 focus:ring-orange-500'
-                      : 'bg-green-600 hover:bg-green-700 focus:ring-green-500'
-                  }`}
+                  className="inline-flex items-center px-4 py-2 border border-transparent text-sm font-medium rounded-md text-white bg-green-600 hover:bg-green-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-green-500 disabled:opacity-50"
                 >
-                  {isCutPayRequest ? (
-                    <>
-                      <Scissors className="h-4 w-4 mr-2" />
-                      {isSubmitting ? 'Submitting...' : 'Submit Cut Pay Request'}
-                    </>
-                  ) : (
-                    <>
-                      <Truck className="h-4 w-4 mr-2" />
-                      {isSubmitting ? 'Creating...' : 'Create Trip'}
-                    </>
-                  )}
+                  <Truck className="h-4 w-4 mr-2" />
+                  {isSubmitting ? 'Creating...' : 'Create Trip'}
                 </button>
               </div>
             </form>
