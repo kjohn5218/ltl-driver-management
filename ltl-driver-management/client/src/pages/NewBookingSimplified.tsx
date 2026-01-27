@@ -4,10 +4,11 @@ import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { api } from '../services/api';
 import { Calendar, Truck, MapPin, AlertCircle, X, Plus } from 'lucide-react';
 import { format, eachDayOfInterval, parseISO } from 'date-fns';
-import { LocationAutocomplete } from '../components/LocationAutocomplete';
+import { LocationSelect } from '../components/LocationSelect';
 import { useAuth } from '../contexts/AuthContext';
 import { Location, CarrierDriver } from '../types';
 import { driverService } from '../services/driverService';
+import { toast } from 'react-hot-toast';
 
 type RateType = 'MILE' | 'MILE_FSC' | 'FLAT_RATE';
 
@@ -62,6 +63,7 @@ export const NewBookingSimplified: React.FC<NewBookingSimplifiedProps> = () => {
   const [availableDrivers, setAvailableDrivers] = useState<CarrierDriver[]>([]);
   const [allDrivers, setAllDrivers] = useState<CarrierDriver[]>([]);
   const [useManualDriverEntry, setUseManualDriverEntry] = useState(false);
+  const [saveDriverToSystem, setSaveDriverToSystem] = useState(false);
   const [driverSearch, setDriverSearch] = useState('');
   const [phoneSearch, setPhoneSearch] = useState('');
   const [showDriverDropdown, setShowDriverDropdown] = useState(false);
@@ -522,20 +524,42 @@ export const NewBookingSimplified: React.FC<NewBookingSimplifiedProps> = () => {
   };
 
   // Handle create booking
-  const handleCreateBooking = () => {
+  const handleCreateBooking = async () => {
     // Check for unsaved leg data
     if (hasUnsavedLegData()) {
       const confirmMessage = 'You have unsaved leg data. Click "Add Leg" to save it first, or proceed without this leg?';
-      
+
       if (!confirm(confirmMessage)) {
         return;
       }
     }
-    
+
     // Validation
     if (legs.length === 0) {
       alert('Please add at least one leg to the booking');
       return;
+    }
+
+    // Save driver to system if option is checked
+    if (saveDriverToSystem && useManualDriverEntry && driverName && carrierId) {
+      try {
+        const newDriver = await driverService.createDriver({
+          carrierId: parseInt(carrierId),
+          name: driverName,
+          phoneNumber: phoneNumber || undefined,
+          active: true
+        });
+        // Update available drivers list
+        setAvailableDrivers(prev => [...prev, newDriver]);
+        setAllDrivers(prev => [...prev, newDriver]);
+        toast.success(`Driver "${driverName}" saved to carrier`);
+        // Reset the save checkbox
+        setSaveDriverToSystem(false);
+      } catch (error) {
+        console.error('Failed to save driver:', error);
+        // Non-blocking - continue with booking creation even if driver save fails
+        toast.error('Failed to save driver, but booking will continue');
+      }
     }
 
     // Get booking dates
@@ -916,7 +940,7 @@ export const NewBookingSimplified: React.FC<NewBookingSimplifiedProps> = () => {
               <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
                 <div>
                   <label className="block text-sm font-medium text-gray-700 mb-2">Origin</label>
-                  <LocationAutocomplete
+                  <LocationSelect
                     value={customOrigin}
                     onChange={(value) => {
                       setCustomOrigin(value);
@@ -935,13 +959,13 @@ export const NewBookingSimplified: React.FC<NewBookingSimplifiedProps> = () => {
                     onLocationSelect={(location) => {
                       setSelectedOriginLocation(location);
                     }}
-                    placeholder="Search origin..."
+                    placeholder="Select origin..."
                     required
                   />
                 </div>
                 <div>
                   <label className="block text-sm font-medium text-gray-700 mb-2">Destination</label>
-                  <LocationAutocomplete
+                  <LocationSelect
                     value={customDestination}
                     onChange={(value) => {
                       setCustomDestination(value);
@@ -960,7 +984,7 @@ export const NewBookingSimplified: React.FC<NewBookingSimplifiedProps> = () => {
                     onLocationSelect={(location) => {
                       setSelectedDestinationLocation(location);
                     }}
-                    placeholder="Search destination..."
+                    placeholder="Select destination..."
                     required
                   />
                 </div>
@@ -1258,14 +1282,30 @@ export const NewBookingSimplified: React.FC<NewBookingSimplifiedProps> = () => {
                     setDriverName('');
                   }
                   setPhoneNumber('');
+                  setSaveDriverToSystem(false);
                 }}
                 className="text-sm text-blue-600 hover:text-blue-800"
               >
                 {useManualDriverEntry ? 'Search from driver list' : 'Enter manually'}
               </button>
+              {useManualDriverEntry && carrierId && (
+                <div className="mt-2">
+                  <label className="flex items-center">
+                    <input
+                      type="checkbox"
+                      checked={saveDriverToSystem}
+                      onChange={(e) => setSaveDriverToSystem(e.target.checked)}
+                      className="mr-2 rounded border-gray-300 text-blue-600 focus:ring-blue-500"
+                    />
+                    <span className="text-sm text-gray-600">
+                      Save this driver to the carrier's driver list
+                    </span>
+                  </label>
+                </div>
+              )}
               {carrierId && (
                 <p className="text-xs text-gray-500">
-                  {availableDrivers.length > 0 
+                  {availableDrivers.length > 0
                     ? `Showing ${availableDrivers.length} drivers from selected carrier`
                     : 'No drivers found for selected carrier'
                   }

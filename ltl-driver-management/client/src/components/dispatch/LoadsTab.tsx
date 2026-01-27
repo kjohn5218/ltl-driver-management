@@ -1,4 +1,4 @@
-import React, { useState, useMemo, useEffect } from 'react';
+import React, { useState, useMemo } from 'react';
 import { useQuery } from '@tanstack/react-query';
 import { DataTable, SortDirection } from '../common/DataTable';
 import { Search } from '../common/Search';
@@ -6,6 +6,7 @@ import { DateRangePicker } from '../common/DateRangePicker';
 import { Modal } from '../common/Modal';
 import { LoadsheetShipmentsModal } from '../loadsheet/LoadsheetShipmentsModal';
 import { CreateLoadsheetModal } from '../loadsheet/CreateLoadsheetModal';
+import { LocationMultiSelect } from '../LocationMultiSelect';
 import { loadsheetService } from '../../services/loadsheetService';
 import { linehaulTripService } from '../../services/linehaulTripService';
 import { linehaulProfileService } from '../../services/linehaulProfileService';
@@ -13,7 +14,7 @@ import { equipmentService } from '../../services/equipmentService';
 import { driverService } from '../../services/driverService';
 import { carrierService } from '../../services/carrierService';
 import { locationService } from '../../services/locationService';
-import { Loadsheet, CarrierDriver, Carrier, Location, LinehaulTrip, LoadsheetStatus, EquipmentTrailer, LinehaulProfile } from '../../types';
+import { Loadsheet, CarrierDriver, Carrier, LinehaulTrip, LoadsheetStatus, EquipmentTrailer, LinehaulProfile } from '../../types';
 import { toast } from 'react-hot-toast';
 import {
   MapPin,
@@ -164,7 +165,6 @@ export const LoadsTab: React.FC<LoadsTabProps> = ({ loading: externalLoading = f
   const [startDate, setStartDate] = useState('');
   const [endDate, setEndDate] = useState('');
   const [selectedOrigins, setSelectedOrigins] = useState<number[]>([]);
-  const [locationTypeFilter, setLocationTypeFilter] = useState<'all' | 'physical' | 'virtual'>('all');
 
   // Modal states
   const [isShipmentsModalOpen, setIsShipmentsModalOpen] = useState(false);
@@ -231,13 +231,6 @@ export const LoadsTab: React.FC<LoadsTabProps> = ({ loading: externalLoading = f
     }
   });
   const locations = locationsData || [];
-
-  // Filter locations by type
-  const filteredLocations = locations.filter(loc => {
-    if (locationTypeFilter === 'physical') return loc.isPhysicalTerminal;
-    if (locationTypeFilter === 'virtual') return loc.isVirtualTerminal;
-    return true;
-  });
 
   // Fetch loadsheets from the API
   const { data: loadsheetsData, isLoading, refetch } = useQuery({
@@ -790,53 +783,12 @@ export const LoadsTab: React.FC<LoadsTabProps> = ({ loading: externalLoading = f
 
           <div className="flex items-center space-x-2">
             <MapPin className="w-4 h-4 text-gray-400" />
-            {/* Location Type Filter */}
-            <select
-              value={locationTypeFilter}
-              onChange={(e) => {
-                setLocationTypeFilter(e.target.value as 'all' | 'physical' | 'virtual');
-                setSelectedOrigins([]);
-              }}
-              className="rounded-md border-gray-300 dark:border-gray-600 dark:bg-gray-700 dark:text-gray-100 text-sm"
-            >
-              <option value="all">All Types</option>
-              <option value="physical">Physical Terminals</option>
-              <option value="virtual">Virtual Terminals</option>
-            </select>
-            {/* Multi-Select Origins Dropdown */}
-            <div className="relative">
-              <select
-                multiple
-                value={selectedOrigins.map(String)}
-                onChange={(e) => {
-                  const selected = Array.from(e.target.selectedOptions, option => parseInt(option.value));
-                  setSelectedOrigins(selected);
-                }}
-                className="w-48 h-9 rounded-md border-gray-300 dark:border-gray-600 dark:bg-gray-700 dark:text-gray-100 text-sm"
-                style={{ paddingRight: selectedOrigins.length > 0 ? '2rem' : undefined }}
-              >
-                {filteredLocations.map((location) => (
-                  <option key={location.id} value={location.id}>
-                    {location.code} - {location.name || location.city}
-                  </option>
-                ))}
-              </select>
-              {selectedOrigins.length > 0 && (
-                <button
-                  onClick={() => setSelectedOrigins([])}
-                  className="absolute right-1 top-1/2 -translate-y-1/2 p-1 text-gray-400 hover:text-gray-600 dark:hover:text-gray-200 hover:bg-gray-100 dark:hover:bg-gray-600 rounded"
-                  title="Clear selection"
-                >
-                  ×
-                </button>
-              )}
-            </div>
-            {/* Selected count badge */}
-            {selectedOrigins.length > 0 && (
-              <span className="text-xs px-2 py-1 bg-indigo-100 dark:bg-indigo-900 text-indigo-700 dark:text-indigo-300 rounded-full">
-                {selectedOrigins.length} selected
-              </span>
-            )}
+            <LocationMultiSelect
+              value={selectedOrigins}
+              onChange={setSelectedOrigins}
+              placeholder="Filter by origin..."
+              className="w-56"
+            />
           </div>
 
           <div className="text-sm text-gray-500 dark:text-gray-400">

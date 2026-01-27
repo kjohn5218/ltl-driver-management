@@ -1,12 +1,14 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useMemo } from 'react';
 import { useQuery, useQueryClient } from '@tanstack/react-query';
 import { linehaulTripService, EtaResult, VehicleLocationResult } from '../../services/linehaulTripService';
 import { loadsheetService } from '../../services/loadsheetService';
 import { locationService } from '../../services/locationService';
-import { LinehaulTrip, Loadsheet, TripStatus, Location } from '../../types';
+import { LinehaulTrip, Loadsheet, TripStatus } from '../../types';
+import { LocationMultiSelect } from '../LocationMultiSelect';
 import { TripStatusBadge } from './TripStatusBadge';
 import { ManifestDetailsModal } from './ManifestDetailsModal';
 import { EditTripModal } from './EditTripModal';
+import { ArrivalDetailsModal } from './ArrivalDetailsModal';
 import { DateRangePicker } from '../common/DateRangePicker';
 import {
   Truck,
@@ -23,7 +25,8 @@ import {
   Navigation,
   X,
   ExternalLink,
-  Loader2
+  Loader2,
+  CheckCircle
 } from 'lucide-react';
 import { format, parseISO } from 'date-fns';
 
@@ -39,7 +42,7 @@ export const InboundTab: React.FC = () => {
   const today = format(new Date(), 'yyyy-MM-dd');
   const [startDate, setStartDate] = useState(today);
   const [endDate, setEndDate] = useState(today);
-  const [locationFilter, setLocationFilter] = useState<number | ''>('');
+  const [selectedDestinations, setSelectedDestinations] = useState<number[]>([]);
   const [tripEtas, setTripEtas] = useState<Record<number, EtaResult>>({});
 
   // Manifest details modal state
@@ -59,23 +62,27 @@ export const InboundTab: React.FC = () => {
   const [locationLoading, setLocationLoading] = useState(false);
   const [locationError, setLocationError] = useState<string | null>(null);
 
-  // Fetch locations for filter dropdown
-  const { data: locations = [] } = useQuery({
+  // Arrival modal state
+  const [arrivalModalOpen, setArrivalModalOpen] = useState(false);
+  const [arrivalTrip, setArrivalTrip] = useState<LinehaulTrip | null>(null);
+
+  // Fetch locations for displaying selected filter names
+  const { data: locationsData } = useQuery({
     queryKey: ['locations-list'],
     queryFn: () => locationService.getLocationsList(),
     staleTime: 5 * 60 * 1000 // Cache for 5 minutes
   });
+  const locations = locationsData || [];
 
   // Fetch inbound trips (in transit, arrived, or unloading)
   const { data: tripsData, isLoading, error, refetch } = useQuery({
-    queryKey: ['inbound-trips', startDate, endDate, locationFilter],
+    queryKey: ['inbound-trips', startDate, endDate],
     queryFn: async () => {
       console.log('Fetching inbound trips with statuses: IN_TRANSIT, ARRIVED, UNLOADING');
       const result = await linehaulTripService.getTrips({
         statuses: ['DISPATCHED', 'IN_TRANSIT', 'ARRIVED', 'UNLOADING'] as TripStatus[],
         startDate: startDate || undefined,
         endDate: endDate || undefined,
-        destinationTerminalId: locationFilter || undefined,
         limit: 100
       });
       console.log('Inbound trips result:', result);
@@ -126,25 +133,34 @@ export const InboundTab: React.FC = () => {
     return { trip, loadsheets: tripLoadsheets, eta };
   });
 
-  // Filter by search term
-  const filteredRows = inboundRows.filter(row => {
-    if (!searchTerm) return true;
-    const search = searchTerm.toLowerCase();
+  // Filter by destination and search term
+  const filteredRows = useMemo(() => {
+    return inboundRows.filter(row => {
+      // Apply destination filter first
+      if (selectedDestinations.length > 0) {
+        const tripDestinationId = row.trip.destinationTerminalId;
+        if (!tripDestinationId || !selectedDestinations.includes(tripDestinationId)) return false;
+      }
 
-    // Search by trip number
-    if (row.trip.tripNumber?.toLowerCase().includes(search)) return true;
+      // Then apply search filter
+      if (!searchTerm) return true;
+      const search = searchTerm.toLowerCase();
 
-    // Search by driver name
-    if (row.trip.driver?.name?.toLowerCase().includes(search)) return true;
+      // Search by trip number
+      if (row.trip.tripNumber?.toLowerCase().includes(search)) return true;
 
-    // Search by manifest number
-    if (row.loadsheets.some(ls => ls.manifestNumber?.toLowerCase().includes(search))) return true;
+      // Search by driver name
+      if (row.trip.driver?.name?.toLowerCase().includes(search)) return true;
 
-    // Search by truck unit number
-    if (row.trip.truck?.unitNumber?.toLowerCase().includes(search)) return true;
+      // Search by manifest number
+      if (row.loadsheets.some(ls => ls.manifestNumber?.toLowerCase().includes(search))) return true;
 
-    return false;
-  });
+      // Search by truck unit number
+      if (row.trip.truck?.unitNumber?.toLowerCase().includes(search)) return true;
+
+      return false;
+    });
+  }, [inboundRows, selectedDestinations, searchTerm]);
 
   // Format loadsheets/manifests for display in a single line
   const formatManifests = (loadsheets: Loadsheet[]): string => {
@@ -152,30 +168,60 @@ export const InboundTab: React.FC = () => {
     return loadsheets.map(ls => ls.manifestNumber).join(', ');
   };
 
-  // Get linehaul info from loadsheets
-  const getLinehaulInfo = (loadsheets: Loadsheet[]): { origin: string; destination: string; linehaulName: string } => {
-    if (loadsheets.length === 0) {
-      return { origin: '-', destination: '-', linehaulName: '-' };
+  // Parse leg (origin-destination) from linehaulName
+  // Examples: "DENWAMSLC1" → "DEN-WAM", "ATL-MEM" → "ATL-MEM", "ABQELP2" → "ABQ-ELP"
+  const parseLeg = (linehaulName: string | null | undefined): { origin: string; destination: string; leg: string } => {
+    if (!linehaulName || linehaulName === '-') {
+      return { origin: '-', destination: '-', leg: '-' };
     }
 
-    const firstLoadsheet = loadsheets[0];
-    const linehaulName = firstLoadsheet.linehaulName || '-';
-
-    // Try to parse origin-destination from linehaulName (e.g., "ATL-MEM")
-    const parts = linehaulName.split('-');
-    if (parts.length >= 2) {
-      return {
-        origin: parts[0],
-        destination: parts[parts.length - 1].replace(/\d+$/, ''), // Remove trailing numbers
-        linehaulName
-      };
+    // If already dash-separated (e.g., "ATL-MEM" or "ATL-MEM2")
+    if (linehaulName.includes('-')) {
+      const parts = linehaulName.split('-');
+      const origin = parts[0];
+      const destination = parts[parts.length - 1].replace(/\d+$/, ''); // Remove trailing numbers
+      return { origin, destination, leg: `${origin}-${destination}` };
     }
 
-    // If no dash, use originTerminalCode and destinationTerminalCode from loadsheet
-    const origin = firstLoadsheet.originTerminalCode || '-';
-    const destination = firstLoadsheet.destinationTerminalCode || '-';
+    // Concatenated format (e.g., "DENWAMSLC1" or "ABQELP2")
+    // Terminal codes are typically 3 letters, extract first two codes
+    const cleanName = linehaulName.replace(/\d+$/, ''); // Remove trailing numbers
 
-    return { origin, destination, linehaulName };
+    if (cleanName.length >= 6) {
+      // At least 2 terminal codes (6 chars)
+      const origin = cleanName.substring(0, 3);
+      const destination = cleanName.substring(3, 6);
+      return { origin, destination, leg: `${origin}-${destination}` };
+    } else if (cleanName.length >= 3) {
+      // Single terminal code
+      return { origin: cleanName.substring(0, 3), destination: '-', leg: cleanName.substring(0, 3) };
+    }
+
+    return { origin: '-', destination: '-', leg: linehaulName };
+  };
+
+  // Get linehaul info from trip or loadsheets
+  const getLinehaulInfo = (row: InboundTripRow): { origin: string; destination: string; linehaulName: string; leg: string } => {
+    // First try trip-level linehaulName (from API transformation)
+    const linehaulName = row.trip.linehaulName || row.loadsheets?.[0]?.linehaulName || '-';
+    const parsed = parseLeg(linehaulName);
+
+    // If parsing didn't get destination, try loadsheet's destinationTerminalCode
+    if (parsed.destination === '-' && row.loadsheets && row.loadsheets.length > 0) {
+      const firstLoadsheet = row.loadsheets[0];
+      if (firstLoadsheet.destinationTerminalCode) {
+        const origin = firstLoadsheet.originTerminalCode || parsed.origin;
+        const destination = firstLoadsheet.destinationTerminalCode;
+        return {
+          origin,
+          destination,
+          linehaulName,
+          leg: `${origin}-${destination}`
+        };
+      }
+    }
+
+    return { ...parsed, linehaulName };
   };
 
   // Calculate total pieces from loadsheets or trip shipments
@@ -326,6 +372,20 @@ export const InboundTab: React.FC = () => {
     await refetch();
   };
 
+  // Handle arrive trip button click
+  const handleArriveClick = (trip: LinehaulTrip) => {
+    setArrivalTrip(trip);
+    setArrivalModalOpen(true);
+  };
+
+  // Handle arrival modal success
+  const handleArrivalSuccess = async () => {
+    setArrivalModalOpen(false);
+    setArrivalTrip(null);
+    await queryClient.invalidateQueries({ queryKey: ['inbound-trips'] });
+    await refetch();
+  };
+
   // Handle power unit click to fetch GPS location
   const handlePowerUnitClick = async (vehicleId: string, unitNumber: string) => {
     setSelectedVehicle({ id: vehicleId, unitNumber });
@@ -386,30 +446,15 @@ export const InboundTab: React.FC = () => {
               }}
             />
 
-            {/* Location Filter (Destination Terminal) */}
+            {/* Destination Filter */}
             <div className="flex items-center gap-2">
               <MapPin className="h-4 w-4 text-gray-400" />
-              <select
-                value={locationFilter}
-                onChange={(e) => setLocationFilter(e.target.value ? parseInt(e.target.value) : '')}
-                className="px-3 py-2 border border-gray-300 dark:border-gray-600 rounded-md bg-white dark:bg-gray-700 text-gray-900 dark:text-gray-100 focus:ring-2 focus:ring-primary-500 focus:border-transparent text-sm"
-              >
-                <option value="">All Destinations</option>
-                {locations.map((location: Location) => (
-                  <option key={location.id} value={location.id}>
-                    {location.code} - {location.name || location.city}
-                  </option>
-                ))}
-              </select>
-              {locationFilter && (
-                <button
-                  onClick={() => setLocationFilter('')}
-                  className="p-1 text-gray-400 hover:text-gray-600 dark:hover:text-gray-300"
-                  title="Clear destination filter"
-                >
-                  <X className="h-4 w-4" />
-                </button>
-              )}
+              <LocationMultiSelect
+                value={selectedDestinations}
+                onChange={setSelectedDestinations}
+                placeholder="Filter by destination..."
+                className="w-56"
+              />
             </div>
           </div>
 
@@ -446,8 +491,8 @@ export const InboundTab: React.FC = () => {
             ) : (
               'All inbound trips'
             )}
-            {locationFilter && locations.find((l: Location) => l.id === locationFilter) && (
-              ` to ${locations.find((l: Location) => l.id === locationFilter)?.code}`
+            {selectedDestinations.length > 0 && (
+              ` to ${selectedDestinations.map(id => locations.find(l => l.id === id)?.code).filter(Boolean).join(', ')}`
             )}
           </p>
         </div>
@@ -481,6 +526,9 @@ export const InboundTab: React.FC = () => {
                   <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 dark:text-gray-400 uppercase tracking-wider">
                     Linehaul
                   </th>
+                  <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 dark:text-gray-400 uppercase tracking-wider">
+                    Leg
+                  </th>
                   <th className="px-4 py-3 text-right text-xs font-medium text-gray-500 dark:text-gray-400 uppercase tracking-wider">
                     <div className="flex items-center justify-end">
                       <Package className="h-3 w-3 mr-1" />
@@ -505,11 +553,14 @@ export const InboundTab: React.FC = () => {
                   <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 dark:text-gray-400 uppercase tracking-wider">
                     Status
                   </th>
+                  <th className="px-4 py-3 text-center text-xs font-medium text-gray-500 dark:text-gray-400 uppercase tracking-wider">
+                    Actions
+                  </th>
                 </tr>
               </thead>
               <tbody className="bg-white dark:bg-gray-800 divide-y divide-gray-200 dark:divide-gray-700">
                 {filteredRows.map((row) => {
-                  const linehaulInfo = getLinehaulInfo(row.loadsheets);
+                  const linehaulInfo = getLinehaulInfo(row);
                   const totalPieces = getTotalPieces(row);
                   const totalWeight = getTotalWeight(row);
                   const schedArrival = getSchedArrival(row);
@@ -587,6 +638,11 @@ export const InboundTab: React.FC = () => {
                         )}
                       </td>
                       <td className="px-4 py-3 whitespace-nowrap">
+                        <span className="font-medium text-gray-900 dark:text-gray-100">
+                          {linehaulInfo.linehaulName}
+                        </span>
+                      </td>
+                      <td className="px-4 py-3 whitespace-nowrap">
                         <div className="flex items-center text-gray-600 dark:text-gray-400">
                           {linehaulInfo.origin !== '-' && linehaulInfo.destination !== '-' ? (
                             <>
@@ -595,7 +651,7 @@ export const InboundTab: React.FC = () => {
                               <span className="font-medium">{linehaulInfo.destination}</span>
                             </>
                           ) : (
-                            <span className="font-medium">{linehaulInfo.linehaulName}</span>
+                            <span className="font-medium">{linehaulInfo.leg}</span>
                           )}
                         </div>
                       </td>
@@ -643,6 +699,18 @@ export const InboundTab: React.FC = () => {
                       </td>
                       <td className="px-4 py-3 whitespace-nowrap">
                         <TripStatusBadge status={row.trip.status} />
+                      </td>
+                      <td className="px-4 py-3 whitespace-nowrap text-center">
+                        {(row.trip.status === 'IN_TRANSIT' || row.trip.status === 'DISPATCHED') && (
+                          <button
+                            onClick={() => handleArriveClick(row.trip)}
+                            className="inline-flex items-center px-3 py-1.5 text-xs font-medium rounded-md text-white bg-orange-600 hover:bg-orange-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-orange-500"
+                            title="Arrive trip"
+                          >
+                            <CheckCircle className="h-3.5 w-3.5 mr-1" />
+                            Arrive
+                          </button>
+                        )}
                       </td>
                     </tr>
                   );
@@ -802,6 +870,19 @@ export const InboundTab: React.FC = () => {
             </div>
           </div>
         </div>
+      )}
+
+      {/* Arrival Details Modal */}
+      {arrivalTrip && (
+        <ArrivalDetailsModal
+          isOpen={arrivalModalOpen}
+          onClose={() => {
+            setArrivalModalOpen(false);
+            setArrivalTrip(null);
+          }}
+          trip={arrivalTrip}
+          onSuccess={handleArrivalSuccess}
+        />
       )}
     </div>
   );
