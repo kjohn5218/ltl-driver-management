@@ -6,6 +6,7 @@ import { Plus, Search, Edit, Eye, Trash2, MapPin, Clock, DollarSign, Filter, X, 
 import { calculateRoute, calculateArrivalTime, formatRunTime, hasAddressInfo } from '../utils/routeCalculations';
 import { LocationWithTooltip, RouteDetails } from '../components/LocationDisplay';
 import { LocationSelect } from '../components/LocationSelect';
+import { TerminalMultiSelect } from '../components/TerminalMultiSelect';
 import { Location } from '../types';
 import { linehaulProfileService } from '../services/linehaulProfileService';
 import { terminalService } from '../services/terminalService';
@@ -1050,123 +1051,29 @@ const RouteEditModal: React.FC<RouteEditModalProps> = ({ route, onClose, onSave 
           </div>
 
           {/* Okay to Load Section */}
-          <div className="border border-gray-200 rounded-md">
-            <button
-              type="button"
-              onClick={() => setShowOkayToLoad(!showOkayToLoad)}
-              className="w-full px-4 py-3 flex items-center justify-between text-left bg-gray-50 hover:bg-gray-100 rounded-t-md"
-            >
-              <div>
-                <span className="text-sm font-medium text-gray-700">Okay to Load</span>
-                <span className="ml-2 text-xs text-gray-500">({okayToLoadIds.length} selected)</span>
-              </div>
-              {showOkayToLoad ? <ChevronUp className="w-4 h-4 text-gray-500" /> : <ChevronDown className="w-4 h-4 text-gray-500" />}
-            </button>
-            {showOkayToLoad && (
-              <div className="p-4 border-t border-gray-200">
-                <p className="text-xs text-gray-500 mb-3">Freight for selected locations can be loaded on the trailer from this origin.</p>
-                <div className="flex items-center gap-2 mb-3">
-                  <Search className="w-4 h-4 text-gray-400" />
-                  <input
-                    type="text"
-                    placeholder="Search terminals..."
-                    value={terminalSearch}
-                    onChange={(e) => setTerminalSearch(e.target.value)}
-                    className="flex-1 px-2 py-1 text-sm border border-gray-300 rounded focus:ring-1 focus:ring-blue-500"
-                  />
-                  <button
-                    type="button"
-                    onClick={selectAllOkayToLoad}
-                    className="text-xs text-blue-600 hover:text-blue-800 whitespace-nowrap"
-                  >
-                    {okayToLoadIds.length === allTerminals?.length ? 'Deselect All' : 'Select All'}
-                  </button>
-                </div>
-                <div className="max-h-48 overflow-y-auto border border-gray-200 rounded">
-                  {filteredTerminals.map((terminal) => (
-                    <label
-                      key={terminal.id}
-                      className="flex items-center px-3 py-2 hover:bg-gray-50 cursor-pointer border-b border-gray-100 last:border-b-0"
-                    >
-                      <input
-                        type="checkbox"
-                        checked={okayToLoadIds.includes(terminal.id)}
-                        onChange={() => toggleOkayToLoad(terminal.id)}
-                        className="mr-3"
-                      />
-                      <span className="text-sm">
-                        <span className="font-medium">{terminal.code}</span>
-                        <span className="text-gray-500 ml-2">{terminal.name}</span>
-                        {terminal.city && <span className="text-gray-400 ml-1">- {terminal.city}, {terminal.state}</span>}
-                      </span>
-                    </label>
-                  ))}
-                  {filteredTerminals.length === 0 && (
-                    <div className="px-3 py-2 text-sm text-gray-500">No terminals found</div>
-                  )}
-                </div>
-              </div>
-            )}
+          <div>
+            <TerminalMultiSelect
+              label="Okay to Load"
+              value={okayToLoadIds}
+              onChange={setOkayToLoadIds}
+              placeholder="Select terminals for loading..."
+              showPhysicalFilter={true}
+              maxHeight="max-h-64"
+            />
+            <p className="text-xs text-gray-500 mt-1">Freight for selected terminals can be loaded on the trailer from this origin.</p>
           </div>
 
           {/* Okay to Dispatch Section */}
-          <div className="border border-gray-200 rounded-md">
-            <button
-              type="button"
-              onClick={() => setShowOkayToDispatch(!showOkayToDispatch)}
-              className="w-full px-4 py-3 flex items-center justify-between text-left bg-gray-50 hover:bg-gray-100 rounded-t-md"
-            >
-              <div>
-                <span className="text-sm font-medium text-gray-700">Okay to Dispatch</span>
-                <span className="ml-2 text-xs text-gray-500">({okayToDispatchIds.length} selected)</span>
-              </div>
-              {showOkayToDispatch ? <ChevronUp className="w-4 h-4 text-gray-500" /> : <ChevronDown className="w-4 h-4 text-gray-500" />}
-            </button>
-            {showOkayToDispatch && (
-              <div className="p-4 border-t border-gray-200">
-                <p className="text-xs text-gray-500 mb-3">Selected locations are acceptable dispatch destinations from this origin.</p>
-                <div className="flex items-center gap-2 mb-3">
-                  <Search className="w-4 h-4 text-gray-400" />
-                  <input
-                    type="text"
-                    placeholder="Search terminals..."
-                    value={terminalSearch}
-                    onChange={(e) => setTerminalSearch(e.target.value)}
-                    className="flex-1 px-2 py-1 text-sm border border-gray-300 rounded focus:ring-1 focus:ring-blue-500"
-                  />
-                  <button
-                    type="button"
-                    onClick={selectAllOkayToDispatch}
-                    className="text-xs text-blue-600 hover:text-blue-800 whitespace-nowrap"
-                  >
-                    {okayToDispatchIds.length === allTerminals?.length ? 'Deselect All' : 'Select All'}
-                  </button>
-                </div>
-                <div className="max-h-48 overflow-y-auto border border-gray-200 rounded">
-                  {filteredTerminals.map((terminal) => (
-                    <label
-                      key={terminal.id}
-                      className="flex items-center px-3 py-2 hover:bg-gray-50 cursor-pointer border-b border-gray-100 last:border-b-0"
-                    >
-                      <input
-                        type="checkbox"
-                        checked={okayToDispatchIds.includes(terminal.id)}
-                        onChange={() => toggleOkayToDispatch(terminal.id)}
-                        className="mr-3"
-                      />
-                      <span className="text-sm">
-                        <span className="font-medium">{terminal.code}</span>
-                        <span className="text-gray-500 ml-2">{terminal.name}</span>
-                        {terminal.city && <span className="text-gray-400 ml-1">- {terminal.city}, {terminal.state}</span>}
-                      </span>
-                    </label>
-                  ))}
-                  {filteredTerminals.length === 0 && (
-                    <div className="px-3 py-2 text-sm text-gray-500">No terminals found</div>
-                  )}
-                </div>
-              </div>
-            )}
+          <div>
+            <TerminalMultiSelect
+              label="Okay to Dispatch"
+              value={okayToDispatchIds}
+              onChange={setOkayToDispatchIds}
+              placeholder="Select dispatch destinations..."
+              showPhysicalFilter={false}
+              maxHeight="max-h-64"
+            />
+            <p className="text-xs text-gray-500 mt-1">Selected terminals are acceptable dispatch destinations from this origin.</p>
           </div>
 
           <div>
@@ -2065,123 +1972,29 @@ const AddRouteModal: React.FC<AddRouteModalProps> = ({ onClose, onSave, copyFrom
           </div>
 
           {/* Okay to Load Section */}
-          <div className="border border-gray-200 rounded-md">
-            <button
-              type="button"
-              onClick={() => setShowOkayToLoad(!showOkayToLoad)}
-              className="w-full px-4 py-3 flex items-center justify-between text-left bg-gray-50 hover:bg-gray-100 rounded-t-md"
-            >
-              <div>
-                <span className="text-sm font-medium text-gray-700">Okay to Load</span>
-                <span className="ml-2 text-xs text-gray-500">({okayToLoadIds.length} selected)</span>
-              </div>
-              {showOkayToLoad ? <ChevronUp className="w-4 h-4 text-gray-500" /> : <ChevronDown className="w-4 h-4 text-gray-500" />}
-            </button>
-            {showOkayToLoad && (
-              <div className="p-4 border-t border-gray-200">
-                <p className="text-xs text-gray-500 mb-3">Freight for selected locations can be loaded on the trailer from this origin.</p>
-                <div className="flex items-center gap-2 mb-3">
-                  <Search className="w-4 h-4 text-gray-400" />
-                  <input
-                    type="text"
-                    placeholder="Search terminals..."
-                    value={addTerminalSearch}
-                    onChange={(e) => setAddTerminalSearch(e.target.value)}
-                    className="flex-1 px-2 py-1 text-sm border border-gray-300 rounded focus:ring-1 focus:ring-blue-500"
-                  />
-                  <button
-                    type="button"
-                    onClick={selectAllOkayToLoad}
-                    className="text-xs text-blue-600 hover:text-blue-800 whitespace-nowrap"
-                  >
-                    {okayToLoadIds.length === allTerminals?.length ? 'Deselect All' : 'Select All'}
-                  </button>
-                </div>
-                <div className="max-h-48 overflow-y-auto border border-gray-200 rounded">
-                  {addFilteredTerminals.map((terminal) => (
-                    <label
-                      key={terminal.id}
-                      className="flex items-center px-3 py-2 hover:bg-gray-50 cursor-pointer border-b border-gray-100 last:border-b-0"
-                    >
-                      <input
-                        type="checkbox"
-                        checked={okayToLoadIds.includes(terminal.id)}
-                        onChange={() => toggleOkayToLoad(terminal.id)}
-                        className="mr-3"
-                      />
-                      <span className="text-sm">
-                        <span className="font-medium">{terminal.code}</span>
-                        <span className="text-gray-500 ml-2">{terminal.name}</span>
-                        {terminal.city && <span className="text-gray-400 ml-1">- {terminal.city}, {terminal.state}</span>}
-                      </span>
-                    </label>
-                  ))}
-                  {addFilteredTerminals.length === 0 && (
-                    <div className="px-3 py-2 text-sm text-gray-500">No terminals found</div>
-                  )}
-                </div>
-              </div>
-            )}
+          <div>
+            <TerminalMultiSelect
+              label="Okay to Load"
+              value={okayToLoadIds}
+              onChange={setOkayToLoadIds}
+              placeholder="Select terminals for loading..."
+              showPhysicalFilter={true}
+              maxHeight="max-h-64"
+            />
+            <p className="text-xs text-gray-500 mt-1">Freight for selected terminals can be loaded on the trailer from this origin.</p>
           </div>
 
           {/* Okay to Dispatch Section */}
-          <div className="border border-gray-200 rounded-md">
-            <button
-              type="button"
-              onClick={() => setShowOkayToDispatch(!showOkayToDispatch)}
-              className="w-full px-4 py-3 flex items-center justify-between text-left bg-gray-50 hover:bg-gray-100 rounded-t-md"
-            >
-              <div>
-                <span className="text-sm font-medium text-gray-700">Okay to Dispatch</span>
-                <span className="ml-2 text-xs text-gray-500">({okayToDispatchIds.length} selected)</span>
-              </div>
-              {showOkayToDispatch ? <ChevronUp className="w-4 h-4 text-gray-500" /> : <ChevronDown className="w-4 h-4 text-gray-500" />}
-            </button>
-            {showOkayToDispatch && (
-              <div className="p-4 border-t border-gray-200">
-                <p className="text-xs text-gray-500 mb-3">Selected locations are acceptable dispatch destinations from this origin.</p>
-                <div className="flex items-center gap-2 mb-3">
-                  <Search className="w-4 h-4 text-gray-400" />
-                  <input
-                    type="text"
-                    placeholder="Search terminals..."
-                    value={addTerminalSearch}
-                    onChange={(e) => setAddTerminalSearch(e.target.value)}
-                    className="flex-1 px-2 py-1 text-sm border border-gray-300 rounded focus:ring-1 focus:ring-blue-500"
-                  />
-                  <button
-                    type="button"
-                    onClick={selectAllOkayToDispatch}
-                    className="text-xs text-blue-600 hover:text-blue-800 whitespace-nowrap"
-                  >
-                    {okayToDispatchIds.length === allTerminals?.length ? 'Deselect All' : 'Select All'}
-                  </button>
-                </div>
-                <div className="max-h-48 overflow-y-auto border border-gray-200 rounded">
-                  {addFilteredTerminals.map((terminal) => (
-                    <label
-                      key={terminal.id}
-                      className="flex items-center px-3 py-2 hover:bg-gray-50 cursor-pointer border-b border-gray-100 last:border-b-0"
-                    >
-                      <input
-                        type="checkbox"
-                        checked={okayToDispatchIds.includes(terminal.id)}
-                        onChange={() => toggleOkayToDispatch(terminal.id)}
-                        className="mr-3"
-                      />
-                      <span className="text-sm">
-                        <span className="font-medium">{terminal.code}</span>
-                        <span className="text-gray-500 ml-2">{terminal.name}</span>
-                        {terminal.city && <span className="text-gray-400 ml-1">- {terminal.city}, {terminal.state}</span>}
-                      </span>
-                    </label>
-                  ))}
-                  {addFilteredTerminals.length === 0 && (
-                    <div className="px-3 py-2 text-sm text-gray-500">No terminals found</div>
-                  )}
-                </div>
-              </div>
-            )}
+          <div>
+            <TerminalMultiSelect
+              label="Okay to Dispatch"
+              value={okayToDispatchIds}
+              onChange={setOkayToDispatchIds}
+              placeholder="Select dispatch destinations..."
+              showPhysicalFilter={false}
+              maxHeight="max-h-64"
+            />
+            <p className="text-xs text-gray-500 mt-1">Selected terminals are acceptable dispatch destinations from this origin.</p>
           </div>
 
           <div>
