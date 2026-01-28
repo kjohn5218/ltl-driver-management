@@ -1,7 +1,8 @@
 import { Router } from 'express';
 import { body, param, query } from 'express-validator';
-import { validateRequest } from '../middleware/validateRequest';
-import { authenticateToken, requireRole } from '../middleware/auth';
+import { validateRequest } from '../middleware/validation.middleware';
+import { authenticate, authorize } from '../middleware/auth.middleware';
+import { UserRole } from '@prisma/client';
 import {
   getInterlineCarriers,
   getInterlineCarrierById,
@@ -15,7 +16,7 @@ import {
 const router = Router();
 
 // All routes require authentication
-router.use(authenticateToken);
+router.use(authenticate);
 
 // Get list of active carriers for dropdowns (simple endpoint)
 router.get('/list', getInterlineCarriersList);
@@ -46,7 +47,7 @@ router.get(
 // Create new interline carrier (Admin/Dispatcher only)
 router.post(
   '/',
-  requireRole(['ADMIN', 'DISPATCHER']),
+  authorize(UserRole.ADMIN, UserRole.DISPATCHER),
   [
     body('code').notEmpty().withMessage('Carrier code is required').isLength({ max: 10 }),
     body('name').notEmpty().withMessage('Carrier name is required').isLength({ max: 100 }),
@@ -64,7 +65,7 @@ router.post(
 // Update interline carrier (Admin/Dispatcher only)
 router.put(
   '/:id',
-  requireRole(['ADMIN', 'DISPATCHER']),
+  authorize(UserRole.ADMIN, UserRole.DISPATCHER),
   [
     param('id').isInt({ min: 1 }).withMessage('Invalid carrier ID'),
     body('code').optional().isLength({ max: 10 }),
@@ -83,7 +84,7 @@ router.put(
 // Delete interline carrier (Admin only)
 router.delete(
   '/:id',
-  requireRole(['ADMIN']),
+  authorize(UserRole.ADMIN),
   [
     param('id').isInt({ min: 1 }).withMessage('Invalid carrier ID'),
     validateRequest
@@ -94,7 +95,7 @@ router.delete(
 // Toggle carrier active status (Admin/Dispatcher)
 router.patch(
   '/:id/toggle-status',
-  requireRole(['ADMIN', 'DISPATCHER']),
+  authorize(UserRole.ADMIN, UserRole.DISPATCHER),
   [
     param('id').isInt({ min: 1 }).withMessage('Invalid carrier ID'),
     validateRequest

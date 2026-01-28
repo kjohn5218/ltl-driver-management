@@ -1,7 +1,8 @@
 import { Router } from 'express';
 import { query, body, param } from 'express-validator';
-import { validateRequest } from '../middleware/validateRequest';
-import { authenticateToken, requireRole } from '../middleware/auth';
+import { validateRequest } from '../middleware/validation.middleware';
+import { authenticate, authorize } from '../middleware/auth.middleware';
+import { UserRole } from '@prisma/client';
 import {
   getExpectedShipments,
   getExpectedShipmentsFromTMS,
@@ -15,7 +16,7 @@ import {
 const router = Router();
 
 // All routes require authentication
-router.use(authenticateToken);
+router.use(authenticate);
 
 // Get expected shipments from database
 router.get(
@@ -71,14 +72,14 @@ router.get(
 // Sync from TMS (Admin/Dispatcher only)
 router.post(
   '/sync',
-  requireRole(['ADMIN', 'DISPATCHER']),
+  authorize(UserRole.ADMIN, UserRole.DISPATCHER),
   syncFromTMS
 );
 
 // Upsert expected shipment (Admin/Dispatcher only)
 router.put(
   '/',
-  requireRole(['ADMIN', 'DISPATCHER']),
+  authorize(UserRole.ADMIN, UserRole.DISPATCHER),
   [
     body('forecastDate').isISO8601().withMessage('Forecast date is required'),
     body('originTerminalCode').notEmpty().withMessage('Origin terminal code is required'),
@@ -100,7 +101,7 @@ router.put(
 // Delete expected shipments (Admin only)
 router.delete(
   '/',
-  requireRole(['ADMIN']),
+  authorize(UserRole.ADMIN),
   [
     body('startDate').optional().isISO8601(),
     body('endDate').optional().isISO8601(),
