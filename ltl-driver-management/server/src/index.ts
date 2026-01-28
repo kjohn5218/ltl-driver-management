@@ -46,6 +46,8 @@ import tripDocumentRoutes from './routes/tripDocument.routes';
 import lateDepartureReasonRoutes from './routes/lateDepartureReason.routes';
 import cutPayRoutes from './routes/cutPay.routes';
 import workdayRoutes, { externalWorkdayRouter } from './routes/workday.routes';
+import interlineCarrierRoutes from './routes/interlineCarrier.routes';
+import expectedShipmentRoutes from './routes/expectedShipment.routes';
 
 // External integrations
 import hrIntegrationRoutes from './routes/hrIntegration.routes';
@@ -168,6 +170,8 @@ app.use('/api/trip-documents', tripDocumentRoutes);
 app.use('/api/late-departure-reasons', lateDepartureReasonRoutes);
 app.use('/api/cut-pay-requests', cutPayRoutes);
 app.use('/api/workday', workdayRoutes);
+app.use('/api/interline-carriers', interlineCarrierRoutes);
+app.use('/api/expected-shipments', expectedShipmentRoutes);
 
 // External integrations (API key authenticated, no CSRF)
 app.use('/api/hr', hrIntegrationRoutes);

@@ -16,6 +16,7 @@ import { LoadsTab } from '../components/dispatch/LoadsTab';
 import { CreateLoadsheetModal } from '../components/loadsheet/CreateLoadsheetModal';
 import { OutboundTab } from '../components/dispatch/OutboundTab';
 import { InboundTab } from '../components/dispatch/InboundTab';
+import { ExpectedShipmentsTab } from '../components/dispatch/ExpectedShipmentsTab';
 import { DispatchTripModal } from '../components/dispatch/DispatchTripModal';
 import { ArriveTripModal } from '../components/dispatch/ArriveTripModal';
 import {
@@ -42,10 +43,11 @@ import {
   Users,
   Container,
   LogOut,
-  LogIn
+  LogIn,
+  TrendingUp
 } from 'lucide-react';
 
-type DispatchTab = 'loads' | 'drivers' | 'outbound' | 'inbound';
+type DispatchTab = 'loads' | 'drivers' | 'outbound' | 'inbound' | 'expected';
 
 export const Dispatch: React.FC = () => {
   const { user } = useAuth();
@@ -428,13 +430,13 @@ export const Dispatch: React.FC = () => {
       {/* Tabs */}
       <div className="bg-white shadow rounded-lg">
         <div className="border-b border-gray-200">
-          <nav className="flex -mb-px">
+          <nav className="flex -mb-px gap-1 p-1">
             <button
               onClick={() => handleTabChange('loads')}
-              className={`flex items-center px-6 py-4 text-sm font-medium border-b-2 ${
+              className={`flex items-center px-6 py-3 text-sm font-medium rounded-t-lg transition-all ${
                 activeTab === 'loads'
-                  ? 'border-indigo-500 text-indigo-600'
-                  : 'border-transparent text-gray-500 hover:text-gray-700 hover:border-gray-300'
+                  ? 'bg-purple-100 text-purple-700 border-b-2 border-purple-500'
+                  : 'bg-purple-50 text-purple-600 hover:bg-purple-100 border-b-2 border-transparent'
               }`}
             >
               <Container className="w-4 h-4 mr-2" />
@@ -442,10 +444,10 @@ export const Dispatch: React.FC = () => {
             </button>
             <button
               onClick={() => handleTabChange('outbound')}
-              className={`flex items-center px-6 py-4 text-sm font-medium border-b-2 ${
+              className={`flex items-center px-6 py-3 text-sm font-medium rounded-t-lg transition-all ${
                 activeTab === 'outbound'
-                  ? 'border-green-500 text-green-600'
-                  : 'border-transparent text-gray-500 hover:text-gray-700 hover:border-gray-300'
+                  ? 'bg-green-100 text-green-700 border-b-2 border-green-500'
+                  : 'bg-green-50 text-green-600 hover:bg-green-100 border-b-2 border-transparent'
               }`}
             >
               <LogOut className="w-4 h-4 mr-2" />
@@ -453,10 +455,10 @@ export const Dispatch: React.FC = () => {
             </button>
             <button
               onClick={() => handleTabChange('inbound')}
-              className={`flex items-center px-6 py-4 text-sm font-medium border-b-2 ${
+              className={`flex items-center px-6 py-3 text-sm font-medium rounded-t-lg transition-all ${
                 activeTab === 'inbound'
-                  ? 'border-blue-500 text-blue-600'
-                  : 'border-transparent text-gray-500 hover:text-gray-700 hover:border-gray-300'
+                  ? 'bg-blue-100 text-blue-700 border-b-2 border-blue-500'
+                  : 'bg-blue-50 text-blue-600 hover:bg-blue-100 border-b-2 border-transparent'
               }`}
             >
               <LogIn className="w-4 h-4 mr-2" />
@@ -464,17 +466,32 @@ export const Dispatch: React.FC = () => {
             </button>
             <button
               onClick={() => handleTabChange('drivers')}
-              className={`flex items-center px-6 py-4 text-sm font-medium border-b-2 ${
+              className={`flex items-center px-6 py-3 text-sm font-medium rounded-t-lg transition-all ${
                 activeTab === 'drivers'
-                  ? 'border-indigo-500 text-indigo-600'
-                  : 'border-transparent text-gray-500 hover:text-gray-700 hover:border-gray-300'
+                  ? 'bg-amber-100 text-amber-700 border-b-2 border-amber-500'
+                  : 'bg-amber-50 text-amber-600 hover:bg-amber-100 border-b-2 border-transparent'
               }`}
             >
               <Users className="w-4 h-4 mr-2" />
               Drivers
-              <span className="ml-2 bg-gray-100 text-gray-600 px-2 py-0.5 rounded-full text-xs">
+              <span className={`ml-2 px-2 py-0.5 rounded-full text-xs ${
+                activeTab === 'drivers'
+                  ? 'bg-amber-200 text-amber-800'
+                  : 'bg-amber-100 text-amber-700'
+              }`}>
                 {activeDriverCount}
               </span>
+            </button>
+            <button
+              onClick={() => handleTabChange('expected')}
+              className={`flex items-center px-6 py-3 text-sm font-medium rounded-t-lg transition-all ${
+                activeTab === 'expected'
+                  ? 'bg-teal-100 text-teal-700 border-b-2 border-teal-500'
+                  : 'bg-teal-50 text-teal-600 hover:bg-teal-100 border-b-2 border-transparent'
+              }`}
+            >
+              <TrendingUp className="w-4 h-4 mr-2" />
+              Expected
             </button>
           </nav>
         </div>
@@ -494,6 +511,10 @@ export const Dispatch: React.FC = () => {
 
       <div className={activeTab === 'drivers' ? '' : 'hidden'}>
         <DriversTab drivers={drivers} loading={driversLoading} />
+      </div>
+
+      <div className={activeTab === 'expected' ? '' : 'hidden'}>
+        <ExpectedShipmentsTab />
       </div>
 
       {/* Create Trip Modal */}

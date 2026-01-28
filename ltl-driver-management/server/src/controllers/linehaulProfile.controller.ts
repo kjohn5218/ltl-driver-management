@@ -52,6 +52,9 @@ export const getLinehaulProfiles = async (req: Request, res: Response): Promise<
           destinationTerminal: {
             select: { id: true, code: true, name: true, city: true, state: true }
           },
+          interlineCarrier: {
+            select: { id: true, code: true, name: true }
+          },
           _count: {
             select: { trips: true }
           }
@@ -85,6 +88,7 @@ export const getLinehaulProfileById = async (req: Request, res: Response): Promi
       include: {
         originTerminal: true,
         destinationTerminal: true,
+        interlineCarrier: true,
         trips: {
           take: 10,
           orderBy: { dispatchDate: 'desc' },
@@ -128,6 +132,9 @@ export const getLinehaulProfileByCode = async (req: Request, res: Response): Pro
         },
         destinationTerminal: {
           select: { id: true, code: true, name: true, city: true, state: true }
+        },
+        interlineCarrier: {
+          select: { id: true, code: true, name: true }
         }
       }
     });
@@ -159,6 +166,9 @@ export const createLinehaulProfile = async (req: Request, res: Response): Promis
       equipmentConfig,
       requiresTeamDriver,
       hazmatRequired,
+      headhaul,
+      interlineTrailer,
+      interlineCarrierId,
       frequency,
       notes,
       active
@@ -203,6 +213,9 @@ export const createLinehaulProfile = async (req: Request, res: Response): Promis
         equipmentConfig,
         requiresTeamDriver: requiresTeamDriver || false,
         hazmatRequired: hazmatRequired || false,
+        headhaul: headhaul || false,
+        interlineTrailer: interlineTrailer || false,
+        interlineCarrierId: interlineCarrierId ? parseInt(interlineCarrierId, 10) : null,
         frequency,
         notes,
         active: active !== undefined ? active : true
@@ -212,6 +225,9 @@ export const createLinehaulProfile = async (req: Request, res: Response): Promis
           select: { id: true, code: true, name: true }
         },
         destinationTerminal: {
+          select: { id: true, code: true, name: true }
+        },
+        interlineCarrier: {
           select: { id: true, code: true, name: true }
         }
       }
@@ -251,6 +267,9 @@ export const updateLinehaulProfile = async (req: Request, res: Response): Promis
       equipmentConfig,
       requiresTeamDriver,
       hazmatRequired,
+      headhaul,
+      interlineTrailer,
+      interlineCarrierId,
       frequency,
       notes,
       active
@@ -302,6 +321,9 @@ export const updateLinehaulProfile = async (req: Request, res: Response): Promis
         ...(equipmentConfig !== undefined && { equipmentConfig }),
         ...(requiresTeamDriver !== undefined && { requiresTeamDriver }),
         ...(hazmatRequired !== undefined && { hazmatRequired }),
+        ...(headhaul !== undefined && { headhaul }),
+        ...(interlineTrailer !== undefined && { interlineTrailer }),
+        ...(interlineCarrierId !== undefined && { interlineCarrierId: interlineCarrierId ? parseInt(interlineCarrierId, 10) : null }),
         ...(frequency !== undefined && { frequency }),
         ...(notes !== undefined && { notes }),
         ...(active !== undefined && { active })
@@ -311,6 +333,9 @@ export const updateLinehaulProfile = async (req: Request, res: Response): Promis
           select: { id: true, code: true, name: true }
         },
         destinationTerminal: {
+          select: { id: true, code: true, name: true }
+        },
+        interlineCarrier: {
           select: { id: true, code: true, name: true }
         }
       }
@@ -371,11 +396,19 @@ export const getLinehaulProfilesList = async (_req: Request, res: Response): Pro
         id: true,
         profileCode: true,
         name: true,
+        standardDepartureTime: true,
+        standardArrivalTime: true,
+        headhaul: true,
+        interlineTrailer: true,
+        interlineCarrierId: true,
         originTerminal: {
           select: { code: true, city: true, state: true }
         },
         destinationTerminal: {
           select: { code: true, city: true, state: true }
+        },
+        interlineCarrier: {
+          select: { id: true, code: true, name: true }
         }
       },
       orderBy: { profileCode: 'asc' }
@@ -416,6 +449,9 @@ export const getProfilesByTerminal = async (req: Request, res: Response): Promis
         },
         destinationTerminal: {
           select: { id: true, code: true, name: true, city: true, state: true }
+        },
+        interlineCarrier: {
+          select: { id: true, code: true, name: true }
         }
       },
       orderBy: { profileCode: 'asc' }
@@ -494,6 +530,9 @@ export const duplicateProfile = async (req: Request, res: Response): Promise<voi
         equipmentConfig: existingProfile.equipmentConfig,
         requiresTeamDriver: existingProfile.requiresTeamDriver,
         hazmatRequired: existingProfile.hazmatRequired,
+        headhaul: existingProfile.headhaul,
+        interlineTrailer: existingProfile.interlineTrailer,
+        interlineCarrierId: existingProfile.interlineCarrierId,
         frequency: existingProfile.frequency,
         notes: existingProfile.notes,
         active: false // Start as inactive
@@ -504,6 +543,9 @@ export const duplicateProfile = async (req: Request, res: Response): Promise<voi
         },
         destinationTerminal: {
           select: { id: true, code: true, name: true }
+        },
+        interlineCarrier: {
+          select: { id: true, code: true, name: true }
         }
       }
     });
@@ -512,5 +554,213 @@ export const duplicateProfile = async (req: Request, res: Response): Promise<voi
   } catch (error) {
     console.error('Error duplicating profile:', error);
     res.status(500).json({ message: 'Failed to duplicate profile' });
+  }
+};
+
+// Get okay-to-load terminals for a profile
+export const getOkayToLoadTerminals = async (req: Request, res: Response): Promise<void> => {
+  try {
+    const { id } = req.params;
+    const profileId = parseInt(id, 10);
+
+    const profile = await prisma.linehaulProfile.findUnique({
+      where: { id: profileId },
+      select: {
+        id: true,
+        profileCode: true,
+        name: true,
+        originTerminal: {
+          select: { id: true, code: true, name: true, city: true, state: true }
+        },
+        okayToLoadTerminals: {
+          include: {
+            terminal: {
+              select: { id: true, code: true, name: true, city: true, state: true, active: true }
+            }
+          }
+        }
+      }
+    });
+
+    if (!profile) {
+      res.status(404).json({ message: 'Linehaul profile not found' });
+      return;
+    }
+
+    res.json({
+      profileId: profile.id,
+      profileCode: profile.profileCode,
+      profileName: profile.name,
+      originTerminal: profile.originTerminal,
+      okayToLoadTerminals: profile.okayToLoadTerminals.map(otl => otl.terminal)
+    });
+  } catch (error) {
+    console.error('Error fetching okay-to-load terminals:', error);
+    res.status(500).json({ message: 'Failed to fetch okay-to-load terminals' });
+  }
+};
+
+// Update okay-to-load terminals for a profile
+export const updateOkayToLoadTerminals = async (req: Request, res: Response): Promise<void> => {
+  try {
+    const { id } = req.params;
+    const { terminalIds } = req.body;
+    const profileId = parseInt(id, 10);
+
+    const profile = await prisma.linehaulProfile.findUnique({
+      where: { id: profileId }
+    });
+
+    if (!profile) {
+      res.status(404).json({ message: 'Linehaul profile not found' });
+      return;
+    }
+
+    if (!Array.isArray(terminalIds)) {
+      res.status(400).json({ message: 'terminalIds must be an array' });
+      return;
+    }
+
+    // Delete existing relationships and create new ones in a transaction
+    await prisma.$transaction([
+      prisma.profileOkayToLoad.deleteMany({
+        where: { linehaulProfileId: profileId }
+      }),
+      prisma.profileOkayToLoad.createMany({
+        data: terminalIds.map((terminalId: number) => ({
+          linehaulProfileId: profileId,
+          terminalId
+        }))
+      })
+    ]);
+
+    // Fetch and return updated data
+    const updatedProfile = await prisma.linehaulProfile.findUnique({
+      where: { id: profileId },
+      select: {
+        id: true,
+        profileCode: true,
+        okayToLoadTerminals: {
+          include: {
+            terminal: {
+              select: { id: true, code: true, name: true, city: true, state: true }
+            }
+          }
+        }
+      }
+    });
+
+    res.json({
+      profileId: updatedProfile!.id,
+      profileCode: updatedProfile!.profileCode,
+      okayToLoadTerminals: updatedProfile!.okayToLoadTerminals.map(otl => otl.terminal)
+    });
+  } catch (error) {
+    console.error('Error updating okay-to-load terminals:', error);
+    res.status(500).json({ message: 'Failed to update okay-to-load terminals' });
+  }
+};
+
+// Get okay-to-dispatch terminals for a profile
+export const getOkayToDispatchTerminals = async (req: Request, res: Response): Promise<void> => {
+  try {
+    const { id } = req.params;
+    const profileId = parseInt(id, 10);
+
+    const profile = await prisma.linehaulProfile.findUnique({
+      where: { id: profileId },
+      select: {
+        id: true,
+        profileCode: true,
+        name: true,
+        originTerminal: {
+          select: { id: true, code: true, name: true, city: true, state: true }
+        },
+        okayToDispatchTerminals: {
+          include: {
+            terminal: {
+              select: { id: true, code: true, name: true, city: true, state: true, active: true }
+            }
+          }
+        }
+      }
+    });
+
+    if (!profile) {
+      res.status(404).json({ message: 'Linehaul profile not found' });
+      return;
+    }
+
+    res.json({
+      profileId: profile.id,
+      profileCode: profile.profileCode,
+      profileName: profile.name,
+      originTerminal: profile.originTerminal,
+      okayToDispatchTerminals: profile.okayToDispatchTerminals.map(otd => otd.terminal)
+    });
+  } catch (error) {
+    console.error('Error fetching okay-to-dispatch terminals:', error);
+    res.status(500).json({ message: 'Failed to fetch okay-to-dispatch terminals' });
+  }
+};
+
+// Update okay-to-dispatch terminals for a profile
+export const updateOkayToDispatchTerminals = async (req: Request, res: Response): Promise<void> => {
+  try {
+    const { id } = req.params;
+    const { terminalIds } = req.body;
+    const profileId = parseInt(id, 10);
+
+    const profile = await prisma.linehaulProfile.findUnique({
+      where: { id: profileId }
+    });
+
+    if (!profile) {
+      res.status(404).json({ message: 'Linehaul profile not found' });
+      return;
+    }
+
+    if (!Array.isArray(terminalIds)) {
+      res.status(400).json({ message: 'terminalIds must be an array' });
+      return;
+    }
+
+    // Delete existing relationships and create new ones in a transaction
+    await prisma.$transaction([
+      prisma.profileOkayToDispatch.deleteMany({
+        where: { linehaulProfileId: profileId }
+      }),
+      prisma.profileOkayToDispatch.createMany({
+        data: terminalIds.map((terminalId: number) => ({
+          linehaulProfileId: profileId,
+          terminalId
+        }))
+      })
+    ]);
+
+    // Fetch and return updated data
+    const updatedProfile = await prisma.linehaulProfile.findUnique({
+      where: { id: profileId },
+      select: {
+        id: true,
+        profileCode: true,
+        okayToDispatchTerminals: {
+          include: {
+            terminal: {
+              select: { id: true, code: true, name: true, city: true, state: true }
+            }
+          }
+        }
+      }
+    });
+
+    res.json({
+      profileId: updatedProfile!.id,
+      profileCode: updatedProfile!.profileCode,
+      okayToDispatchTerminals: updatedProfile!.okayToDispatchTerminals.map(otd => otd.terminal)
+    });
+  } catch (error) {
+    console.error('Error updating okay-to-dispatch terminals:', error);
+    res.status(500).json({ message: 'Failed to update okay-to-dispatch terminals' });
   }
 };

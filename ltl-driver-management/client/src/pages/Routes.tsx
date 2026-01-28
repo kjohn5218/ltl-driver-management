@@ -1,8 +1,8 @@
 import React, { useState, useEffect, useMemo } from 'react';
 import { useQuery, useQueryClient } from '@tanstack/react-query';
 import { api } from '../services/api';
-import { Route, Terminal } from '../types';
-import { Plus, Search, Edit, Eye, Trash2, MapPin, Clock, DollarSign, Filter, X, Calculator, Copy, ChevronDown, ChevronUp } from 'lucide-react';
+import { Route, Terminal, InterlineCarrier } from '../types';
+import { Plus, Search, Edit, Eye, Trash2, MapPin, Clock, DollarSign, Filter, X, Calculator, Copy, ChevronDown, ChevronUp, Truck } from 'lucide-react';
 import { calculateRoute, calculateArrivalTime, formatRunTime, hasAddressInfo } from '../utils/routeCalculations';
 import { LocationWithTooltip, RouteDetails } from '../components/LocationDisplay';
 import { LocationSelect } from '../components/LocationSelect';
@@ -10,6 +10,7 @@ import { Location } from '../types';
 import { linehaulProfileService } from '../services/linehaulProfileService';
 import { terminalService } from '../services/terminalService';
 import { locationService } from '../services/locationService';
+import { interlineCarrierService } from '../services/interlineCarrierService';
 import toast from 'react-hot-toast';
 import { usePersistedFilters } from '../hooks/usePersistedFilters';
 
@@ -484,8 +485,21 @@ const RouteEditModal: React.FC<RouteEditModalProps> = ({ route, onClose, onSave 
     standardRate: route.standardRate?.toString() || '',
     frequency: route.frequency || '',
     departureTime: route.departureTime || '',
-    arrivalTime: route.arrivalTime || ''
+    arrivalTime: route.arrivalTime || '',
+    headhaul: (route as any).headhaul || false,
+    interlineTrailer: (route as any).interlineTrailer || false,
+    interlineCarrierId: (route as any).interlineCarrierId?.toString() || ''
   });
+
+  // Interline carriers for dropdown
+  const [interlineCarriers, setInterlineCarriers] = useState<InterlineCarrier[]>([]);
+
+  // Fetch interline carriers when interlineTrailer is enabled
+  useEffect(() => {
+    if (formData.interlineTrailer) {
+      interlineCarrierService.getCarriersList().then(setInterlineCarriers).catch(console.error);
+    }
+  }, [formData.interlineTrailer]);
 
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [isCalculating, setIsCalculating] = useState(false);
@@ -705,9 +719,12 @@ const RouteEditModal: React.FC<RouteEditModalProps> = ({ route, onClose, onSave 
         standardRate: formData.standardRate && !isNaN(parseFloat(formData.standardRate)) ? parseFloat(formData.standardRate) : undefined,
         frequency: cleanValue(formData.frequency),
         departureTime: formatTime(formData.departureTime),
-        arrivalTime: formatTime(formData.arrivalTime)
+        arrivalTime: formatTime(formData.arrivalTime),
+        headhaul: formData.headhaul,
+        interlineTrailer: formData.interlineTrailer,
+        interlineCarrierId: formData.interlineCarrierId ? parseInt(formData.interlineCarrierId) : null
       };
-      
+
       const response = await api.put(`/routes/${route.id}`, payload);
 
       // Save okay-to-load and okay-to-dispatch terminals
@@ -973,6 +990,65 @@ const RouteEditModal: React.FC<RouteEditModalProps> = ({ route, onClose, onSave 
             </div>
           </div>
 
+          {/* Headhaul and Interline Trailer Section */}
+          <div className="border border-gray-200 rounded-md p-4 bg-gray-50">
+            <h4 className="text-sm font-medium text-gray-700 mb-3 flex items-center gap-2">
+              <Truck className="w-4 h-4" />
+              Profile Configuration
+            </h4>
+            <div className="space-y-3">
+              <label className="flex items-center gap-2 cursor-pointer">
+                <input
+                  type="checkbox"
+                  checked={formData.headhaul}
+                  onChange={(e) => setFormData({ ...formData, headhaul: e.target.checked })}
+                  className="w-4 h-4 rounded border-gray-300 text-blue-600 focus:ring-blue-500"
+                />
+                <span className="text-sm text-gray-700">Headhaul</span>
+                <span className="text-xs text-gray-500">(Indicates if this is a headhaul route)</span>
+              </label>
+
+              <label className="flex items-center gap-2 cursor-pointer">
+                <input
+                  type="checkbox"
+                  checked={formData.interlineTrailer}
+                  onChange={(e) => {
+                    const checked = e.target.checked;
+                    setFormData({
+                      ...formData,
+                      interlineTrailer: checked,
+                      interlineCarrierId: checked ? formData.interlineCarrierId : ''
+                    });
+                  }}
+                  className="w-4 h-4 rounded border-gray-300 text-blue-600 focus:ring-blue-500"
+                />
+                <span className="text-sm text-gray-700">Interline Trailer</span>
+                <span className="text-xs text-gray-500">(Allows manual trailer number entry on loadsheets)</span>
+              </label>
+
+              {formData.interlineTrailer && (
+                <div className="ml-6 mt-2">
+                  <label className="block text-sm font-medium text-gray-700 mb-1">Interline Carrier</label>
+                  <select
+                    value={formData.interlineCarrierId}
+                    onChange={(e) => setFormData({ ...formData, interlineCarrierId: e.target.value })}
+                    className="w-full px-3 py-2 border border-gray-300 rounded-md focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
+                  >
+                    <option value="">Select interline carrier...</option>
+                    {interlineCarriers.map((carrier) => (
+                      <option key={carrier.id} value={carrier.id}>
+                        {carrier.code} - {carrier.name}
+                      </option>
+                    ))}
+                  </select>
+                  <p className="text-xs text-gray-500 mt-1">
+                    When an interline carrier is selected, users can manually enter trailer numbers instead of selecting from equipment.
+                  </p>
+                </div>
+              )}
+            </div>
+          </div>
+
           {/* Okay to Load Section */}
           <div className="border border-gray-200 rounded-md">
             <button
@@ -1224,9 +1300,12 @@ const AddRouteModal: React.FC<AddRouteModalProps> = ({ onClose, onSave, copyFrom
     standardRate: copyFromRoute ? (copyFromRoute.standardRate?.toString() || '') : '',
     frequency: copyFromRoute?.frequency || '',
     departureTime: copyFromRoute?.departureTime || '',
-    arrivalTime: copyFromRoute?.arrivalTime || ''
+    arrivalTime: copyFromRoute?.arrivalTime || '',
+    headhaul: (copyFromRoute as any)?.headhaul || false,
+    interlineTrailer: (copyFromRoute as any)?.interlineTrailer || false,
+    interlineCarrierId: (copyFromRoute as any)?.interlineCarrierId?.toString() || ''
   });
-  
+
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [isCalculating, setIsCalculating] = useState(false);
   const [showRouteSelector, setShowRouteSelector] = useState(false);
@@ -1234,6 +1313,14 @@ const AddRouteModal: React.FC<AddRouteModalProps> = ({ onClose, onSave, copyFrom
   const [errorMessage, setErrorMessage] = useState<string | null>(null);
   const [selectedOriginLocation, setSelectedOriginLocation] = useState<Location | null>(null);
   const [selectedDestinationLocation, setSelectedDestinationLocation] = useState<Location | null>(null);
+  const [addInterlineCarriers, setAddInterlineCarriers] = useState<InterlineCarrier[]>([]);
+
+  // Fetch interline carriers when interlineTrailer is enabled
+  useEffect(() => {
+    if (formData.interlineTrailer) {
+      interlineCarrierService.getCarriersList().then(setAddInterlineCarriers).catch(console.error);
+    }
+  }, [formData.interlineTrailer]);
 
   // Okay to Load/Dispatch state for AddRouteModal
   const [okayToLoadIds, setOkayToLoadIds] = useState<number[]>([]);
@@ -1325,7 +1412,10 @@ const AddRouteModal: React.FC<AddRouteModalProps> = ({ onClose, onSave, copyFrom
       standardRate: route.standardRate?.toString() || '',
       frequency: route.frequency || '',
       departureTime: route.departureTime || '',
-      arrivalTime: route.arrivalTime || ''
+      arrivalTime: route.arrivalTime || '',
+      headhaul: (route as any).headhaul || false,
+      interlineTrailer: (route as any).interlineTrailer || false,
+      interlineCarrierId: (route as any).interlineCarrierId?.toString() || ''
     });
     setShowRouteSelector(false);
     setRouteSearchInput('');
@@ -1513,9 +1603,12 @@ const AddRouteModal: React.FC<AddRouteModalProps> = ({ onClose, onSave, copyFrom
         standardRate: formData.standardRate && !isNaN(parseFloat(formData.standardRate)) ? parseFloat(formData.standardRate) : undefined,
         frequency: cleanValue(formData.frequency),
         departureTime: formatTime(formData.departureTime),
-        arrivalTime: formatTime(formData.arrivalTime)
+        arrivalTime: formatTime(formData.arrivalTime),
+        headhaul: formData.headhaul,
+        interlineTrailer: formData.interlineTrailer,
+        interlineCarrierId: formData.interlineCarrierId ? parseInt(formData.interlineCarrierId) : null
       };
-      
+
       console.log('Submitting route payload:', payload);
       const response = await api.post('/routes', payload);
       const createdProfile = response.data;
@@ -1909,6 +2002,65 @@ const AddRouteModal: React.FC<AddRouteModalProps> = ({ onClose, onSave, copyFrom
                 onChange={(e) => setFormData({ ...formData, arrivalTime: e.target.value })}
                 className="w-full px-3 py-2 border border-gray-300 rounded-md focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
               />
+            </div>
+          </div>
+
+          {/* Headhaul and Interline Trailer Section */}
+          <div className="border border-gray-200 rounded-md p-4 bg-gray-50">
+            <h4 className="text-sm font-medium text-gray-700 mb-3 flex items-center gap-2">
+              <Truck className="w-4 h-4" />
+              Profile Configuration
+            </h4>
+            <div className="space-y-3">
+              <label className="flex items-center gap-2 cursor-pointer">
+                <input
+                  type="checkbox"
+                  checked={formData.headhaul}
+                  onChange={(e) => setFormData({ ...formData, headhaul: e.target.checked })}
+                  className="w-4 h-4 rounded border-gray-300 text-blue-600 focus:ring-blue-500"
+                />
+                <span className="text-sm text-gray-700">Headhaul</span>
+                <span className="text-xs text-gray-500">(Indicates if this is a headhaul route)</span>
+              </label>
+
+              <label className="flex items-center gap-2 cursor-pointer">
+                <input
+                  type="checkbox"
+                  checked={formData.interlineTrailer}
+                  onChange={(e) => {
+                    const checked = e.target.checked;
+                    setFormData({
+                      ...formData,
+                      interlineTrailer: checked,
+                      interlineCarrierId: checked ? formData.interlineCarrierId : ''
+                    });
+                  }}
+                  className="w-4 h-4 rounded border-gray-300 text-blue-600 focus:ring-blue-500"
+                />
+                <span className="text-sm text-gray-700">Interline Trailer</span>
+                <span className="text-xs text-gray-500">(Allows manual trailer number entry on loadsheets)</span>
+              </label>
+
+              {formData.interlineTrailer && (
+                <div className="ml-6 mt-2">
+                  <label className="block text-sm font-medium text-gray-700 mb-1">Interline Carrier</label>
+                  <select
+                    value={formData.interlineCarrierId}
+                    onChange={(e) => setFormData({ ...formData, interlineCarrierId: e.target.value })}
+                    className="w-full px-3 py-2 border border-gray-300 rounded-md focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
+                  >
+                    <option value="">Select interline carrier...</option>
+                    {addInterlineCarriers.map((carrier) => (
+                      <option key={carrier.id} value={carrier.id}>
+                        {carrier.code} - {carrier.name}
+                      </option>
+                    ))}
+                  </select>
+                  <p className="text-xs text-gray-500 mt-1">
+                    When an interline carrier is selected, users can manually enter trailer numbers instead of selecting from equipment.
+                  </p>
+                </div>
+              )}
             </div>
           </div>
 

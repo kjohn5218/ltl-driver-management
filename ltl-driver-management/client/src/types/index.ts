@@ -135,11 +135,17 @@ export interface Route {
   originState?: string;
   originZipCode?: string;
   originContact?: string;
+  originTimeZone?: string;
+  originLatitude?: number;
+  originLongitude?: number;
   destinationAddress?: string;
   destinationCity?: string;
   destinationState?: string;
   destinationZipCode?: string;
   destinationContact?: string;
+  destinationTimeZone?: string;
+  destinationLatitude?: number;
+  destinationLongitude?: number;
   distance: number;
   runTime?: number; // Run time in minutes
   active: boolean;
@@ -147,6 +153,10 @@ export interface Route {
   frequency?: string;
   departureTime?: string;
   arrivalTime?: string;
+  headhaul: boolean;
+  interlineTrailer: boolean;
+  interlineCarrierId?: number;
+  interlineCarrier?: InterlineCarrier;
   createdAt: string;
   updatedAt: string;
   _count?: {
@@ -500,6 +510,24 @@ export interface EquipmentDolly {
   };
 }
 
+// Interline Carrier
+export interface InterlineCarrier {
+  id: number;
+  code: string;
+  name: string;
+  scacCode?: string;
+  contactName?: string;
+  contactPhone?: string;
+  contactEmail?: string;
+  active: boolean;
+  notes?: string;
+  createdAt: string;
+  updatedAt: string;
+  _count?: {
+    linehaulProfiles: number;
+  };
+}
+
 // Linehaul Profile
 export interface LinehaulProfile {
   id: number;
@@ -516,6 +544,9 @@ export interface LinehaulProfile {
   equipmentConfig: EquipmentConfig;
   requiresTeamDriver: boolean;
   hazmatRequired: boolean;
+  headhaul: boolean;
+  interlineTrailer: boolean;
+  interlineCarrierId?: number;
   frequency?: string;
   notes?: string;
   active: boolean;
@@ -523,6 +554,7 @@ export interface LinehaulProfile {
   updatedAt: string;
   originTerminal?: Terminal;
   destinationTerminal?: Terminal;
+  interlineCarrier?: InterlineCarrier;
   _count?: {
     linehaulTrips: number;
     rateCards: number;
@@ -1315,4 +1347,112 @@ export interface PayrollExportOptions {
   startDate?: string;
   endDate?: string;
   onlyApproved?: boolean;
+}
+
+// ==================== EXPECTED SHIPMENTS MODULE ====================
+
+export type ConfidenceLevel = 'HIGH' | 'MEDIUM' | 'LOW';
+export type ServiceLevel = 'STANDARD' | 'GUARANTEED' | 'EXPEDITED';
+export type DataSource = 'TMS' | 'WMS' | 'MANUAL';
+
+// Expected lane volume - aggregated shipment forecast by lane
+export interface ExpectedLaneVolume {
+  id?: number;
+  externalId?: string;
+  forecastDate: string;
+  originTerminalCode: string;
+  destinationTerminalCode: string;
+  laneName?: string;
+
+  // Volume metrics
+  expectedShipmentCount: number;
+  expectedPieces: number;
+  expectedWeight: number;
+  expectedCube?: number;
+
+  // Service breakdown
+  guaranteedCount: number;
+  standardCount: number;
+  expeditedCount: number;
+
+  // Special handling
+  hazmatCount: number;
+  highValueCount: number;
+  oversizeCount: number;
+
+  // Trailer planning
+  estimatedTrailers?: number;
+  trailerUtilization?: number;
+
+  // Data source tracking
+  dataSource?: DataSource;
+  confidenceLevel?: ConfidenceLevel;
+  lastSyncAt?: string;
+
+  // Metadata
+  notes?: string;
+  createdAt?: string;
+  updatedAt?: string;
+}
+
+// Expected shipment detail - individual expected shipment
+export interface ExpectedShipmentDetail {
+  id?: number;
+  expectedShipmentId?: number;
+  externalProNumber?: string;
+  forecastDate: string;
+  originTerminalCode: string;
+  destinationTerminalCode: string;
+
+  // Shipment details
+  pieces: number;
+  weight: number;
+  cube?: number;
+
+  // Service and handling
+  serviceLevel: ServiceLevel;
+  isHazmat: boolean;
+  hazmatClass?: string;
+  isHighValue: boolean;
+  isOversize: boolean;
+
+  // Customer info
+  shipperName?: string;
+  shipperCity?: string;
+  consigneeName?: string;
+  consigneeCity?: string;
+
+  // Planning
+  estimatedPickupTime?: string;
+  estimatedDeliveryTime?: string;
+  appointmentRequired: boolean;
+
+  // Tracking
+  dataSource?: DataSource;
+  externalStatus?: string;
+  lastSyncAt?: string;
+  createdAt?: string;
+  updatedAt?: string;
+}
+
+// Expected shipments response
+export interface ExpectedShipmentsResponse {
+  shipments: ExpectedLaneVolume[];
+  pagination: {
+    page: number;
+    limit: number;
+    total: number;
+    totalPages: number;
+  };
+}
+
+// Expected shipments summary
+export interface ExpectedShipmentsSummary {
+  totalShipments: number;
+  totalPieces: number;
+  totalWeight: number;
+  totalTrailers: number;
+  hazmatShipments: number;
+  guaranteedShipments: number;
+  laneCount: number;
 }

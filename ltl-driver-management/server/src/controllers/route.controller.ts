@@ -57,6 +57,9 @@ export const getRoutes = async (req: Request, res: Response) => {
       take: limitNum,
       orderBy: { name: 'asc' },
       include: {
+        interlineCarrier: {
+          select: { id: true, code: true, name: true }
+        },
         _count: {
           select: {
             bookings: true,
@@ -179,7 +182,15 @@ export const createRoute = async (req: Request, res: Response) => {
         active: routeData.active !== undefined ? routeData.active : true,
         frequency: routeData.frequency || undefined,
         departureTime: routeData.departureTime || undefined,
-        arrivalTime: routeData.arrivalTime || undefined
+        arrivalTime: routeData.arrivalTime || undefined,
+        headhaul: routeData.headhaul !== undefined ? routeData.headhaul : false,
+        interlineTrailer: routeData.interlineTrailer !== undefined ? routeData.interlineTrailer : false,
+        interlineCarrierId: routeData.interlineCarrierId ? parseInt(routeData.interlineCarrierId) : null
+      },
+      include: {
+        interlineCarrier: {
+          select: { id: true, code: true, name: true }
+        }
       }
     });
 
@@ -223,7 +234,15 @@ export const updateRoute = async (req: Request, res: Response) => {
         active: updateData.active,
         frequency: updateData.frequency || undefined,
         departureTime: updateData.departureTime || undefined,
-        arrivalTime: updateData.arrivalTime || undefined
+        arrivalTime: updateData.arrivalTime || undefined,
+        ...(updateData.headhaul !== undefined && { headhaul: updateData.headhaul }),
+        ...(updateData.interlineTrailer !== undefined && { interlineTrailer: updateData.interlineTrailer }),
+        ...(updateData.interlineCarrierId !== undefined && { interlineCarrierId: updateData.interlineCarrierId ? parseInt(updateData.interlineCarrierId) : null })
+      },
+      include: {
+        interlineCarrier: {
+          select: { id: true, code: true, name: true }
+        }
       }
     });
 
@@ -246,5 +265,286 @@ export const deleteRoute = async (req: Request, res: Response) => {
   } catch (error) {
     console.error('Delete route error:', error);
     return res.status(500).json({ message: 'Failed to delete route' });
+  }
+};
+
+// Get all legs for a multi-leg route by name
+export const getRouteLegs = async (req: Request, res: Response) => {
+  try {
+    const { name } = req.params;
+
+    const legs = await prisma.route.findMany({
+      where: {
+        name: name,
+        active: true
+      },
+      orderBy: { legOrder: 'asc' },
+      select: {
+        id: true,
+        name: true,
+        origin: true,
+        destination: true,
+        legOrder: true,
+        dayOffset: true,
+        isMultiLeg: true,
+        departureTime: true,
+        arrivalTime: true,
+        distance: true,
+        runTime: true
+      }
+    });
+
+    if (legs.length === 0) {
+      return res.status(404).json({ message: 'Route not found' });
+    }
+
+    return res.json({
+      routeName: name,
+      isMultiLeg: legs[0].isMultiLeg,
+      totalLegs: legs.length,
+      legs
+    });
+  } catch (error) {
+    console.error('Get route legs error:', error);
+    return res.status(500).json({ message: 'Failed to fetch route legs' });
+  }
+};
+
+// Get the specific leg for a route given origin terminal
+export const getRouteLegByOrigin = async (req: Request, res: Response) => {
+  try {
+    const { name, origin } = req.params;
+
+    const leg = await prisma.route.findFirst({
+      where: {
+        name: name,
+        origin: origin.toUpperCase(),
+        active: true
+      },
+      select: {
+        id: true,
+        name: true,
+        origin: true,
+        destination: true,
+        legOrder: true,
+        dayOffset: true,
+        isMultiLeg: true,
+        departureTime: true,
+        arrivalTime: true,
+        distance: true,
+        runTime: true
+      }
+    });
+
+    if (!leg) {
+      return res.status(404).json({ message: 'Route leg not found' });
+    }
+
+    return res.json(leg);
+  } catch (error) {
+    console.error('Get route leg by origin error:', error);
+    return res.status(500).json({ message: 'Failed to fetch route leg' });
+  }
+};
+
+// Check if a leg is eligible for dispatch (previous legs must be dispatched)
+export const checkLegDispatchEligibility = async (req: Request, res: Response) => {
+  try {
+    const { routeName, originTerminalCode } = req.query;
+
+    if (!routeName || !originTerminalCode) {
+      return res.status(400).json({ message: 'routeName and originTerminalCode are required' });
+    }
+
+    // Get all legs for this route
+    const allLegs = await prisma.route.findMany({
+      where: {
+        name: routeName as string,
+        active: true
+      },
+      orderBy: { legOrder: 'asc' }
+    });
+
+    if (allLegs.length === 0) {
+      return res.status(404).json({ message: 'Route not found' });
+    }
+
+    // Find the current leg
+    const currentLeg = allLegs.find(
+      leg => leg.origin.toUpperCase() === (originTerminalCode as string).toUpperCase()
+    );
+
+    if (!currentLeg) {
+      return res.status(404).json({ message: 'Leg not found for given origin terminal' });
+    }
+
+    // If this is the first leg, it's always eligible
+    if (currentLeg.legOrder === 1) {
+      return res.json({
+        eligible: true,
+        currentLeg: {
+          legOrder: currentLeg.legOrder,
+          origin: currentLeg.origin,
+          destination: currentLeg.destination
+        },
+        message: 'First leg - eligible for dispatch'
+      });
+    }
+
+    // Check if previous legs have been dispatched
+    // A leg is considered dispatched if there's a loadsheet with:
+    // - Same linehaulName
+    // - Origin matching that leg's origin
+    // - Status is DISPATCHED or CLOSED
+    const previousLegs = allLegs.filter(leg => leg.legOrder !== null && leg.legOrder < (currentLeg.legOrder || 0));
+
+    const undispatchedPreviousLegs = [];
+
+    for (const prevLeg of previousLegs) {
+      const dispatchedLoadsheet = await prisma.loadsheet.findFirst({
+        where: {
+          linehaulName: routeName as string,
+          originTerminalCode: prevLeg.origin,
+          status: { in: ['DISPATCHED', 'CLOSED'] }
+        }
+      });
+
+      if (!dispatchedLoadsheet) {
+        undispatchedPreviousLegs.push({
+          legOrder: prevLeg.legOrder,
+          origin: prevLeg.origin,
+          destination: prevLeg.destination
+        });
+      }
+    }
+
+    if (undispatchedPreviousLegs.length > 0) {
+      return res.json({
+        eligible: false,
+        currentLeg: {
+          legOrder: currentLeg.legOrder,
+          origin: currentLeg.origin,
+          destination: currentLeg.destination
+        },
+        undispatchedPreviousLegs,
+        message: `Cannot dispatch leg ${currentLeg.legOrder}. Previous legs must be dispatched first.`
+      });
+    }
+
+    return res.json({
+      eligible: true,
+      currentLeg: {
+        legOrder: currentLeg.legOrder,
+        origin: currentLeg.origin,
+        destination: currentLeg.destination
+      },
+      message: 'All previous legs dispatched - eligible for dispatch'
+    });
+  } catch (error) {
+    console.error('Check leg dispatch eligibility error:', error);
+    return res.status(500).json({ message: 'Failed to check dispatch eligibility' });
+  }
+};
+
+// Get available loadsheets for dispatch (filters out ineligible multi-leg loadsheets)
+export const getDispatchableLoadsheets = async (req: Request, res: Response) => {
+  try {
+    const { limit = 100 } = req.query;
+
+    // Get all loadsheets that are ready for dispatch
+    const loadsheets = await prisma.loadsheet.findMany({
+      where: {
+        status: { in: ['DRAFT', 'CLOSED'] }, // Ready to dispatch
+        linehaulTripId: null // Not yet assigned to a trip
+      },
+      take: parseInt(limit as string),
+      orderBy: { loadDate: 'desc' },
+      include: {
+        originTerminal: true,
+        route: true
+      }
+    });
+
+    // Check eligibility for each loadsheet
+    const eligibleLoadsheets = [];
+    const ineligibleLoadsheets = [];
+
+    for (const loadsheet of loadsheets) {
+      // Get the route for this loadsheet
+      const route = await prisma.route.findFirst({
+        where: {
+          name: loadsheet.linehaulName,
+          origin: loadsheet.originTerminalCode || '',
+          active: true
+        }
+      });
+
+      // If not a multi-leg route or is first leg, it's eligible
+      if (!route?.isMultiLeg || route.legOrder === 1) {
+        eligibleLoadsheets.push({
+          ...loadsheet,
+          legOrder: route?.legOrder || 1,
+          isMultiLeg: route?.isMultiLeg || false,
+          dispatchEligible: true,
+          destination: route?.destination || null
+        });
+        continue;
+      }
+
+      // For multi-leg routes, check if previous legs are dispatched
+      const allLegs = await prisma.route.findMany({
+        where: { name: loadsheet.linehaulName, active: true },
+        orderBy: { legOrder: 'asc' }
+      });
+
+      const previousLegs = allLegs.filter(
+        leg => leg.legOrder !== null && leg.legOrder < (route.legOrder || 0)
+      );
+
+      let allPreviousDispatched = true;
+      for (const prevLeg of previousLegs) {
+        const dispatched = await prisma.loadsheet.findFirst({
+          where: {
+            linehaulName: loadsheet.linehaulName,
+            originTerminalCode: prevLeg.origin,
+            status: { in: ['DISPATCHED', 'CLOSED'] }
+          }
+        });
+        if (!dispatched) {
+          allPreviousDispatched = false;
+          break;
+        }
+      }
+
+      if (allPreviousDispatched) {
+        eligibleLoadsheets.push({
+          ...loadsheet,
+          legOrder: route.legOrder,
+          isMultiLeg: true,
+          dispatchEligible: true,
+          destination: route.destination
+        });
+      } else {
+        ineligibleLoadsheets.push({
+          ...loadsheet,
+          legOrder: route.legOrder,
+          isMultiLeg: true,
+          dispatchEligible: false,
+          destination: route.destination,
+          reason: 'Previous legs not yet dispatched'
+        });
+      }
+    }
+
+    return res.json({
+      eligible: eligibleLoadsheets,
+      ineligible: ineligibleLoadsheets,
+      total: loadsheets.length,
+      eligibleCount: eligibleLoadsheets.length,
+      ineligibleCount: ineligibleLoadsheets.length
+    });
+  } catch (error) {
+    console.error('Get dispatchable loadsheets error:', error);
+    return res.status(500).json({ message: 'Failed to fetch dispatchable loadsheets' });
   }
 };

@@ -145,13 +145,20 @@ model Route {
   dayOffset            Int?                    @default(0) // Day offset from initial dispatch (0=same day, 1=next day, etc.)
   isMultiLeg           Boolean                 @default(false) // True if this route is part of a multi-leg profile
 
+  // Headhaul and Interline support
+  headhaul             Boolean                 @default(false) // Indicates if this is a headhaul route
+  interlineTrailer     Boolean                 @default(false) // If true, allows manual trailer number entry on loadsheets
+  interlineCarrierId   Int?                    // Reference to interline carrier when interlineTrailer is true
+
   // Relations
   bookings             Booking[]
   preferredBy          CarrierPreferredRoute[]
   loadsheets           Loadsheet[]
+  interlineCarrier     InterlineCarrier?       @relation(fields: [interlineCarrierId], references: [id])
 
   @@index([name])
   @@index([name, legOrder])
+  @@index([interlineCarrierId])
   @@map("routes")
 }
 
@@ -866,6 +873,9 @@ model LinehaulProfile {
   equipmentConfig       String? // tractor-trailer, tractor-pup-dolly-pup, etc.
   requiresTeamDriver    Boolean  @default(false)
   hazmatRequired        Boolean  @default(false)
+  headhaul              Boolean  @default(false) // Indicates if this is a headhaul route
+  interlineTrailer      Boolean  @default(false) // If true, allows manual trailer number entry on loadsheets
+  interlineCarrierId    Int?     // Reference to interline carrier when interlineTrailer is true
   active                Boolean  @default(true)
   notes                 String?
   createdAt             DateTime @default(now())
@@ -874,6 +884,7 @@ model LinehaulProfile {
   // Relations
   originTerminal          Terminal                @relation("OriginTerminal", fields: [originTerminalId], references: [id])
   destinationTerminal     Terminal                @relation("DestinationTerminal", fields: [destinationTerminalId], references: [id])
+  interlineCarrier        InterlineCarrier?       @relation(fields: [interlineCarrierId], references: [id])
   trips                   LinehaulTrip[]
   rateCards               RateCard[]
   okayToLoadTerminals     ProfileOkayToLoad[]     @relation("OkayToLoadTerminals")
@@ -882,6 +893,7 @@ model LinehaulProfile {
   @@index([originTerminalId])
   @@index([destinationTerminalId])
   @@index([active])
+  @@index([interlineCarrierId])
   @@map("linehaul_profiles")
 }
 
@@ -1751,4 +1763,128 @@ model WorkdayPaycode {
   @@index([payType])
   @@index([trailerConfig])
   @@map("workday_paycodes")
+}
+
+// ============================================
+// INTERLINE CARRIER MODULE
+// ============================================
+
+// Interline Carrier - external carriers for interline trailer operations
+model InterlineCarrier {
+  id            Int      @id @default(autoincrement())
+  code          String   @unique  // Short code like "SWFT", "JBHT"
+  name          String            // Full name like "Swift Transportation"
+  scacCode      String?  @unique  // Standard Carrier Alpha Code
+  contactName   String?
+  contactPhone  String?
+  contactEmail  String?
+  active        Boolean  @default(true)
+  notes         String?
+  createdAt     DateTime @default(now())
+  updatedAt     DateTime @updatedAt
+
+  // Relations
+  linehaulProfiles LinehaulProfile[]
+  routes           Route[]
+
+  @@index([active])
+  @@map("interline_carriers")
+}
+
+// ============================================
+// EXPECTED SHIPMENTS MODULE - External TMS Integration
+// ============================================
+
+// Expected Shipment Volume - anticipated shipment volumes by lane from external TMS
+model ExpectedShipment {
+  id                    Int      @id @default(autoincrement())
+  externalId            String?  @unique // External system reference ID
+  forecastDate          DateTime // The date this forecast is for
+  originTerminalCode    String   // Origin terminal code (e.g., "DEN", "ABQ")
+  destinationTerminalCode String // Destination terminal code (e.g., "SLC", "PHX")
+  laneName              String?  // Lane name/identifier (e.g., "DEN-SLC", "DENSLT1")
+
+  // Volume metrics
+  expectedShipmentCount Int      @default(0)  // Number of shipments expected
+  expectedPieces        Int      @default(0)  // Total pieces expected
+  expectedWeight        Int      @default(0)  // Total weight in lbs
+  expectedCube          Int?                  // Cubic feet (optional)
+
+  // Service breakdown
+  guaranteedCount       Int      @default(0)  // Guaranteed service shipments
+  standardCount         Int      @default(0)  // Standard service shipments
+  expeditedCount        Int      @default(0)  // Expedited service shipments
+
+  // Special handling
+  hazmatCount           Int      @default(0)  // Hazmat shipments
+  highValueCount        Int      @default(0)  // High value shipments
+  oversizeCount         Int      @default(0)  // Oversize shipments
+
+  // Trailer planning
+  estimatedTrailers     Decimal? @db.Decimal(4, 1) // Estimated trailer loads (can be fractional)
+  trailerUtilization    Decimal? @db.Decimal(5, 2) // Estimated utilization percentage
+
+  // Data source tracking
+  dataSource            String   @default("TMS")   // Source system (TMS, WMS, MANUAL)
+  confidenceLevel       String?                    // HIGH, MEDIUM, LOW
+  lastSyncAt            DateTime @default(now())   // When data was last synced from external system
+
+  // Metadata
+  notes                 String?
+  createdAt             DateTime @default(now())
+  updatedAt             DateTime @updatedAt
+
+  @@unique([forecastDate, originTerminalCode, destinationTerminalCode])
+  @@index([forecastDate])
+  @@index([originTerminalCode])
+  @@index([destinationTerminalCode])
+  @@index([laneName])
+  @@map("expected_shipments")
+}
+
+// Expected Shipment Detail - individual expected shipments (optional granularity)
+model ExpectedShipmentDetail {
+  id                    Int       @id @default(autoincrement())
+  expectedShipmentId    Int?      // Optional link to aggregate record
+  externalProNumber     String?   // PRO number from external system (may not be final)
+  forecastDate          DateTime
+  originTerminalCode    String
+  destinationTerminalCode String
+
+  // Shipment details
+  pieces                Int       @default(1)
+  weight                Int       @default(0)  // Weight in lbs
+  cube                  Decimal?  @db.Decimal(8, 2) // Cubic feet
+
+  // Service and handling
+  serviceLevel          String    @default("STANDARD") // STANDARD, GUARANTEED, EXPEDITED
+  isHazmat              Boolean   @default(false)
+  hazmatClass           String?
+  isHighValue           Boolean   @default(false)
+  isOversize            Boolean   @default(false)
+
+  // Customer info (from TMS)
+  shipperName           String?
+  shipperCity           String?
+  consigneeName         String?
+  consigneeCity         String?
+
+  // Planning info
+  estimatedPickupTime   DateTime?
+  estimatedDeliveryTime DateTime?
+  appointmentRequired   Boolean   @default(false)
+
+  // Tracking
+  dataSource            String    @default("TMS")
+  externalStatus        String?   // Status in external system
+  lastSyncAt            DateTime  @default(now())
+  createdAt             DateTime  @default(now())
+  updatedAt             DateTime  @updatedAt
+
+  @@index([forecastDate])
+  @@index([originTerminalCode])
+  @@index([destinationTerminalCode])
+  @@index([serviceLevel])
+  @@index([externalProNumber])
+  @@map("expected_shipment_details")
 }
