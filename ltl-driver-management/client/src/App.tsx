@@ -30,6 +30,7 @@ import { Loadsheets } from './pages/Loadsheets';
 import { LoadsheetForm } from './pages/LoadsheetForm';
 import { ContractPowerHome } from './pages/ContractPowerHome';
 import { LateLinehaulReport } from './pages/LateLinehaulReport';
+import { LoadFactorReport } from './pages/LoadFactorReport';
 import { PayRules } from './pages/PayRules';
 import { DriverSelfService } from './pages/DriverSelfService';
 
@@ -132,6 +133,10 @@ const router = createBrowserRouter([
           {
             path: 'reports/late-linehaul',
             element: <LateLinehaulReport />
+          },
+          {
+            path: 'reports/load-factor',
+            element: <LoadFactorReport />
           },
           {
             path: 'administration',

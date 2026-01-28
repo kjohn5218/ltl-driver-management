@@ -23,7 +23,9 @@ import {
   AlertTriangle,
   Package,
   Scale,
-  CheckCircle2
+  CheckCircle2,
+  Percent,
+  TrendingUp
 } from 'lucide-react';
 import { format, parseISO } from 'date-fns';
 
@@ -40,6 +42,7 @@ export const OutboundTab: React.FC = () => {
   const [endDate, setEndDate] = useState(today);
   const [selectedOrigins, setSelectedOrigins] = useState<number[]>([]);
   const [showLateOnly, setShowLateOnly] = useState(false);
+  const [showHeadhaulOnly, setShowHeadhaulOnly] = useState(false);
 
   // Late reason modal state
   const [lateModalOpen, setLateModalOpen] = useState(false);
@@ -197,7 +200,7 @@ export const OutboundTab: React.FC = () => {
     return dispatchMinutes > schedMinutes;
   };
 
-  // Filter by search term, origin filter, and late filter
+  // Filter by search term, origin filter, late filter, and HH filter
   const filteredRows = useMemo(() => {
     return outboundRows.filter(row => {
       // Apply origin filter first
@@ -208,6 +211,9 @@ export const OutboundTab: React.FC = () => {
 
       // Apply late filter
       if (showLateOnly && !isLate(row)) return false;
+
+      // Apply headhaul filter
+      if (showHeadhaulOnly && !row.trip.linehaulProfile?.headhaul) return false;
 
       // Then apply search filter
       if (!searchTerm) return true;
@@ -227,7 +233,7 @@ export const OutboundTab: React.FC = () => {
 
       return false;
     });
-  }, [outboundRows, selectedOrigins, showLateOnly, searchTerm]);
+  }, [outboundRows, selectedOrigins, showLateOnly, showHeadhaulOnly, searchTerm]);
 
   // Format loadsheets/manifests for display in a single line
   const formatManifests = (loadsheets: Loadsheet[]): string => {
@@ -318,6 +324,64 @@ export const OutboundTab: React.FC = () => {
     }
     return null;
   };
+
+  // Calculate total trailer length (in feet) for a trip
+  // Includes primary trailer, trailer2, and trailer3 if present
+  const getTotalTrailerLength = (row: OutboundTripRow): number | null => {
+    let totalLength = 0;
+
+    // Get length from trip's trailers
+    if (row.trip.trailer?.lengthFeet) {
+      totalLength += row.trip.trailer.lengthFeet;
+    }
+    if (row.trip.trailer2?.lengthFeet) {
+      totalLength += row.trip.trailer2.lengthFeet;
+    }
+    if ((row.trip as any).trailer3?.lengthFeet) {
+      totalLength += (row.trip as any).trailer3.lengthFeet;
+    }
+
+    // If no trailer length from trip, try to get from loadsheet's suggestedTrailerLength
+    if (totalLength === 0 && row.loadsheets && row.loadsheets.length > 0) {
+      const loadsheetLength = row.loadsheets.reduce((sum, ls) => sum + (ls.suggestedTrailerLength || 0), 0);
+      if (loadsheetLength > 0) totalLength = loadsheetLength;
+    }
+
+    return totalLength > 0 ? totalLength : null;
+  };
+
+  // Calculate Load Factor percentage
+  // LF % = (Weight / (Trailer Length * 590)) * 100
+  // 590 lbs per foot is the industry standard for LTL
+  const getLoadFactor = (row: OutboundTripRow): number | null => {
+    const weight = getTotalWeight(row);
+    const trailerLength = getTotalTrailerLength(row);
+
+    if (!weight || !trailerLength || trailerLength === 0) return null;
+
+    const lf = (weight / (trailerLength * 590)) * 100;
+    return Math.round(lf * 10) / 10; // Round to 1 decimal place
+  };
+
+  // Calculate cumulative load factor for all filtered rows
+  const cumulativeLoadFactor = useMemo(() => {
+    let totalWeight = 0;
+    let totalTrailerLength = 0;
+
+    filteredRows.forEach(row => {
+      const weight = getTotalWeight(row);
+      const length = getTotalTrailerLength(row);
+      if (weight && length) {
+        totalWeight += weight;
+        totalTrailerLength += length;
+      }
+    });
+
+    if (totalTrailerLength === 0) return null;
+
+    const lf = (totalWeight / (totalTrailerLength * 590)) * 100;
+    return Math.round(lf * 10) / 10;
+  }, [filteredRows]);
 
   // Check if trip has a late reason recorded
   const hasLateReasonRecorded = (tripId: number): boolean => {
@@ -413,6 +477,20 @@ export const OutboundTab: React.FC = () => {
                 Late Only
               </span>
             </label>
+
+            {/* Headhaul Only Filter */}
+            <label className="flex items-center gap-2 cursor-pointer">
+              <input
+                type="checkbox"
+                checked={showHeadhaulOnly}
+                onChange={(e) => setShowHeadhaulOnly(e.target.checked)}
+                className="h-4 w-4 text-blue-600 border-gray-300 rounded focus:ring-blue-500"
+              />
+              <span className="flex items-center gap-1 text-sm text-gray-700 dark:text-gray-300">
+                <TrendingUp className="h-4 w-4 text-blue-500" />
+                HH Only
+              </span>
+            </label>
           </div>
 
           {/* Refresh Button */}
@@ -429,12 +507,28 @@ export const OutboundTab: React.FC = () => {
       {/* Outbound Trips Grid */}
       <div className="bg-white dark:bg-gray-800 shadow rounded-lg">
         <div className="px-6 py-4 border-b border-gray-200 dark:border-gray-700">
-          <div className="flex items-center">
+          <div className="flex items-center flex-wrap gap-2">
             <Truck className="w-5 h-5 text-green-500 mr-2" />
             <h3 className="text-lg font-medium text-gray-900 dark:text-gray-100">Outbound Trips</h3>
-            <span className="ml-2 bg-green-100 text-green-800 dark:bg-green-900 dark:text-green-200 px-2 py-0.5 rounded-full text-xs">
+            <span className="bg-green-100 text-green-800 dark:bg-green-900 dark:text-green-200 px-2 py-0.5 rounded-full text-xs">
               {filteredRows.length} dispatched
             </span>
+            {cumulativeLoadFactor !== null && (
+              <span className={`flex items-center gap-1 px-2 py-0.5 rounded-full text-xs font-medium ${
+                cumulativeLoadFactor >= 85 ? 'bg-green-100 text-green-800 dark:bg-green-900 dark:text-green-200' :
+                cumulativeLoadFactor >= 65 ? 'bg-yellow-100 text-yellow-800 dark:bg-yellow-900 dark:text-yellow-200' :
+                'bg-red-100 text-red-800 dark:bg-red-900 dark:text-red-200'
+              }`}>
+                <Percent className="h-3 w-3" />
+                Avg LF: {cumulativeLoadFactor.toFixed(1)}%
+              </span>
+            )}
+            {showHeadhaulOnly && (
+              <span className="flex items-center gap-1 bg-blue-100 text-blue-800 dark:bg-blue-900 dark:text-blue-200 px-2 py-0.5 rounded-full text-xs">
+                <TrendingUp className="h-3 w-3" />
+                Headhaul Only
+              </span>
+            )}
           </div>
           <p className="mt-1 text-sm text-gray-500 dark:text-gray-400">
             {startDate && endDate ? (
@@ -496,6 +590,12 @@ export const OutboundTab: React.FC = () => {
                     <div className="flex items-center justify-end">
                       <Scale className="h-3 w-3 mr-1" />
                       Weight
+                    </div>
+                  </th>
+                  <th className="px-4 py-3 text-right text-xs font-medium text-gray-500 dark:text-gray-400 uppercase tracking-wider">
+                    <div className="flex items-center justify-end">
+                      <Percent className="h-3 w-3 mr-1" />
+                      LF %
                     </div>
                   </th>
                   <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 dark:text-gray-400 uppercase tracking-wider">
@@ -601,6 +701,16 @@ export const OutboundTab: React.FC = () => {
                       </td>
                       <td className="px-4 py-3 whitespace-nowrap text-right text-gray-900 dark:text-gray-100">
                         {totalWeight !== null ? `${totalWeight.toLocaleString()} lbs` : '-'}
+                      </td>
+                      <td className="px-4 py-3 whitespace-nowrap text-right">
+                        {(() => {
+                          const lf = getLoadFactor(row);
+                          if (lf === null) return <span className="text-gray-400">-</span>;
+                          const colorClass = lf >= 85 ? 'text-green-600 dark:text-green-400' :
+                                             lf >= 65 ? 'text-yellow-600 dark:text-yellow-400' :
+                                             'text-red-600 dark:text-red-400';
+                          return <span className={`font-medium ${colorClass}`}>{lf.toFixed(1)}%</span>;
+                        })()}
                       </td>
                       <td className="px-4 py-3 whitespace-nowrap text-gray-600 dark:text-gray-400">
                         {schedDepart || '-'}

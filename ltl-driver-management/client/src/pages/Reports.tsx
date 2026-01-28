@@ -2,7 +2,7 @@ import React, { useState } from 'react';
 import { useQuery } from '@tanstack/react-query';
 import { api } from '../services/api';
 import { BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer, PieChart, Pie, Cell, LineChart, Line } from 'recharts';
-import { Download, Target, Truck, Package, Clock, DollarSign, Route, Activity, AlertTriangle, Star, Smile } from 'lucide-react';
+import { Download, Target, Truck, Package, Clock, DollarSign, Route, Activity, AlertTriangle, Star, Smile, Percent } from 'lucide-react';
 import { Link } from 'react-router-dom';
 import { linehaulTripService, MoraleReportResponse } from '../services/linehaulTripService';
 
@@ -115,6 +115,13 @@ export const Reports: React.FC = () => {
           <p className="text-gray-600">Cost analysis and resource booking optimization for LTL operations</p>
         </div>
         <div className="flex items-center gap-3">
+          <Link
+            to="/reports/load-factor"
+            className="inline-flex items-center px-3 py-2 border border-blue-300 bg-blue-50 text-blue-700 rounded-md hover:bg-blue-100 text-sm font-medium"
+          >
+            <Percent className="w-4 h-4 mr-2" />
+            Load Factor Report
+          </Link>
           <Link
             to="/reports/late-linehaul"
             className="inline-flex items-center px-3 py-2 border border-amber-300 bg-amber-50 text-amber-700 rounded-md hover:bg-amber-100 text-sm font-medium"

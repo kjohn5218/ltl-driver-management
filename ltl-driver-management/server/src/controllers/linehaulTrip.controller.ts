@@ -136,6 +136,7 @@ export const getTrips = async (req: Request, res: Response): Promise<void> => {
               name: true,
               transitTimeMinutes: true,
               standardArrivalTime: true,
+              headhaul: true,
               originTerminal: {
                 select: { code: true, name: true }
               },
@@ -154,10 +155,13 @@ export const getTrips = async (req: Request, res: Response): Promise<void> => {
             select: { id: true, unitNumber: true, truckType: true, externalFleetId: true }
           },
           trailer: {
-            select: { id: true, unitNumber: true, trailerType: true }
+            select: { id: true, unitNumber: true, trailerType: true, lengthFeet: true }
           },
           trailer2: {
-            select: { id: true, unitNumber: true, trailerType: true }
+            select: { id: true, unitNumber: true, trailerType: true, lengthFeet: true }
+          },
+          trailer3: {
+            select: { id: true, unitNumber: true, trailerType: true, lengthFeet: true }
           },
           dolly: {
             select: { id: true, unitNumber: true, dollyType: true }
@@ -171,7 +175,12 @@ export const getTrips = async (req: Request, res: Response): Promise<void> => {
               manifestNumber: true,
               linehaulName: true,
               originTerminalCode: true,
-              destinationTerminalCode: true
+              destinationTerminalCode: true,
+              weight: true,
+              pieces: true,
+              trailerNumber: true,
+              suggestedTrailerLength: true,
+              targetDispatchTime: true
             }
           },
           shipments: {
