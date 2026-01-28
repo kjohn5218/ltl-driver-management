@@ -12,12 +12,15 @@ interface LocationMultiSelectProps {
 }
 
 export const LocationMultiSelect: React.FC<LocationMultiSelectProps> = ({
-  value,
+  value = [],
   onChange,
   placeholder = "Select locations...",
   className = "",
   maxHeight = "max-h-80"
 }) => {
+  // Ensure value is always an array
+  const safeValue = Array.isArray(value) ? value : [];
+
   const [isOpen, setIsOpen] = useState(false);
   const [searchTerm, setSearchTerm] = useState('');
   const [locations, setLocations] = useState<Location[]>([]);
@@ -56,8 +59,8 @@ export const LocationMultiSelect: React.FC<LocationMultiSelectProps> = ({
 
   // Get selected location objects
   const selectedLocations = useMemo(() => {
-    return locations.filter(loc => value.includes(loc.id));
-  }, [locations, value]);
+    return locations.filter(loc => safeValue.includes(loc.id));
+  }, [locations, safeValue]);
 
   // Close on outside click
   useEffect(() => {
@@ -79,10 +82,10 @@ export const LocationMultiSelect: React.FC<LocationMultiSelectProps> = ({
   }, [isOpen]);
 
   const handleToggle = (locationId: number) => {
-    if (value.includes(locationId)) {
-      onChange(value.filter(id => id !== locationId));
+    if (safeValue.includes(locationId)) {
+      onChange(safeValue.filter(id => id !== locationId));
     } else {
-      onChange([...value, locationId]);
+      onChange([...safeValue, locationId]);
     }
   };
 
@@ -127,7 +130,7 @@ export const LocationMultiSelect: React.FC<LocationMultiSelectProps> = ({
         </div>
 
         <div className="flex items-center gap-1 ml-2">
-          {value.length > 0 && (
+          {safeValue.length > 0 && (
             <button
               type="button"
               onClick={(e) => {
@@ -144,9 +147,9 @@ export const LocationMultiSelect: React.FC<LocationMultiSelectProps> = ({
       </button>
 
       {/* Selected count badge */}
-      {value.length > 0 && (
+      {safeValue.length > 0 && (
         <span className="absolute -top-2 -right-2 text-xs px-1.5 py-0.5 bg-indigo-600 text-white rounded-full">
-          {value.length}
+          {safeValue.length}
         </span>
       )}
 
@@ -199,7 +202,7 @@ export const LocationMultiSelect: React.FC<LocationMultiSelectProps> = ({
               </div>
             ) : (
               filteredLocations.map((location) => {
-                const isSelected = value.includes(location.id);
+                const isSelected = safeValue.includes(location.id);
                 return (
                   <button
                     key={location.id}
