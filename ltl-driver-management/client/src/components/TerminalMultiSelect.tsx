@@ -1,6 +1,16 @@
 import React, { useState, useEffect, useRef, useMemo } from 'react';
 import { ChevronDown, X, Search, Check, Building2 } from 'lucide-react';
-import { locationService, TerminalLocation } from '../services/locationService';
+import { api } from '../services/api';
+
+interface TerminalLocation {
+  id: number;
+  code: string;
+  name?: string;
+  city?: string;
+  state?: string;
+  isPhysicalTerminal?: boolean;
+  isVirtualTerminal?: boolean;
+}
 
 interface TerminalMultiSelectProps {
   value: number[];
@@ -32,13 +42,14 @@ export const TerminalMultiSelect: React.FC<TerminalMultiSelectProps> = ({
   const containerRef = useRef<HTMLDivElement>(null);
   const searchInputRef = useRef<HTMLInputElement>(null);
 
-  // Fetch terminal locations on mount
+  // Fetch all active locations on mount
   useEffect(() => {
     const fetchTerminals = async () => {
       setIsLoading(true);
       try {
-        const data = await locationService.getTerminalLocations();
-        setTerminals(data || []);
+        const response = await api.get('/locations?limit=500&active=true');
+        const locations = response.data.locations || response.data || [];
+        setTerminals(locations);
       } catch (error) {
         console.error('Failed to fetch terminals:', error);
         setTerminals([]);
@@ -55,7 +66,7 @@ export const TerminalMultiSelect: React.FC<TerminalMultiSelectProps> = ({
 
     // Apply physical terminal filter
     if (physicalOnly) {
-      filtered = filtered.filter(t => t.isPhysicalTerminal);
+      filtered = filtered.filter(t => t.isPhysicalTerminal === true);
     }
 
     // Apply search filter
@@ -268,12 +279,12 @@ export const TerminalMultiSelect: React.FC<TerminalMultiSelectProps> = ({
                           {terminal.name && (
                             <span className="text-gray-700 dark:text-gray-300 text-sm truncate">{terminal.name}</span>
                           )}
-                          {terminal.isPhysicalTerminal && (
+                          {terminal.isPhysicalTerminal === true && (
                             <span className="text-xs px-1.5 py-0.5 bg-green-100 text-green-700 dark:bg-green-900/30 dark:text-green-400 rounded">
                               Physical
                             </span>
                           )}
-                          {terminal.isVirtualTerminal && !terminal.isPhysicalTerminal && (
+                          {terminal.isVirtualTerminal === true && terminal.isPhysicalTerminal !== true && (
                             <span className="text-xs px-1.5 py-0.5 bg-purple-100 text-purple-700 dark:bg-purple-900/30 dark:text-purple-400 rounded">
                               Virtual
                             </span>
