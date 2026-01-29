@@ -1,6 +1,7 @@
 import { Request, Response } from 'express';
 import { prisma } from '../index';
 import { Prisma } from '@prisma/client';
+import { fleetMockService } from '../services/fleet.mock.service';
 
 // Get all terminals with filtering and pagination
 export const getTerminals = async (req: Request, res: Response): Promise<void> => {
@@ -51,6 +52,52 @@ export const getTerminals = async (req: Request, res: Response): Promise<void> =
       }),
       prisma.terminal.count({ where })
     ]);
+
+    // If no terminals in database, fallback to mock fleet data
+    if (total === 0 && !search) {
+      console.log('No terminals in database, using mock fleet data');
+      const mockData = await fleetMockService.getTerminals({
+        search: search as string,
+        active: active === 'true',
+        limit: limitNum,
+        page: pageNum
+      });
+
+      res.json({
+        terminals: mockData.terminals.map(t => ({
+          id: t.id,
+          code: t.code,
+          name: t.name,
+          address: t.address,
+          city: t.city,
+          state: t.state,
+          zipCode: t.zipCode,
+          phone: t.phone,
+          contact: t.contact,
+          timezone: t.timezone,
+          latitude: t.latitude,
+          longitude: t.longitude,
+          active: t.active,
+          createdAt: new Date(),
+          updatedAt: new Date(),
+          _count: {
+            trucks: 0,
+            trailers: 0,
+            dollies: 0,
+            originLinehaulProfiles: 0,
+            destLinehaulProfiles: 0
+          }
+        })),
+        pagination: {
+          page: pageNum,
+          limit: limitNum,
+          total: mockData.total,
+          totalPages: Math.ceil(mockData.total / limitNum)
+        },
+        source: 'fleet_mock'
+      });
+      return;
+    }
 
     res.json({
       terminals,

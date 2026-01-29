@@ -28,14 +28,14 @@ export const Dashboard: React.FC = () => {
       icon: Truck,
       color: 'bg-green-500',
       hoverColor: 'hover:bg-green-600',
-      route: '/dispatch/trip'
+      route: '/dispatch?action=dispatch-trip'
     },
     {
       name: 'Arrive Trip',
       icon: Truck,
       color: 'bg-orange-500',
       hoverColor: 'hover:bg-orange-600',
-      route: '/arrive-trip'
+      route: '/dispatch?action=arrive-trip'
     },
     {
       name: 'Transfer Scans',

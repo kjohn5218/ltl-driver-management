@@ -321,12 +321,28 @@ export const payRulesService = {
     return response.data;
   },
 
-  // Get default rate cards
-  getDefaultRates: async (): Promise<RateCardsResponse> => {
+  // Get default rate cards (legacy)
+  getDefaultRateCards: async (): Promise<RateCardsResponse> => {
     const params = new URLSearchParams();
     params.append('type', 'DEFAULT');
 
     const response = await api.get(`/rate-cards?${params.toString()}`);
+    return response.data;
+  },
+
+  // Get default rates (structured)
+  getDefaultRates: async (): Promise<{
+    defaultRates: any | null;
+    systemFuelSurcharge: number;
+    fuelSurchargeSource: string;
+  }> => {
+    const response = await api.get('/rate-cards/defaults');
+    return response.data;
+  },
+
+  // Update default rates
+  updateDefaultRates: async (data: any): Promise<any> => {
+    const response = await api.put('/rate-cards/defaults', data);
     return response.data;
   }
 };

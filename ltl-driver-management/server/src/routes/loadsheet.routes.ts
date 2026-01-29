@@ -9,7 +9,8 @@ import {
   closeLoadsheet,
   downloadLoadsheet,
   deleteLoadsheet,
-  checkDuplicateLoadsheets
+  checkDuplicateLoadsheets,
+  getLoadsheetShipments
 } from '../controllers/loadsheet.controller';
 import { authenticate } from '../middleware/auth.middleware';
 import { validateRequest } from '../middleware/validation.middleware';
@@ -24,7 +25,7 @@ router.get(
   '/',
   [
     query('search').optional().trim(),
-    query('status').optional().isIn(['DRAFT', 'OPEN', 'CLOSED', 'DISPATCHED']),
+    query('status').optional().isIn(['DRAFT', 'OPEN', 'LOADING', 'CLOSED', 'DISPATCHED']),
     query('linehaulTripId').optional().isInt({ min: 1 }),
     query('originTerminalId').optional().isInt({ min: 1 }),
     query('startDate').optional().isISO8601(),
@@ -61,6 +62,14 @@ router.get(
   downloadLoadsheet
 );
 
+// GET /api/loadsheets/:id/shipments - Get shipments loaded to a loadsheet
+router.get(
+  '/:id/shipments',
+  [param('id').isInt({ min: 1 })],
+  validateRequest,
+  getLoadsheetShipments
+);
+
 // POST /api/loadsheets/check-duplicates - Check for existing loadsheets with same trailer/location
 router.post(
   '/check-duplicates',
@@ -83,6 +92,7 @@ router.post(
     body('suggestedTrailerLength').optional().isInt({ min: 1 }),
     body('pintleHookRequired').optional().isBoolean(),
     body('targetDispatchTime').optional().trim(),
+    body('scheduledDepartDate').optional().trim(),
     body('loadType').optional().isIn(['PURE', 'MIX'])
   ],
   validateRequest,

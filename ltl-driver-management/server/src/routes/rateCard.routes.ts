@@ -16,8 +16,36 @@ import {
   importRateCardsExternal,
   getDriversWithRates,
   getCarriersWithRates,
-  getProfilesWithRates
+  getProfilesWithRates,
+  getDefaultRates,
+  updateDefaultRates
 } from '../controllers/rateCard.controller';
+
+// All accessorial types including new ones
+const ALL_ACCESSORIAL_TYPES = [
+  'LAYOVER',
+  'DETENTION',
+  'BREAKDOWN',
+  'HELPER',
+  'TRAINER',
+  'HAZMAT',
+  'TEAM_DRIVER',
+  'STOP_CHARGE',
+  'FUEL_SURCHARGE',
+  'DROP_HOOK',
+  'DROP_HOOK_SINGLE',
+  'DROP_HOOK_DOUBLE_TRIPLE',
+  'CHAIN_UP',
+  'WAIT_TIME',
+  'SINGLE_TRAILER',
+  'DOUBLE_TRAILER',
+  'TRIPLE_TRAILER',
+  'CUT_PAY',
+  'CUT_PAY_SINGLE_MILES',
+  'CUT_PAY_DOUBLE_MILES',
+  'CUT_PAY_TRIPLE_MILES',
+  'OTHER'
+];
 import { authenticateApiKey } from '../middleware/apiKey.middleware';
 import { authenticate, authorize } from '../middleware/auth.middleware';
 import { validateRequest } from '../middleware/validation.middleware';
@@ -111,6 +139,42 @@ router.get(
   getProfilesWithRates
 );
 
+// Get default rates - MUST be before /:id
+router.get(
+  '/defaults',
+  getDefaultRates
+);
+
+// Update default rates (Admin/Payroll Admin only) - MUST be before /:id
+router.put(
+  '/defaults',
+  authorize(UserRole.ADMIN, UserRole.PAYROLL_ADMIN),
+  [
+    body('baseRate').optional().isDecimal(),
+    body('rateMethod').optional().isIn(['PER_MILE', 'FLAT_RATE', 'HOURLY', 'PERCENTAGE']),
+    body('minimumAmount').optional().isDecimal(),
+    body('maximumAmount').optional().isDecimal(),
+    body('effectiveDate').optional().isISO8601(),
+    body('expirationDate').optional().isISO8601(),
+    body('notes').optional().trim(),
+    body('dropHook').optional().isObject(),
+    body('dropHookSingle').optional().isObject(),
+    body('dropHookDoubleTriple').optional().isObject(),
+    body('chainUp').optional().isObject(),
+    body('fuelSurcharge').optional().isObject(),
+    body('waitTime').optional().isObject(),
+    body('singleTrailer').optional().isObject(),
+    body('doubleTrailer').optional().isObject(),
+    body('tripleTrailer').optional().isObject(),
+    body('cutPay').optional().isObject(),
+    body('cutPaySingleMiles').optional().isObject(),
+    body('cutPayDoubleMiles').optional().isObject(),
+    body('cutPayTripleMiles').optional().isObject()
+  ],
+  validateRequest,
+  updateDefaultRates
+);
+
 // Get rate card by ID - parameterized route must come after specific routes
 router.get(
   '/:id',
@@ -190,20 +254,7 @@ router.post(
   authorize(UserRole.ADMIN, UserRole.PAYROLL_ADMIN),
   [
     param('rateCardId').isInt({ min: 1 }),
-    body('type').notEmpty().isIn([
-      'LAYOVER',
-      'DETENTION',
-      'BREAKDOWN',
-      'HELPER',
-      'TRAINER',
-      'HAZMAT',
-      'TEAM_DRIVER',
-      'STOP_CHARGE',
-      'FUEL_SURCHARGE',
-      'DROP_HOOK',
-      'CHAIN_UP',
-      'OTHER'
-    ]),
+    body('type').notEmpty().isIn(ALL_ACCESSORIAL_TYPES),
     body('description').optional().trim(),
     body('rateAmount').notEmpty().isDecimal(),
     body('rateUnit').optional().trim(),
@@ -221,20 +272,7 @@ router.put(
   [
     param('rateCardId').isInt({ min: 1 }),
     body('rates').isArray(),
-    body('rates.*.type').notEmpty().isIn([
-      'LAYOVER',
-      'DETENTION',
-      'BREAKDOWN',
-      'HELPER',
-      'TRAINER',
-      'HAZMAT',
-      'TEAM_DRIVER',
-      'STOP_CHARGE',
-      'FUEL_SURCHARGE',
-      'DROP_HOOK',
-      'CHAIN_UP',
-      'OTHER'
-    ]),
+    body('rates.*.type').notEmpty().isIn(ALL_ACCESSORIAL_TYPES),
     body('rates.*.rateAmount').notEmpty().isDecimal()
   ],
   validateRequest,

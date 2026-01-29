@@ -1,6 +1,7 @@
 import React, { useState, useEffect } from 'react';
-import { CarrierDriver, Carrier } from '../../types';
-import { User, Hash, Phone, Mail, CreditCard, Truck } from 'lucide-react';
+import { CarrierDriver, Carrier, Location } from '../../types';
+import { locationService } from '../../services/locationService';
+import { User, Hash, Phone, Mail, CreditCard, Truck, MapPin, AlertTriangle } from 'lucide-react';
 
 interface DriverFormProps {
   driver?: CarrierDriver | null;
@@ -22,10 +23,26 @@ export const DriverForm: React.FC<DriverFormProps> = ({
     phoneNumber: driver?.phoneNumber || '',
     email: driver?.email || '',
     licenseNumber: driver?.licenseNumber || '',
+    hazmatEndorsement: driver?.hazmatEndorsement ?? false,
+    locationId: driver?.locationId ? driver.locationId.toString() : '',
     active: driver?.active ?? true
   });
 
   const [errors, setErrors] = useState<Record<string, string>>({});
+  const [locations, setLocations] = useState<Location[]>([]);
+
+  // Fetch locations on mount
+  useEffect(() => {
+    const fetchLocations = async () => {
+      try {
+        const locationsList = await locationService.getLocationsList();
+        setLocations(locationsList);
+      } catch (error) {
+        console.error('Failed to fetch locations:', error);
+      }
+    };
+    fetchLocations();
+  }, []);
 
   // Update form data when driver prop changes
   useEffect(() => {
@@ -39,6 +56,8 @@ export const DriverForm: React.FC<DriverFormProps> = ({
         phoneNumber: driver.phoneNumber || '',
         email: driver.email || '',
         licenseNumber: driver.licenseNumber || '',
+        hazmatEndorsement: driver.hazmatEndorsement ?? false,
+        locationId: driver.locationId ? driver.locationId.toString() : '',
         active: driver.active ?? true
       });
       // Clear any existing errors when driver changes
@@ -72,7 +91,7 @@ export const DriverForm: React.FC<DriverFormProps> = ({
 
   const handleSubmit = (e: React.FormEvent) => {
     e.preventDefault();
-    
+
     if (!validateForm()) {
       return;
     }
@@ -83,7 +102,9 @@ export const DriverForm: React.FC<DriverFormProps> = ({
       phoneNumber: formData.phoneNumber || undefined,
       email: formData.email || undefined,
       licenseNumber: formData.licenseNumber || undefined,
-      number: formData.number || undefined
+      number: formData.number || undefined,
+      hazmatEndorsement: formData.hazmatEndorsement,
+      locationId: formData.locationId ? parseInt(formData.locationId as string) : null
     };
 
     onSubmit(submitData);
@@ -237,6 +258,57 @@ export const DriverForm: React.FC<DriverFormProps> = ({
           className="mt-1 block w-full rounded-md border-gray-300 shadow-sm focus:border-indigo-500 focus:ring-indigo-500 sm:text-sm"
           placeholder="Enter license number"
         />
+      </div>
+
+      {/* Hazmat Endorsement */}
+      <div>
+        <div className="flex items-center">
+          <input
+            id="hazmatEndorsement"
+            name="hazmatEndorsement"
+            type="checkbox"
+            checked={formData.hazmatEndorsement}
+            onChange={handleChange}
+            className="h-4 w-4 text-orange-600 focus:ring-orange-500 border-gray-300 rounded"
+          />
+          <label htmlFor="hazmatEndorsement" className="ml-2 flex items-center text-sm text-gray-900">
+            <AlertTriangle className="w-4 h-4 mr-1 text-orange-500" />
+            Hazmat Endorsement
+          </label>
+        </div>
+        <p className="mt-1 text-sm text-gray-500 ml-6">
+          Check if driver has a valid hazmat endorsement on their CDL
+        </p>
+      </div>
+
+      {/* Location */}
+      <div>
+        <label htmlFor="locationId" className="flex items-center text-sm font-medium text-gray-700 mb-2">
+          <MapPin className="w-4 h-4 mr-2" />
+          Location
+          {driver && driver.location && (
+            <span className="ml-2 text-xs text-gray-500">
+              (Currently: {driver.location.code}{driver.location.name ? ` - ${driver.location.name}` : ''})
+            </span>
+          )}
+        </label>
+        <select
+          id="locationId"
+          name="locationId"
+          value={formData.locationId}
+          onChange={handleChange}
+          className="mt-1 block w-full rounded-md border-gray-300 shadow-sm focus:border-indigo-500 focus:ring-indigo-500 sm:text-sm"
+        >
+          <option value="">Select a location (optional)</option>
+          {locations.map((location) => (
+            <option key={location.id} value={location.id}>
+              {location.code}{location.name ? ` - ${location.name}` : ''}{location.city && location.state ? ` (${location.city}, ${location.state})` : ''}
+            </option>
+          ))}
+        </select>
+        <p className="mt-1 text-sm text-gray-500">
+          Assign a home location for this driver
+        </p>
       </div>
 
       {/* Active Status (only show for editing) */}

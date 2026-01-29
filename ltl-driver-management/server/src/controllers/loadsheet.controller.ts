@@ -169,6 +169,7 @@ export const createLoadsheet = async (req: Request, res: Response): Promise<void
       suggestedTrailerLength,
       pintleHookRequired,
       targetDispatchTime,
+      scheduledDepartDate,
       preloadManifest,
       originTerminalId,
       originTerminalCode,
@@ -185,6 +186,8 @@ export const createLoadsheet = async (req: Request, res: Response): Promise<void
       blankets,
       loaderName,
       sealNumber,
+      pieces,
+      weight,
       wallCondition,
       floorCondition,
       roofCondition,
@@ -217,6 +220,27 @@ export const createLoadsheet = async (req: Request, res: Response): Promise<void
       }
     }
 
+    // Look up the route to get destination and routeId
+    let routeId: number | null = null;
+    let destinationTerminalCode: string | null = null;
+
+    if (linehaulName && terminalCode) {
+      const route = await prisma.route.findFirst({
+        where: {
+          name: linehaulName,
+          origin: terminalCode,
+          active: true
+        }
+      });
+      if (route) {
+        routeId = route.id;
+        destinationTerminalCode = route.destination;
+        console.log(`Found route for ${linehaulName}/${terminalCode}: ${route.origin} -> ${route.destination} (leg ${route.legOrder})`);
+      } else {
+        console.log(`No route found for linehaulName=${linehaulName}, origin=${terminalCode}`);
+      }
+    }
+
     // Create loadsheet with related data (default status is OPEN)
     const loadsheet = await prisma.loadsheet.create({
       data: {
@@ -227,9 +251,12 @@ export const createLoadsheet = async (req: Request, res: Response): Promise<void
         suggestedTrailerLength: suggestedTrailerLength || 53,
         pintleHookRequired: pintleHookRequired || false,
         targetDispatchTime,
+        scheduledDepartDate,
         preloadManifest,
         originTerminalId: validTerminalId,
         originTerminalCode: terminalCode,
+        destinationTerminalCode,
+        routeId,
         linehaulTripId,
         doorNumber,
         loadDate: loadDate ? new Date(loadDate) : new Date(),
@@ -243,6 +270,8 @@ export const createLoadsheet = async (req: Request, res: Response): Promise<void
         blankets,
         loaderName,
         sealNumber,
+        pieces,
+        weight,
         wallCondition: wallCondition || 'OK',
         floorCondition: floorCondition || 'OK',
         roofCondition: roofCondition || 'OK',
@@ -315,6 +344,7 @@ export const updateLoadsheet = async (req: Request, res: Response): Promise<void
       suggestedTrailerLength,
       pintleHookRequired,
       targetDispatchTime,
+      scheduledDepartDate,
       preloadManifest,
       originTerminalId,
       originTerminalCode,
@@ -331,6 +361,8 @@ export const updateLoadsheet = async (req: Request, res: Response): Promise<void
       blankets,
       loaderName,
       sealNumber,
+      pieces,
+      weight,
       wallCondition,
       floorCondition,
       roofCondition,
@@ -398,6 +430,7 @@ export const updateLoadsheet = async (req: Request, res: Response): Promise<void
           ...(suggestedTrailerLength !== undefined && { suggestedTrailerLength }),
           ...(pintleHookRequired !== undefined && { pintleHookRequired }),
           ...(targetDispatchTime !== undefined && { targetDispatchTime }),
+          ...(scheduledDepartDate !== undefined && { scheduledDepartDate }),
           ...(preloadManifest !== undefined && { preloadManifest }),
           ...(validTerminalId !== undefined && { originTerminalId: validTerminalId }),
           ...(terminalCode !== undefined && { originTerminalCode: terminalCode }),
@@ -414,6 +447,8 @@ export const updateLoadsheet = async (req: Request, res: Response): Promise<void
           ...(blankets !== undefined && { blankets }),
           ...(loaderName !== undefined && { loaderName }),
           ...(sealNumber !== undefined && { sealNumber }),
+          ...(pieces !== undefined && { pieces }),
+          ...(weight !== undefined && { weight }),
           ...(wallCondition !== undefined && { wallCondition }),
           ...(floorCondition !== undefined && { floorCondition }),
           ...(roofCondition !== undefined && { roofCondition }),
@@ -598,5 +633,122 @@ export const deleteLoadsheet = async (req: Request, res: Response): Promise<void
   } catch (error) {
     console.error('Error deleting loadsheet:', error);
     res.status(500).json({ message: 'Failed to delete loadsheet' });
+  }
+};
+
+// Get shipments loaded to a loadsheet
+// Returns shipments from trip documents if dispatched, or mock data if not yet dispatched
+export const getLoadsheetShipments = async (req: Request, res: Response): Promise<void> => {
+  try {
+    const { id } = req.params;
+    const loadsheetId = parseInt(id, 10);
+
+    // Get loadsheet basic info
+    const loadsheet = await prisma.loadsheet.findUnique({
+      where: { id: loadsheetId }
+    });
+
+    if (!loadsheet) {
+      res.status(404).json({ message: 'Loadsheet not found' });
+      return;
+    }
+
+    // Try to get shipments from trip documents first (if dispatched)
+    let shipments: any[] = [];
+
+    if (loadsheet.linehaulTripId) {
+      // Fetch trip documents separately
+      const tripDocuments = await prisma.tripDocument.findMany({
+        where: {
+          tripId: loadsheet.linehaulTripId,
+          documentType: 'LINEHAUL_MANIFEST',
+          status: 'GENERATED'
+        },
+        include: {
+          manifestData: {
+            include: {
+              freightItems: {
+                orderBy: { sortOrder: 'asc' }
+              }
+            }
+          }
+        }
+      });
+
+      if (tripDocuments.length > 0) {
+        const manifest = tripDocuments[0];
+        if (manifest.manifestData?.freightItems) {
+          // Filter to shipments for this manifest number
+          shipments = manifest.manifestData.freightItems.filter(
+            (item: any) => item.manifestNumber === loadsheet.manifestNumber
+          );
+        }
+      }
+    }
+
+    // If no shipments from trip documents, generate mock data based on loadsheet status
+    if (shipments.length === 0 && loadsheet.status !== 'DRAFT') {
+      // Generate mock shipments based on loadsheet pieces/weight
+      const mockShipmentCount = loadsheet.status === 'OPEN' ? 0 :
+                                loadsheet.status === 'LOADING' ? Math.floor(Math.random() * 8) + 3 :
+                                Math.floor(Math.random() * 12) + 8;
+
+      const destinations = ['ATL', 'MEM', 'DFW', 'LAX', 'ORD', 'PHX', 'SEA', 'DEN'];
+      const companies = [
+        'Acme Corp', 'Global Industries', 'Metro Supplies', 'Tech Solutions',
+        'Prime Logistics', 'Quality Goods Inc', 'Fast Track Co', 'Summit Products'
+      ];
+      const cities = [
+        'Atlanta, GA', 'Memphis, TN', 'Dallas, TX', 'Los Angeles, CA',
+        'Chicago, IL', 'Phoenix, AZ', 'Seattle, WA', 'Denver, CO'
+      ];
+
+      let totalPieces = 0;
+      let totalWeight = 0;
+      const targetPieces = loadsheet.pieces || Math.floor(Math.random() * 200) + 50;
+      const targetWeight = loadsheet.weight || Math.floor(Math.random() * 15000) + 5000;
+
+      for (let i = 0; i < mockShipmentCount; i++) {
+        const piecesForThis = Math.floor(targetPieces / mockShipmentCount) + Math.floor(Math.random() * 10);
+        const weightForThis = Math.floor(targetWeight / mockShipmentCount) + Math.floor(Math.random() * 500);
+        const destIndex = Math.floor(Math.random() * destinations.length);
+        const isHazmat = Math.random() < 0.15; // 15% chance of hazmat
+
+        shipments.push({
+          id: i + 1,
+          proNumber: `PRO${String(100000000 + Math.floor(Math.random() * 900000000)).substring(0, 9)}`,
+          manifestNumber: loadsheet.manifestNumber,
+          destTerminal: destinations[destIndex],
+          destTerminalSub: null,
+          consigneeName: companies[Math.floor(Math.random() * companies.length)],
+          consigneeCity: cities[destIndex],
+          pieces: piecesForThis,
+          weight: weightForThis,
+          isHazmat,
+          hazmatClass: isHazmat ? ['1.4', '2.1', '3', '4.1', '8', '9'][Math.floor(Math.random() * 6)] : null,
+          sortOrder: i
+        });
+
+        totalPieces += piecesForThis;
+        totalWeight += weightForThis;
+      }
+    }
+
+    // Calculate totals
+    const totalPieces = shipments.reduce((sum: number, item: any) => sum + (item.pieces || 0), 0);
+    const totalWeight = shipments.reduce((sum: number, item: any) => sum + (item.weight || 0), 0);
+    const hazmatCount = shipments.filter((item: any) => item.isHazmat).length;
+
+    res.json({
+      loadsheetId,
+      manifestNumber: loadsheet.manifestNumber,
+      shipments,
+      totalPieces,
+      totalWeight,
+      hazmatCount
+    });
+  } catch (error) {
+    console.error('Error fetching loadsheet shipments:', error);
+    res.status(500).json({ message: 'Failed to fetch loadsheet shipments' });
   }
 };

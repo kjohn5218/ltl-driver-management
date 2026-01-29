@@ -1,9 +1,8 @@
-import React, { useState } from 'react';
+import React from 'react';
 import { useAuth } from '../../contexts/AuthContext';
 import { useTheme } from '../../contexts/ThemeContext';
-import { Menu, LogOut, Building2, Sun, Moon } from 'lucide-react';
+import { Menu, LogOut, Sun, Moon } from 'lucide-react';
 import { useNavigate } from 'react-router-dom';
-import { CompanyProfileModal } from '../CompanyProfileModal';
 
 interface HeaderProps {
   onMenuClick: () => void;
@@ -13,7 +12,6 @@ export const Header: React.FC<HeaderProps> = ({ onMenuClick }) => {
   const { user, logout } = useAuth();
   const { toggleTheme, isDark } = useTheme();
   const navigate = useNavigate();
-  const [isCompanyProfileOpen, setIsCompanyProfileOpen] = useState(false);
 
   const handleLogout = () => {
     logout();
@@ -42,15 +40,6 @@ export const Header: React.FC<HeaderProps> = ({ onMenuClick }) => {
           </div>
 
           <div className="flex items-center space-x-4">
-            <button
-              onClick={() => setIsCompanyProfileOpen(true)}
-              className="hidden md:inline-flex items-center px-3 py-2 text-sm font-medium text-white/90 hover:text-white hover:bg-blue-500 rounded-md transition-colors"
-              title="Company Profile"
-            >
-              <Building2 className="h-4 w-4 mr-2" />
-              Company Profile
-            </button>
-
             <div className="flex items-center text-sm text-white">
               <span className="font-medium">{user?.name}</span>
             </div>
@@ -74,11 +63,6 @@ export const Header: React.FC<HeaderProps> = ({ onMenuClick }) => {
           </div>
         </div>
       </header>
-      
-      <CompanyProfileModal
-        isOpen={isCompanyProfileOpen}
-        onClose={() => setIsCompanyProfileOpen(false)}
-      />
     </>
   );
 };

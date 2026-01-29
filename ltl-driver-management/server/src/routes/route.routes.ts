@@ -1,12 +1,16 @@
 import { Router } from 'express';
-import { body, query } from 'express-validator';
-import { 
-  getRoutes, 
-  getRouteById, 
-  createRoute, 
-  updateRoute, 
+import { body, query, param } from 'express-validator';
+import {
+  getRoutes,
+  getRouteById,
+  createRoute,
+  updateRoute,
   deleteRoute,
-  getRouteCarriers
+  getRouteCarriers,
+  getRouteLegs,
+  getRouteLegByOrigin,
+  checkLegDispatchEligibility,
+  getDispatchableLoadsheets
 } from '../controllers/route.controller';
 import { authenticate, authorize } from '../middleware/auth.middleware';
 import { validateRequest } from '../middleware/validation.middleware';
@@ -29,6 +33,46 @@ router.get(
   ],
   validateRequest,
   getRoutes
+);
+
+// Multi-leg route endpoints (must come before /:id to avoid conflicts)
+
+// Get all legs for a route by name
+router.get(
+  '/legs/:name',
+  [param('name').notEmpty().trim()],
+  validateRequest,
+  getRouteLegs
+);
+
+// Get specific leg by route name and origin
+router.get(
+  '/legs/:name/:origin',
+  [
+    param('name').notEmpty().trim(),
+    param('origin').notEmpty().trim()
+  ],
+  validateRequest,
+  getRouteLegByOrigin
+);
+
+// Check if a leg is eligible for dispatch
+router.get(
+  '/dispatch-eligibility',
+  [
+    query('routeName').notEmpty().trim(),
+    query('originTerminalCode').notEmpty().trim()
+  ],
+  validateRequest,
+  checkLegDispatchEligibility
+);
+
+// Get loadsheets that are eligible for dispatch (filters multi-leg)
+router.get(
+  '/dispatchable-loadsheets',
+  [query('limit').optional().isInt({ min: 1, max: 500 })],
+  validateRequest,
+  getDispatchableLoadsheets
 );
 
 // Get specific route

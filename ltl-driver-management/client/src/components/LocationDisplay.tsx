@@ -146,7 +146,7 @@ export const RouteDetails: React.FC<RouteDetailsProps> = ({
   if (compact) {
     return (
       <div>
-        <label className="block text-sm font-medium text-gray-700 mb-1">Route</label>
+        <label className="block text-sm font-medium text-gray-700 mb-1">Linehaul Profile</label>
         <div className="text-sm text-gray-900">
           {route.name && <p className="font-medium">{route.name}</p>}
           <div className="flex items-center text-gray-600">
@@ -180,7 +180,7 @@ export const RouteDetails: React.FC<RouteDetailsProps> = ({
     <div className="space-y-4">
       {route.name && (
         <div>
-          <label className="block text-sm font-medium text-gray-700 mb-1">Route Name</label>
+          <label className="block text-sm font-medium text-gray-700 mb-1">Linehaul Name</label>
           <p className="text-lg font-semibold text-gray-900">{route.name}</p>
         </div>
       )}

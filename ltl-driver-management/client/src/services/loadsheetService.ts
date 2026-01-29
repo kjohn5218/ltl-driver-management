@@ -6,8 +6,19 @@ import {
   CreateLoadsheetRequest,
   LoadsheetStatus,
   CheckDuplicateLoadsheetsRequest,
-  CheckDuplicateLoadsheetsResponse
+  CheckDuplicateLoadsheetsResponse,
+  ManifestFreightItem
 } from '../types';
+
+// Response type for loadsheet shipments
+export interface LoadsheetShipmentsResponse {
+  loadsheetId: number;
+  manifestNumber: string;
+  shipments: ManifestFreightItem[];
+  totalPieces: number;
+  totalWeight: number;
+  hazmatCount: number;
+}
 
 export const loadsheetService = {
   // Get all loadsheets with filtering
@@ -74,6 +85,12 @@ export const loadsheetService = {
   // Check for duplicate loadsheets (same trailer, location, within 4 days, not DISPATCHED or CLOSED)
   checkDuplicateLoadsheets: async (data: CheckDuplicateLoadsheetsRequest): Promise<CheckDuplicateLoadsheetsResponse> => {
     const response = await api.post('/loadsheets/check-duplicates', data);
+    return response.data;
+  },
+
+  // Get shipments loaded to a loadsheet
+  getLoadsheetShipments: async (loadsheetId: number): Promise<LoadsheetShipmentsResponse> => {
+    const response = await api.get(`/loadsheets/${loadsheetId}/shipments`);
     return response.data;
   }
 };

@@ -944,6 +944,263 @@ export const getCarriersWithRates = async (req: Request, res: Response): Promise
   }
 };
 
+// ==================== DEFAULT RATES ====================
+
+// Get default rate card with all accessorial rates
+export const getDefaultRates = async (_req: Request, res: Response): Promise<void> => {
+  try {
+    const today = new Date();
+
+    // Find the active default rate card
+    let defaultRateCard = await prisma.rateCard.findFirst({
+      where: {
+        rateType: 'DEFAULT',
+        active: true,
+        effectiveDate: { lte: today },
+        OR: [
+          { expirationDate: null },
+          { expirationDate: { gte: today } }
+        ]
+      },
+      include: {
+        accessorialRates: {
+          orderBy: { accessorialType: 'asc' }
+        }
+      },
+      orderBy: { priority: 'asc' }
+    });
+
+    // Get system fuel surcharge rate
+    const systemSettings = await prisma.systemSettings.findFirst({
+      orderBy: { id: 'desc' }
+    });
+
+    // If no default rate card exists, return empty with system FSC
+    if (!defaultRateCard) {
+      res.json({
+        defaultRates: null,
+        systemFuelSurcharge: systemSettings?.fuelSurchargeRate || 0,
+        fuelSurchargeSource: systemSettings?.fuelSurchargeSource || 'manual'
+      });
+      return;
+    }
+
+    // Build a structured response with default rates
+    const accessorialMap: Record<string, any> = {};
+    for (const ar of defaultRateCard.accessorialRates) {
+      accessorialMap[ar.accessorialType] = {
+        id: ar.id,
+        rateAmount: ar.rateAmount,
+        rateMethod: ar.rateMethod,
+        minimumCharge: ar.minimumCharge,
+        maximumCharge: ar.maximumCharge,
+        description: ar.description
+      };
+    }
+
+    res.json({
+      defaultRates: {
+        id: defaultRateCard.id,
+        baseRate: defaultRateCard.rateAmount,
+        rateMethod: defaultRateCard.rateMethod,
+        minimumAmount: defaultRateCard.minimumAmount,
+        maximumAmount: defaultRateCard.maximumAmount,
+        effectiveDate: defaultRateCard.effectiveDate,
+        expirationDate: defaultRateCard.expirationDate,
+        priority: defaultRateCard.priority,
+        notes: defaultRateCard.notes,
+        // Accessorial rates mapped by type
+        dropHook: accessorialMap['DROP_HOOK'] || null,
+        dropHookSingle: accessorialMap['DROP_HOOK_SINGLE'] || null,
+        dropHookDoubleTriple: accessorialMap['DROP_HOOK_DOUBLE_TRIPLE'] || null,
+        chainUp: accessorialMap['CHAIN_UP'] || null,
+        fuelSurcharge: accessorialMap['FUEL_SURCHARGE'] || null,
+        waitTime: accessorialMap['WAIT_TIME'] || null,
+        singleTrailer: accessorialMap['SINGLE_TRAILER'] || null,
+        doubleTrailer: accessorialMap['DOUBLE_TRAILER'] || null,
+        tripleTrailer: accessorialMap['TRIPLE_TRAILER'] || null,
+        cutPay: accessorialMap['CUT_PAY'] || null,
+        cutPaySingleMiles: accessorialMap['CUT_PAY_SINGLE_MILES'] || null,
+        cutPayDoubleMiles: accessorialMap['CUT_PAY_DOUBLE_MILES'] || null,
+        cutPayTripleMiles: accessorialMap['CUT_PAY_TRIPLE_MILES'] || null,
+        layover: accessorialMap['LAYOVER'] || null,
+        detention: accessorialMap['DETENTION'] || null,
+        breakdown: accessorialMap['BREAKDOWN'] || null,
+        helper: accessorialMap['HELPER'] || null,
+        hazmat: accessorialMap['HAZMAT'] || null,
+        teamDriver: accessorialMap['TEAM_DRIVER'] || null,
+        stopCharge: accessorialMap['STOP_CHARGE'] || null
+      },
+      systemFuelSurcharge: systemSettings?.fuelSurchargeRate || 0,
+      fuelSurchargeSource: systemSettings?.fuelSurchargeSource || 'manual'
+    });
+  } catch (error) {
+    console.error('Error fetching default rates:', error);
+    res.status(500).json({ message: 'Failed to fetch default rates' });
+  }
+};
+
+// Update or create default rate card with accessorial rates
+export const updateDefaultRates = async (req: Request, res: Response): Promise<void> => {
+  try {
+    const {
+      baseRate,
+      rateMethod,
+      minimumAmount,
+      maximumAmount,
+      effectiveDate,
+      expirationDate,
+      notes,
+      // Accessorial rates
+      dropHook,
+      dropHookSingle,
+      dropHookDoubleTriple,
+      chainUp,
+      fuelSurcharge,
+      waitTime,
+      singleTrailer,
+      doubleTrailer,
+      tripleTrailer,
+      cutPay,
+      cutPaySingleMiles,
+      cutPayDoubleMiles,
+      cutPayTripleMiles,
+      layover,
+      detention,
+      breakdown,
+      helper,
+      hazmat,
+      teamDriver,
+      stopCharge
+    } = req.body;
+
+    const today = new Date();
+
+    // Find existing active default rate card
+    let defaultRateCard = await prisma.rateCard.findFirst({
+      where: {
+        rateType: 'DEFAULT',
+        active: true
+      },
+      orderBy: { priority: 'asc' }
+    });
+
+    // Create or update the default rate card
+    if (defaultRateCard) {
+      defaultRateCard = await prisma.rateCard.update({
+        where: { id: defaultRateCard.id },
+        data: {
+          rateAmount: baseRate !== undefined ? new Prisma.Decimal(baseRate) : undefined,
+          rateMethod: rateMethod || undefined,
+          minimumAmount: minimumAmount !== undefined ? new Prisma.Decimal(minimumAmount) : undefined,
+          maximumAmount: maximumAmount !== undefined ? new Prisma.Decimal(maximumAmount) : undefined,
+          effectiveDate: effectiveDate ? new Date(effectiveDate) : undefined,
+          expirationDate: expirationDate ? new Date(expirationDate) : null,
+          notes: notes !== undefined ? notes : undefined
+        }
+      });
+    } else {
+      // Create new default rate card
+      defaultRateCard = await prisma.rateCard.create({
+        data: {
+          rateType: 'DEFAULT',
+          rateMethod: rateMethod || 'PER_MILE',
+          rateAmount: new Prisma.Decimal(baseRate || 0),
+          minimumAmount: minimumAmount ? new Prisma.Decimal(minimumAmount) : null,
+          maximumAmount: maximumAmount ? new Prisma.Decimal(maximumAmount) : null,
+          effectiveDate: effectiveDate ? new Date(effectiveDate) : today,
+          expirationDate: expirationDate ? new Date(expirationDate) : null,
+          priority: 10, // Lowest priority
+          notes: notes || 'Default rate card',
+          active: true
+        }
+      });
+    }
+
+    // Helper function to upsert accessorial rate
+    const upsertAccessorial = async (
+      type: AccessorialType,
+      data: { rateAmount?: number; rateMethod?: string; minimumCharge?: number; maximumCharge?: number; description?: string } | null
+    ) => {
+      if (!data || data.rateAmount === undefined) return;
+
+      const existing = await prisma.accessorialRate.findFirst({
+        where: {
+          rateCardId: defaultRateCard!.id,
+          accessorialType: type
+        }
+      });
+
+      if (existing) {
+        await prisma.accessorialRate.update({
+          where: { id: existing.id },
+          data: {
+            rateAmount: new Prisma.Decimal(data.rateAmount),
+            rateMethod: (data.rateMethod as RateMethod) || 'FLAT_RATE',
+            minimumCharge: data.minimumCharge ? new Prisma.Decimal(data.minimumCharge) : null,
+            maximumCharge: data.maximumCharge ? new Prisma.Decimal(data.maximumCharge) : null,
+            description: data.description || null
+          }
+        });
+      } else {
+        await prisma.accessorialRate.create({
+          data: {
+            rateCardId: defaultRateCard!.id,
+            accessorialType: type,
+            rateAmount: new Prisma.Decimal(data.rateAmount),
+            rateMethod: (data.rateMethod as RateMethod) || 'FLAT_RATE',
+            minimumCharge: data.minimumCharge ? new Prisma.Decimal(data.minimumCharge) : null,
+            maximumCharge: data.maximumCharge ? new Prisma.Decimal(data.maximumCharge) : null,
+            description: data.description || null
+          }
+        });
+      }
+    };
+
+    // Upsert all accessorial rates
+    await Promise.all([
+      upsertAccessorial('DROP_HOOK', dropHook),
+      upsertAccessorial('DROP_HOOK_SINGLE', dropHookSingle),
+      upsertAccessorial('DROP_HOOK_DOUBLE_TRIPLE', dropHookDoubleTriple),
+      upsertAccessorial('CHAIN_UP', chainUp),
+      upsertAccessorial('FUEL_SURCHARGE', fuelSurcharge),
+      upsertAccessorial('WAIT_TIME', waitTime),
+      upsertAccessorial('SINGLE_TRAILER', singleTrailer),
+      upsertAccessorial('DOUBLE_TRAILER', doubleTrailer),
+      upsertAccessorial('TRIPLE_TRAILER', tripleTrailer),
+      upsertAccessorial('CUT_PAY', cutPay),
+      upsertAccessorial('CUT_PAY_SINGLE_MILES', cutPaySingleMiles),
+      upsertAccessorial('CUT_PAY_DOUBLE_MILES', cutPayDoubleMiles),
+      upsertAccessorial('CUT_PAY_TRIPLE_MILES', cutPayTripleMiles),
+      upsertAccessorial('LAYOVER', layover),
+      upsertAccessorial('DETENTION', detention),
+      upsertAccessorial('BREAKDOWN', breakdown),
+      upsertAccessorial('HELPER', helper),
+      upsertAccessorial('HAZMAT', hazmat),
+      upsertAccessorial('TEAM_DRIVER', teamDriver),
+      upsertAccessorial('STOP_CHARGE', stopCharge)
+    ]);
+
+    // Fetch and return the updated default rates
+    const updatedCard = await prisma.rateCard.findUnique({
+      where: { id: defaultRateCard.id },
+      include: {
+        accessorialRates: {
+          orderBy: { accessorialType: 'asc' }
+        }
+      }
+    });
+
+    res.json({
+      message: 'Default rates updated successfully',
+      rateCard: updatedCard
+    });
+  } catch (error) {
+    console.error('Error updating default rates:', error);
+    res.status(500).json({ message: 'Failed to update default rates' });
+  }
+};
+
 // Get linehaul profiles with their rate cards for the Pay Rules UI
 export const getProfilesWithRates = async (req: Request, res: Response): Promise<void> => {
   try {

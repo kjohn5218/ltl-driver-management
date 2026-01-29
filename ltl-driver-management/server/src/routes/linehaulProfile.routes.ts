@@ -10,7 +10,11 @@ import {
   getLinehaulProfilesList,
   getProfilesByTerminal,
   toggleProfileStatus,
-  duplicateProfile
+  duplicateProfile,
+  getOkayToLoadTerminals,
+  updateOkayToLoadTerminals,
+  getOkayToDispatchTerminals,
+  updateOkayToDispatchTerminals
 } from '../controllers/linehaulProfile.controller';
 import { authenticate, authorize } from '../middleware/auth.middleware';
 import { validateRequest } from '../middleware/validation.middleware';
@@ -146,6 +150,48 @@ router.post(
   ],
   validateRequest,
   duplicateProfile
+);
+
+// Get okay-to-load terminals for a profile
+router.get(
+  '/:id/okay-to-load',
+  [param('id').isInt({ min: 1 })],
+  validateRequest,
+  getOkayToLoadTerminals
+);
+
+// Update okay-to-load terminals for a profile (Admin/Dispatcher only)
+router.put(
+  '/:id/okay-to-load',
+  authorize(UserRole.ADMIN, UserRole.DISPATCHER),
+  [
+    param('id').isInt({ min: 1 }),
+    body('terminalIds').isArray(),
+    body('terminalIds.*').isInt({ min: 1 })
+  ],
+  validateRequest,
+  updateOkayToLoadTerminals
+);
+
+// Get okay-to-dispatch terminals for a profile
+router.get(
+  '/:id/okay-to-dispatch',
+  [param('id').isInt({ min: 1 })],
+  validateRequest,
+  getOkayToDispatchTerminals
+);
+
+// Update okay-to-dispatch terminals for a profile (Admin/Dispatcher only)
+router.put(
+  '/:id/okay-to-dispatch',
+  authorize(UserRole.ADMIN, UserRole.DISPATCHER),
+  [
+    param('id').isInt({ min: 1 }),
+    body('terminalIds').isArray(),
+    body('terminalIds.*').isInt({ min: 1 })
+  ],
+  validateRequest,
+  updateOkayToDispatchTerminals
 );
 
 export default router;

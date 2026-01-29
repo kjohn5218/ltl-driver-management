@@ -1,6 +1,7 @@
 import { Request, Response } from 'express';
 import { prisma } from '../index';
 import { Prisma, EquipmentStatus, TruckType, TrailerType, DollyType } from '@prisma/client';
+import { fleetMockService } from '../services/fleet.mock.service';
 
 // ==================== TRUCKS ====================
 
@@ -64,6 +65,50 @@ export const getTrucks = async (req: Request, res: Response): Promise<void> => {
       }),
       prisma.equipmentTruck.count({ where })
     ]);
+
+    // If no trucks in database, fallback to mock fleet data
+    if (total === 0 && !search && !status && !truckType && !terminalId) {
+      console.log('No trucks in database, using mock fleet data');
+      const mockData = await fleetMockService.getTrucks({
+        search: search as string,
+        status: status as EquipmentStatus,
+        type: truckType as TruckType,
+        limit: limitNum,
+        page: pageNum
+      });
+
+      res.json({
+        trucks: mockData.trucks.map(t => ({
+          id: t.id,
+          unitNumber: t.unitNumber,
+          truckType: t.truckType,
+          make: t.make,
+          model: t.model,
+          year: t.year,
+          vin: t.vin,
+          status: t.status,
+          licensePlate: t.licensePlate,
+          licensePlateState: t.licensePlateState,
+          fuelType: t.fuelType,
+          maintenanceStatus: t.maintenanceStatus,
+          maintenanceNotes: t.maintenanceNotes,
+          owned: t.owned,
+          externalFleetId: t.externalFleetId,
+          currentTerminal: null,
+          assignedDriver: null,
+          createdAt: new Date(),
+          updatedAt: new Date()
+        })),
+        pagination: {
+          page: pageNum,
+          limit: limitNum,
+          total: mockData.total,
+          totalPages: Math.ceil(mockData.total / limitNum)
+        },
+        source: 'fleet_mock'
+      });
+      return;
+    }
 
     res.json({
       trucks,
@@ -392,6 +437,48 @@ export const getTrailers = async (req: Request, res: Response): Promise<void> =>
       prisma.equipmentTrailer.count({ where })
     ]);
 
+    // If no trailers in database, fallback to mock fleet data
+    if (total === 0 && !search && !status && !trailerType && !terminalId) {
+      console.log('No trailers in database, using mock fleet data');
+      const mockData = await fleetMockService.getTrailers({
+        search: search as string,
+        status: status as EquipmentStatus,
+        type: trailerType as TrailerType,
+        limit: limitNum,
+        page: pageNum
+      });
+
+      res.json({
+        trailers: mockData.trailers.map(t => ({
+          id: t.id,
+          unitNumber: t.unitNumber,
+          trailerType: t.trailerType,
+          lengthFeet: t.lengthFeet,
+          capacityWeight: t.capacityWeight,
+          capacityCube: t.capacityCube,
+          status: t.status,
+          currentLocation: t.currentLocation,
+          licensePlate: t.licensePlate,
+          licensePlateState: t.licensePlateState,
+          maintenanceStatus: t.maintenanceStatus,
+          maintenanceNotes: t.maintenanceNotes,
+          owned: t.owned,
+          externalFleetId: t.externalFleetId,
+          currentTerminal: null,
+          createdAt: new Date(),
+          updatedAt: new Date()
+        })),
+        pagination: {
+          page: pageNum,
+          limit: limitNum,
+          total: mockData.total,
+          totalPages: Math.ceil(mockData.total / limitNum)
+        },
+        source: 'fleet_mock' // Indicates data comes from mock fleet service
+      });
+      return;
+    }
+
     res.json({
       trailers,
       pagination: {
@@ -683,6 +770,41 @@ export const getDollies = async (req: Request, res: Response): Promise<void> => 
       }),
       prisma.equipmentDolly.count({ where })
     ]);
+
+    // If no dollies in database, fallback to mock fleet data
+    if (total === 0 && !search && !status && !dollyType && !terminalId) {
+      console.log('No dollies in database, using mock fleet data');
+      const mockData = await fleetMockService.getDollies({
+        search: search as string,
+        status: status as EquipmentStatus,
+        type: dollyType as DollyType,
+        limit: limitNum,
+        page: pageNum
+      });
+
+      res.json({
+        dollies: mockData.dollies.map(d => ({
+          id: d.id,
+          unitNumber: d.unitNumber,
+          dollyType: d.dollyType,
+          status: d.status,
+          maintenanceStatus: d.maintenanceStatus,
+          maintenanceNotes: d.maintenanceNotes,
+          externalFleetId: d.externalFleetId,
+          currentTerminal: null,
+          createdAt: new Date(),
+          updatedAt: new Date()
+        })),
+        pagination: {
+          page: pageNum,
+          limit: limitNum,
+          total: mockData.total,
+          totalPages: Math.ceil(mockData.total / limitNum)
+        },
+        source: 'fleet_mock'
+      });
+      return;
+    }
 
     res.json({
       dollies,

@@ -26,6 +26,10 @@ const statusConfig: Record<TripStatus, { label: string; className: string }> = {
     label: 'Arrived',
     className: 'bg-teal-100 text-teal-800'
   },
+  UNLOADING: {
+    label: 'Unloading',
+    className: 'bg-orange-100 text-orange-800'
+  },
   COMPLETED: {
     label: 'Completed',
     className: 'bg-green-100 text-green-800'

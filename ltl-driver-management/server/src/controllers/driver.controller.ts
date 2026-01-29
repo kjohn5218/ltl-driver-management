@@ -37,7 +37,7 @@ export const getDrivers = async (req: Request, res: Response): Promise<Response>
     const skip = (pageNum - 1) * limitNum;
     const take = limitNum;
 
-    // Get drivers with carrier information
+    // Get drivers with carrier and location information
     const [drivers, total] = await Promise.all([
       prisma.carrierDriver.findMany({
         where,
@@ -47,6 +47,15 @@ export const getDrivers = async (req: Request, res: Response): Promise<Response>
               id: true,
               name: true,
               status: true
+            }
+          },
+          location: {
+            select: {
+              id: true,
+              code: true,
+              name: true,
+              city: true,
+              state: true
             }
           }
         },
@@ -109,6 +118,15 @@ export const getDriverById = async (req: Request, res: Response): Promise<Respon
             name: true,
             status: true
           }
+        },
+        location: {
+          select: {
+            id: true,
+            code: true,
+            name: true,
+            city: true,
+            state: true
+          }
         }
       }
     });
@@ -127,7 +145,7 @@ export const getDriverById = async (req: Request, res: Response): Promise<Respon
 // Create new driver
 export const createDriver = async (req: Request, res: Response): Promise<Response> => {
   try {
-    const { carrierId, name, phoneNumber, email, licenseNumber, number } = req.body;
+    const { carrierId, name, phoneNumber, email, licenseNumber, number, locationId, hazmatEndorsement } = req.body;
 
     // Verify carrier exists
     const carrier = await prisma.carrier.findUnique({
@@ -138,6 +156,17 @@ export const createDriver = async (req: Request, res: Response): Promise<Respons
       return res.status(404).json({ error: 'Carrier not found' });
     }
 
+    // Verify location exists if provided
+    if (locationId) {
+      const location = await prisma.location.findUnique({
+        where: { id: locationId }
+      });
+
+      if (!location) {
+        return res.status(404).json({ error: 'Location not found' });
+      }
+    }
+
     // Create driver with extended properties
     const driver = await prisma.carrierDriver.create({
       data: {
@@ -146,7 +175,9 @@ export const createDriver = async (req: Request, res: Response): Promise<Respons
         number,
         phoneNumber,
         email,
-        licenseNumber
+        licenseNumber,
+        hazmatEndorsement: hazmatEndorsement ?? false,
+        locationId: locationId || null
       },
       include: {
         carrier: {
@@ -154,6 +185,15 @@ export const createDriver = async (req: Request, res: Response): Promise<Respons
             id: true,
             name: true,
             status: true
+          }
+        },
+        location: {
+          select: {
+            id: true,
+            code: true,
+            name: true,
+            city: true,
+            state: true
           }
         }
       }
@@ -170,7 +210,7 @@ export const createDriver = async (req: Request, res: Response): Promise<Respons
 export const updateDriver = async (req: Request, res: Response): Promise<Response> => {
   try {
     const { id } = req.params;
-    const { name, phoneNumber, email, licenseNumber, active, carrierId, number } = req.body;
+    const { name, phoneNumber, email, licenseNumber, active, carrierId, number, locationId, hazmatEndorsement } = req.body;
 
     // Verify driver exists
     const existingDriver = await prisma.carrierDriver.findUnique({
@@ -192,6 +232,17 @@ export const updateDriver = async (req: Request, res: Response): Promise<Respons
       }
     }
 
+    // If changing location, verify new location exists
+    if (locationId !== undefined && locationId !== null && locationId !== existingDriver.locationId) {
+      const location = await prisma.location.findUnique({
+        where: { id: locationId }
+      });
+
+      if (!location) {
+        return res.status(404).json({ error: 'Location not found' });
+      }
+    }
+
     // Update driver
     const driver = await prisma.carrierDriver.update({
       where: { id: parseInt(id) },
@@ -202,7 +253,9 @@ export const updateDriver = async (req: Request, res: Response): Promise<Respons
         ...(licenseNumber !== undefined && { licenseNumber }),
         ...(active !== undefined && { active }),
         ...(carrierId !== undefined && { carrierId }),
-        ...(number !== undefined && { number })
+        ...(number !== undefined && { number }),
+        ...(locationId !== undefined && { locationId: locationId || null }),
+        ...(hazmatEndorsement !== undefined && { hazmatEndorsement })
       },
       include: {
         carrier: {
@@ -210,6 +263,15 @@ export const updateDriver = async (req: Request, res: Response): Promise<Respons
             id: true,
             name: true,
             status: true
+          }
+        },
+        location: {
+          select: {
+            id: true,
+            code: true,
+            name: true,
+            city: true,
+            state: true
           }
         }
       }
