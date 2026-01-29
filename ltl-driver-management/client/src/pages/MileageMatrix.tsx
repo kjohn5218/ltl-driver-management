@@ -19,7 +19,8 @@ import {
   Upload,
   Download,
   Search,
-  Loader2
+  Loader2,
+  Zap
 } from 'lucide-react';
 
 export const MileageMatrix: React.FC = () => {
@@ -44,8 +45,14 @@ export const MileageMatrix: React.FC = () => {
   const [isEditModalOpen, setIsEditModalOpen] = useState(false);
   const [isDeleteModalOpen, setIsDeleteModalOpen] = useState(false);
   const [isImportModalOpen, setIsImportModalOpen] = useState(false);
+  const [isAutoPopulateModalOpen, setIsAutoPopulateModalOpen] = useState(false);
   const [selectedEntry, setSelectedEntry] = useState<MileageEntry | null>(null);
   const [formLoading, setFormLoading] = useState(false);
+
+  // Auto-populate states
+  const [autoPopulateLoading, setAutoPopulateLoading] = useState(false);
+  const [roadFactor, setRoadFactor] = useState('1.3');
+  const [overwriteExisting, setOverwriteExisting] = useState(false);
 
   // Form states
   const [formData, setFormData] = useState({
@@ -209,6 +216,32 @@ export const MileageMatrix: React.FC = () => {
       toast.error(error.response?.data?.message || 'Failed to import mileage data');
     } finally {
       setImportLoading(false);
+    }
+  };
+
+  const handleAutoPopulate = async () => {
+    setAutoPopulateLoading(true);
+    try {
+      const result = await mileageMatrixService.autoPopulate({
+        roadFactor: parseFloat(roadFactor),
+        overwriteExisting
+      });
+
+      toast.success(
+        `Auto-populate complete: ${result.created} created, ${result.updated} updated` +
+        (result.skipped > 0 ? `, ${result.skipped} skipped` : '')
+      );
+
+      if (result.errors && result.errors.length > 0) {
+        console.warn('Auto-populate errors:', result.errors);
+      }
+
+      setIsAutoPopulateModalOpen(false);
+      fetchEntries();
+    } catch (error: any) {
+      toast.error(error.response?.data?.message || 'Failed to auto-populate mileage data');
+    } finally {
+      setAutoPopulateLoading(false);
     }
   };
 
@@ -390,6 +423,14 @@ export const MileageMatrix: React.FC = () => {
             >
               <Upload className="h-4 w-4 mr-1" />
               Import
+            </button>
+            <button
+              onClick={() => setIsAutoPopulateModalOpen(true)}
+              className="inline-flex items-center px-3 py-2 border border-transparent rounded-md text-sm font-medium text-white bg-green-600 hover:bg-green-700"
+              title="Calculate mileage from location GPS coordinates"
+            >
+              <Zap className="h-4 w-4 mr-1" />
+              Auto-Populate
             </button>
             <button
               onClick={() => {
@@ -599,6 +640,79 @@ export const MileageMatrix: React.FC = () => {
             >
               {importLoading && <Loader2 className="h-4 w-4 mr-2 animate-spin" />}
               Import
+            </button>
+          </div>
+        </div>
+      </Modal>
+
+      {/* Auto-Populate Modal */}
+      <Modal
+        isOpen={isAutoPopulateModalOpen}
+        onClose={() => {
+          setIsAutoPopulateModalOpen(false);
+          setRoadFactor('1.3');
+          setOverwriteExisting(false);
+        }}
+        title="Auto-Populate from Locations"
+      >
+        <div className="space-y-4">
+          <p className="text-sm text-gray-600 dark:text-gray-400">
+            Automatically calculate mileage between all terminal locations using their GPS coordinates.
+            This uses the Haversine formula with a road factor to approximate driving distance.
+          </p>
+          <div className="bg-blue-50 dark:bg-blue-900/30 border border-blue-200 dark:border-blue-800 rounded-md p-3">
+            <p className="text-sm text-blue-700 dark:text-blue-300">
+              <strong>Note:</strong> Only locations marked as Physical or Virtual terminals with GPS coordinates will be used.
+            </p>
+          </div>
+          <div>
+            <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">
+              Road Factor
+            </label>
+            <input
+              type="number"
+              step="0.1"
+              min="1.0"
+              max="2.0"
+              value={roadFactor}
+              onChange={(e) => setRoadFactor(e.target.value)}
+              className="w-full px-3 py-2 border border-gray-300 dark:border-gray-600 rounded-md bg-white dark:bg-gray-700 text-gray-900 dark:text-gray-100 focus:ring-2 focus:ring-primary-500 focus:border-transparent"
+            />
+            <p className="mt-1 text-xs text-gray-500 dark:text-gray-400">
+              Multiplier applied to straight-line distance (1.3 = 30% longer roads). Typical values: 1.2-1.4
+            </p>
+          </div>
+          <div className="flex items-center">
+            <input
+              type="checkbox"
+              id="overwriteExisting"
+              checked={overwriteExisting}
+              onChange={(e) => setOverwriteExisting(e.target.checked)}
+              className="h-4 w-4 text-primary-600 focus:ring-primary-500 border-gray-300 rounded"
+            />
+            <label htmlFor="overwriteExisting" className="ml-2 block text-sm text-gray-700 dark:text-gray-300">
+              Overwrite existing entries
+            </label>
+          </div>
+          <div className="flex justify-end space-x-3 pt-4">
+            <button
+              onClick={() => {
+                setIsAutoPopulateModalOpen(false);
+                setRoadFactor('1.3');
+                setOverwriteExisting(false);
+              }}
+              className="px-4 py-2 text-sm font-medium text-gray-700 dark:text-gray-300 bg-white dark:bg-gray-700 border border-gray-300 dark:border-gray-600 rounded-md hover:bg-gray-50 dark:hover:bg-gray-600"
+            >
+              Cancel
+            </button>
+            <button
+              onClick={handleAutoPopulate}
+              disabled={autoPopulateLoading}
+              className="inline-flex items-center px-4 py-2 border border-transparent text-sm font-medium rounded-md text-white bg-green-600 hover:bg-green-700 disabled:opacity-50"
+            >
+              {autoPopulateLoading && <Loader2 className="h-4 w-4 mr-2 animate-spin" />}
+              <Zap className="h-4 w-4 mr-1" />
+              Auto-Populate
             </button>
           </div>
         </div>

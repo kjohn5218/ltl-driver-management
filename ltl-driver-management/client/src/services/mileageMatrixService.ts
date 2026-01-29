@@ -44,6 +44,16 @@ export interface BulkUpsertResult {
   errors?: string[];
 }
 
+export interface AutoPopulateResult {
+  message: string;
+  locationsProcessed: number;
+  pairsProcessed: number;
+  created: number;
+  updated: number;
+  skipped: number;
+  errors?: string[];
+}
+
 export const mileageMatrixService = {
   // Get all entries with pagination and filtering
   getEntries: async (filters?: MileageFilters): Promise<MileageResponse> => {
@@ -125,6 +135,18 @@ export const mileageMatrixService = {
   // Get all unique terminal codes used in the matrix
   getTerminalCodes: async (): Promise<string[]> => {
     const response = await api.get('/mileage-matrix/terminal-codes');
+    return response.data;
+  },
+
+  // Auto-populate mileage matrix from location GPS coordinates
+  autoPopulate: async (options?: {
+    roadFactor?: number;
+    overwriteExisting?: boolean;
+  }): Promise<AutoPopulateResult> => {
+    const response = await api.post('/mileage-matrix/auto-populate', {
+      roadFactor: options?.roadFactor || 1.3,
+      overwriteExisting: options?.overwriteExisting || false
+    });
     return response.data;
   }
 };

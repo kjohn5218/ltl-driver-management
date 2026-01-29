@@ -370,3 +370,146 @@ export const getTerminalCodes = async (_req: Request, res: Response) => {
     return res.status(500).json({ message: 'Failed to fetch terminal codes' });
   }
 };
+
+// Haversine formula to calculate distance between two GPS coordinates
+const calculateHaversineDistance = (
+  lat1: number,
+  lon1: number,
+  lat2: number,
+  lon2: number
+): number => {
+  const R = 3959; // Earth's radius in miles
+  const dLat = (lat2 - lat1) * Math.PI / 180;
+  const dLon = (lon2 - lon1) * Math.PI / 180;
+  const a =
+    Math.sin(dLat / 2) * Math.sin(dLat / 2) +
+    Math.cos(lat1 * Math.PI / 180) * Math.cos(lat2 * Math.PI / 180) *
+    Math.sin(dLon / 2) * Math.sin(dLon / 2);
+  const c = 2 * Math.atan2(Math.sqrt(a), Math.sqrt(1 - a));
+  return R * c;
+};
+
+// Auto-populate mileage matrix from location GPS coordinates
+export const autoPopulateFromLocations = async (req: Request, res: Response) => {
+  try {
+    const { roadFactor = 1.3, overwriteExisting = false } = req.body;
+
+    // Get all active locations with GPS coordinates (terminals only)
+    const locations = await prisma.location.findMany({
+      where: {
+        active: true,
+        latitude: { not: null },
+        longitude: { not: null },
+        OR: [
+          { isPhysicalTerminal: true },
+          { isVirtualTerminal: true }
+        ]
+      },
+      select: {
+        code: true,
+        name: true,
+        latitude: true,
+        longitude: true
+      }
+    });
+
+    if (locations.length < 2) {
+      return res.status(400).json({
+        message: 'Need at least 2 locations with GPS coordinates to calculate mileage'
+      });
+    }
+
+    let created = 0;
+    let updated = 0;
+    let skipped = 0;
+    const errors: string[] = [];
+
+    // Calculate distance for each pair of locations
+    for (let i = 0; i < locations.length; i++) {
+      for (let j = 0; j < locations.length; j++) {
+        if (i === j) continue; // Skip same location
+
+        const origin = locations[i];
+        const destination = locations[j];
+
+        if (!origin.latitude || !origin.longitude || !destination.latitude || !destination.longitude) {
+          continue;
+        }
+
+        const originCode = origin.code.toUpperCase();
+        const destinationCode = destination.code.toUpperCase();
+
+        // Calculate straight-line distance and apply road factor
+        const straightLineDistance = calculateHaversineDistance(
+          Number(origin.latitude),
+          Number(origin.longitude),
+          Number(destination.latitude),
+          Number(destination.longitude)
+        );
+
+        // Apply road factor to approximate driving distance
+        const drivingDistance = Math.round(straightLineDistance * roadFactor * 10) / 10;
+
+        try {
+          // Check if entry exists
+          const existing = await prisma.mileageMatrix.findUnique({
+            where: {
+              originCode_destinationCode: {
+                originCode,
+                destinationCode
+              }
+            }
+          });
+
+          if (existing && !overwriteExisting) {
+            skipped++;
+            continue;
+          }
+
+          // Upsert the entry
+          const result = await prisma.mileageMatrix.upsert({
+            where: {
+              originCode_destinationCode: {
+                originCode,
+                destinationCode
+              }
+            },
+            update: {
+              miles: drivingDistance,
+              notes: `Auto-calculated from GPS (factor: ${roadFactor})`,
+              active: true
+            },
+            create: {
+              originCode,
+              destinationCode,
+              miles: drivingDistance,
+              notes: `Auto-calculated from GPS (factor: ${roadFactor})`,
+              active: true
+            }
+          });
+
+          if (existing) {
+            updated++;
+          } else {
+            created++;
+          }
+        } catch (entryError) {
+          errors.push(`Failed to process ${originCode} -> ${destinationCode}`);
+        }
+      }
+    }
+
+    return res.json({
+      message: 'Auto-populate completed',
+      locationsProcessed: locations.length,
+      pairsProcessed: locations.length * (locations.length - 1),
+      created,
+      updated,
+      skipped,
+      errors: errors.length > 0 ? errors : undefined
+    });
+  } catch (error) {
+    console.error('Auto-populate mileage error:', error);
+    return res.status(500).json({ message: 'Failed to auto-populate mileage matrix' });
+  }
+};

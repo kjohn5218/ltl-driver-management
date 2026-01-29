@@ -2,7 +2,8 @@ import React, { useState, useEffect } from 'react';
 import { useQuery, useQueryClient } from '@tanstack/react-query';
 import { api } from '../services/api';
 import { Location } from '../types';
-import { Plus, Search, Edit, Eye, Trash2, MapPin, Clock, Filter, X, ChevronUp, ChevronDown, ChevronsUpDown } from 'lucide-react';
+import { Plus, Search, Edit, Eye, Trash2, MapPin, Clock, Filter, X, ChevronUp, ChevronDown, ChevronsUpDown, ArrowRight } from 'lucide-react';
+import { Link } from 'react-router-dom';
 import { usePersistedFilters } from '../hooks/usePersistedFilters';
 
 export const Locations: React.FC = () => {
@@ -176,7 +177,16 @@ export const Locations: React.FC = () => {
             Manage origin and destination locations for route planning
           </p>
         </div>
-        <div className="mt-4 sm:mt-0 sm:ml-16 sm:flex-none">
+        <div className="mt-4 sm:mt-0 sm:ml-16 sm:flex-none flex space-x-3">
+          <Link
+            to="/mileage-matrix"
+            className="inline-flex items-center justify-center rounded-md border border-gray-300 bg-white px-4 py-2 text-sm font-medium text-gray-700 shadow-sm hover:bg-gray-50 focus:outline-none focus:ring-2 focus:ring-primary-500 focus:ring-offset-2 sm:w-auto"
+          >
+            <MapPin className="h-4 w-4 mr-1" />
+            <ArrowRight className="h-3 w-3 mr-1" />
+            <MapPin className="h-4 w-4 mr-2" />
+            Mileage Matrix
+          </Link>
           <button
             onClick={() => setShowAddModal(true)}
             className="inline-flex items-center justify-center rounded-md border border-transparent bg-primary-600 px-4 py-2 text-sm font-medium text-white shadow-sm hover:bg-primary-700 focus:outline-none focus:ring-2 focus:ring-primary-500 focus:ring-offset-2 sm:w-auto"

@@ -8,7 +8,8 @@ import {
   bulkCreateOrUpdate,
   updateMileageEntry,
   deleteMileageEntry,
-  getTerminalCodes
+  getTerminalCodes,
+  autoPopulateFromLocations
 } from '../controllers/mileageMatrix.controller';
 import { authenticate, authorize } from '../middleware/auth.middleware';
 import { validateRequest } from '../middleware/validation.middleware';
@@ -70,6 +71,18 @@ router.post(
   ],
   validateRequest,
   bulkCreateOrUpdate
+);
+
+// POST /api/mileage-matrix/auto-populate - Auto-populate from location GPS coordinates (Admin/Dispatcher only)
+router.post(
+  '/auto-populate',
+  authorize(UserRole.ADMIN, UserRole.DISPATCHER),
+  [
+    body('roadFactor').optional().isFloat({ min: 1.0, max: 2.0 }).withMessage('Road factor must be between 1.0 and 2.0'),
+    body('overwriteExisting').optional().isBoolean()
+  ],
+  validateRequest,
+  autoPopulateFromLocations
 );
 
 // PUT /api/mileage-matrix/:id - Update entry (Admin/Dispatcher only)
