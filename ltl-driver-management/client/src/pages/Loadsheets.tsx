@@ -43,9 +43,11 @@ const getStatusVariant = (status: LoadsheetStatus): 'default' | 'success' | 'war
     case 'LOADING':
       return 'warning';
     case 'CLOSED':
-      return 'success';
+      return 'success';  // Ready to dispatch
     case 'DISPATCHED':
       return 'default';
+    case 'UNLOADED':
+      return 'default';  // All freight unloaded
     default:
       return 'default';
   }

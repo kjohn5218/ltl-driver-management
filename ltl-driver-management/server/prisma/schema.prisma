@@ -1259,8 +1259,9 @@ enum LoadsheetStatus {
   DRAFT
   OPEN
   LOADING
-  CLOSED
+  CLOSED      // Load assignment completed on scanner - ready to dispatch
   DISPATCHED
+  UNLOADED    // All freight has been unloaded at destination
 }
 
 enum LoadType {

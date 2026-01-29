@@ -1520,17 +1520,25 @@ export const arriveTrip = async (req: Request, res: Response): Promise<void> => 
           else capacityPercent = '0%';
         }
 
-        // Update loadsheet: reset for physical terminal arrivals, otherwise mark as dispatched
+        // Update loadsheet based on remaining freight:
+        // - OPEN: Physical terminal with remaining freight (available for next leg)
+        // - UNLOADED: No freight remains (all unloaded at this terminal)
+        let newStatus: 'OPEN' | 'UNLOADED';
+        if (remainingPieces > 0 && isPhysicalTerminal) {
+          newStatus = 'OPEN';
+        } else {
+          newStatus = 'UNLOADED';
+        }
+
         await tx.loadsheet.update({
           where: { id: loadsheet.id },
           data: {
             linehaulTripId: null,
             ...(destinationCode && { originTerminalCode: destinationCode }),
             destinationTerminalCode: null,
-            // Only reset to OPEN at physical terminals where freight may continue
-            status: isPhysicalTerminal && remainingPieces > 0 ? 'OPEN' : 'DISPATCHED',
-            pieces: remainingPieces > 0 ? remainingPieces : undefined,
-            weight: remainingWeight > 0 ? remainingWeight : undefined,
+            status: newStatus,
+            pieces: remainingPieces > 0 ? remainingPieces : 0,
+            weight: remainingWeight > 0 ? remainingWeight : 0,
             capacity: capacityPercent
           }
         });
