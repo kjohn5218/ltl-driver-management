@@ -16,7 +16,7 @@ import {
 import toast from 'react-hot-toast';
 import { LinehaulTrip, TripArrivalData, WaitTimeReason, EquipmentIssueType } from '../../types';
 import { linehaulTripService } from '../../services/linehaulTripService';
-import { mileageMatrixService } from '../../services/mileageMatrixService';
+import { locationService } from '../../services/locationService';
 
 interface ArrivalDetailsModalProps {
   isOpen: boolean;
@@ -47,7 +47,7 @@ export const ArrivalDetailsModal: React.FC<ArrivalDetailsModalProps> = ({
   // Form state
   const [arrivalDateTime, setArrivalDateTime] = useState<string>(''); // datetime-local format
   const [miles, setMiles] = useState<string>('');
-  const [milesSource, setMilesSource] = useState<'matrix' | 'profile' | 'manual'>('manual');
+  const [milesSource, setMilesSource] = useState<'profile' | 'gps' | 'manual'>('manual');
   const [dropAndHook, setDropAndHook] = useState<string>('');
   const [chainUpCycles, setChainUpCycles] = useState<string>('');
   const [waitTimeStart, setWaitTimeStart] = useState<string>(''); // datetime-local format
@@ -241,28 +241,21 @@ export const ArrivalDetailsModal: React.FC<ArrivalDetailsModalProps> = ({
     }
   }, [isOpen]);
 
-  // Lookup mileage from matrix when modal opens
+  // Lookup mileage when modal opens (profile first, GPS fallback)
   useEffect(() => {
     if (isOpen && origin !== '-' && destination !== '-') {
-      // First check if linehaulProfile has distanceMiles
-      if (trip.linehaulProfile?.distanceMiles) {
-        setMiles(trip.linehaulProfile.distanceMiles.toString());
-        setMilesSource('profile');
-      } else {
-        // Lookup from mileage matrix
-        mileageMatrixService.lookupMiles(origin, destination)
-          .then(result => {
-            if (result.miles !== null) {
-              setMiles(result.miles.toString());
-              setMilesSource('matrix');
-            }
-          })
-          .catch(() => {
-            // Silently fail - field will just be empty
-          });
-      }
+      locationService.lookupMileage(origin, destination)
+        .then(result => {
+          if (result.miles !== null) {
+            setMiles(result.miles.toString());
+            setMilesSource(result.source === 'profile' ? 'profile' : 'gps');
+          }
+        })
+        .catch(() => {
+          // Silently fail - field will just be empty
+        });
     }
-  }, [isOpen, origin, destination, trip.linehaulProfile?.distanceMiles]);
+  }, [isOpen, origin, destination]);
 
   // Handle morale rating submission
   const handleMoraleRatingSubmit = () => {
@@ -481,8 +474,8 @@ export const ArrivalDetailsModal: React.FC<ArrivalDetailsModalProps> = ({
                   <div>
                     <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">
                       Miles
-                      {milesSource === 'matrix' && (
-                        <span className="text-xs text-blue-500 ml-1">(from matrix)</span>
+                      {milesSource === 'gps' && (
+                        <span className="text-xs text-blue-500 ml-1">(from GPS)</span>
                       )}
                       {milesSource === 'profile' && (
                         <span className="text-xs text-green-500 ml-1">(from profile)</span>

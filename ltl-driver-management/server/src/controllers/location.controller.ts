@@ -156,7 +156,9 @@ export const createLocation = async (req: Request, res: Response) => {
         latitude: locationData.latitude ? parseFloat(locationData.latitude) : undefined,
         longitude: locationData.longitude ? parseFloat(locationData.longitude) : undefined,
         notes: locationData.notes || undefined,
-        active: locationData.active !== undefined ? locationData.active : true
+        active: locationData.active !== undefined ? locationData.active : true,
+        isPhysicalTerminal: locationData.isPhysicalTerminal ?? false,
+        isVirtualTerminal: locationData.isVirtualTerminal ?? false
       }
     });
 
@@ -213,7 +215,9 @@ export const updateLocation = async (req: Request, res: Response) => {
         latitude: updateData.latitude ? parseFloat(updateData.latitude) : undefined,
         longitude: updateData.longitude ? parseFloat(updateData.longitude) : undefined,
         notes: updateData.notes || undefined,
-        active: updateData.active
+        active: updateData.active,
+        isPhysicalTerminal: updateData.isPhysicalTerminal,
+        isVirtualTerminal: updateData.isVirtualTerminal
       }
     });
 
@@ -226,6 +230,170 @@ export const updateLocation = async (req: Request, res: Response) => {
       }
     }
     return res.status(500).json({ message: 'Failed to update location' });
+  }
+};
+
+// Get locations that are terminals (for Okay to Load/Dispatch lists)
+export const getTerminalLocations = async (_req: Request, res: Response) => {
+  try {
+    const locations = await prisma.location.findMany({
+      where: {
+        active: true,
+        OR: [
+          { isPhysicalTerminal: true },
+          { isVirtualTerminal: true }
+        ]
+      },
+      select: {
+        id: true,
+        code: true,
+        name: true,
+        city: true,
+        state: true,
+        isPhysicalTerminal: true,
+        isVirtualTerminal: true
+      },
+      orderBy: { code: 'asc' }
+    });
+
+    return res.json(locations);
+  } catch (error) {
+    console.error('Get terminal locations error:', error);
+    return res.status(500).json({ message: 'Failed to fetch terminal locations' });
+  }
+};
+
+// Haversine formula to calculate distance between two GPS coordinates
+const calculateHaversineDistance = (
+  lat1: number,
+  lon1: number,
+  lat2: number,
+  lon2: number
+): number => {
+  const R = 3959; // Earth's radius in miles
+  const dLat = (lat2 - lat1) * Math.PI / 180;
+  const dLon = (lon2 - lon1) * Math.PI / 180;
+  const a =
+    Math.sin(dLat / 2) * Math.sin(dLat / 2) +
+    Math.cos(lat1 * Math.PI / 180) * Math.cos(lat2 * Math.PI / 180) *
+    Math.sin(dLon / 2) * Math.sin(dLon / 2);
+  const c = 2 * Math.atan2(Math.sqrt(a), Math.sqrt(1 - a));
+  return R * c;
+};
+
+// Lookup mileage between two locations
+// First checks linehaul profiles, then falls back to GPS calculation
+export const lookupMileage = async (req: Request, res: Response) => {
+  try {
+    const { origin, destination } = req.query;
+
+    if (!origin || !destination) {
+      return res.status(400).json({ message: 'Origin and destination are required' });
+    }
+
+    const originCode = (origin as string).toUpperCase();
+    const destinationCode = (destination as string).toUpperCase();
+
+    // First, try to find mileage from linehaul profiles
+    // Look for a profile that matches origin and destination terminals by code
+    const profile = await prisma.linehaulProfile.findFirst({
+      where: {
+        active: true,
+        distanceMiles: { not: null },
+        originTerminal: { code: originCode },
+        destinationTerminal: { code: destinationCode }
+      },
+      select: {
+        distanceMiles: true,
+        profileCode: true
+      }
+    });
+
+    if (profile && profile.distanceMiles) {
+      return res.json({
+        miles: profile.distanceMiles,
+        originCode,
+        destinationCode,
+        source: 'profile',
+        profileCode: profile.profileCode
+      });
+    }
+
+    // Try reverse direction (destination to origin)
+    const reverseProfile = await prisma.linehaulProfile.findFirst({
+      where: {
+        active: true,
+        distanceMiles: { not: null },
+        originTerminal: { code: destinationCode },
+        destinationTerminal: { code: originCode }
+      },
+      select: {
+        distanceMiles: true,
+        profileCode: true
+      }
+    });
+
+    if (reverseProfile && reverseProfile.distanceMiles) {
+      return res.json({
+        miles: reverseProfile.distanceMiles,
+        originCode,
+        destinationCode,
+        source: 'profile',
+        profileCode: reverseProfile.profileCode
+      });
+    }
+
+    // Fall back to GPS calculation
+    const [originLocation, destinationLocation] = await Promise.all([
+      prisma.location.findUnique({
+        where: { code: originCode },
+        select: { latitude: true, longitude: true }
+      }),
+      prisma.location.findUnique({
+        where: { code: destinationCode },
+        select: { latitude: true, longitude: true }
+      })
+    ]);
+
+    if (!originLocation || !destinationLocation) {
+      return res.status(404).json({
+        message: 'One or both locations not found',
+        miles: null,
+        originCode,
+        destinationCode
+      });
+    }
+
+    if (!originLocation.latitude || !originLocation.longitude ||
+        !destinationLocation.latitude || !destinationLocation.longitude) {
+      return res.status(404).json({
+        message: 'GPS coordinates not available for one or both locations',
+        miles: null,
+        originCode,
+        destinationCode
+      });
+    }
+
+    // Calculate straight-line distance and apply road factor (1.3)
+    const straightLineDistance = calculateHaversineDistance(
+      Number(originLocation.latitude),
+      Number(originLocation.longitude),
+      Number(destinationLocation.latitude),
+      Number(destinationLocation.longitude)
+    );
+
+    const roadFactor = 1.3;
+    const drivingDistance = Math.round(straightLineDistance * roadFactor * 10) / 10;
+
+    return res.json({
+      miles: drivingDistance,
+      originCode,
+      destinationCode,
+      source: 'gps'
+    });
+  } catch (error) {
+    console.error('Lookup mileage error:', error);
+    return res.status(500).json({ message: 'Failed to lookup mileage' });
   }
 };
 

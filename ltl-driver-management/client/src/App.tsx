@@ -32,7 +32,6 @@ import { ContractPowerHome } from './pages/ContractPowerHome';
 import { LateLinehaulReport } from './pages/LateLinehaulReport';
 import { LoadFactorReport } from './pages/LoadFactorReport';
 import { PayRules } from './pages/PayRules';
-import { MileageMatrix } from './pages/MileageMatrix';
 import { DriverSelfService } from './pages/DriverSelfService';
 
 // Create a client
@@ -105,10 +104,6 @@ const router = createBrowserRouter([
           {
             path: 'pay-rules',
             element: <PayRules />
-          },
-          {
-            path: 'mileage-matrix',
-            element: <MileageMatrix />
           },
           {
             path: 'contract-power',

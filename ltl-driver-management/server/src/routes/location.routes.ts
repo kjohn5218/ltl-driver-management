@@ -6,7 +6,9 @@ import {
   searchLocations,
   createLocation,
   updateLocation,
-  deleteLocation
+  deleteLocation,
+  getTerminalLocations,
+  lookupMileage
 } from '../controllers/location.controller';
 import { authenticate } from '../middleware/auth.middleware';
 
@@ -20,6 +22,12 @@ router.get('/', getLocations);
 
 // GET /api/locations/search - Search locations for autocomplete
 router.get('/search', searchLocations);
+
+// GET /api/locations/terminals - Get locations that are terminals (for Okay to Load/Dispatch)
+router.get('/terminals', getTerminalLocations);
+
+// GET /api/locations/mileage - Lookup mileage between two locations (profile first, GPS fallback)
+router.get('/mileage', lookupMileage);
 
 // GET /api/locations/code/:code - Get location by code
 router.get('/code/:code', getLocationByCode);

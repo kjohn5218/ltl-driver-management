@@ -1888,21 +1888,3 @@ model ExpectedShipmentDetail {
   @@index([externalProNumber])
   @@map("expected_shipment_details")
 }
-
-// Mileage Matrix - Stores mileage between terminal/location pairs
-model MileageMatrix {
-  id              Int      @id @default(autoincrement())
-  originCode      String   // Terminal code (e.g., "ABQ", "DEN")
-  destinationCode String   // Terminal code (e.g., "ELP", "PHX")
-  miles           Decimal  @db.Decimal(8, 1)
-  active          Boolean  @default(true)
-  notes           String?
-  createdAt       DateTime @default(now())
-  updatedAt       DateTime @updatedAt
-
-  @@unique([originCode, destinationCode])
-  @@index([originCode])
-  @@index([destinationCode])
-  @@index([active])
-  @@map("mileage_matrix")
-}
