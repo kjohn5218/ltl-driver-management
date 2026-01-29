@@ -77,11 +77,6 @@ router.post(
 router.post(
   '/auto-populate',
   authorize(UserRole.ADMIN, UserRole.DISPATCHER),
-  [
-    body('roadFactor').optional().isFloat({ min: 1.0, max: 2.0 }).withMessage('Road factor must be between 1.0 and 2.0'),
-    body('overwriteExisting').optional().isBoolean()
-  ],
-  validateRequest,
   autoPopulateFromLocations
 );
 
