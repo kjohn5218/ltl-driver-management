@@ -16,6 +16,7 @@ import {
 import toast from 'react-hot-toast';
 import { LinehaulTrip, TripArrivalData, WaitTimeReason, EquipmentIssueType } from '../../types';
 import { linehaulTripService } from '../../services/linehaulTripService';
+import { mileageMatrixService } from '../../services/mileageMatrixService';
 
 interface ArrivalDetailsModalProps {
   isOpen: boolean;
@@ -45,6 +46,8 @@ export const ArrivalDetailsModal: React.FC<ArrivalDetailsModalProps> = ({
 
   // Form state
   const [arrivalDateTime, setArrivalDateTime] = useState<string>(''); // datetime-local format
+  const [miles, setMiles] = useState<string>('');
+  const [milesSource, setMilesSource] = useState<'matrix' | 'profile' | 'manual'>('manual');
   const [dropAndHook, setDropAndHook] = useState<string>('');
   const [chainUpCycles, setChainUpCycles] = useState<string>('');
   const [waitTimeStart, setWaitTimeStart] = useState<string>(''); // datetime-local format
@@ -183,6 +186,7 @@ export const ArrivalDetailsModal: React.FC<ArrivalDetailsModalProps> = ({
     // Build the arrival data
     const arrivalData: TripArrivalData = {
       actualArrival: arrivalDateTime ? new Date(arrivalDateTime).toISOString() : undefined,
+      actualMileage: miles ? parseFloat(miles) : undefined,
       dropAndHook: dropAndHook ? parseInt(dropAndHook, 10) : undefined,
       chainUpCycles: chainUpCycles ? parseInt(chainUpCycles, 10) : undefined,
       waitTimeStart: waitTimeStart ? new Date(waitTimeStart).toISOString() : undefined,
@@ -218,6 +222,8 @@ export const ArrivalDetailsModal: React.FC<ArrivalDetailsModalProps> = ({
     if (isOpen) {
       // Set arrival date/time to current date/time
       setArrivalDateTime(formatDateTimeLocal(new Date()));
+      setMiles('');
+      setMilesSource('manual');
       setDropAndHook('');
       setChainUpCycles('');
       setWaitTimeStart('');
@@ -234,6 +240,29 @@ export const ArrivalDetailsModal: React.FC<ArrivalDetailsModalProps> = ({
       setArrivalResult(null);
     }
   }, [isOpen]);
+
+  // Lookup mileage from matrix when modal opens
+  useEffect(() => {
+    if (isOpen && origin !== '-' && destination !== '-') {
+      // First check if linehaulProfile has distanceMiles
+      if (trip.linehaulProfile?.distanceMiles) {
+        setMiles(trip.linehaulProfile.distanceMiles.toString());
+        setMilesSource('profile');
+      } else {
+        // Lookup from mileage matrix
+        mileageMatrixService.lookupMiles(origin, destination)
+          .then(result => {
+            if (result.miles !== null) {
+              setMiles(result.miles.toString());
+              setMilesSource('matrix');
+            }
+          })
+          .catch(() => {
+            // Silently fail - field will just be empty
+          });
+      }
+    }
+  }, [isOpen, origin, destination, trip.linehaulProfile?.distanceMiles]);
 
   // Handle morale rating submission
   const handleMoraleRatingSubmit = () => {
@@ -448,7 +477,30 @@ export const ArrivalDetailsModal: React.FC<ArrivalDetailsModalProps> = ({
                 <h4 className="text-sm font-medium text-gray-700 dark:text-gray-300 mb-3">
                   Operational Details
                 </h4>
-                <div className="grid grid-cols-2 gap-4">
+                <div className="grid grid-cols-3 gap-4">
+                  <div>
+                    <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">
+                      Miles
+                      {milesSource === 'matrix' && (
+                        <span className="text-xs text-blue-500 ml-1">(from matrix)</span>
+                      )}
+                      {milesSource === 'profile' && (
+                        <span className="text-xs text-green-500 ml-1">(from profile)</span>
+                      )}
+                    </label>
+                    <input
+                      type="number"
+                      min="0"
+                      step="0.1"
+                      value={miles}
+                      onChange={(e) => {
+                        setMiles(e.target.value);
+                        setMilesSource('manual');
+                      }}
+                      placeholder="0"
+                      className="w-full px-3 py-2 border border-gray-300 dark:border-gray-600 rounded-md bg-white dark:bg-gray-700 text-gray-900 dark:text-gray-100 focus:ring-2 focus:ring-primary-500 focus:border-transparent"
+                    />
+                  </div>
                   <div>
                     <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">
                       Drop & Hook

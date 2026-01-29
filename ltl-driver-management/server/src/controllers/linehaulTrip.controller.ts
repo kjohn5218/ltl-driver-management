@@ -1359,6 +1359,7 @@ export const arriveTrip = async (req: Request, res: Response): Promise<void> => 
     const tripId = parseInt(id, 10);
     const {
       actualArrival,
+      actualMileage,
       dropAndHook,
       chainUpCycles,
       waitTimeStart,
@@ -1409,7 +1410,8 @@ export const arriveTrip = async (req: Request, res: Response): Promise<void> => 
         where: { id: tripId },
         data: {
           status: 'ARRIVED',
-          actualArrival: arrivalTime
+          actualArrival: arrivalTime,
+          actualMileage: actualMileage ? parseInt(actualMileage, 10) : undefined
         }
       });
 
