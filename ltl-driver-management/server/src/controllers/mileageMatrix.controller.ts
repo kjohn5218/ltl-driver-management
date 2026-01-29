@@ -394,16 +394,12 @@ export const autoPopulateFromLocations = async (req: Request, res: Response) => 
   try {
     const { roadFactor = 1.3, overwriteExisting = false } = req.body;
 
-    // Get all active locations with GPS coordinates (terminals only)
+    // Get all active locations with GPS coordinates
     const locations = await prisma.location.findMany({
       where: {
         active: true,
         latitude: { not: null },
-        longitude: { not: null },
-        OR: [
-          { isPhysicalTerminal: true },
-          { isVirtualTerminal: true }
-        ]
+        longitude: { not: null }
       },
       select: {
         code: true,

@@ -662,7 +662,7 @@ export const MileageMatrix: React.FC = () => {
           </p>
           <div className="bg-blue-50 dark:bg-blue-900/30 border border-blue-200 dark:border-blue-800 rounded-md p-3">
             <p className="text-sm text-blue-700 dark:text-blue-300">
-              <strong>Note:</strong> Only locations marked as Physical or Virtual terminals with GPS coordinates will be used.
+              <strong>Note:</strong> All active locations with GPS coordinates will be used.
             </p>
           </div>
           <div>
