@@ -32,8 +32,12 @@ export const getLoadsheets = async (req: Request, res: Response): Promise<void> 
       ];
     }
 
+    // Default to showing only OPEN and LOADING loadsheets unless specific status requested
     if (status) {
       where.status = status as LoadsheetStatus;
+    } else {
+      // Only show loadsheets that are available for loading (OPEN or LOADING)
+      where.status = { in: ['OPEN', 'LOADING'] };
     }
 
     if (linehaulTripId) {

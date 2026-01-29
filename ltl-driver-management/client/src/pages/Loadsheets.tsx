@@ -31,11 +31,9 @@ import {
 } from 'lucide-react';
 
 const statusFilterOptions: { value: LoadsheetStatus | ''; label: string }[] = [
-  { value: '', label: 'All Statuses' },
-  { value: 'OPEN', label: 'Open' },
-  { value: 'LOADING', label: 'Loading' },
-  { value: 'CLOSED', label: 'Closed' },
-  { value: 'DISPATCHED', label: 'Dispatched' }
+  { value: '', label: 'Available (Open/Loading)' },
+  { value: 'OPEN', label: 'Open Only' },
+  { value: 'LOADING', label: 'Loading Only' }
 ];
 
 const getStatusVariant = (status: LoadsheetStatus): 'default' | 'success' | 'warning' | 'error' | 'info' => {

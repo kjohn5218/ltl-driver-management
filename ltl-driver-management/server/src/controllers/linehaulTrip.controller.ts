@@ -1459,17 +1459,82 @@ export const arriveTrip = async (req: Request, res: Response): Promise<void> => 
         });
       }
 
-      // Release loadsheets for next leg
+      // Release loadsheets for next leg at physical terminal arrivals
       const destinationCode = trip.linehaulProfile?.destinationTerminal?.code;
-      await tx.loadsheet.updateMany({
+
+      // Check if destination is a physical terminal
+      let isPhysicalTerminal = false;
+      if (destinationCode) {
+        const destinationLocation = await tx.location.findUnique({
+          where: { code: destinationCode },
+          select: { isPhysicalTerminal: true }
+        });
+        isPhysicalTerminal = destinationLocation?.isPhysicalTerminal || false;
+      }
+
+      // Get loadsheets assigned to this trip
+      const loadsheets = await tx.loadsheet.findMany({
         where: { linehaulTripId: tripId },
-        data: {
-          linehaulTripId: null,
-          ...(destinationCode && { originTerminalCode: destinationCode }),
-          destinationTerminalCode: null,
-          status: 'OPEN'
-        }
+        select: { id: true, manifestNumber: true }
       });
+
+      // For each loadsheet, recalculate capacity based on freight not yet unloaded at this terminal
+      for (const loadsheet of loadsheets) {
+        // Get freight items for this loadsheet that have been unloaded at this terminal
+        const unloadedItems = await tx.manifestFreightItem.aggregate({
+          where: {
+            manifestNumber: loadsheet.manifestNumber,
+            unloadedTerminal: destinationCode
+          },
+          _sum: {
+            pieces: true,
+            weight: true
+          }
+        });
+
+        // Get total freight items for this loadsheet
+        const totalItems = await tx.manifestFreightItem.aggregate({
+          where: {
+            manifestNumber: loadsheet.manifestNumber
+          },
+          _sum: {
+            pieces: true,
+            weight: true
+          }
+        });
+
+        // Calculate remaining pieces and weight after unloading
+        const remainingPieces = (totalItems._sum.pieces || 0) - (unloadedItems._sum.pieces || 0);
+        const remainingWeight = (totalItems._sum.weight || 0) - (unloadedItems._sum.weight || 0);
+
+        // Determine capacity percentage based on remaining weight
+        // Assuming max trailer capacity is around 45,000 lbs
+        const maxWeight = 45000;
+        let capacityPercent = '0%';
+        if (remainingWeight > 0) {
+          const percentFull = (remainingWeight / maxWeight) * 100;
+          if (percentFull >= 90) capacityPercent = '100%';
+          else if (percentFull >= 65) capacityPercent = '75%';
+          else if (percentFull >= 40) capacityPercent = '50%';
+          else if (percentFull >= 15) capacityPercent = '25%';
+          else capacityPercent = '0%';
+        }
+
+        // Update loadsheet: reset for physical terminal arrivals, otherwise mark as dispatched
+        await tx.loadsheet.update({
+          where: { id: loadsheet.id },
+          data: {
+            linehaulTripId: null,
+            ...(destinationCode && { originTerminalCode: destinationCode }),
+            destinationTerminalCode: null,
+            // Only reset to OPEN at physical terminals where freight may continue
+            status: isPhysicalTerminal && remainingPieces > 0 ? 'OPEN' : 'DISPATCHED',
+            pieces: remainingPieces > 0 ? remainingPieces : undefined,
+            weight: remainingWeight > 0 ? remainingWeight : undefined,
+            capacity: capacityPercent
+          }
+        });
+      }
 
       // Create driver trip report
       const driverReport = await tx.driverTripReport.create({
