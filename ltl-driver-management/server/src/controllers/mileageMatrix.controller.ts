@@ -467,7 +467,7 @@ export const autoPopulateFromLocations = async (req: Request, res: Response) => 
           }
 
           // Upsert the entry
-          const result = await prisma.mileageMatrix.upsert({
+          await prisma.mileageMatrix.upsert({
             where: {
               originCode_destinationCode: {
                 originCode,
