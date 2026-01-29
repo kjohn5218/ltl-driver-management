@@ -180,7 +180,13 @@ export const getTrips = async (req: Request, res: Response): Promise<void> => {
               pieces: true,
               trailerNumber: true,
               suggestedTrailerLength: true,
-              targetDispatchTime: true
+              targetDispatchTime: true,
+              scheduledDepartDate: true,
+              doorNumber: true,
+              pintleHookRequired: true,
+              status: true,
+              linehaulTripId: true,
+              capacity: true
             }
           },
           shipments: {

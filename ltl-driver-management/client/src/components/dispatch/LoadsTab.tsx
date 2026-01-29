@@ -826,89 +826,167 @@ export const LoadsTab: React.FC<LoadsTabProps> = ({ loading: externalLoading = f
             <table className="min-w-full divide-y divide-gray-200 dark:divide-gray-700">
               <thead className="bg-gray-50 dark:bg-gray-700">
                 <tr>
-                  <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 dark:text-gray-300 uppercase tracking-wider">
-                    Trip / Linehaul
-                  </th>
-                  <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 dark:text-gray-300 uppercase tracking-wider">
-                    From
-                  </th>
-                  <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 dark:text-gray-300 uppercase tracking-wider">
-                    Arrived At
-                  </th>
-                  <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 dark:text-gray-300 uppercase tracking-wider">
-                    Current Driver
-                  </th>
-                  <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 dark:text-gray-300 uppercase tracking-wider">
-                    Planned Carrier
-                  </th>
-                  <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 dark:text-gray-300 uppercase tracking-wider">
-                    Planned Driver
-                  </th>
+                  <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 dark:text-gray-300 uppercase tracking-wider">Trailer</th>
+                  <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 dark:text-gray-300 uppercase tracking-wider">Door</th>
+                  <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 dark:text-gray-300 uppercase tracking-wider">Manifest</th>
+                  <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 dark:text-gray-300 uppercase tracking-wider">Linehaul</th>
+                  <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 dark:text-gray-300 uppercase tracking-wider">Capacity</th>
+                  <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 dark:text-gray-300 uppercase tracking-wider">Wt (lbs)</th>
+                  <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 dark:text-gray-300 uppercase tracking-wider">Pcs</th>
+                  <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 dark:text-gray-300 uppercase tracking-wider">Status</th>
+                  <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 dark:text-gray-300 uppercase tracking-wider">Arrived At</th>
+                  <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 dark:text-gray-300 uppercase tracking-wider">Sched. Date</th>
+                  <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 dark:text-gray-300 uppercase tracking-wider">Sched. Time</th>
+                  <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 dark:text-gray-300 uppercase tracking-wider">Planned Driver</th>
+                  <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 dark:text-gray-300 uppercase tracking-wider">Actions</th>
                 </tr>
               </thead>
               <tbody className="bg-white dark:bg-gray-800 divide-y divide-gray-200 dark:divide-gray-700">
-                {continuingTrips.map((trip) => (
-                  <tr key={trip.id} className="hover:bg-amber-50 dark:hover:bg-amber-900/10">
-                    <td className="px-4 py-3 whitespace-nowrap">
-                      <div>
-                        <span className="font-medium text-gray-900 dark:text-gray-100">{trip.tripNumber}</span>
-                        <p className="text-xs text-gray-500 dark:text-gray-400">{trip.linehaulProfile?.name || trip.linehaulProfile?.profileCode}</p>
-                      </div>
-                    </td>
-                    <td className="px-4 py-3 whitespace-nowrap text-gray-600 dark:text-gray-300">
-                      {trip.linehaulProfile?.originTerminal?.code || '-'}
-                    </td>
-                    <td className="px-4 py-3 whitespace-nowrap">
-                      <span className="inline-flex items-center px-2 py-1 rounded-full text-xs font-medium bg-amber-100 dark:bg-amber-900 text-amber-800 dark:text-amber-200">
-                        {trip.linehaulProfile?.destinationTerminal?.code || '-'}
-                      </span>
-                    </td>
-                    <td className="px-4 py-3 whitespace-nowrap">
-                      <div className="flex items-center text-gray-600 dark:text-gray-300">
-                        <User className="w-4 h-4 mr-1" />
-                        {trip.driver?.name || '-'}
-                      </div>
-                    </td>
-                    <td className="px-4 py-3 whitespace-nowrap">
-                      <select
-                        value={continuingTripData[trip.id]?.plannedCarrierId || ''}
-                        onChange={(e) => updateContinuingTripData(
-                          trip.id,
-                          'plannedCarrierId',
-                          e.target.value ? parseInt(e.target.value) : undefined
-                        )}
-                        className="w-36 text-sm rounded-md border-gray-300 dark:border-gray-600 dark:bg-gray-700 dark:text-gray-100 focus:ring-indigo-500 focus:border-indigo-500"
-                      >
-                        <option value="">Select carrier...</option>
-                        {carriers.map((carrier) => (
-                          <option key={carrier.id} value={carrier.id}>
-                            {carrier.name}
-                          </option>
-                        ))}
-                      </select>
-                    </td>
-                    <td className="px-4 py-3 whitespace-nowrap">
-                      <select
-                        value={continuingTripData[trip.id]?.plannedDriverId || ''}
-                        onChange={(e) => updateContinuingTripData(
-                          trip.id,
-                          'plannedDriverId',
-                          e.target.value ? parseInt(e.target.value) : undefined
-                        )}
-                        className="w-36 text-sm rounded-md border-gray-300 dark:border-gray-600 dark:bg-gray-700 dark:text-gray-100 focus:ring-indigo-500 focus:border-indigo-500"
-                      >
-                        <option value="">Select driver...</option>
-                        {drivers
-                          .filter(d => d.active && (!continuingTripData[trip.id]?.plannedCarrierId || d.carrierId === continuingTripData[trip.id]?.plannedCarrierId))
-                          .map((driver) => (
-                            <option key={driver.id} value={driver.id}>
-                              {driver.name}
-                            </option>
-                          ))}
-                      </select>
-                    </td>
-                  </tr>
-                ))}
+                {continuingTrips.flatMap((trip) => {
+                  // Get loadsheets for this trip
+                  const tripLoadsheets = trip.loadsheets || [];
+                  if (tripLoadsheets.length === 0) {
+                    // Show a placeholder row if no loadsheets
+                    return [(
+                      <tr key={trip.id} className="hover:bg-amber-50 dark:hover:bg-amber-900/10">
+                        <td className="px-4 py-3 text-gray-500" colSpan={13}>
+                          Trip {trip.tripNumber} - No loadsheets
+                        </td>
+                      </tr>
+                    )];
+                  }
+                  return tripLoadsheets.map((loadsheet: Loadsheet) => {
+                    const loadItem = loadsheetToLoadItem(loadsheet, 0);
+                    const arrivedAt = trip.linehaulProfile?.destinationTerminal?.code || '-';
+
+                    return (
+                      <tr key={`${trip.id}-${loadsheet.id}`} className="hover:bg-amber-50 dark:hover:bg-amber-900/10">
+                        <td className="px-4 py-3 whitespace-nowrap">
+                          <div>
+                            <div className="font-medium text-gray-900 dark:text-gray-100">{loadItem.trailerNumber}</div>
+                            <div className="text-xs text-gray-500">{loadItem.trailerLength}′</div>
+                          </div>
+                        </td>
+                        <td className="px-4 py-3 whitespace-nowrap text-gray-600 dark:text-gray-300">
+                          {loadItem.door || '-'}
+                        </td>
+                        <td className="px-4 py-3 whitespace-nowrap">
+                          <button
+                            type="button"
+                            onClick={() => {
+                              setSelectedLoadItem(loadItem);
+                              setIsShipmentsModalOpen(true);
+                            }}
+                            className="font-medium text-indigo-600 dark:text-indigo-400 hover:text-indigo-800 dark:hover:text-indigo-300 hover:underline cursor-pointer"
+                          >
+                            {loadItem.manifestNumber}
+                          </button>
+                        </td>
+                        <td className="px-4 py-3 whitespace-nowrap text-gray-900 dark:text-gray-100">
+                          {loadItem.linehaulName}
+                        </td>
+                        <td className="px-4 py-3 whitespace-nowrap">
+                          <div className="min-w-[100px]">
+                            <ProgressBar current={loadItem.currentLoad} max={loadItem.trailerCapacity} />
+                          </div>
+                        </td>
+                        <td className="px-4 py-3 whitespace-nowrap text-gray-600 dark:text-gray-300">
+                          {loadItem.weight.toLocaleString()}
+                        </td>
+                        <td className="px-4 py-3 whitespace-nowrap text-gray-600 dark:text-gray-300">
+                          {loadItem.pieces}
+                        </td>
+                        <td className="px-4 py-3 whitespace-nowrap">
+                          <span className={`inline-flex px-2 py-0.5 rounded-full text-xs font-medium ${statusColors[loadItem.status]}`}>
+                            {loadItem.status}
+                          </span>
+                        </td>
+                        <td className="px-4 py-3 whitespace-nowrap">
+                          <span className="inline-flex items-center px-2 py-1 rounded-full text-xs font-medium bg-amber-100 dark:bg-amber-900 text-amber-800 dark:text-amber-200">
+                            {arrivedAt}
+                          </span>
+                        </td>
+                        <td className="px-4 py-3 whitespace-nowrap">
+                          {loadItem.scheduledDepartDate ? (
+                            <span className="text-sm text-gray-600 dark:text-gray-300">
+                              {loadItem.scheduledDepartDate.split('-').slice(1).join('/')}
+                            </span>
+                          ) : <span className="text-gray-400">-</span>}
+                        </td>
+                        <td className="px-4 py-3 whitespace-nowrap">
+                          {loadItem.scheduledDeparture ? (
+                            <span className="text-sm text-gray-600 dark:text-gray-300">
+                              {(() => {
+                                const [hours, minutes] = loadItem.scheduledDeparture.split(':').map(Number);
+                                if (isNaN(hours) || isNaN(minutes)) return '-';
+                                const period = hours >= 12 ? 'PM' : 'AM';
+                                const displayHours = hours % 12 || 12;
+                                return `${displayHours}:${minutes.toString().padStart(2, '0')} ${period}`;
+                              })()}
+                            </span>
+                          ) : <span className="text-gray-400">-</span>}
+                        </td>
+                        <td className="px-4 py-3 whitespace-nowrap">
+                          <select
+                            value={continuingTripData[trip.id]?.plannedDriverId || ''}
+                            onChange={(e) => updateContinuingTripData(
+                              trip.id,
+                              'plannedDriverId',
+                              e.target.value ? parseInt(e.target.value) : undefined
+                            )}
+                            className="w-28 text-xs rounded border-gray-300 dark:border-gray-600 dark:bg-gray-700 dark:text-gray-100 py-1"
+                          >
+                            <option value="">Select...</option>
+                            {drivers
+                              .filter(d => d.active && (!continuingTripData[trip.id]?.plannedCarrierId || d.carrierId === continuingTripData[trip.id]?.plannedCarrierId))
+                              .map((driver) => (
+                                <option key={driver.id} value={driver.id}>
+                                  {driver.name}
+                                </option>
+                              ))}
+                          </select>
+                        </td>
+                        <td className="px-4 py-3 whitespace-nowrap">
+                          <div className="flex items-center gap-1">
+                            <button
+                              onClick={() => openEditModal(loadItem)}
+                              className="p-1 text-gray-500 hover:text-blue-600 hover:bg-blue-50 dark:hover:bg-blue-900/30 rounded transition-colors"
+                              title="Edit"
+                            >
+                              <Edit className="w-3.5 h-3.5" />
+                            </button>
+                            <button
+                              onClick={() => handlePrint(loadItem)}
+                              className="p-1 text-gray-500 hover:text-purple-600 hover:bg-purple-50 dark:hover:bg-purple-900/30 rounded transition-colors"
+                              title="Print"
+                            >
+                              <Printer className="w-3.5 h-3.5" />
+                            </button>
+                            <button
+                              onClick={() => handleDownload(loadItem)}
+                              className="p-1 text-gray-500 hover:text-green-600 hover:bg-green-50 dark:hover:bg-green-900/30 rounded transition-colors"
+                              title="Download PDF"
+                            >
+                              <Download className="w-3.5 h-3.5" />
+                            </button>
+                            {loadItem.status === 'OPEN' && (
+                              <button
+                                onClick={() => {
+                                  setSelectedLoadItem(loadItem);
+                                  setIsDeleteModalOpen(true);
+                                }}
+                                className="p-1 text-gray-500 hover:text-red-600 hover:bg-red-50 dark:hover:bg-red-900/30 rounded transition-colors"
+                                title="Delete"
+                              >
+                                <Trash2 className="w-3.5 h-3.5" />
+                              </button>
+                            )}
+                          </div>
+                        </td>
+                      </tr>
+                    );
+                  });
+                })}
               </tbody>
             </table>
           </div>
