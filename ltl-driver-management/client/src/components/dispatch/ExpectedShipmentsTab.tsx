@@ -284,19 +284,6 @@ export const ExpectedShipmentsTab: React.FC = () => {
     }
   };
 
-  const getConfidenceBadge = (level?: string) => {
-    switch (level) {
-      case 'HIGH':
-        return <span className="inline-flex px-2 py-0.5 rounded-full text-xs font-medium bg-green-100 text-green-800 dark:bg-green-900/30 dark:text-green-300">High</span>;
-      case 'MEDIUM':
-        return <span className="inline-flex px-2 py-0.5 rounded-full text-xs font-medium bg-yellow-100 text-yellow-800 dark:bg-yellow-900/30 dark:text-yellow-300">Medium</span>;
-      case 'LOW':
-        return <span className="inline-flex px-2 py-0.5 rounded-full text-xs font-medium bg-red-100 text-red-800 dark:bg-red-900/30 dark:text-red-300">Low</span>;
-      default:
-        return null;
-    }
-  };
-
   return (
     <div className="space-y-4">
       {/* Filters */}
@@ -462,7 +449,6 @@ export const ExpectedShipmentsTab: React.FC = () => {
                   <th className="px-4 py-3 text-right text-xs font-medium text-gray-500 dark:text-gray-300 uppercase tracking-wider">Trailers</th>
                   <th className="px-4 py-3 text-center text-xs font-medium text-gray-500 dark:text-gray-300 uppercase tracking-wider">Service Mix</th>
                   <th className="px-4 py-3 text-center text-xs font-medium text-gray-500 dark:text-gray-300 uppercase tracking-wider">Special</th>
-                  <th className="px-4 py-3 text-center text-xs font-medium text-gray-500 dark:text-gray-300 uppercase tracking-wider">Confidence</th>
                   <th className="px-4 py-3 text-center text-xs font-medium text-gray-500 dark:text-gray-300 uppercase tracking-wider">Actions</th>
                 </tr>
               </thead>
@@ -471,7 +457,7 @@ export const ExpectedShipmentsTab: React.FC = () => {
                   <React.Fragment key={origin}>
                     {/* Origin Group Header */}
                     <tr className="bg-gray-100 dark:bg-gray-700/50">
-                      <td colSpan={aggregateView ? 9 : 10} className="px-4 py-2">
+                      <td colSpan={aggregateView ? 8 : 9} className="px-4 py-2">
                         <button
                           onClick={() => toggleLaneExpand(origin)}
                           className="flex items-center gap-2 text-sm font-medium text-gray-700 dark:text-gray-300"
@@ -550,9 +536,6 @@ export const ExpectedShipmentsTab: React.FC = () => {
                               <span className="text-gray-400">-</span>
                             )}
                           </div>
-                        </td>
-                        <td className="px-4 py-3 text-center">
-                          {getConfidenceBadge(lane.confidenceLevel)}
                         </td>
                         <td className="px-4 py-3 text-center">
                           <button
