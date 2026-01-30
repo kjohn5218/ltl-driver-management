@@ -488,6 +488,7 @@ const RouteEditModal: React.FC<RouteEditModalProps> = ({ route, onClose, onSave 
     departureTime: route.departureTime || '',
     arrivalTime: route.arrivalTime || '',
     headhaul: (route as any).headhaul || false,
+    trailerLoad: (route as any).trailerLoad || false,
     interlineTrailer: (route as any).interlineTrailer || false,
     interlineCarrierId: (route as any).interlineCarrierId?.toString() || ''
   });
@@ -722,6 +723,7 @@ const RouteEditModal: React.FC<RouteEditModalProps> = ({ route, onClose, onSave 
         departureTime: formatTime(formData.departureTime),
         arrivalTime: formatTime(formData.arrivalTime),
         headhaul: formData.headhaul,
+        trailerLoad: formData.trailerLoad,
         interlineTrailer: formData.interlineTrailer,
         interlineCarrierId: formData.interlineCarrierId ? parseInt(formData.interlineCarrierId) : null
       };
@@ -1012,6 +1014,17 @@ const RouteEditModal: React.FC<RouteEditModalProps> = ({ route, onClose, onSave 
               <label className="flex items-center gap-2 cursor-pointer">
                 <input
                   type="checkbox"
+                  checked={formData.trailerLoad}
+                  onChange={(e) => setFormData({ ...formData, trailerLoad: e.target.checked })}
+                  className="w-4 h-4 rounded border-gray-300 text-blue-600 focus:ring-blue-500"
+                />
+                <span className="text-sm text-gray-700">Trailer Load</span>
+                <span className="text-xs text-gray-500">(Exclude from load factor calculations)</span>
+              </label>
+
+              <label className="flex items-center gap-2 cursor-pointer">
+                <input
+                  type="checkbox"
                   checked={formData.interlineTrailer}
                   onChange={(e) => {
                     const checked = e.target.checked;
@@ -1209,6 +1222,7 @@ const AddRouteModal: React.FC<AddRouteModalProps> = ({ onClose, onSave, copyFrom
     departureTime: copyFromRoute?.departureTime || '',
     arrivalTime: copyFromRoute?.arrivalTime || '',
     headhaul: (copyFromRoute as any)?.headhaul || false,
+    trailerLoad: (copyFromRoute as any)?.trailerLoad || false,
     interlineTrailer: (copyFromRoute as any)?.interlineTrailer || false,
     interlineCarrierId: (copyFromRoute as any)?.interlineCarrierId?.toString() || ''
   });
@@ -1512,6 +1526,7 @@ const AddRouteModal: React.FC<AddRouteModalProps> = ({ onClose, onSave, copyFrom
         departureTime: formatTime(formData.departureTime),
         arrivalTime: formatTime(formData.arrivalTime),
         headhaul: formData.headhaul,
+        trailerLoad: formData.trailerLoad,
         interlineTrailer: formData.interlineTrailer,
         interlineCarrierId: formData.interlineCarrierId ? parseInt(formData.interlineCarrierId) : null
       };
@@ -1928,6 +1943,17 @@ const AddRouteModal: React.FC<AddRouteModalProps> = ({ onClose, onSave, copyFrom
                 />
                 <span className="text-sm text-gray-700">Headhaul</span>
                 <span className="text-xs text-gray-500">(Indicates if this is a headhaul route)</span>
+              </label>
+
+              <label className="flex items-center gap-2 cursor-pointer">
+                <input
+                  type="checkbox"
+                  checked={formData.trailerLoad}
+                  onChange={(e) => setFormData({ ...formData, trailerLoad: e.target.checked })}
+                  className="w-4 h-4 rounded border-gray-300 text-blue-600 focus:ring-blue-500"
+                />
+                <span className="text-sm text-gray-700">Trailer Load</span>
+                <span className="text-xs text-gray-500">(Exclude from load factor calculations)</span>
               </label>
 
               <label className="flex items-center gap-2 cursor-pointer">

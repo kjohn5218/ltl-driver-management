@@ -154,6 +154,7 @@ export interface Route {
   departureTime?: string;
   arrivalTime?: string;
   headhaul: boolean;
+  trailerLoad: boolean;
   interlineTrailer: boolean;
   interlineCarrierId?: number;
   interlineCarrier?: InterlineCarrier;
@@ -545,6 +546,7 @@ export interface LinehaulProfile {
   requiresTeamDriver: boolean;
   hazmatRequired: boolean;
   headhaul: boolean;
+  trailerLoad: boolean;
   interlineTrailer: boolean;
   interlineCarrierId?: number;
   frequency?: string;

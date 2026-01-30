@@ -874,6 +874,7 @@ model LinehaulProfile {
   requiresTeamDriver    Boolean  @default(false)
   hazmatRequired        Boolean  @default(false)
   headhaul              Boolean  @default(false) // Indicates if this is a headhaul route
+  trailerLoad           Boolean  @default(false) // Exclude from load factor calculations
   interlineTrailer      Boolean  @default(false) // If true, allows manual trailer number entry on loadsheets
   interlineCarrierId    Int?     // Reference to interline carrier when interlineTrailer is true
   active                Boolean  @default(true)

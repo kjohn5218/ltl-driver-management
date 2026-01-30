@@ -171,6 +171,7 @@ export const LoadFactorReport: React.FC = () => {
       const weight = getTotalWeight(row);
       const length = getTotalTrailerLength(row);
       const isHeadhaul = row.trip.linehaulProfile?.headhaul || false;
+      const isTrailerLoad = row.trip.linehaulProfile?.trailerLoad || false;
       const lateMinutes = tripLateMinutesMap.get(row.trip.id);
 
       const location = locations.find(l => l.code === originCode);
@@ -192,13 +193,17 @@ export const LoadFactorReport: React.FC = () => {
 
       const metrics = metricsMap.get(originCode)!;
       metrics.tripCount++;
-      metrics.totalWeight += weight;
-      metrics.totalTrailerLength += length;
 
-      if (isHeadhaul) {
-        metrics.hhTripCount++;
-        metrics.hhTotalWeight += weight;
-        metrics.hhTotalTrailerLength += length;
+      // Exclude trailer load profiles from load factor calculations
+      if (!isTrailerLoad) {
+        metrics.totalWeight += weight;
+        metrics.totalTrailerLength += length;
+
+        if (isHeadhaul) {
+          metrics.hhTripCount++;
+          metrics.hhTotalWeight += weight;
+          metrics.hhTotalTrailerLength += length;
+        }
       }
 
       if (lateMinutes !== undefined) {
