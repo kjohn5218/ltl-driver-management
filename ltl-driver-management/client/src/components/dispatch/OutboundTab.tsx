@@ -25,8 +25,48 @@ import {
   Scale,
   CheckCircle2,
   Percent,
-  TrendingUp
+  TrendingUp,
+  ChevronUp,
+  ChevronDown
 } from 'lucide-react';
+
+type SortDirection = 'asc' | 'desc' | null;
+type SortColumn = 'tripNumber' | 'driver' | 'powerUnit' | 'trailer' | 'manifests' | 'linehaul' | 'leg' | 'pieces' | 'weight' | 'lf' | 'schedDepart' | 'dispatched' | 'status';
+
+interface SortConfig {
+  column: SortColumn | null;
+  direction: SortDirection;
+}
+
+// Sortable header component
+const SortableHeader: React.FC<{
+  column: SortColumn;
+  label: string;
+  sortConfig: SortConfig;
+  onSort: (column: SortColumn) => void;
+  className?: string;
+  icon?: React.ReactNode;
+  align?: 'left' | 'right';
+}> = ({ column, label, sortConfig, onSort, className = '', icon, align = 'left' }) => {
+  const isActive = sortConfig.column === column;
+  const direction = isActive ? sortConfig.direction : null;
+
+  return (
+    <th
+      className={`px-4 py-3 text-xs font-medium text-gray-500 dark:text-gray-400 uppercase tracking-wider cursor-pointer hover:bg-gray-100 dark:hover:bg-gray-800 select-none ${align === 'right' ? 'text-right' : 'text-left'} ${className}`}
+      onClick={() => onSort(column)}
+    >
+      <div className={`flex items-center gap-1 ${align === 'right' ? 'justify-end' : ''}`}>
+        {icon}
+        <span>{label}</span>
+        <span className="ml-1 flex flex-col">
+          <ChevronUp className={`h-3 w-3 -mb-1 ${isActive && direction === 'asc' ? 'text-indigo-600 dark:text-indigo-400' : 'text-gray-300 dark:text-gray-600'}`} />
+          <ChevronDown className={`h-3 w-3 ${isActive && direction === 'desc' ? 'text-indigo-600 dark:text-indigo-400' : 'text-gray-300 dark:text-gray-600'}`} />
+        </span>
+      </div>
+    </th>
+  );
+};
 import { format, parseISO } from 'date-fns';
 
 interface OutboundTripRow {
@@ -43,6 +83,9 @@ export const OutboundTab: React.FC = () => {
   const [selectedOrigins, setSelectedOrigins] = useState<number[]>([]);
   const [showLateOnly, setShowLateOnly] = useState(false);
   const [showHeadhaulOnly, setShowHeadhaulOnly] = useState(false);
+
+  // Sort state
+  const [sortConfig, setSortConfig] = useState<SortConfig>({ column: null, direction: null });
 
   // Late reason modal state
   const [lateModalOpen, setLateModalOpen] = useState(false);
@@ -234,6 +277,91 @@ export const OutboundTab: React.FC = () => {
       return false;
     });
   }, [outboundRows, selectedOrigins, showLateOnly, showHeadhaulOnly, searchTerm]);
+
+  // Handle column sort
+  const handleSort = (column: SortColumn) => {
+    setSortConfig(current => {
+      if (current.column === column) {
+        // Cycle: asc -> desc -> null
+        if (current.direction === 'asc') return { column, direction: 'desc' };
+        if (current.direction === 'desc') return { column: null, direction: null };
+      }
+      return { column, direction: 'asc' };
+    });
+  };
+
+  // Sort filtered rows
+  const sortedRows = useMemo(() => {
+    if (!sortConfig.column || !sortConfig.direction) return filteredRows;
+
+    return [...filteredRows].sort((a, b) => {
+      const direction = sortConfig.direction === 'asc' ? 1 : -1;
+
+      switch (sortConfig.column) {
+        case 'tripNumber':
+          return direction * (a.trip.tripNumber || '').localeCompare(b.trip.tripNumber || '');
+
+        case 'driver':
+          return direction * (a.trip.driver?.name || '').localeCompare(b.trip.driver?.name || '');
+
+        case 'powerUnit':
+          const aUnit = a.trip.truck?.unitNumber || 'OWNOP';
+          const bUnit = b.trip.truck?.unitNumber || 'OWNOP';
+          return direction * aUnit.localeCompare(bUnit);
+
+        case 'trailer':
+          const aTrailer = a.trip.trailer?.unitNumber || a.loadsheets[0]?.trailerNumber || '';
+          const bTrailer = b.trip.trailer?.unitNumber || b.loadsheets[0]?.trailerNumber || '';
+          return direction * aTrailer.localeCompare(bTrailer);
+
+        case 'manifests':
+          const aManifest = a.loadsheets[0]?.manifestNumber || '';
+          const bManifest = b.loadsheets[0]?.manifestNumber || '';
+          return direction * aManifest.localeCompare(bManifest);
+
+        case 'linehaul':
+          const aLinehaul = getLinehaulInfo(a).linehaulName;
+          const bLinehaul = getLinehaulInfo(b).linehaulName;
+          return direction * aLinehaul.localeCompare(bLinehaul);
+
+        case 'leg':
+          const aLeg = getLinehaulInfo(a).leg;
+          const bLeg = getLinehaulInfo(b).leg;
+          return direction * aLeg.localeCompare(bLeg);
+
+        case 'pieces':
+          const aPieces = getTotalPieces(a) || 0;
+          const bPieces = getTotalPieces(b) || 0;
+          return direction * (aPieces - bPieces);
+
+        case 'weight':
+          const aWeight = getTotalWeight(a) || 0;
+          const bWeight = getTotalWeight(b) || 0;
+          return direction * (aWeight - bWeight);
+
+        case 'lf':
+          const aLf = getLoadFactor(a) || 0;
+          const bLf = getLoadFactor(b) || 0;
+          return direction * (aLf - bLf);
+
+        case 'schedDepart':
+          const aSchedMinutes = parseTimeToMinutes(getSchedDepart(a) || '') || 0;
+          const bSchedMinutes = parseTimeToMinutes(getSchedDepart(b) || '') || 0;
+          return direction * (aSchedMinutes - bSchedMinutes);
+
+        case 'dispatched':
+          const aDispatchMinutes = parseTimeToMinutes(getDispatchTime(a) || '') || 0;
+          const bDispatchMinutes = parseTimeToMinutes(getDispatchTime(b) || '') || 0;
+          return direction * (aDispatchMinutes - bDispatchMinutes);
+
+        case 'status':
+          return direction * (a.trip.status || '').localeCompare(b.trip.status || '');
+
+        default:
+          return 0;
+      }
+    });
+  }, [filteredRows, sortConfig]);
 
   // Format loadsheets/manifests for display in a single line
   const formatManifests = (loadsheets: Loadsheet[]): string => {
@@ -559,58 +687,23 @@ export const OutboundTab: React.FC = () => {
             <table className="min-w-full divide-y divide-gray-200 dark:divide-gray-700">
               <thead className="bg-gray-50 dark:bg-gray-900/50">
                 <tr>
-                  <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 dark:text-gray-400 uppercase tracking-wider">
-                    Trip #
-                  </th>
-                  <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 dark:text-gray-400 uppercase tracking-wider">
-                    Driver
-                  </th>
-                  <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 dark:text-gray-400 uppercase tracking-wider">
-                    Power Unit
-                  </th>
-                  <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 dark:text-gray-400 uppercase tracking-wider">
-                    Trailer
-                  </th>
-                  <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 dark:text-gray-400 uppercase tracking-wider">
-                    Manifests
-                  </th>
-                  <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 dark:text-gray-400 uppercase tracking-wider">
-                    Linehaul
-                  </th>
-                  <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 dark:text-gray-400 uppercase tracking-wider">
-                    Leg
-                  </th>
-                  <th className="px-4 py-3 text-right text-xs font-medium text-gray-500 dark:text-gray-400 uppercase tracking-wider">
-                    <div className="flex items-center justify-end">
-                      <Package className="h-3 w-3 mr-1" />
-                      Pieces
-                    </div>
-                  </th>
-                  <th className="px-4 py-3 text-right text-xs font-medium text-gray-500 dark:text-gray-400 uppercase tracking-wider">
-                    <div className="flex items-center justify-end">
-                      <Scale className="h-3 w-3 mr-1" />
-                      Weight
-                    </div>
-                  </th>
-                  <th className="px-4 py-3 text-right text-xs font-medium text-gray-500 dark:text-gray-400 uppercase tracking-wider">
-                    <div className="flex items-center justify-end">
-                      <Percent className="h-3 w-3 mr-1" />
-                      LF %
-                    </div>
-                  </th>
-                  <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 dark:text-gray-400 uppercase tracking-wider">
-                    Sched Depart
-                  </th>
-                  <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 dark:text-gray-400 uppercase tracking-wider">
-                    Dispatched
-                  </th>
-                  <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 dark:text-gray-400 uppercase tracking-wider">
-                    Status
-                  </th>
+                  <SortableHeader column="tripNumber" label="Trip #" sortConfig={sortConfig} onSort={handleSort} />
+                  <SortableHeader column="driver" label="Driver" sortConfig={sortConfig} onSort={handleSort} />
+                  <SortableHeader column="powerUnit" label="Power Unit" sortConfig={sortConfig} onSort={handleSort} />
+                  <SortableHeader column="trailer" label="Trailer" sortConfig={sortConfig} onSort={handleSort} />
+                  <SortableHeader column="manifests" label="Manifests" sortConfig={sortConfig} onSort={handleSort} />
+                  <SortableHeader column="linehaul" label="Linehaul" sortConfig={sortConfig} onSort={handleSort} />
+                  <SortableHeader column="leg" label="Leg" sortConfig={sortConfig} onSort={handleSort} />
+                  <SortableHeader column="pieces" label="Pieces" sortConfig={sortConfig} onSort={handleSort} align="right" icon={<Package className="h-3 w-3" />} />
+                  <SortableHeader column="weight" label="Weight" sortConfig={sortConfig} onSort={handleSort} align="right" icon={<Scale className="h-3 w-3" />} />
+                  <SortableHeader column="lf" label="LF %" sortConfig={sortConfig} onSort={handleSort} align="right" icon={<Percent className="h-3 w-3" />} />
+                  <SortableHeader column="schedDepart" label="Sched Depart" sortConfig={sortConfig} onSort={handleSort} />
+                  <SortableHeader column="dispatched" label="Dispatched" sortConfig={sortConfig} onSort={handleSort} />
+                  <SortableHeader column="status" label="Status" sortConfig={sortConfig} onSort={handleSort} />
                 </tr>
               </thead>
               <tbody className="bg-white dark:bg-gray-800 divide-y divide-gray-200 dark:divide-gray-700">
-                {filteredRows.map((row) => {
+                {sortedRows.map((row) => {
                   const linehaulInfo = getLinehaulInfo(row);
                   const totalPieces = getTotalPieces(row);
                   const totalWeight = getTotalWeight(row);

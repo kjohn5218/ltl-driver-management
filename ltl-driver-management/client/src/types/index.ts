@@ -457,6 +457,7 @@ export interface EquipmentTruck {
   createdAt: string;
   updatedAt: string;
   currentTerminal?: Terminal;
+  lastArrivalTerminal?: Terminal;
   assignedDriver?: CarrierDriver;
   _count?: {
     linehaulTrips: number;
@@ -486,6 +487,7 @@ export interface EquipmentTrailer {
   createdAt: string;
   updatedAt: string;
   currentTerminal?: Terminal;
+  lastArrivalTerminal?: Terminal;
   _count?: {
     primaryTrips: number;
     secondaryTrips: number;
@@ -506,6 +508,7 @@ export interface EquipmentDolly {
   createdAt: string;
   updatedAt: string;
   currentTerminal?: Terminal;
+  lastArrivalTerminal?: Terminal;
   _count?: {
     linehaulTrips: number;
   };

@@ -27,6 +27,49 @@ interface LocationUpdate {
   longitude?: number;
 }
 
+// FormsApp Sync Types
+interface SyncResultItem {
+  created: number;
+  updated: number;
+  errors: string[];
+  total: number;
+}
+
+interface SyncResult {
+  success: boolean;
+  message: string;
+  trucks?: SyncResultItem;
+  trailers?: SyncResultItem;
+  dollies?: SyncResultItem;
+}
+
+interface SyncStatus {
+  configured: boolean;
+  message?: string;
+  lastSyncAt?: string;
+  lastResult?: {
+    trucks: SyncResultItem;
+    trailers: SyncResultItem;
+    dollies: SyncResultItem;
+    summary: string;
+  };
+}
+
+// Motive GPS Location Types
+export interface VehicleLocationData {
+  unitNumber: string;
+  latitude: number;
+  longitude: number;
+  speed: number | null;
+  bearing: number;
+  locatedAt: string;
+  description: string;
+  odometer: number;
+  fuelPercentage: number | null;
+  currentDriverName: string | null;
+  currentDriverId: string | null;
+}
+
 export const equipmentService = {
   // ==================== TRUCKS ====================
 
@@ -205,6 +248,58 @@ export const equipmentService = {
   // Update dolly location
   updateDollyLocation: async (id: number, location: LocationUpdate): Promise<EquipmentDolly> => {
     const response = await api.patch(`/equipment/dollies/${id}/location`, location);
+    return response.data;
+  },
+
+  // ==================== FORMSAPP SYNC ====================
+
+  // Sync all equipment from FormsApp
+  syncAllEquipment: async (): Promise<SyncResult> => {
+    const response = await api.post('/equipment/sync');
+    return response.data;
+  },
+
+  // Sync trucks only from FormsApp
+  syncTrucks: async (): Promise<SyncResult> => {
+    const response = await api.post('/equipment/trucks/sync');
+    return response.data;
+  },
+
+  // Sync trailers only from FormsApp
+  syncTrailers: async (): Promise<SyncResult> => {
+    const response = await api.post('/equipment/trailers/sync');
+    return response.data;
+  },
+
+  // Sync dollies only from FormsApp
+  syncDollies: async (): Promise<SyncResult> => {
+    const response = await api.post('/equipment/dollies/sync');
+    return response.data;
+  },
+
+  // Get sync status
+  getSyncStatus: async (): Promise<SyncStatus> => {
+    const response = await api.get('/equipment/sync/status');
+    return response.data;
+  },
+
+  // ==================== MOTIVE GPS TRACKING ====================
+
+  // Get truck location from Motive
+  getTruckLocation: async (unitNumber: string): Promise<VehicleLocationData | null> => {
+    const response = await api.get(`/equipment/trucks/${encodeURIComponent(unitNumber)}/location`);
+    return response.data.location || null;
+  },
+
+  // Get all vehicle locations
+  getAllVehicleLocations: async (): Promise<VehicleLocationData[]> => {
+    const response = await api.get('/equipment/locations');
+    return response.data;
+  },
+
+  // Sync vehicle locations from Motive
+  syncVehicleLocations: async (): Promise<{ success: boolean; message: string; result?: any }> => {
+    const response = await api.post('/equipment/locations/sync');
     return response.data;
   }
 };

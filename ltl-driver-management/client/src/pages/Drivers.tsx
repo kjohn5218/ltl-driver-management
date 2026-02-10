@@ -1,20 +1,24 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useMemo } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { PageHeader } from '../components/common/PageHeader';
-import { DataTable } from '../components/common/DataTable';
+import { DataTable, SortDirection } from '../components/common/DataTable';
 import { TablePagination } from '../components/common/TablePagination';
 import { StatusBadge } from '../components/common/StatusBadge';
 import { Search } from '../components/common/Search';
 import { Modal } from '../components/common/Modal';
 import { DriverForm } from '../components/drivers/DriverForm';
 import { DriverImport } from '../components/drivers/DriverImport';
+import { LocationMultiSelect } from '../components/LocationMultiSelect';
 import { driverService } from '../services/driverService';
 import { carrierService } from '../services/carrierService';
 import { CarrierDriver, Carrier } from '../types';
 import { useAuth } from '../contexts/AuthContext';
 import { toast } from 'react-hot-toast';
-import { Plus, Edit, Trash2, Phone, Mail, Truck, Upload, MapPin, AlertTriangle } from 'lucide-react';
+import { Plus, Edit, Trash2, Phone, Mail, Truck, Upload, MapPin, Shield, RefreshCw, Filter } from 'lucide-react';
 import { usePersistedState } from '../hooks/usePersistedFilters';
+
+// Available endorsement types
+const ENDORSEMENT_OPTIONS = ['hazmat', 'tanker', 'lcv', 'doubles', 'triples'];
 
 export const Drivers: React.FC = () => {
   const navigate = useNavigate();
@@ -25,29 +29,44 @@ export const Drivers: React.FC = () => {
   const [searchTerm, setSearchTerm] = usePersistedState('drivers-search', '');
   const [currentPage, setCurrentPage] = useState(1);
   const [totalPages, setTotalPages] = useState(1);
+  const [totalDrivers, setTotalDrivers] = useState(0);
   const [isCreateModalOpen, setIsCreateModalOpen] = useState(false);
   const [isEditModalOpen, setIsEditModalOpen] = useState(false);
   const [isDeleteModalOpen, setIsDeleteModalOpen] = useState(false);
   const [isImportModalOpen, setIsImportModalOpen] = useState(false);
   const [selectedDriver, setSelectedDriver] = useState<CarrierDriver | null>(null);
+  const [isSyncing, setIsSyncing] = useState(false);
+
+  // Filter state
+  const [carrierFilter, setCarrierFilter] = useState<number | ''>('');
+  const [selectedLocations, setSelectedLocations] = useState<number[]>([]);
+  const [endorsementFilter, setEndorsementFilter] = useState<string>('');
+  const [statusFilter, setStatusFilter] = useState<'active' | 'inactive' | ''>('');
+
+  // Sort state
+  const [sortBy, setSortBy] = useState<keyof CarrierDriver | null>(null);
+  const [sortDirection, setSortDirection] = useState<SortDirection>(null);
 
   const isAdminOrDispatcher = user?.role === 'ADMIN' || user?.role === 'DISPATCHER';
 
   useEffect(() => {
     fetchDrivers();
     fetchCarriers();
-  }, [currentPage, searchTerm]);
+  }, [currentPage, searchTerm, carrierFilter, statusFilter]);
 
   const fetchDrivers = async () => {
     try {
       setLoading(true);
       const response = await driverService.getDrivers({
-        search: searchTerm,
+        search: searchTerm || undefined,
+        carrierId: carrierFilter || undefined,
+        active: statusFilter === '' ? undefined : statusFilter === 'active',
         page: currentPage,
-        limit: 20
+        limit: 50
       });
       setDrivers(response.drivers);
       setTotalPages(response.pagination.pages);
+      setTotalDrivers(response.pagination.total);
     } catch (error) {
       toast.error('Failed to fetch drivers');
     } finally {
@@ -61,6 +80,76 @@ export const Drivers: React.FC = () => {
       setCarriers(response.carriers);
     } catch (error) {
       console.error('Failed to fetch carriers:', error);
+    }
+  };
+
+  // Client-side filtering for location and endorsements (after server-side filters)
+  const filteredDrivers = useMemo(() => {
+    return drivers.filter(d => {
+      // Filter by location
+      if (selectedLocations.length > 0) {
+        if (!d.locationId || !selectedLocations.includes(d.locationId)) return false;
+      }
+      // Filter by endorsement
+      if (endorsementFilter) {
+        if (!d.endorsements?.toLowerCase().includes(endorsementFilter.toLowerCase())) return false;
+      }
+      return true;
+    });
+  }, [drivers, selectedLocations, endorsementFilter]);
+
+  // Sort filtered drivers
+  const sortedDrivers = useMemo(() => {
+    if (!sortBy || !sortDirection) return filteredDrivers;
+
+    return [...filteredDrivers].sort((a, b) => {
+      let aValue: any;
+      let bValue: any;
+
+      if (sortBy === 'carrierId') {
+        aValue = a.carrier?.name || '';
+        bValue = b.carrier?.name || '';
+      } else if (sortBy === 'locationId') {
+        aValue = a.location?.code || '';
+        bValue = b.location?.code || '';
+      } else {
+        aValue = a[sortBy];
+        bValue = b[sortBy];
+      }
+
+      if (aValue == null) aValue = '';
+      if (bValue == null) bValue = '';
+
+      if (typeof aValue === 'string' && typeof bValue === 'string') {
+        const comparison = aValue.toLowerCase().localeCompare(bValue.toLowerCase());
+        return sortDirection === 'asc' ? comparison : -comparison;
+      }
+
+      if (typeof aValue === 'boolean') {
+        return sortDirection === 'asc'
+          ? (aValue === bValue ? 0 : aValue ? -1 : 1)
+          : (aValue === bValue ? 0 : aValue ? 1 : -1);
+      }
+
+      if (aValue < bValue) return sortDirection === 'asc' ? -1 : 1;
+      if (aValue > bValue) return sortDirection === 'asc' ? 1 : -1;
+      return 0;
+    });
+  }, [filteredDrivers, sortBy, sortDirection]);
+
+  const handleSort = (column: keyof CarrierDriver) => {
+    if (sortBy === column) {
+      if (sortDirection === 'asc') {
+        setSortDirection('desc');
+      } else if (sortDirection === 'desc') {
+        setSortBy(null);
+        setSortDirection(null);
+      } else {
+        setSortDirection('asc');
+      }
+    } else {
+      setSortBy(column);
+      setSortDirection('asc');
     }
   };
 
@@ -106,26 +195,52 @@ export const Drivers: React.FC = () => {
     setCurrentPage(1);
   };
 
+  const handleSync = async () => {
+    setIsSyncing(true);
+    try {
+      const result = await driverService.syncDrivers();
+      if (result.success) {
+        toast.success(result.message);
+        fetchDrivers();
+      } else {
+        toast.error(result.message);
+      }
+    } catch (error: any) {
+      const message = error.response?.data?.message || 'Failed to sync drivers';
+      toast.error(message);
+    } finally {
+      setIsSyncing(false);
+    }
+  };
+
+  const clearFilters = () => {
+    setCarrierFilter('');
+    setSelectedLocations([]);
+    setEndorsementFilter('');
+    setStatusFilter('');
+    setCurrentPage(1);
+  };
+
+  const hasActiveFilters = carrierFilter !== '' || selectedLocations.length > 0 || endorsementFilter !== '' || statusFilter !== '';
+
   const columns = [
     {
       header: 'Driver Name',
       accessor: 'name' as keyof CarrierDriver,
+      sortable: true,
       cell: (driver: CarrierDriver) => (
-        <div className="font-medium text-gray-900">{driver.name}</div>
-      )
-    },
-    {
-      header: 'Number',
-      accessor: 'number' as keyof CarrierDriver,
-      cell: (driver: CarrierDriver) => (
-        <div className="text-gray-600">
-          {driver.number || '-'}
+        <div>
+          <div className="font-medium text-gray-900">{driver.name}</div>
+          {driver.number && (
+            <div className="text-xs text-gray-500">#{driver.number}</div>
+          )}
         </div>
       )
     },
     {
       header: 'Carrier',
-      accessor: 'carrier' as keyof CarrierDriver,
+      accessor: 'carrierId' as keyof CarrierDriver,
+      sortable: true,
       cell: (driver: CarrierDriver) => (
         <div className="flex items-center">
           <Truck className="w-4 h-4 mr-2 text-gray-400" />
@@ -136,6 +251,7 @@ export const Drivers: React.FC = () => {
     {
       header: 'Phone',
       accessor: 'phoneNumber' as keyof CarrierDriver,
+      sortable: true,
       cell: (driver: CarrierDriver) => (
         <div className="flex items-center text-gray-600">
           {driver.phoneNumber ? (
@@ -150,24 +266,9 @@ export const Drivers: React.FC = () => {
       )
     },
     {
-      header: 'Email',
-      accessor: 'email' as keyof CarrierDriver,
-      cell: (driver: CarrierDriver) => (
-        <div className="flex items-center text-gray-600">
-          {driver.email ? (
-            <>
-              <Mail className="w-4 h-4 mr-1" />
-              {driver.email}
-            </>
-          ) : (
-            '-'
-          )}
-        </div>
-      )
-    },
-    {
       header: 'Location',
       accessor: 'locationId' as keyof CarrierDriver,
+      sortable: true,
       cell: (driver: CarrierDriver) => (
         <div className="flex items-center text-gray-600">
           {driver.location ? (
@@ -189,17 +290,24 @@ export const Drivers: React.FC = () => {
       )
     },
     {
-      header: 'Hazmat',
-      accessor: 'hazmatEndorsement' as keyof CarrierDriver,
+      header: 'Endorsements',
+      accessor: 'endorsements' as keyof CarrierDriver,
       cell: (driver: CarrierDriver) => (
         <div className="flex items-center">
-          {driver.hazmatEndorsement ? (
-            <span className="inline-flex items-center px-2 py-0.5 rounded text-xs font-medium bg-orange-100 text-orange-800">
-              <AlertTriangle className="w-3 h-3 mr-1" />
-              Hazmat
-            </span>
+          {driver.endorsements ? (
+            <div className="flex flex-wrap gap-1">
+              {driver.endorsements.split(',').map((e, i) => (
+                <span
+                  key={i}
+                  className="inline-flex items-center px-2 py-0.5 rounded text-xs font-medium bg-blue-100 text-blue-800"
+                >
+                  <Shield className="w-3 h-3 mr-1" />
+                  {e.trim()}
+                </span>
+              ))}
+            </div>
           ) : (
-            <span className="text-gray-400">-</span>
+            <span className="text-gray-400">None</span>
           )}
         </div>
       )
@@ -207,6 +315,7 @@ export const Drivers: React.FC = () => {
     {
       header: 'Status',
       accessor: 'active' as keyof CarrierDriver,
+      sortable: true,
       cell: (driver: CarrierDriver) => (
         <StatusBadge
           status={driver.active ? 'active' : 'inactive'}
@@ -251,16 +360,25 @@ export const Drivers: React.FC = () => {
 
       <div className="bg-white shadow rounded-lg">
         <div className="p-6 border-b border-gray-200">
-          <div className="flex justify-between items-center">
+          {/* Search and Actions Row */}
+          <div className="flex justify-between items-center mb-4">
             <div className="flex-1 max-w-md">
               <Search
                 value={searchTerm}
                 onChange={handleSearch}
-                placeholder="Search drivers by name, phone, or carrier..."
+                placeholder="Search drivers by name, number, or carrier..."
               />
             </div>
             {isAdminOrDispatcher && (
               <div className="ml-4 flex space-x-2">
+                <button
+                  onClick={handleSync}
+                  disabled={isSyncing}
+                  className="inline-flex items-center px-4 py-2 border border-gray-300 rounded-md shadow-sm text-sm font-medium text-gray-700 bg-white hover:bg-gray-50 disabled:opacity-50 disabled:cursor-not-allowed"
+                >
+                  <RefreshCw className={`w-4 h-4 mr-2 ${isSyncing ? 'animate-spin' : ''}`} />
+                  {isSyncing ? 'Syncing...' : 'Sync Drivers'}
+                </button>
                 <button
                   onClick={() => setIsImportModalOpen(true)}
                   className="inline-flex items-center px-4 py-2 border border-gray-300 rounded-md shadow-sm text-sm font-medium text-gray-700 bg-white hover:bg-gray-50"
@@ -278,15 +396,99 @@ export const Drivers: React.FC = () => {
               </div>
             )}
           </div>
+
+          {/* Filters Row */}
+          <div className="flex flex-wrap items-center gap-4">
+            <div className="flex items-center gap-2">
+              <Filter className="h-4 w-4 text-gray-400" />
+              <span className="text-sm font-medium text-gray-700">Filters:</span>
+            </div>
+
+            {/* Carrier Filter */}
+            <select
+              value={carrierFilter}
+              onChange={(e) => {
+                setCarrierFilter(e.target.value ? parseInt(e.target.value) : '');
+                setCurrentPage(1);
+              }}
+              className="rounded-md border border-gray-300 shadow-sm text-sm focus:ring-indigo-500 focus:border-indigo-500"
+            >
+              <option value="">All Carriers</option>
+              {carriers.map(carrier => (
+                <option key={carrier.id} value={carrier.id}>
+                  {carrier.name}
+                </option>
+              ))}
+            </select>
+
+            {/* Location Filter */}
+            <div className="flex items-center gap-2">
+              <MapPin className="h-4 w-4 text-gray-400" />
+              <LocationMultiSelect
+                value={selectedLocations}
+                onChange={(locs) => {
+                  setSelectedLocations(locs);
+                }}
+                placeholder="Filter by location..."
+                className="w-56"
+              />
+            </div>
+
+            {/* Endorsement Filter */}
+            <select
+              value={endorsementFilter}
+              onChange={(e) => setEndorsementFilter(e.target.value)}
+              className="rounded-md border border-gray-300 shadow-sm text-sm focus:ring-indigo-500 focus:border-indigo-500"
+            >
+              <option value="">All Endorsements</option>
+              {ENDORSEMENT_OPTIONS.map(endorsement => (
+                <option key={endorsement} value={endorsement}>
+                  {endorsement.toUpperCase()}
+                </option>
+              ))}
+            </select>
+
+            {/* Status Filter */}
+            <select
+              value={statusFilter}
+              onChange={(e) => {
+                setStatusFilter(e.target.value as 'active' | 'inactive' | '');
+                setCurrentPage(1);
+              }}
+              className="rounded-md border border-gray-300 shadow-sm text-sm focus:ring-indigo-500 focus:border-indigo-500"
+            >
+              <option value="">All Statuses</option>
+              <option value="active">Active</option>
+              <option value="inactive">Inactive</option>
+            </select>
+
+            {/* Clear Filters */}
+            {hasActiveFilters && (
+              <button
+                onClick={clearFilters}
+                className="text-sm text-indigo-600 hover:text-indigo-800"
+              >
+                Clear filters
+              </button>
+            )}
+
+            {/* Results Count */}
+            <div className="ml-auto text-sm text-gray-500">
+              {sortedDrivers.length} of {totalDrivers} drivers
+            </div>
+          </div>
         </div>
 
         <DataTable
           columns={columns}
-          data={drivers}
+          data={sortedDrivers}
           loading={loading}
+          sortBy={sortBy}
+          sortDirection={sortDirection}
+          onSort={handleSort}
         />
 
-        {!loading && drivers.length > 0 && (
+        {!loading && totalPages > 1 && (
           <div className="px-6 py-4 border-t border-gray-200">
             <TablePagination
               currentPage={currentPage}

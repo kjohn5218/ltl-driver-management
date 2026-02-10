@@ -1,12 +1,14 @@
 import { Router } from 'express';
 import { body, query } from 'express-validator';
-import { 
-  getDrivers, 
-  getDriverById, 
-  createDriver, 
-  updateDriver, 
+import {
+  getDrivers,
+  getDriverById,
+  createDriver,
+  updateDriver,
   deleteDriver,
-  getActiveDriversByCarrier
+  getActiveDriversByCarrier,
+  syncDrivers,
+  getDriverSyncStatus
 } from '../controllers/driver.controller';
 import { authenticate, authorize } from '../middleware/auth.middleware';
 import { validateRequest } from '../middleware/validation.middleware';
@@ -78,6 +80,22 @@ router.delete(
   '/:id',
   authorize(UserRole.ADMIN),
   deleteDriver
+);
+
+// ==================== EXTERNAL API SYNC ====================
+
+// Sync drivers from external API (Admin only)
+router.post(
+  '/sync',
+  authorize(UserRole.ADMIN),
+  syncDrivers
+);
+
+// Get driver sync status
+router.get(
+  '/sync/status',
+  authorize(UserRole.ADMIN, UserRole.DISPATCHER),
+  getDriverSyncStatus
 );
 
 export default router;

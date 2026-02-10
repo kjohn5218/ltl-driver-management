@@ -60,11 +60,39 @@ export const getTrucks = async (req: Request, res: Response): Promise<void> => {
           },
           assignedDriver: {
             select: { id: true, name: true }
+          },
+          linehaulTrips: {
+            where: {
+              status: { in: ['ARRIVED', 'COMPLETED', 'UNLOADING'] },
+              actualArrival: { not: null }
+            },
+            orderBy: { actualArrival: 'desc' },
+            take: 1,
+            include: {
+              linehaulProfile: {
+                include: {
+                  destinationTerminal: {
+                    select: { id: true, code: true, name: true }
+                  }
+                }
+              }
+            }
           }
         }
       }),
       prisma.equipmentTruck.count({ where })
     ]);
+
+    // Transform trucks to include lastArrivalTerminal
+    const transformedTrucks = trucks.map(truck => {
+      const lastTrip = truck.linehaulTrips?.[0];
+      const lastArrivalTerminal = lastTrip?.linehaulProfile?.destinationTerminal || null;
+      const { linehaulTrips, ...truckData } = truck;
+      return {
+        ...truckData,
+        lastArrivalTerminal
+      };
+    });
 
     // If no trucks in database, fallback to mock fleet data
     if (total === 0 && !search && !status && !truckType && !terminalId) {
@@ -111,7 +139,7 @@ export const getTrucks = async (req: Request, res: Response): Promise<void> => {
     }
 
     res.json({
-      trucks,
+      trucks: transformedTrucks,
       pagination: {
         page: pageNum,
         limit: limitNum,
@@ -422,6 +450,24 @@ export const getTrailers = async (req: Request, res: Response): Promise<void> =>
       where.status = 'AVAILABLE';
     }
 
+    const tripInclude = {
+      where: {
+        status: { in: ['ARRIVED', 'COMPLETED', 'UNLOADING'] as ('ARRIVED' | 'COMPLETED' | 'UNLOADING')[] },
+        actualArrival: { not: null }
+      },
+      orderBy: { actualArrival: 'desc' as const },
+      take: 1,
+      include: {
+        linehaulProfile: {
+          include: {
+            destinationTerminal: {
+              select: { id: true, code: true, name: true }
+            }
+          }
+        }
+      }
+    };
+
     const [trailers, total] = await Promise.all([
       prisma.equipmentTrailer.findMany({
         where,
@@ -431,11 +477,39 @@ export const getTrailers = async (req: Request, res: Response): Promise<void> =>
         include: {
           currentTerminal: {
             select: { id: true, code: true, name: true }
-          }
+          },
+          primaryTrips: tripInclude,
+          secondaryTrips: tripInclude,
+          tertiaryTrips: tripInclude
         }
       }),
       prisma.equipmentTrailer.count({ where })
     ]);
+
+    // Transform trailers to include lastArrivalTerminal from any trip position
+    const transformedTrailers = trailers.map((trailer: any) => {
+      // Get all trips and find the most recent arrival
+      const allTrips = [
+        ...(trailer.primaryTrips || []),
+        ...(trailer.secondaryTrips || []),
+        ...(trailer.tertiaryTrips || [])
+      ].filter((t: any) => t.actualArrival);
+
+      // Sort by actualArrival descending and get the most recent
+      allTrips.sort((a: any, b: any) => {
+        const dateA = a.actualArrival ? new Date(a.actualArrival).getTime() : 0;
+        const dateB = b.actualArrival ? new Date(b.actualArrival).getTime() : 0;
+        return dateB - dateA;
+      });
+
+      const lastTrip = allTrips[0];
+      const lastArrivalTerminal = lastTrip?.linehaulProfile?.destinationTerminal || null;
+      const { primaryTrips, secondaryTrips, tertiaryTrips, ...trailerData } = trailer;
+      return {
+        ...trailerData,
+        lastArrivalTerminal
+      };
+    });
 
     // If no trailers in database, fallback to mock fleet data
     if (total === 0 && !search && !status && !trailerType && !terminalId) {
@@ -480,7 +554,7 @@ export const getTrailers = async (req: Request, res: Response): Promise<void> =>
     }
 
     res.json({
-      trailers,
+      trailers: transformedTrailers,
       pagination: {
         page: pageNum,
         limit: limitNum,
@@ -756,6 +830,24 @@ export const getDollies = async (req: Request, res: Response): Promise<void> => 
       where.status = 'AVAILABLE';
     }
 
+    const dollyTripInclude = {
+      where: {
+        status: { in: ['ARRIVED', 'COMPLETED', 'UNLOADING'] as ('ARRIVED' | 'COMPLETED' | 'UNLOADING')[] },
+        actualArrival: { not: null }
+      },
+      orderBy: { actualArrival: 'desc' as const },
+      take: 1,
+      include: {
+        linehaulProfile: {
+          include: {
+            destinationTerminal: {
+              select: { id: true, code: true, name: true }
+            }
+          }
+        }
+      }
+    };
+
     const [dollies, total] = await Promise.all([
       prisma.equipmentDolly.findMany({
         where,
@@ -765,11 +857,37 @@ export const getDollies = async (req: Request, res: Response): Promise<void> => 
         include: {
           currentTerminal: {
             select: { id: true, code: true, name: true }
-          }
+          },
+          linehaulTrips: dollyTripInclude,
+          linehaulTrips2: dollyTripInclude
         }
       }),
       prisma.equipmentDolly.count({ where })
     ]);
+
+    // Transform dollies to include lastArrivalTerminal from any trip position
+    const transformedDollies = dollies.map((dolly: any) => {
+      // Get all trips and find the most recent arrival
+      const allTrips = [
+        ...(dolly.linehaulTrips || []),
+        ...(dolly.linehaulTrips2 || [])
+      ].filter((t: any) => t.actualArrival);
+
+      // Sort by actualArrival descending and get the most recent
+      allTrips.sort((a: any, b: any) => {
+        const dateA = a.actualArrival ? new Date(a.actualArrival).getTime() : 0;
+        const dateB = b.actualArrival ? new Date(b.actualArrival).getTime() : 0;
+        return dateB - dateA;
+      });
+
+      const lastTrip = allTrips[0];
+      const lastArrivalTerminal = lastTrip?.linehaulProfile?.destinationTerminal || null;
+      const { linehaulTrips, linehaulTrips2, ...dollyData } = dolly;
+      return {
+        ...dollyData,
+        lastArrivalTerminal
+      };
+    });
 
     // If no dollies in database, fallback to mock fleet data
     if (total === 0 && !search && !status && !dollyType && !terminalId) {
@@ -807,7 +925,7 @@ export const getDollies = async (req: Request, res: Response): Promise<void> => 
     }
 
     res.json({
-      dollies,
+      dollies: transformedDollies,
       pagination: {
         page: pageNum,
         limit: limitNum,
@@ -1079,5 +1197,274 @@ export const getAvailableEquipment = async (req: Request, res: Response): Promis
   } catch (error) {
     console.error('Error fetching available equipment:', error);
     res.status(500).json({ message: 'Failed to fetch available equipment' });
+  }
+};
+
+// ==================== FORMSAPP SYNC ====================
+
+import { getFormsAppService } from '../services/formsapp.service';
+import { isFormsAppConfigured } from '../config/formsapp.config';
+
+// Sync all equipment from FormsApp
+export const syncEquipment = async (_req: Request, res: Response): Promise<void> => {
+  try {
+    if (!isFormsAppConfigured()) {
+      res.status(503).json({
+        message: 'FormsApp integration is not configured. Please set FORMSAPP_API_KEY and FORMSAPP_API_URL environment variables.'
+      });
+      return;
+    }
+
+    const service = getFormsAppService();
+    const result = await service.syncAllEquipment();
+
+    res.json({
+      success: true,
+      message: result.summary,
+      trucks: result.trucks,
+      trailers: result.trailers,
+      dollies: result.dollies
+    });
+  } catch (error) {
+    console.error('Error syncing equipment from FormsApp:', error);
+    const message = error instanceof Error ? error.message : 'Unknown error';
+    res.status(500).json({
+      success: false,
+      message: `Failed to sync equipment: ${message}`
+    });
+  }
+};
+
+// Sync trucks only from FormsApp
+export const syncTrucks = async (_req: Request, res: Response): Promise<void> => {
+  try {
+    if (!isFormsAppConfigured()) {
+      res.status(503).json({
+        message: 'FormsApp integration is not configured.'
+      });
+      return;
+    }
+
+    const service = getFormsAppService();
+    const result = await service.syncTrucks();
+
+    res.json({
+      success: true,
+      message: `Synced ${result.created} created, ${result.updated} updated trucks`,
+      ...result
+    });
+  } catch (error) {
+    console.error('Error syncing trucks from FormsApp:', error);
+    const message = error instanceof Error ? error.message : 'Unknown error';
+    res.status(500).json({
+      success: false,
+      message: `Failed to sync trucks: ${message}`
+    });
+  }
+};
+
+// Sync trailers only from FormsApp
+export const syncTrailers = async (_req: Request, res: Response): Promise<void> => {
+  try {
+    if (!isFormsAppConfigured()) {
+      res.status(503).json({
+        message: 'FormsApp integration is not configured.'
+      });
+      return;
+    }
+
+    const service = getFormsAppService();
+    const result = await service.syncTrailers();
+
+    res.json({
+      success: true,
+      message: `Synced ${result.created} created, ${result.updated} updated trailers`,
+      ...result
+    });
+  } catch (error) {
+    console.error('Error syncing trailers from FormsApp:', error);
+    const message = error instanceof Error ? error.message : 'Unknown error';
+    res.status(500).json({
+      success: false,
+      message: `Failed to sync trailers: ${message}`
+    });
+  }
+};
+
+// Sync dollies only from FormsApp
+export const syncDollies = async (_req: Request, res: Response): Promise<void> => {
+  try {
+    if (!isFormsAppConfigured()) {
+      res.status(503).json({
+        message: 'FormsApp integration is not configured.'
+      });
+      return;
+    }
+
+    const service = getFormsAppService();
+    const result = await service.syncDollies();
+
+    res.json({
+      success: true,
+      message: `Synced ${result.created} created, ${result.updated} updated dollies`,
+      ...result
+    });
+  } catch (error) {
+    console.error('Error syncing dollies from FormsApp:', error);
+    const message = error instanceof Error ? error.message : 'Unknown error';
+    res.status(500).json({
+      success: false,
+      message: `Failed to sync dollies: ${message}`
+    });
+  }
+};
+
+// Get sync status
+export const getSyncStatus = async (_req: Request, res: Response): Promise<void> => {
+  try {
+    if (!isFormsAppConfigured()) {
+      res.json({
+        configured: false,
+        message: 'FormsApp integration is not configured.'
+      });
+      return;
+    }
+
+    const service = getFormsAppService();
+    const status = service.getSyncStatus();
+
+    res.json({
+      configured: true,
+      lastSyncAt: status.lastSyncAt,
+      lastResult: status.lastResult
+    });
+  } catch (error) {
+    console.error('Error getting sync status:', error);
+    res.status(500).json({ message: 'Failed to get sync status' });
+  }
+};
+
+// ==================== MOTIVE GPS TRACKING ====================
+
+import { getMotiveService } from '../services/motive.service';
+import { isMotiveConfigured } from '../config/motive.config';
+
+// Sync vehicle locations from Motive
+export const syncVehicleLocations = async (_req: Request, res: Response): Promise<void> => {
+  try {
+    if (!isMotiveConfigured()) {
+      res.status(503).json({
+        success: false,
+        message: 'Motive integration is not configured. Please set MOTIVE_API_KEY environment variable.'
+      });
+      return;
+    }
+
+    const service = getMotiveService();
+    const result = await service.syncVehicleLocations();
+
+    res.json({
+      success: true,
+      message: `Updated ${result.trucksUpdated} truck locations, ${result.trucksNotFound} not found in database`,
+      ...result
+    });
+  } catch (error) {
+    console.error('Error syncing vehicle locations from Motive:', error);
+    const message = error instanceof Error ? error.message : 'Unknown error';
+    res.status(500).json({
+      success: false,
+      message: `Failed to sync locations: ${message}`
+    });
+  }
+};
+
+// Get all current vehicle locations (for map display)
+export const getVehicleLocations = async (_req: Request, res: Response): Promise<void> => {
+  try {
+    if (!isMotiveConfigured()) {
+      res.status(503).json({
+        success: false,
+        message: 'Motive integration is not configured.'
+      });
+      return;
+    }
+
+    const service = getMotiveService();
+    const locations = await service.getAllVehicleLocations();
+
+    res.json({
+      success: true,
+      count: locations.length,
+      locations
+    });
+  } catch (error) {
+    console.error('Error fetching vehicle locations:', error);
+    const message = error instanceof Error ? error.message : 'Unknown error';
+    res.status(500).json({
+      success: false,
+      message: `Failed to fetch locations: ${message}`
+    });
+  }
+};
+
+// Get location for a specific truck
+export const getTruckLocation = async (req: Request, res: Response): Promise<void> => {
+  try {
+    if (!isMotiveConfigured()) {
+      res.status(503).json({
+        success: false,
+        message: 'Motive integration is not configured.'
+      });
+      return;
+    }
+
+    const { unitNumber } = req.params;
+    const service = getMotiveService();
+    const location = await service.getTruckLocation(unitNumber);
+
+    if (!location) {
+      res.status(404).json({
+        success: false,
+        message: `No location found for truck ${unitNumber}`
+      });
+      return;
+    }
+
+    res.json({
+      success: true,
+      location
+    });
+  } catch (error) {
+    console.error('Error fetching truck location:', error);
+    const message = error instanceof Error ? error.message : 'Unknown error';
+    res.status(500).json({
+      success: false,
+      message: `Failed to fetch location: ${message}`
+    });
+  }
+};
+
+// Get Motive sync status
+export const getMotiveSyncStatus = async (_req: Request, res: Response): Promise<void> => {
+  try {
+    if (!isMotiveConfigured()) {
+      res.json({
+        configured: false,
+        message: 'Motive integration is not configured.'
+      });
+      return;
+    }
+
+    const service = getMotiveService();
+    const status = service.getSyncStatus();
+
+    res.json({
+      configured: true,
+      lastSyncAt: status.lastSyncAt,
+      lastResult: status.lastResult
+    });
+  } catch (error) {
+    console.error('Error getting Motive sync status:', error);
+    res.status(500).json({ message: 'Failed to get sync status' });
   }
 };

@@ -60,7 +60,6 @@ export const Dispatch: React.FC = () => {
   const [dollies, setDollies] = useState<EquipmentDolly[]>([]);
   const [locations, setLocations] = useState<Location[]>([]);
   const [loading, setLoading] = useState(true);
-  const [driversLoading, setDriversLoading] = useState(true);
 
   // Tab state - read from URL params
   const tabFromUrl = searchParams.get('tab') as DispatchTab | null;
@@ -151,13 +150,10 @@ export const Dispatch: React.FC = () => {
 
   const fetchDrivers = async () => {
     try {
-      setDriversLoading(true);
-      const response = await driverService.getDrivers({ limit: 1000 });
+      const response = await driverService.getDrivers({ active: true, limit: 1000 });
       setDrivers(response.drivers);
     } catch (error) {
       console.error('Failed to fetch drivers:', error);
-    } finally {
-      setDriversLoading(false);
     }
   };
 
@@ -417,9 +413,6 @@ export const Dispatch: React.FC = () => {
       : [])
   ];
 
-  // Count active drivers for tab badge
-  const activeDriverCount = drivers.filter(d => d.active).length;
-
   return (
     <div className="space-y-6">
       <PageHeader
@@ -474,13 +467,6 @@ export const Dispatch: React.FC = () => {
             >
               <Users className="w-4 h-4 mr-2" />
               Drivers
-              <span className={`ml-2 px-2 py-0.5 rounded-full text-xs ${
-                activeTab === 'drivers'
-                  ? 'bg-amber-200 text-amber-800'
-                  : 'bg-amber-100 text-amber-700'
-              }`}>
-                {activeDriverCount}
-              </span>
             </button>
             <button
               onClick={() => handleTabChange('expected')}
@@ -510,7 +496,7 @@ export const Dispatch: React.FC = () => {
       </div>
 
       <div className={activeTab === 'drivers' ? '' : 'hidden'}>
-        <DriversTab drivers={drivers} loading={driversLoading} />
+        <DriversTab />
       </div>
 
       <div className={activeTab === 'expected' ? '' : 'hidden'}>

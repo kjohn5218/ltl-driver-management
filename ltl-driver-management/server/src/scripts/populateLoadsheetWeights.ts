@@ -24,9 +24,10 @@ async function populateLoadsheetWeights() {
 
   for (const loadsheet of loadsheets) {
     // Generate realistic pieces and weight based on trailer size and status
+    // Capacity in lbs based on trailer length
     const trailerLength = loadsheet.suggestedTrailerLength || 53;
-    const capacityMap: Record<number, number> = { 28: 1400, 40: 2000, 45: 2400, 48: 2400, 53: 2800 };
-    const trailerCapacity = capacityMap[trailerLength] || 2800;
+    const capacityMap: Record<number, number> = { 28: 20000, 40: 40000, 43: 40000, 45: 42000, 48: 44000, 53: 45000 };
+    const trailerCapacity = capacityMap[trailerLength] || 45000;
 
     // Vary the load percentage based on status
     let loadPercentage = 0.5;
@@ -48,9 +49,10 @@ async function populateLoadsheetWeights() {
         loadPercentage = 0.5;
     }
 
+    // currentLoad is now weight in lbs
     const currentLoad = Math.round(trailerCapacity * loadPercentage);
-    const weight = Math.round(currentLoad * 16 + Math.random() * 2000);
-    const pieces = Math.round(currentLoad / 15 + Math.random() * 20);
+    const weight = Math.round(currentLoad + Math.random() * 2000);
+    const pieces = Math.round(currentLoad / 50 + Math.random() * 20); // ~50 lbs per piece average
 
     await prisma.loadsheet.update({
       where: { id: loadsheet.id },

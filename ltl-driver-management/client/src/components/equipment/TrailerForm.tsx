@@ -28,6 +28,16 @@ const statusOptions: { value: EquipmentStatus; label: string }[] = [
   { value: 'OUT_OF_SERVICE', label: 'Out of Service' }
 ];
 
+// Capacity mapping based on trailer length (in lbs)
+const lengthToCapacity: Record<number, number> = {
+  53: 45000,
+  48: 44000,
+  45: 42000,
+  43: 40000,
+  40: 40000,
+  28: 20000
+};
+
 export const TrailerForm: React.FC<TrailerFormProps> = ({
   trailer,
   locations,
@@ -38,7 +48,7 @@ export const TrailerForm: React.FC<TrailerFormProps> = ({
     unitNumber: '',
     trailerType: 'DRY_VAN_53' as TrailerType,
     lengthFeet: 53,
-    capacityWeight: '',
+    capacityWeight: '45000',
     licensePlate: '',
     licensePlateState: '',
     currentTerminalId: '',
@@ -48,11 +58,13 @@ export const TrailerForm: React.FC<TrailerFormProps> = ({
 
   useEffect(() => {
     if (trailer) {
+      const length = trailer.lengthFeet || 53;
+      const defaultCapacity = lengthToCapacity[length] || 45000;
       setFormData({
         unitNumber: trailer.unitNumber || '',
         trailerType: trailer.trailerType || 'DRY_VAN_53',
-        lengthFeet: trailer.lengthFeet || 53,
-        capacityWeight: trailer.capacityWeight?.toString() || '',
+        lengthFeet: length,
+        capacityWeight: trailer.capacityWeight?.toString() || defaultCapacity.toString(),
         licensePlate: trailer.licensePlate || '',
         licensePlateState: trailer.licensePlateState || '',
         currentTerminalId: trailer.currentTerminalId?.toString() || '',
@@ -109,11 +121,20 @@ export const TrailerForm: React.FC<TrailerFormProps> = ({
           <label className="block text-sm font-medium text-gray-700">Length (feet)</label>
           <select
             value={formData.lengthFeet}
-            onChange={(e) => setFormData({ ...formData, lengthFeet: parseInt(e.target.value) })}
+            onChange={(e) => {
+              const newLength = parseInt(e.target.value);
+              const newCapacity = lengthToCapacity[newLength] || 45000;
+              setFormData({
+                ...formData,
+                lengthFeet: newLength,
+                capacityWeight: newCapacity.toString()
+              });
+            }}
             className="mt-1 block w-full rounded-md border-gray-300 shadow-sm focus:border-indigo-500 focus:ring-indigo-500 sm:text-sm"
           >
             <option value={28}>28'</option>
             <option value={40}>40'</option>
+            <option value={43}>43'</option>
             <option value={45}>45'</option>
             <option value={48}>48'</option>
             <option value={53}>53'</option>

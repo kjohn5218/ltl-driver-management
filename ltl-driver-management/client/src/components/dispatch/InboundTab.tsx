@@ -26,9 +26,49 @@ import {
   X,
   ExternalLink,
   Loader2,
-  CheckCircle
+  CheckCircle,
+  ChevronUp,
+  ChevronDown
 } from 'lucide-react';
 import { format, parseISO } from 'date-fns';
+
+type SortDirection = 'asc' | 'desc' | null;
+type SortColumn = 'tripNumber' | 'driver' | 'powerUnit' | 'trailer' | 'manifests' | 'linehaul' | 'leg' | 'pieces' | 'weight' | 'schedArrival' | 'eta' | 'status';
+
+interface SortConfig {
+  column: SortColumn | null;
+  direction: SortDirection;
+}
+
+// Sortable header component
+const SortableHeader: React.FC<{
+  column: SortColumn;
+  label: string;
+  sortConfig: SortConfig;
+  onSort: (column: SortColumn) => void;
+  className?: string;
+  icon?: React.ReactNode;
+  align?: 'left' | 'right';
+}> = ({ column, label, sortConfig, onSort, className = '', icon, align = 'left' }) => {
+  const isActive = sortConfig.column === column;
+  const direction = isActive ? sortConfig.direction : null;
+
+  return (
+    <th
+      className={`px-4 py-3 text-xs font-medium text-gray-500 dark:text-gray-400 uppercase tracking-wider cursor-pointer hover:bg-gray-100 dark:hover:bg-gray-800 select-none ${align === 'right' ? 'text-right' : 'text-left'} ${className}`}
+      onClick={() => onSort(column)}
+    >
+      <div className={`flex items-center gap-1 ${align === 'right' ? 'justify-end' : ''}`}>
+        {icon}
+        <span>{label}</span>
+        <span className="ml-1 flex flex-col">
+          <ChevronUp className={`h-3 w-3 -mb-1 ${isActive && direction === 'asc' ? 'text-indigo-600 dark:text-indigo-400' : 'text-gray-300 dark:text-gray-600'}`} />
+          <ChevronDown className={`h-3 w-3 ${isActive && direction === 'desc' ? 'text-indigo-600 dark:text-indigo-400' : 'text-gray-300 dark:text-gray-600'}`} />
+        </span>
+      </div>
+    </th>
+  );
+};
 
 interface InboundTripRow {
   trip: LinehaulTrip;
@@ -44,6 +84,10 @@ export const InboundTab: React.FC = () => {
   const [endDate, setEndDate] = useState(today);
   const [selectedDestinations, setSelectedDestinations] = useState<number[]>([]);
   const [tripEtas, setTripEtas] = useState<Record<number, EtaResult>>({});
+  const [showUnarrivedOnly, setShowUnarrivedOnly] = useState(false);
+
+  // Sort state
+  const [sortConfig, setSortConfig] = useState<SortConfig>({ column: null, direction: null });
 
   // Manifest details modal state
   const [manifestModalOpen, setManifestModalOpen] = useState(false);
@@ -133,10 +177,16 @@ export const InboundTab: React.FC = () => {
     return { trip, loadsheets: tripLoadsheets, eta };
   });
 
-  // Filter by destination and search term
+  // Filter by destination, search term, and unarrived status
   const filteredRows = useMemo(() => {
     return inboundRows.filter(row => {
-      // Apply destination filter first
+      // Apply unarrived filter first
+      if (showUnarrivedOnly) {
+        const unarrivedStatuses = ['DISPATCHED', 'IN_TRANSIT'];
+        if (!unarrivedStatuses.includes(row.trip.status)) return false;
+      }
+
+      // Apply destination filter
       if (selectedDestinations.length > 0) {
         const tripDestinationId = row.trip.destinationTerminalId;
         if (!tripDestinationId || !selectedDestinations.includes(tripDestinationId)) return false;
@@ -160,7 +210,33 @@ export const InboundTab: React.FC = () => {
 
       return false;
     });
-  }, [inboundRows, selectedDestinations, searchTerm]);
+  }, [inboundRows, selectedDestinations, searchTerm, showUnarrivedOnly]);
+
+  // Handle column sort
+  const handleSort = (column: SortColumn) => {
+    setSortConfig(current => {
+      if (current.column === column) {
+        // Cycle: asc -> desc -> null
+        if (current.direction === 'asc') return { column, direction: 'desc' };
+        if (current.direction === 'desc') return { column: null, direction: null };
+      }
+      return { column, direction: 'asc' };
+    });
+  };
+
+  // Parse time string (HH:mm, HH:mm:ss, or HH:MM:SS) to minutes since midnight for comparison
+  const parseTimeToMinutes = (timeStr: string): number | null => {
+    if (!timeStr) return null;
+
+    // Handle HH:mm or HH:mm:ss format (with or without seconds)
+    const match = timeStr.match(/^(\d{1,2}):(\d{2})(?::\d{2})?$/);
+    if (match) {
+      const hours = parseInt(match[1], 10);
+      const minutes = parseInt(match[2], 10);
+      return hours * 60 + minutes;
+    }
+    return null;
+  };
 
   // Format loadsheets/manifests for display in a single line
   const formatManifests = (loadsheets: Loadsheet[]): string => {
@@ -350,6 +426,78 @@ export const InboundTab: React.FC = () => {
     return !row.trip.truckId && !row.trip.truck;
   };
 
+  // Sort filtered rows
+  const sortedRows = useMemo(() => {
+    if (!sortConfig.column || !sortConfig.direction) return filteredRows;
+
+    return [...filteredRows].sort((a, b) => {
+      const direction = sortConfig.direction === 'asc' ? 1 : -1;
+
+      switch (sortConfig.column) {
+        case 'tripNumber':
+          return direction * (a.trip.tripNumber || '').localeCompare(b.trip.tripNumber || '');
+
+        case 'driver':
+          return direction * (a.trip.driver?.name || '').localeCompare(b.trip.driver?.name || '');
+
+        case 'powerUnit':
+          const aUnit = a.trip.truck?.unitNumber || 'OWNOP';
+          const bUnit = b.trip.truck?.unitNumber || 'OWNOP';
+          return direction * aUnit.localeCompare(bUnit);
+
+        case 'trailer':
+          const aTrailer = a.trip.trailer?.unitNumber || a.loadsheets[0]?.trailerNumber || '';
+          const bTrailer = b.trip.trailer?.unitNumber || b.loadsheets[0]?.trailerNumber || '';
+          return direction * aTrailer.localeCompare(bTrailer);
+
+        case 'manifests':
+          const aManifest = a.loadsheets[0]?.manifestNumber || '';
+          const bManifest = b.loadsheets[0]?.manifestNumber || '';
+          return direction * aManifest.localeCompare(bManifest);
+
+        case 'linehaul':
+          const aLinehaul = getLinehaulInfo(a).linehaulName;
+          const bLinehaul = getLinehaulInfo(b).linehaulName;
+          return direction * aLinehaul.localeCompare(bLinehaul);
+
+        case 'leg':
+          const aLeg = getLinehaulInfo(a).leg;
+          const bLeg = getLinehaulInfo(b).leg;
+          return direction * aLeg.localeCompare(bLeg);
+
+        case 'pieces':
+          const aPieces = getTotalPieces(a) || 0;
+          const bPieces = getTotalPieces(b) || 0;
+          return direction * (aPieces - bPieces);
+
+        case 'weight':
+          const aWeight = getTotalWeight(a) || 0;
+          const bWeight = getTotalWeight(b) || 0;
+          return direction * (aWeight - bWeight);
+
+        case 'schedArrival':
+          const aSchedArrival = getSchedArrival(a);
+          const bSchedArrival = getSchedArrival(b);
+          const aSchedMinutes = parseTimeToMinutes(aSchedArrival.time || '') || 0;
+          const bSchedMinutes = parseTimeToMinutes(bSchedArrival.time || '') || 0;
+          return direction * (aSchedMinutes - bSchedMinutes);
+
+        case 'eta':
+          const aEta = formatEta(a);
+          const bEta = formatEta(b);
+          const aEtaMinutes = parseTimeToMinutes(aEta.time || '') || 0;
+          const bEtaMinutes = parseTimeToMinutes(bEta.time || '') || 0;
+          return direction * (aEtaMinutes - bEtaMinutes);
+
+        case 'status':
+          return direction * (a.trip.status || '').localeCompare(b.trip.status || '');
+
+        default:
+          return 0;
+      }
+    });
+  }, [filteredRows, sortConfig]);
+
   // Open manifest details modal
   const handleManifestClick = (loadsheets: Loadsheet[], tripNumber: string, tripId: number) => {
     setSelectedManifestLoadsheets(loadsheets);
@@ -456,6 +604,20 @@ export const InboundTab: React.FC = () => {
                 className="w-56"
               />
             </div>
+
+            {/* Unarrived Only Filter */}
+            <label className="flex items-center gap-2 cursor-pointer">
+              <input
+                type="checkbox"
+                checked={showUnarrivedOnly}
+                onChange={(e) => setShowUnarrivedOnly(e.target.checked)}
+                className="h-4 w-4 text-blue-600 border-gray-300 rounded focus:ring-blue-500"
+              />
+              <span className="flex items-center gap-1 text-sm text-gray-700 dark:text-gray-300">
+                <Clock className="h-4 w-4 text-blue-500" />
+                Unarrived Only
+              </span>
+            </label>
           </div>
 
           {/* Refresh Button */}
@@ -508,58 +670,25 @@ export const InboundTab: React.FC = () => {
             <table className="min-w-full divide-y divide-gray-200 dark:divide-gray-700">
               <thead className="bg-gray-50 dark:bg-gray-900/50">
                 <tr>
-                  <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 dark:text-gray-400 uppercase tracking-wider">
-                    Trip #
-                  </th>
-                  <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 dark:text-gray-400 uppercase tracking-wider">
-                    Driver
-                  </th>
-                  <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 dark:text-gray-400 uppercase tracking-wider">
-                    Power Unit
-                  </th>
-                  <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 dark:text-gray-400 uppercase tracking-wider">
-                    Trailer
-                  </th>
-                  <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 dark:text-gray-400 uppercase tracking-wider">
-                    Manifests
-                  </th>
-                  <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 dark:text-gray-400 uppercase tracking-wider">
-                    Linehaul
-                  </th>
-                  <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 dark:text-gray-400 uppercase tracking-wider">
-                    Leg
-                  </th>
-                  <th className="px-4 py-3 text-right text-xs font-medium text-gray-500 dark:text-gray-400 uppercase tracking-wider">
-                    <div className="flex items-center justify-end">
-                      <Package className="h-3 w-3 mr-1" />
-                      Pieces
-                    </div>
-                  </th>
-                  <th className="px-4 py-3 text-right text-xs font-medium text-gray-500 dark:text-gray-400 uppercase tracking-wider">
-                    <div className="flex items-center justify-end">
-                      <Scale className="h-3 w-3 mr-1" />
-                      Weight
-                    </div>
-                  </th>
-                  <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 dark:text-gray-400 uppercase tracking-wider">
-                    Sched Arrival
-                  </th>
-                  <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 dark:text-gray-400 uppercase tracking-wider">
-                    <div className="flex items-center">
-                      <Clock className="h-3 w-3 mr-1" />
-                      ETA
-                    </div>
-                  </th>
-                  <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 dark:text-gray-400 uppercase tracking-wider">
-                    Status
-                  </th>
+                  <SortableHeader column="tripNumber" label="Trip #" sortConfig={sortConfig} onSort={handleSort} />
+                  <SortableHeader column="driver" label="Driver" sortConfig={sortConfig} onSort={handleSort} />
+                  <SortableHeader column="powerUnit" label="Power Unit" sortConfig={sortConfig} onSort={handleSort} />
+                  <SortableHeader column="trailer" label="Trailer" sortConfig={sortConfig} onSort={handleSort} />
+                  <SortableHeader column="manifests" label="Manifests" sortConfig={sortConfig} onSort={handleSort} />
+                  <SortableHeader column="linehaul" label="Linehaul" sortConfig={sortConfig} onSort={handleSort} />
+                  <SortableHeader column="leg" label="Leg" sortConfig={sortConfig} onSort={handleSort} />
+                  <SortableHeader column="pieces" label="Pieces" sortConfig={sortConfig} onSort={handleSort} align="right" icon={<Package className="h-3 w-3" />} />
+                  <SortableHeader column="weight" label="Weight" sortConfig={sortConfig} onSort={handleSort} align="right" icon={<Scale className="h-3 w-3" />} />
+                  <SortableHeader column="schedArrival" label="Sched Arrival" sortConfig={sortConfig} onSort={handleSort} />
+                  <SortableHeader column="eta" label="ETA" sortConfig={sortConfig} onSort={handleSort} icon={<Clock className="h-3 w-3" />} />
+                  <SortableHeader column="status" label="Status" sortConfig={sortConfig} onSort={handleSort} />
                   <th className="px-4 py-3 text-center text-xs font-medium text-gray-500 dark:text-gray-400 uppercase tracking-wider">
                     Actions
                   </th>
                 </tr>
               </thead>
               <tbody className="bg-white dark:bg-gray-800 divide-y divide-gray-200 dark:divide-gray-700">
-                {filteredRows.map((row) => {
+                {sortedRows.map((row) => {
                   const linehaulInfo = getLinehaulInfo(row);
                   const totalPieces = getTotalPieces(row);
                   const totalWeight = getTotalWeight(row);

@@ -78,10 +78,10 @@ const loadsheetToLoadItem = (loadsheet: Loadsheet, index: number): LoadItem => {
   const originCode = parts[0] || loadsheet.originTerminalCode || 'UNK';
   const destCode = parts[1] || 'UNK';
 
-  // Simulate capacity data
+  // Capacity data based on trailer length (in lbs)
   const trailerLength = loadsheet.suggestedTrailerLength || 53;
-  const capacityMap: Record<number, number> = { 28: 1400, 40: 2000, 45: 2400, 48: 2400, 53: 2800 };
-  const trailerCapacity = capacityMap[trailerLength] || 2800;
+  const capacityMap: Record<number, number> = { 28: 20000, 40: 40000, 43: 40000, 45: 42000, 48: 44000, 53: 45000 };
+  const trailerCapacity = capacityMap[trailerLength] || 45000;
 
   // Use actual pieces/weight if available, otherwise estimate based on capacity
   let loadPercentage = 0;
@@ -92,11 +92,12 @@ const loadsheetToLoadItem = (loadsheet: Loadsheet, index: number): LoadItem => {
   else if (loadsheet.status === 'DISPATCHED') loadPercentage = 0.95;
   else loadPercentage = 0.5;
 
+  // Current load is now weight-based (in lbs)
   const currentLoad = Math.round(trailerCapacity * loadPercentage);
 
   // Use actual loadsheet pieces/weight if available, otherwise estimate
-  const weight = loadsheet.weight || Math.round(currentLoad * 16);
-  const pieces = loadsheet.pieces || Math.round(currentLoad / 15);
+  const weight = loadsheet.weight || currentLoad;
+  const pieces = loadsheet.pieces || Math.round(currentLoad / 50); // ~50 lbs per piece average
 
   return {
     id: loadsheet.id,
@@ -136,15 +137,15 @@ const statusColors: Record<string, string> = {
 };
 
 // Progress bar component
-const ProgressBar: React.FC<{ current: number; max: number }> = ({ current, max }) => {
-  const percentage = Math.min(100, Math.round((current / max) * 100));
+const CapacityDisplay: React.FC<{ weight: number; capacity: number }> = ({ weight, capacity }) => {
+  const percentage = capacity > 0 ? Math.min(100, Math.round((weight / capacity) * 100)) : 0;
   const barColor = percentage >= 80 ? 'bg-green-500' : percentage >= 50 ? 'bg-blue-500' : 'bg-gray-400';
 
   return (
     <div className="w-full">
       <div className="flex items-center justify-between text-xs text-gray-500 dark:text-gray-400">
         <span>{percentage}%</span>
-        <span>{current.toLocaleString()}</span>
+        <span>{capacity.toLocaleString()}</span>
       </div>
       <div className="w-full bg-gray-200 dark:bg-gray-700 rounded-full h-1.5 mt-0.5">
         <div className={`h-1.5 rounded-full ${barColor}`} style={{ width: `${percentage}%` }} />
@@ -554,7 +555,7 @@ export const LoadsTab: React.FC<LoadsTabProps> = ({ loading: externalLoading = f
       sortable: true,
       cell: (load: LoadItem) => (
         <div className="min-w-[100px]">
-          <ProgressBar current={load.currentLoad} max={load.trailerCapacity} />
+          <CapacityDisplay weight={load.weight} capacity={load.trailerCapacity} />
         </div>
       )
     },
@@ -887,7 +888,7 @@ export const LoadsTab: React.FC<LoadsTabProps> = ({ loading: externalLoading = f
                         </td>
                         <td className="px-4 py-3 whitespace-nowrap">
                           <div className="min-w-[100px]">
-                            <ProgressBar current={loadItem.currentLoad} max={loadItem.trailerCapacity} />
+                            <CapacityDisplay weight={loadItem.weight} capacity={loadItem.trailerCapacity} />
                           </div>
                         </td>
                         <td className="px-4 py-3 whitespace-nowrap text-gray-600 dark:text-gray-300">

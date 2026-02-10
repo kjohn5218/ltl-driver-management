@@ -752,6 +752,8 @@ model EquipmentTruck {
   status              EquipmentStatus @default(AVAILABLE)
   assignedDriverId    Int?
   lastLocationUpdate  DateTime?
+  currentLatitude     Decimal?        @db.Decimal(10, 7)
+  currentLongitude    Decimal?        @db.Decimal(10, 7)
   maintenanceStatus   String?
   maintenanceNotes    String?
   nextMaintenanceDate DateTime?

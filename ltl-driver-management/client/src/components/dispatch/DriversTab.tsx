@@ -1,14 +1,20 @@
-import React, { useState, useMemo } from 'react';
+import React, { useState, useEffect, useCallback, useMemo } from 'react';
 import { DataTable, SortDirection } from '../common/DataTable';
+import { TablePagination } from '../common/TablePagination';
 import { Search } from '../common/Search';
 import { LocationMultiSelect } from '../LocationMultiSelect';
-import { CarrierDriver, DriverStatus } from '../../types';
-import { Phone, User, MapPin, Shield, Building2 } from 'lucide-react';
+import { CarrierDriver, DriverStatus, Carrier } from '../../types';
+import { driverService } from '../../services/driverService';
+import { carrierService } from '../../services/carrierService';
+import { Phone, User, MapPin, Shield, Building2, RefreshCw, Filter } from 'lucide-react';
+import { toast } from 'react-hot-toast';
 
 interface DriversTabProps {
-  drivers: CarrierDriver[];
-  loading?: boolean;
+  onDriverSelect?: (driver: CarrierDriver) => void;
 }
+
+// Available endorsement types
+const ENDORSEMENT_OPTIONS = ['hazmat', 'tanker', 'lcv', 'doubles', 'triples'];
 
 const driverStatusColors: Record<string, string> = {
   AVAILABLE: 'bg-green-100 text-green-800',
@@ -20,12 +26,84 @@ const formatDriverStatus = (status: string): string => {
   return status.replace(/_/g, ' ').toLowerCase().replace(/\b\w/g, l => l.toUpperCase());
 };
 
-export const DriversTab: React.FC<DriversTabProps> = ({ drivers, loading }) => {
+export const DriversTab: React.FC<DriversTabProps> = ({ onDriverSelect }) => {
+  const [drivers, setDrivers] = useState<CarrierDriver[]>([]);
+  const [carriers, setCarriers] = useState<Carrier[]>([]);
+  const [loading, setLoading] = useState(true);
+  const [isSyncing, setIsSyncing] = useState(false);
   const [searchTerm, setSearchTerm] = useState('');
-  const [statusFilter, setStatusFilter] = useState<DriverStatus | ''>('');
   const [selectedLocations, setSelectedLocations] = useState<number[]>([]);
+  const [currentPage, setCurrentPage] = useState(1);
+  const [totalPages, setTotalPages] = useState(1);
+  const [totalDrivers, setTotalDrivers] = useState(0);
   const [sortBy, setSortBy] = useState<keyof CarrierDriver | null>(null);
   const [sortDirection, setSortDirection] = useState<SortDirection>(null);
+
+  // Filter state
+  const [carrierFilter, setCarrierFilter] = useState<number | ''>('');
+  const [endorsementFilter, setEndorsementFilter] = useState<string>('');
+  const [availabilityFilter, setAvailabilityFilter] = useState<DriverStatus | ''>('');
+
+  const fetchDrivers = useCallback(async () => {
+    try {
+      setLoading(true);
+      const response = await driverService.getDrivers({
+        search: searchTerm || undefined,
+        carrierId: carrierFilter || undefined,
+        active: true,
+        page: currentPage,
+        limit: 50
+      });
+      setDrivers(response.drivers);
+      setTotalPages(response.pagination.pages);
+      setTotalDrivers(response.pagination.total);
+    } catch (error) {
+      console.error('Failed to fetch drivers:', error);
+      toast.error('Failed to fetch drivers');
+    } finally {
+      setLoading(false);
+    }
+  }, [searchTerm, currentPage, carrierFilter]);
+
+  const fetchCarriers = useCallback(async () => {
+    try {
+      const response = await carrierService.getCarriers({ limit: 1000 });
+      setCarriers(response.carriers);
+    } catch (error) {
+      console.error('Failed to fetch carriers:', error);
+    }
+  }, []);
+
+  useEffect(() => {
+    fetchDrivers();
+  }, [fetchDrivers]);
+
+  useEffect(() => {
+    fetchCarriers();
+  }, [fetchCarriers]);
+
+  const handleSearch = (value: string) => {
+    setSearchTerm(value);
+    setCurrentPage(1);
+  };
+
+  const handleSync = async () => {
+    setIsSyncing(true);
+    try {
+      const result = await driverService.syncDrivers();
+      if (result.success) {
+        toast.success(result.message);
+        fetchDrivers();
+      } else {
+        toast.error(result.message);
+      }
+    } catch (error: any) {
+      const message = error.response?.data?.message || 'Failed to sync drivers';
+      toast.error(message);
+    } finally {
+      setIsSyncing(false);
+    }
+  };
 
   const handleSort = (column: keyof CarrierDriver) => {
     if (sortBy === column) {
@@ -43,54 +121,65 @@ export const DriversTab: React.FC<DriversTabProps> = ({ drivers, loading }) => {
     }
   };
 
-  // Filter active drivers
+  // Client-side filtering for location, endorsements, and availability (after server-side search)
   const filteredDrivers = useMemo(() => {
     return drivers.filter(d => {
-      if (!d.active) return false;
-      if (searchTerm && !d.name.toLowerCase().includes(searchTerm.toLowerCase())) return false;
-      if (statusFilter && d.driverStatus !== statusFilter) return false;
-      // Filter by selected locations
+      // Filter by location
       if (selectedLocations.length > 0) {
         if (!d.locationId || !selectedLocations.includes(d.locationId)) return false;
       }
+      // Filter by endorsement
+      if (endorsementFilter) {
+        if (!d.endorsements?.toLowerCase().includes(endorsementFilter.toLowerCase())) return false;
+      }
+      // Filter by availability
+      if (availabilityFilter && d.driverStatus !== availabilityFilter) return false;
       return true;
     });
-  }, [drivers, searchTerm, statusFilter, selectedLocations]);
+  }, [drivers, selectedLocations, endorsementFilter, availabilityFilter]);
 
   // Sort filtered drivers
-  const sortedDrivers = [...filteredDrivers].sort((a, b) => {
-    if (!sortBy || !sortDirection) return 0;
+  const sortedDrivers = useMemo(() => {
+    if (!sortBy || !sortDirection) return filteredDrivers;
 
-    let aValue: any;
-    let bValue: any;
+    return [...filteredDrivers].sort((a, b) => {
+      let aValue: any;
+      let bValue: any;
 
-    // Handle special cases for nested properties
-    if (sortBy === 'carrierId') {
-      aValue = a.carrier?.name || '';
-      bValue = b.carrier?.name || '';
-    } else if (sortBy === 'locationId') {
-      aValue = a.location?.code || '';
-      bValue = b.location?.code || '';
-    } else {
-      aValue = a[sortBy];
-      bValue = b[sortBy];
-    }
+      if (sortBy === 'carrierId') {
+        aValue = a.carrier?.name || '';
+        bValue = b.carrier?.name || '';
+      } else if (sortBy === 'locationId') {
+        aValue = a.location?.code || '';
+        bValue = b.location?.code || '';
+      } else {
+        aValue = a[sortBy];
+        bValue = b[sortBy];
+      }
 
-    // Handle null/undefined values
-    if (aValue == null) aValue = '';
-    if (bValue == null) bValue = '';
+      if (aValue == null) aValue = '';
+      if (bValue == null) bValue = '';
 
-    // String comparison
-    if (typeof aValue === 'string' && typeof bValue === 'string') {
-      const comparison = aValue.toLowerCase().localeCompare(bValue.toLowerCase());
-      return sortDirection === 'asc' ? comparison : -comparison;
-    }
+      if (typeof aValue === 'string' && typeof bValue === 'string') {
+        const comparison = aValue.toLowerCase().localeCompare(bValue.toLowerCase());
+        return sortDirection === 'asc' ? comparison : -comparison;
+      }
 
-    // Numeric comparison
-    if (aValue < bValue) return sortDirection === 'asc' ? -1 : 1;
-    if (aValue > bValue) return sortDirection === 'asc' ? 1 : -1;
-    return 0;
-  });
+      if (aValue < bValue) return sortDirection === 'asc' ? -1 : 1;
+      if (aValue > bValue) return sortDirection === 'asc' ? 1 : -1;
+      return 0;
+    });
+  }, [filteredDrivers, sortBy, sortDirection]);
+
+  const clearFilters = () => {
+    setCarrierFilter('');
+    setSelectedLocations([]);
+    setEndorsementFilter('');
+    setAvailabilityFilter('');
+    setCurrentPage(1);
+  };
+
+  const hasActiveFilters = carrierFilter !== '' || selectedLocations.length > 0 || endorsementFilter !== '' || availabilityFilter !== '';
 
   const columns = [
     {
@@ -209,24 +298,52 @@ export const DriversTab: React.FC<DriversTabProps> = ({ drivers, loading }) => {
   return (
     <div className="bg-white shadow rounded-lg">
       <div className="p-4 border-b border-gray-200">
-        <div className="flex flex-wrap items-center gap-4">
-          <div className="w-64">
+        {/* Search Row */}
+        <div className="flex flex-wrap items-center gap-4 mb-4">
+          <div className="w-72">
             <Search
               value={searchTerm}
-              onChange={setSearchTerm}
-              placeholder="Search drivers..."
+              onChange={handleSearch}
+              placeholder="Search by name, number, or carrier..."
             />
           </div>
+          <div className="ml-auto">
+            <button
+              onClick={handleSync}
+              disabled={isSyncing}
+              className="inline-flex items-center px-3 py-1.5 border border-gray-300 rounded-md shadow-sm text-sm font-medium text-gray-700 bg-white hover:bg-gray-50 disabled:opacity-50 disabled:cursor-not-allowed"
+            >
+              <RefreshCw className={`w-4 h-4 mr-2 ${isSyncing ? 'animate-spin' : ''}`} />
+              {isSyncing ? 'Syncing...' : 'Sync Drivers'}
+            </button>
+          </div>
+        </div>
+
+        {/* Filters Row */}
+        <div className="flex flex-wrap items-center gap-4">
+          <div className="flex items-center gap-2">
+            <Filter className="h-4 w-4 text-gray-400" />
+            <span className="text-sm font-medium text-gray-700">Filters:</span>
+          </div>
+
+          {/* Carrier Filter */}
           <select
-            value={statusFilter}
-            onChange={(e) => setStatusFilter(e.target.value as DriverStatus | '')}
-            className="rounded-md border-gray-300 dark:border-gray-600 dark:bg-gray-700 dark:text-gray-100 text-sm"
+            value={carrierFilter}
+            onChange={(e) => {
+              setCarrierFilter(e.target.value ? parseInt(e.target.value) : '');
+              setCurrentPage(1);
+            }}
+            className="rounded-md border border-gray-300 shadow-sm text-sm focus:ring-indigo-500 focus:border-indigo-500"
           >
-            <option value="">All Statuses</option>
-            <option value="AVAILABLE">Available</option>
-            <option value="UNAVAILABLE">Unavailable</option>
-            <option value="DISPATCHED">Dispatched</option>
+            <option value="">All Carriers</option>
+            {carriers.map(carrier => (
+              <option key={carrier.id} value={carrier.id}>
+                {carrier.name}
+              </option>
+            ))}
           </select>
+
+          {/* Location Filter */}
           <div className="flex items-center gap-2">
             <MapPin className="h-4 w-4 text-gray-400" />
             <LocationMultiSelect
@@ -236,8 +353,46 @@ export const DriversTab: React.FC<DriversTabProps> = ({ drivers, loading }) => {
               className="w-56"
             />
           </div>
-          <div className="text-sm text-gray-500 dark:text-gray-400">
-            {filteredDrivers.length} active driver{filteredDrivers.length !== 1 ? 's' : ''}
+
+          {/* Endorsement Filter */}
+          <select
+            value={endorsementFilter}
+            onChange={(e) => setEndorsementFilter(e.target.value)}
+            className="rounded-md border border-gray-300 shadow-sm text-sm focus:ring-indigo-500 focus:border-indigo-500"
+          >
+            <option value="">All Endorsements</option>
+            {ENDORSEMENT_OPTIONS.map(endorsement => (
+              <option key={endorsement} value={endorsement}>
+                {endorsement.toUpperCase()}
+              </option>
+            ))}
+          </select>
+
+          {/* Availability Filter */}
+          <select
+            value={availabilityFilter}
+            onChange={(e) => setAvailabilityFilter(e.target.value as DriverStatus | '')}
+            className="rounded-md border border-gray-300 shadow-sm text-sm focus:ring-indigo-500 focus:border-indigo-500"
+          >
+            <option value="">All Availability</option>
+            <option value="AVAILABLE">Available</option>
+            <option value="UNAVAILABLE">Unavailable</option>
+            <option value="DISPATCHED">Dispatched</option>
+          </select>
+
+          {/* Clear Filters */}
+          {hasActiveFilters && (
+            <button
+              onClick={clearFilters}
+              className="text-sm text-indigo-600 hover:text-indigo-800"
+            >
+              Clear filters
+            </button>
+          )}
+
+          {/* Results Count */}
+          <div className="ml-auto text-sm text-gray-500">
+            {sortedDrivers.length} of {totalDrivers} drivers
           </div>
         </div>
       </div>
@@ -249,6 +404,15 @@ export const DriversTab: React.FC<DriversTabProps> = ({ drivers, loading }) => {
         sortDirection={sortDirection}
         onSort={handleSort}
       />
+      {!loading && totalPages > 1 && (
+        <div className="px-4 py-3 border-t border-gray-200">
+          <TablePagination
+            currentPage={currentPage}
+            totalPages={totalPages}
+            onPageChange={setCurrentPage}
+          />
+        </div>
+      )}
     </div>
   );
 };

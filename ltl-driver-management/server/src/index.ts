@@ -52,6 +52,9 @@ import expectedShipmentRoutes from './routes/expectedShipment.routes';
 // External integrations
 import hrIntegrationRoutes from './routes/hrIntegration.routes';
 
+// Scheduler
+import { startEquipmentSyncScheduler } from './scheduler';
+
 // Public driver routes (no SSO auth required)
 import publicDriverRoutes from './routes/publicDriver.routes';
 
@@ -199,10 +202,13 @@ async function startServer() {
     app.listen(PORT, () => {
       console.log(`🚀 Server is running on http://localhost:${PORT}`);
       console.log(`🔒 Security features enabled`);
-      
+
       if (process.env.NODE_ENV !== 'production') {
         console.log('⚠️  Running in development mode - some security features may be relaxed');
       }
+
+      // Start equipment sync scheduler (if FormsApp is configured)
+      startEquipmentSyncScheduler();
     });
   } catch (error) {
     console.error('❌ Failed to connect to database:', error);

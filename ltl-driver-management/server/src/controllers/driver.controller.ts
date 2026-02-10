@@ -310,3 +310,60 @@ export const deleteDriver = async (req: Request, res: Response): Promise<Respons
     return res.status(500).json({ error: 'Failed to delete driver' });
   }
 };
+
+// ==================== EXTERNAL API SYNC ====================
+
+import { getDriversApiService } from '../services/drivers-api.service';
+import { isDriversApiConfigured } from '../config/drivers-api.config';
+
+// Sync drivers from external API
+export const syncDrivers = async (_req: Request, res: Response): Promise<Response> => {
+  try {
+    if (!isDriversApiConfigured()) {
+      return res.status(503).json({
+        success: false,
+        message: 'Drivers API integration is not configured. Please set DRIVERS_API_URL, DRIVERS_API_USERNAME, and DRIVERS_API_PASSWORD environment variables.'
+      });
+    }
+
+    const service = getDriversApiService();
+    const result = await service.syncDrivers();
+
+    return res.json({
+      success: true,
+      message: `Synced ${result.created} created, ${result.updated} updated drivers`,
+      ...result
+    });
+  } catch (error) {
+    console.error('Error syncing drivers:', error);
+    const message = error instanceof Error ? error.message : 'Unknown error';
+    return res.status(500).json({
+      success: false,
+      message: `Failed to sync drivers: ${message}`
+    });
+  }
+};
+
+// Get driver sync status
+export const getDriverSyncStatus = async (_req: Request, res: Response): Promise<Response> => {
+  try {
+    if (!isDriversApiConfigured()) {
+      return res.json({
+        configured: false,
+        message: 'Drivers API integration is not configured.'
+      });
+    }
+
+    const service = getDriversApiService();
+    const status = service.getSyncStatus();
+
+    return res.json({
+      configured: true,
+      lastSyncAt: status.lastSyncAt,
+      lastResult: status.lastResult
+    });
+  } catch (error) {
+    console.error('Error getting driver sync status:', error);
+    return res.status(500).json({ error: 'Failed to get sync status' });
+  }
+};

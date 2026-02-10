@@ -1,8 +1,8 @@
 import { prisma } from '../index';
 
-// External GPS API configuration - replace with actual GPS provider details
-const GPS_API_BASE_URL = process.env.GPS_API_BASE_URL || 'https://api.gps-provider.com';
-const GPS_API_KEY = process.env.GPS_API_KEY || '';
+// GoMotive API configuration for GPS tracking
+const GOMOTIVE_API_URL = process.env.GOMOTIVE_API_URL || 'https://api.gomotive.com/v3';
+const GOMOTIVE_API_KEY = process.env.GOMOTIVE_API_KEY || '';
 
 interface GpsLocation {
   latitude: number;
@@ -117,11 +117,11 @@ async function calculateGpsBasedEta(trip: TripWithProfile): Promise<EtaResult> {
   }
 
   try {
-    // Fetch current GPS location from external provider or use mock data
+    // Fetch current GPS location from GoMotive API or use mock data
     let gpsLocation: GpsLocation | null = null;
 
-    if (trip.truck.externalFleetId && GPS_API_KEY) {
-      gpsLocation = await fetchGpsLocation(trip.truck.externalFleetId);
+    if (trip.truck.externalFleetId && GOMOTIVE_API_KEY) {
+      gpsLocation = await fetchGpsLocationFromGoMotive(trip.truck.externalFleetId);
     }
 
     // Use mock GPS data if no real data available (for development)
@@ -182,8 +182,16 @@ async function calculateGpsBasedEta(trip: TripWithProfile): Promise<EtaResult> {
 function calculateProfileBasedEta(trip: TripWithProfile): EtaResult {
   const transitTimeMinutes = trip.linehaulProfile?.transitTimeMinutes;
 
-  if (!transitTimeMinutes) {
-    return { estimatedArrival: null, source: 'NONE' };
+  // If no transit time in profile, estimate based on distance
+  // Average truck speed is ~55 mph
+  let effectiveTransitMinutes = transitTimeMinutes;
+  if (!effectiveTransitMinutes && trip.linehaulProfile?.distanceMiles) {
+    effectiveTransitMinutes = Math.round((trip.linehaulProfile.distanceMiles / 55) * 60);
+  }
+
+  // Default to 4 hours if no transit time or distance available
+  if (!effectiveTransitMinutes) {
+    effectiveTransitMinutes = 240; // 4 hours default
   }
 
   // Use actual departure if available, otherwise estimate from current time
@@ -191,7 +199,7 @@ function calculateProfileBasedEta(trip: TripWithProfile): EtaResult {
   const departureTime = trip.actualDeparture || new Date();
 
   const estimatedArrival = new Date(departureTime);
-  estimatedArrival.setMinutes(estimatedArrival.getMinutes() + transitTimeMinutes);
+  estimatedArrival.setMinutes(estimatedArrival.getMinutes() + effectiveTransitMinutes);
 
   return {
     estimatedArrival,
@@ -200,43 +208,56 @@ function calculateProfileBasedEta(trip: TripWithProfile): EtaResult {
 }
 
 /**
- * Fetch GPS location from external provider API
- * This is a placeholder - implement based on your actual GPS provider
+ * Fetch GPS location from GoMotive API
+ * Uses the same API endpoint pattern as the vehicle location controller
  */
-async function fetchGpsLocation(externalFleetId: string): Promise<GpsLocation | null> {
-  if (!GPS_API_KEY || !GPS_API_BASE_URL) {
+async function fetchGpsLocationFromGoMotive(externalFleetId: string): Promise<GpsLocation | null> {
+  if (!GOMOTIVE_API_KEY || !GOMOTIVE_API_URL) {
     return null;
   }
 
   try {
-    const response = await fetch(
-      `${GPS_API_BASE_URL}/vehicles/${externalFleetId}/location`,
-      {
-        headers: {
-          'Authorization': `Bearer ${GPS_API_KEY}`,
-          'Content-Type': 'application/json'
-        }
+    // Calculate date range for API (last 24 hours)
+    const endDate = new Date();
+    const startDate = new Date(endDate.getTime() - 24 * 60 * 60 * 1000);
+
+    const apiUrl = `${GOMOTIVE_API_URL}/vehicle_locations/${externalFleetId}?start_date=${startDate.toISOString()}&end_date=${endDate.toISOString()}`;
+
+    const response = await fetch(apiUrl, {
+      method: 'GET',
+      headers: {
+        'Authorization': `Bearer ${GOMOTIVE_API_KEY}`,
+        'Content-Type': 'application/json'
       }
-    );
+    });
 
     if (!response.ok) {
-      console.error(`GPS API returned status ${response.status}`);
+      console.error(`GoMotive API returned status ${response.status}`);
       return null;
     }
 
-    const data = await response.json() as GpsApiResponse;
+    const data = await response.json() as {
+      vehicle_locations?: GpsApiResponse[];
+      locations?: GpsApiResponse[];
+    };
 
-    // Map the response to our GpsLocation interface
-    // Adjust this mapping based on your actual GPS provider's response format
+    // GoMotive API returns an array of location records - get the most recent
+    const locations = data.vehicle_locations || data.locations || [];
+    const latestLocation = locations.length > 0 ? locations[locations.length - 1] : null;
+
+    if (!latestLocation) {
+      return null;
+    }
+
     return {
-      latitude: data.latitude ?? data.lat ?? 0,
-      longitude: data.longitude ?? data.lng ?? data.lon ?? 0,
-      speed: data.speed ?? data.velocity ?? 0,
-      heading: data.heading ?? data.bearing ?? 0,
-      timestamp: new Date(data.timestamp ?? data.time ?? Date.now())
+      latitude: latestLocation.latitude ?? latestLocation.lat ?? 0,
+      longitude: latestLocation.longitude ?? latestLocation.lng ?? latestLocation.lon ?? 0,
+      speed: latestLocation.speed ?? latestLocation.velocity ?? 0,
+      heading: latestLocation.heading ?? latestLocation.bearing ?? 0,
+      timestamp: new Date(latestLocation.timestamp ?? latestLocation.time ?? Date.now())
     };
   } catch (error) {
-    console.error('Error fetching GPS location:', error);
+    console.error('Error fetching GPS location from GoMotive:', error);
     return null;
   }
 }

@@ -104,5 +104,34 @@ export const driverService = {
   // Delete driver (soft delete)
   deleteDriver: async (id: number): Promise<void> => {
     await api.delete(`/drivers/${id}`);
+  },
+
+  // Sync drivers from external API
+  syncDrivers: async (): Promise<{
+    success: boolean;
+    message: string;
+    created: number;
+    updated: number;
+    errors: string[];
+    total: number;
+  }> => {
+    const response = await api.post('/drivers/sync');
+    return response.data;
+  },
+
+  // Get driver sync status
+  getSyncStatus: async (): Promise<{
+    configured: boolean;
+    message?: string;
+    lastSyncAt?: string;
+    lastResult?: {
+      created: number;
+      updated: number;
+      errors: string[];
+      total: number;
+    };
+  }> => {
+    const response = await api.get('/drivers/sync/status');
+    return response.data;
   }
 };

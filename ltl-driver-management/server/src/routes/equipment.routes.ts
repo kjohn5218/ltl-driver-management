@@ -24,7 +24,18 @@ import {
   deleteDolly,
   updateDollyStatus,
   // Lists
-  getAvailableEquipment
+  getAvailableEquipment,
+  // FormsApp Sync
+  syncEquipment,
+  syncTrucks,
+  syncTrailers,
+  syncDollies,
+  getSyncStatus,
+  // Motive GPS
+  syncVehicleLocations,
+  getVehicleLocations,
+  getTruckLocation,
+  getMotiveSyncStatus
 } from '../controllers/equipment.controller';
 import { authenticate, authorize } from '../middleware/auth.middleware';
 import { validateRequest } from '../middleware/validation.middleware';
@@ -380,6 +391,72 @@ router.get(
   [param('terminalId').isInt({ min: 1 })],
   validateRequest,
   getAvailableEquipment
+);
+
+// ==================== FORMSAPP SYNC ====================
+
+// Sync all equipment from FormsApp (Admin only)
+router.post(
+  '/sync',
+  authorize(UserRole.ADMIN),
+  syncEquipment
+);
+
+// Sync trucks only from FormsApp (Admin/Dispatcher)
+router.post(
+  '/trucks/sync',
+  authorize(UserRole.ADMIN, UserRole.DISPATCHER),
+  syncTrucks
+);
+
+// Sync trailers only from FormsApp (Admin/Dispatcher)
+router.post(
+  '/trailers/sync',
+  authorize(UserRole.ADMIN, UserRole.DISPATCHER),
+  syncTrailers
+);
+
+// Sync dollies only from FormsApp (Admin/Dispatcher)
+router.post(
+  '/dollies/sync',
+  authorize(UserRole.ADMIN, UserRole.DISPATCHER),
+  syncDollies
+);
+
+// Get sync status
+router.get(
+  '/sync/status',
+  authorize(UserRole.ADMIN, UserRole.DISPATCHER),
+  getSyncStatus
+);
+
+// ==================== MOTIVE GPS TRACKING ====================
+
+// Sync vehicle locations from Motive (updates truck lat/lon)
+router.post(
+  '/locations/sync',
+  authorize(UserRole.ADMIN, UserRole.DISPATCHER),
+  syncVehicleLocations
+);
+
+// Get all current vehicle locations (for map display)
+router.get(
+  '/locations',
+  authorize(UserRole.ADMIN, UserRole.DISPATCHER, UserRole.YARD_MANAGER),
+  getVehicleLocations
+);
+
+// Get location for a specific truck
+router.get(
+  '/trucks/:unitNumber/location',
+  getTruckLocation
+);
+
+// Get Motive sync status
+router.get(
+  '/locations/sync/status',
+  authorize(UserRole.ADMIN, UserRole.DISPATCHER),
+  getMotiveSyncStatus
 );
 
 export default router;
