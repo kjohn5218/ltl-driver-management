@@ -737,12 +737,14 @@ export const PayRules: React.FC = () => {
     );
   };
 
-  const formatCurrencyDisplay = (amount: number | undefined, method?: string) => {
-    if (amount === undefined) return '-';
-    if (method === 'PERCENTAGE') return `${amount}%`;
-    if (method === 'HOURLY') return `$${amount.toFixed(2)}/hr`;
-    if (method === 'PER_MILE') return `$${amount.toFixed(2)}/mi`;
-    return `$${amount.toFixed(2)}`;
+  const formatCurrencyDisplay = (amount: number | string | undefined | null, method?: string) => {
+    if (amount === undefined || amount === null) return '-';
+    const numAmount = typeof amount === 'string' ? parseFloat(amount) : amount;
+    if (isNaN(numAmount)) return '-';
+    if (method === 'PERCENTAGE') return `${numAmount}%`;
+    if (method === 'HOURLY') return `$${numAmount.toFixed(2)}/hr`;
+    if (method === 'PER_MILE') return `$${numAmount.toFixed(2)}/mi`;
+    return `$${numAmount.toFixed(2)}`;
   };
 
   return (
