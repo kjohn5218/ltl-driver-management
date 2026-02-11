@@ -1,4 +1,5 @@
 import nodemailer from 'nodemailer';
+import { SESClient, SendRawEmailCommand } from '@aws-sdk/client-ses';
 import { Booking, Carrier, Route } from '@prisma/client';
 import { PDFService } from './pdf.service';
 
@@ -14,16 +15,43 @@ interface EmailOptions {
   }>;
 }
 
-// Create transporter
-const transporter = nodemailer.createTransport({
-  host: process.env.EMAIL_HOST || 'smtp.gmail.com',
-  port: parseInt(process.env.EMAIL_PORT || '587'),
-  secure: false,
-  auth: {
-    user: process.env.EMAIL_USER,
-    pass: process.env.EMAIL_PASS
+// Create transporter based on EMAIL_PROVIDER setting
+const createTransporter = (): nodemailer.Transporter => {
+  const provider = process.env.EMAIL_PROVIDER?.toUpperCase();
+
+  if (provider === 'SES') {
+    // AWS SES configuration
+    const sesClient = new SESClient({
+      region: process.env.AWS_REGION || 'us-west-2',
+      credentials: {
+        accessKeyId: process.env.AWS_ACCESS_KEY_ID || '',
+        secretAccessKey: process.env.AWS_SECRET_ACCESS_KEY || ''
+      }
+    });
+
+    console.log('📧 Email provider: AWS SES (region: ' + (process.env.AWS_REGION || 'us-west-2') + ')');
+
+    // Use type assertion for SES transport (nodemailer types don't include SES)
+    return nodemailer.createTransport({
+      SES: { ses: sesClient, aws: { SendRawEmailCommand } }
+    } as nodemailer.TransportOptions);
   }
-});
+
+  // Default: SMTP configuration (Gmail or custom SMTP)
+  console.log('📧 Email provider: SMTP (' + (process.env.EMAIL_HOST || 'smtp.gmail.com') + ')');
+
+  return nodemailer.createTransport({
+    host: process.env.EMAIL_HOST || 'smtp.gmail.com',
+    port: parseInt(process.env.EMAIL_PORT || '587'),
+    secure: false,
+    auth: {
+      user: process.env.EMAIL_USER,
+      pass: process.env.EMAIL_PASS
+    }
+  });
+};
+
+const transporter = createTransporter();
 
 interface BookingWithRelations extends Booking {
   carrier: Carrier | null;
