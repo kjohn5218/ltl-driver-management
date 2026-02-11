@@ -398,15 +398,17 @@ export const PayRules: React.FC = () => {
     return `$${num.toFixed(2)}`;
   };
 
-  // Helper to parse driver/employer info from notes (fallback when driver not linked)
+  // Helper to parse driver/employer/fsc info from notes (fallback when not linked)
   const parseNotesInfo = (notes: string | undefined | null) => {
-    if (!notes) return { driverName: null, employer: null };
-    // Match both formats: "Driver: Name" and "driverName: Name"
-    const driverMatch = notes.match(/(?:Driver|driverName):\s*([^;.]+)/i);
+    if (!notes) return { driverName: null, employer: null, fuelSurcharge: null };
+    // Match both formats: "Driver: Name", "driverName: Name", "Driver Name: Name"
+    const driverMatch = notes.match(/(?:Driver|driverName|Driver Name):\s*([^;.]+)/i);
     const employerMatch = notes.match(/(?:Employer|employer):\s*([^;.]+)/i);
+    const fscMatch = notes.match(/Fuel\s*Surcharge:\s*([^;.\n]+)/i);
     return {
       driverName: driverMatch ? driverMatch[1].trim() : null,
-      employer: employerMatch ? employerMatch[1].trim() : null
+      employer: employerMatch ? employerMatch[1].trim() : null,
+      fuelSurcharge: fscMatch ? fscMatch[1].trim() : null
     };
   };
 
@@ -457,10 +459,19 @@ export const PayRules: React.FC = () => {
       header: 'Driver Name',
       accessor: 'entityId' as keyof RateCard,
       cell: (rc: RateCard) => {
-        if (rc.rateType !== 'DRIVER') return <span className="text-gray-400">-</span>;
-        // Try driver object first, fallback to notes
-        const name = rc.driver?.name || parseNotesInfo(rc.notes).driverName;
-        return <span className="font-medium text-gray-900">{name || '-'}</span>;
+        // For DRIVER types, show driver from API or notes
+        if (rc.rateType === 'DRIVER') {
+          const name = rc.driver?.name || parseNotesInfo(rc.notes).driverName;
+          return <span className="font-medium text-gray-900">{name || '-'}</span>;
+        }
+        // For OD_PAIR types, show driver from notes if present (driver-specific lane rate)
+        if (rc.rateType === 'OD_PAIR') {
+          const name = parseNotesInfo(rc.notes).driverName;
+          if (name) {
+            return <span className="font-medium text-blue-600">{name}</span>;
+          }
+        }
+        return <span className="text-gray-400">-</span>;
       }
     },
     {
@@ -582,6 +593,23 @@ export const PayRules: React.FC = () => {
       }
     },
     {
+      header: 'FSC',
+      accessor: 'fuelSurcharge' as keyof RateCard,
+      cell: (rc: RateCard) => {
+        // Check for fuel surcharge in notes
+        const fsc = parseNotesInfo(rc.notes).fuelSurcharge;
+        // Also check the fuelSurcharge field itself
+        const fscValue = rc.fuelSurcharge;
+        if (fsc) {
+          return <span className="text-xs font-mono text-teal-600">{fsc}</span>;
+        }
+        if (fscValue) {
+          return <span className="text-xs text-teal-600">{Number(fscValue).toFixed(2)}%</span>;
+        }
+        return <span className="text-gray-400">-</span>;
+      }
+    },
+    {
       header: 'Priority',
       accessor: 'priority' as keyof RateCard,
       cell: (rc: RateCard) => (
@@ -633,6 +661,9 @@ export const PayRules: React.FC = () => {
   const renderExpandedRow = (rateCard: RateCard) => {
     if (!expandedRows.has(rateCard.id)) return null;
 
+    const notesInfo = parseNotesInfo(rateCard.notes);
+    const odInfo = parseODFromNotes(rateCard.notes);
+
     return (
       <tr key={`expanded-${rateCard.id}`} className="bg-gray-50">
         <td colSpan={columns.length} className="px-6 py-4">
@@ -657,10 +688,32 @@ export const PayRules: React.FC = () => {
                   <div className="text-sm font-medium">${Number(rateCard.perChainUp).toFixed(2)}</div>
                 </div>
               )}
-              {rateCard.fuelSurcharge && (
+              {(rateCard.fuelSurcharge || notesInfo.fuelSurcharge) && (
+                <div className="bg-teal-50 border border-teal-200 rounded-lg p-2 text-center">
+                  <div className="text-xs text-teal-600">Fuel Surcharge</div>
+                  <div className="text-sm font-medium text-teal-800">
+                    {notesInfo.fuelSurcharge || `${Number(rateCard.fuelSurcharge).toFixed(2)}%`}
+                  </div>
+                </div>
+              )}
+              {/* Show O/D from notes if not already linked to terminals */}
+              {rateCard.rateType === 'OD_PAIR' && !rateCard.originTerminalId && odInfo.origin && (
                 <div className="bg-purple-50 border border-purple-200 rounded-lg p-2 text-center">
-                  <div className="text-xs text-purple-600">Fuel Surcharge</div>
-                  <div className="text-sm font-medium text-purple-800">{Number(rateCard.fuelSurcharge).toFixed(2)}%</div>
+                  <div className="text-xs text-purple-600">Origin (Notes)</div>
+                  <div className="text-sm font-medium text-purple-800">{odInfo.origin}</div>
+                </div>
+              )}
+              {rateCard.rateType === 'OD_PAIR' && !rateCard.destinationTerminalId && odInfo.dest && (
+                <div className="bg-purple-50 border border-purple-200 rounded-lg p-2 text-center">
+                  <div className="text-xs text-purple-600">Dest (Notes)</div>
+                  <div className="text-sm font-medium text-purple-800">{odInfo.dest}</div>
+                </div>
+              )}
+              {/* Show driver from notes for OD_PAIR if present */}
+              {rateCard.rateType === 'OD_PAIR' && notesInfo.driverName && (
+                <div className="bg-blue-50 border border-blue-200 rounded-lg p-2 text-center">
+                  <div className="text-xs text-blue-600">Driver (Lane-Specific)</div>
+                  <div className="text-sm font-medium text-blue-800">{notesInfo.driverName}</div>
                 </div>
               )}
             </div>
