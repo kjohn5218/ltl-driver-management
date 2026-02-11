@@ -24,10 +24,12 @@ import {
   Printer,
   CheckCircle,
   FileSpreadsheet,
-  Scissors
+  Scissors,
+  RefreshCw
 } from 'lucide-react';
 import { clsx } from 'clsx';
 import { api } from '../../services/api';
+import { settingsService } from '../../services/settingsService';
 import { CutPayModal } from '../dispatch/CutPayModal';
 
 interface SidebarProps {
@@ -43,6 +45,7 @@ export const Sidebar: React.FC<SidebarProps> = ({ isOpen, onClose }) => {
   const [isEditing, setIsEditing] = useState(false);
   const [editValue, setEditValue] = useState<string>('');
   const [isLoading, setIsLoading] = useState(false);
+  const [isSyncing, setIsSyncing] = useState(false);
   const [error, setError] = useState<string>('');
   const [isCutPayModalOpen, setIsCutPayModalOpen] = useState(false);
 
@@ -95,6 +98,24 @@ export const Sidebar: React.FC<SidebarProps> = ({ isOpen, onClose }) => {
 
     loadFuelSurchargeRate();
   }, []);
+
+  const handleSyncClick = async () => {
+    setIsSyncing(true);
+    setError('');
+    try {
+      const result = await settingsService.syncFuelSurcharge();
+      if (result.success && result.newRate !== null && result.newRate !== undefined) {
+        setFuelSurchargeRate(result.newRate);
+        setFuelSurchargeSource('external');
+      } else {
+        setError(result.message || 'Sync failed');
+      }
+    } catch (err: any) {
+      setError(err.response?.data?.message || 'Failed to sync fuel surcharge');
+    } finally {
+      setIsSyncing(false);
+    }
+  };
 
   const handleEditClick = () => {
     setEditValue(Number(fuelSurchargeRate || 0).toString());
@@ -236,13 +257,23 @@ export const Sidebar: React.FC<SidebarProps> = ({ isOpen, onClose }) => {
                               <span className="text-xs px-1.5 py-0.5 bg-blue-100 text-blue-700 rounded">External</span>
                             )}
                           </div>
-                          <button
-                            onClick={handleEditClick}
-                            className="p-1 text-gray-400 hover:text-gray-600 transition-colors"
-                            title="Edit fuel surcharge rate (manual entry)"
-                          >
-                            <Edit2 className="h-3.5 w-3.5" />
-                          </button>
+                          <div className="flex items-center gap-1">
+                            <button
+                              onClick={handleSyncClick}
+                              disabled={isSyncing}
+                              className="p-1 text-blue-500 hover:text-blue-700 transition-colors disabled:opacity-50"
+                              title="Sync from CCFS API"
+                            >
+                              <RefreshCw className={`h-3.5 w-3.5 ${isSyncing ? 'animate-spin' : ''}`} />
+                            </button>
+                            <button
+                              onClick={handleEditClick}
+                              className="p-1 text-gray-400 hover:text-gray-600 transition-colors"
+                              title="Edit fuel surcharge rate (manual entry)"
+                            >
+                              <Edit2 className="h-3.5 w-3.5" />
+                            </button>
+                          </div>
                         </div>
                       ) : (
                         <div className="space-y-2">
