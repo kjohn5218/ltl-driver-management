@@ -5,11 +5,18 @@ import { PrismaClient } from '@prisma/client';
 const prisma = new PrismaClient();
 
 // Fuel Price API Response Type
-// Based on endpoint: GET Service/FuelInfo?EffectiveDate={EffectiveDate}
+// CCFS API: GET Service/FuelInfo
+// Returns: { Code, Effective, Index, Price, Rate }
+// Rate is returned as decimal (0.3 = 30%)
 interface FuelInfoResponse {
+  Code?: string;
+  Effective?: string;
+  Index?: string;
+  Price?: number;
+  Rate?: number;
+  // Fallback field names for other APIs
   FuelSurchargeRate?: number;
   fuelSurchargeRate?: number;
-  Rate?: number;
   rate?: number;
   Percentage?: number;
   percentage?: number;
@@ -95,22 +102,12 @@ export class FuelPriceService {
 
   /**
    * Fetch current fuel info from the external API
-   * Endpoint: GET Service/FuelInfo?EffectiveDate={EffectiveDate}
+   * CCFS API: GET Service/FuelInfo (no date parameter needed - returns current rate)
    */
-  async fetchFuelInfo(effectiveDate?: string): Promise<FuelInfoResponse> {
-    // Use provided date or default to today
-    const date = effectiveDate || new Date().toISOString().split('T')[0];
+  async fetchFuelInfo(_effectiveDate?: string): Promise<FuelInfoResponse> {
+    console.log(`[FuelPrice] Fetching current fuel info from API`);
 
-    console.log(`[FuelPrice] Fetching fuel info for date: ${date}`);
-
-    const response = await this.apiClient.get<FuelInfoResponse>(
-      `/Service/FuelInfo`,
-      {
-        params: {
-          EffectiveDate: date
-        }
-      }
-    );
+    const response = await this.apiClient.get<FuelInfoResponse>(`/Service/FuelInfo`);
 
     console.log('[FuelPrice] API Response:', JSON.stringify(response.data, null, 2));
 
@@ -120,14 +117,16 @@ export class FuelPriceService {
   /**
    * Extract the fuel surcharge rate from the API response
    * Handles different possible field names in the response
+   * CCFS API returns Rate as decimal (0.3 = 30%), converts to percentage
    */
   private extractRate(data: FuelInfoResponse): number | null {
     // Try different possible field names
-    const possibleFields = [
+    // Fields that return decimal values (0.3 = 30%) - need to multiply by 100
+    const decimalFields = ['Rate', 'rate'];
+    // Fields that already return percentage values (30 = 30%)
+    const percentageFields = [
       'FuelSurchargeRate',
       'fuelSurchargeRate',
-      'Rate',
-      'rate',
       'Percentage',
       'percentage',
       'FSCRate',
@@ -136,10 +135,25 @@ export class FuelPriceService {
       'surchargeRate'
     ];
 
-    for (const field of possibleFields) {
+    // First try decimal fields (CCFS API format)
+    for (const field of decimalFields) {
       if (data[field] !== undefined && data[field] !== null) {
         const value = parseFloat(String(data[field]));
         if (!isNaN(value)) {
+          // Convert decimal to percentage (0.3 -> 30)
+          const percentage = value <= 1 ? value * 100 : value;
+          console.log(`[FuelPrice] Found rate in field '${field}': ${value} -> ${percentage}%`);
+          return percentage;
+        }
+      }
+    }
+
+    // Then try percentage fields
+    for (const field of percentageFields) {
+      if (data[field] !== undefined && data[field] !== null) {
+        const value = parseFloat(String(data[field]));
+        if (!isNaN(value)) {
+          console.log(`[FuelPrice] Found rate in field '${field}': ${value}%`);
           return value;
         }
       }
@@ -196,10 +210,14 @@ export class FuelPriceService {
 
       result.newRate = newRate;
 
+      // Get effective date from response
+      const effectiveDateFromApi = fuelInfo.Effective || fuelInfo.EffectiveDate ||
+                                   fuelInfo.effectiveDate || date;
+      result.effectiveDate = effectiveDateFromApi;
+
       // Determine the source identifier
-      const sourceId = fuelInfo.Source || fuelInfo.source ||
-                       fuelInfo.EffectiveDate || fuelInfo.effectiveDate ||
-                       `fuel-api-${date}`;
+      const sourceId = fuelInfo.Code || fuelInfo.Source || fuelInfo.source ||
+                       effectiveDateFromApi || `fuel-api-${date}`;
 
       // Update system settings
       if (currentSettings) {
