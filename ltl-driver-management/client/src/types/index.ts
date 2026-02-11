@@ -769,7 +769,7 @@ export interface RateCard {
   linehaulProfile?: LinehaulProfile;
   accessorialRates?: AccessorialRate[];
   // Driver/Carrier info (populated by API for DRIVER/CARRIER rate types)
-  driver?: { id: number; name: string; number?: string } | null;
+  driver?: { id: number; name: string; number?: string; workdayEmployeeId?: string | null; carrier?: { id: number; name: string } } | null;
   carrier?: { id: number; name: string } | null;
   _count?: {
     accessorialRates: number;

@@ -84,7 +84,7 @@ export const getRateCards = async (req: Request, res: Response): Promise<void> =
       driverIds.length > 0
         ? prisma.carrierDriver.findMany({
             where: { id: { in: driverIds } },
-            select: { id: true, name: true, number: true }
+            select: { id: true, name: true, number: true, workdayEmployeeId: true, carrier: { select: { id: true, name: true } } }
           })
         : [],
       carrierIds.length > 0
@@ -99,12 +99,81 @@ export const getRateCards = async (req: Request, res: Response): Promise<void> =
     const driverMap = new Map(drivers.map(d => [d.id, d]));
     const carrierMap = new Map(carriers.map(c => [c.id, c]));
 
+    // Helper to parse driver/employer info from notes
+    const parseNotesInfo = (notes: string | null) => {
+      if (!notes) return { driverName: null, employer: null };
+      // Match both formats: "Driver: Name" and "driverName: Name"
+      const driverMatch = notes.match(/(?:Driver|driverName):\s*([^;.]+)/i);
+      const employerMatch = notes.match(/(?:Employer|employer):\s*([^;.]+)/i);
+      return {
+        driverName: driverMatch ? driverMatch[1].trim() : null,
+        employer: employerMatch ? employerMatch[1].trim() : null
+      };
+    };
+
     // Attach driver/carrier info to rate cards
-    const enrichedRateCards = rateCards.map(rc => ({
-      ...rc,
-      driver: rc.rateType === 'DRIVER' && rc.entityId ? driverMap.get(rc.entityId) || null : null,
-      carrier: rc.rateType === 'CARRIER' && rc.entityId ? carrierMap.get(rc.entityId) || null : null
-    }));
+    let enrichedRateCards = rateCards.map(rc => {
+      let driver = rc.rateType === 'DRIVER' && rc.entityId ? driverMap.get(rc.entityId) || null : null;
+      let carrier = rc.rateType === 'CARRIER' && rc.entityId ? carrierMap.get(rc.entityId) || null : null;
+
+      // If driver not found by entityId, try to extract from notes
+      if (rc.rateType === 'DRIVER' && !driver) {
+        const notesInfo = parseNotesInfo(rc.notes);
+        if (notesInfo.driverName) {
+          driver = {
+            id: 0,
+            name: notesInfo.driverName,
+            number: null,
+            workdayEmployeeId: null,
+            carrier: notesInfo.employer ? { id: 0, name: notesInfo.employer } : null
+          } as any;
+        }
+      }
+
+      // If carrier not found by entityId for CARRIER types, try to extract from notes
+      if (rc.rateType === 'CARRIER' && !carrier) {
+        const notesInfo = parseNotesInfo(rc.notes);
+        if (notesInfo.employer) {
+          carrier = { id: 0, name: notesInfo.employer };
+        }
+      }
+
+      return { ...rc, driver, carrier };
+    });
+
+    // Deduplicate: If multiple rate cards exist for the same driver number,
+    // keep only the one linked to a Workday-connected driver
+    const driverRateCards = enrichedRateCards.filter(rc => rc.rateType === 'DRIVER' && rc.driver?.number);
+    const otherRateCards = enrichedRateCards.filter(rc => rc.rateType !== 'DRIVER' || !rc.driver?.number);
+
+    // Group driver rate cards by driver number
+    const byDriverNumber = new Map<string, typeof enrichedRateCards>();
+    for (const rc of driverRateCards) {
+      const num = rc.driver!.number!;
+      if (!byDriverNumber.has(num)) {
+        byDriverNumber.set(num, []);
+      }
+      byDriverNumber.get(num)!.push(rc);
+    }
+
+    // For each driver number, prefer the Workday-connected record
+    const deduplicatedDriverRateCards: typeof enrichedRateCards = [];
+    for (const [, cards] of byDriverNumber) {
+      if (cards.length === 1) {
+        deduplicatedDriverRateCards.push(cards[0]);
+      } else {
+        // Multiple cards for same driver number - prefer Workday-connected
+        const workdayCard = cards.find(c => c.driver?.workdayEmployeeId);
+        if (workdayCard) {
+          deduplicatedDriverRateCards.push(workdayCard);
+        } else {
+          // No Workday card, just take the first one
+          deduplicatedDriverRateCards.push(cards[0]);
+        }
+      }
+    }
+
+    enrichedRateCards = [...otherRateCards, ...deduplicatedDriverRateCards];
 
     res.json({
       rateCards: enrichedRateCards,

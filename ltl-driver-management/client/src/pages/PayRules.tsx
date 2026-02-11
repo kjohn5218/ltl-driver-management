@@ -390,6 +390,26 @@ export const PayRules: React.FC = () => {
     }
   };
 
+  // Helper to format rate value
+  const formatRate = (value: number | string | undefined | null): string => {
+    if (value === undefined || value === null) return '-';
+    const num = typeof value === 'string' ? parseFloat(value) : value;
+    if (isNaN(num)) return '-';
+    return `$${num.toFixed(2)}`;
+  };
+
+  // Helper to parse driver/employer info from notes (fallback when driver not linked)
+  const parseNotesInfo = (notes: string | undefined | null) => {
+    if (!notes) return { driverName: null, employer: null };
+    // Match both formats: "Driver: Name" and "driverName: Name"
+    const driverMatch = notes.match(/(?:Driver|driverName):\s*([^;.]+)/i);
+    const employerMatch = notes.match(/(?:Employer|employer):\s*([^;.]+)/i);
+    return {
+      driverName: driverMatch ? driverMatch[1].trim() : null,
+      employer: employerMatch ? employerMatch[1].trim() : null
+    };
+  };
+
   const columns = [
     {
       header: '',
@@ -404,84 +424,116 @@ export const PayRules: React.FC = () => {
       )
     },
     {
-      header: 'Type',
-      accessor: 'rateType' as keyof RateCard,
-      cell: (rc: RateCard) => (
-        <div className="flex items-center space-x-2">
-          <span className="text-gray-500">{getRateTypeIcon(rc.rateType)}</span>
-          <span className="font-medium">{formatRateType(rc.rateType)}</span>
-        </div>
-      )
-    },
-    {
-      header: 'Entity / Lane',
+      header: 'Driver Name',
       accessor: 'entityId' as keyof RateCard,
-      cell: (rc: RateCard) => (
-        <div>
-          <div className="font-medium text-gray-900">{getEntityName(rc)}</div>
-          {rc.rateType === 'DRIVER' && rc.driver?.number && (
-            <div className="text-xs text-gray-500">#{rc.driver.number}</div>
-          )}
-          {rc.rateType === 'LINEHAUL' && rc.linehaulProfile && (
-            <div className="text-sm text-gray-500 flex items-center">
-              {rc.linehaulProfile.originTerminal?.code}
-              <ArrowRight className="w-3 h-3 mx-1" />
-              {rc.linehaulProfile.destinationTerminal?.code}
-            </div>
-          )}
-        </div>
-      )
-    },
-    {
-      header: 'Rate Method',
-      accessor: 'rateMethod' as keyof RateCard,
-      cell: (rc: RateCard) => (
-        <span className="px-2 py-1 text-xs font-medium rounded-full bg-gray-100 text-gray-700">
-          {formatRateMethod(rc.rateMethod)}
-        </span>
-      )
-    },
-    {
-      header: 'Rate',
-      accessor: 'rateAmount' as keyof RateCard,
       cell: (rc: RateCard) => {
-        const amount = formatCurrency(rc.rateAmount);
-        if (rc.rateMethod === 'PER_MILE') return <span className="font-semibold text-green-600">{amount}/mi</span>;
-        if (rc.rateMethod === 'HOURLY') return <span className="font-semibold text-blue-600">{amount}/hr</span>;
-        if (rc.rateMethod === 'PERCENTAGE') return <span className="font-semibold text-purple-600">{rc.rateAmount}%</span>;
-        return <span className="font-semibold">{amount}</span>;
+        if (rc.rateType !== 'DRIVER') return <span className="text-gray-400">-</span>;
+        // Try driver object first, fallback to notes
+        const name = rc.driver?.name || parseNotesInfo(rc.notes).driverName;
+        return <span className="font-medium text-gray-900">{name || '-'}</span>;
       }
     },
     {
-      header: 'Min / Max',
-      accessor: 'minimumAmount' as keyof RateCard,
+      header: 'Driver #',
+      accessor: 'id' as keyof RateCard,
       cell: (rc: RateCard) => {
-        if (!rc.minimumAmount && !rc.maximumAmount) return <span className="text-gray-400">-</span>;
+        if (rc.rateType !== 'DRIVER') return <span className="text-gray-400">-</span>;
+        return <span className="text-gray-600">{rc.driver?.number || '-'}</span>;
+      }
+    },
+    {
+      header: 'Employer',
+      accessor: 'rateType' as keyof RateCard,
+      cell: (rc: RateCard) => {
+        // For DRIVER types, show the driver's carrier (employer) or from notes
+        if (rc.rateType === 'DRIVER') {
+          const employer = rc.driver?.carrier?.name || parseNotesInfo(rc.notes).employer;
+          return <span className="text-gray-700">{employer || '-'}</span>;
+        }
+        // For CARRIER types, show the carrier name
+        if (rc.rateType === 'CARRIER' && rc.carrier?.name) {
+          return <span className="text-gray-700">{rc.carrier.name}</span>;
+        }
+        return <span className="text-gray-400">-</span>;
+      }
+    },
+    {
+      header: 'Per Trip',
+      accessor: 'perTrip' as keyof RateCard,
+      cell: (rc: RateCard) => {
+        const trip = rc.perTrip;
+        const cutTrip = rc.perCutTrip;
+        if (!trip && !cutTrip) return <span className="text-gray-400">-</span>;
         return (
-          <span className="text-sm text-gray-600">
-            {rc.minimumAmount ? formatCurrency(rc.minimumAmount) : '-'} / {rc.maximumAmount ? formatCurrency(rc.maximumAmount) : '-'}
-          </span>
+          <div className="text-sm">
+            {trip && <div className="font-medium text-green-600">{formatRate(trip)}</div>}
+            {cutTrip && <div className="text-orange-600 text-xs">Cut: {formatRate(cutTrip)}</div>}
+          </div>
         );
       }
     },
     {
-      header: 'Effective',
-      accessor: 'effectiveDate' as keyof RateCard,
-      cell: (rc: RateCard) => (
-        <div className="text-sm">
-          <div>{new Date(rc.effectiveDate).toLocaleDateString()}</div>
-          {rc.expirationDate && (
-            <div className="text-gray-500">to {new Date(rc.expirationDate).toLocaleDateString()}</div>
-          )}
-        </div>
-      )
+      header: 'Per Mile (S/D/T)',
+      accessor: 'perSingleMile' as keyof RateCard,
+      cell: (rc: RateCard) => {
+        const s = rc.perSingleMile;
+        const d = rc.perDoubleMile;
+        const t = rc.perTripleMile;
+        if (!s && !d && !t) return <span className="text-gray-400">-</span>;
+        return (
+          <div className="text-xs font-mono">
+            <span className="text-gray-700">{s ? formatRate(s) : '-'}</span>
+            <span className="text-gray-400"> / </span>
+            <span className="text-gray-700">{d ? formatRate(d) : '-'}</span>
+            <span className="text-gray-400"> / </span>
+            <span className="text-gray-700">{t ? formatRate(t) : '-'}</span>
+          </div>
+        );
+      }
     },
     {
-      header: 'Accessorials',
-      accessor: '_count' as keyof RateCard,
+      header: 'Per Hour (Work/Stop)',
+      accessor: 'perWorkHour' as keyof RateCard,
+      cell: (rc: RateCard) => {
+        const work = rc.perWorkHour;
+        const stop = rc.perStopHour;
+        if (!work && !stop) return <span className="text-gray-400">-</span>;
+        return (
+          <div className="text-xs font-mono">
+            <span className="text-blue-600">{work ? formatRate(work) : '-'}</span>
+            <span className="text-gray-400"> / </span>
+            <span className="text-blue-600">{stop ? formatRate(stop) : '-'}</span>
+          </div>
+        );
+      }
+    },
+    {
+      header: 'D/H (S/D/T)',
+      accessor: 'perSingleDH' as keyof RateCard,
+      cell: (rc: RateCard) => {
+        const s = rc.perSingleDH;
+        const d = rc.perDoubleDH;
+        const t = rc.perTripleDH;
+        if (!s && !d && !t) return <span className="text-gray-400">-</span>;
+        return (
+          <div className="text-xs font-mono">
+            <span className="text-purple-600">{s ? formatRate(s) : '-'}</span>
+            <span className="text-gray-400"> / </span>
+            <span className="text-purple-600">{d ? formatRate(d) : '-'}</span>
+            <span className="text-gray-400"> / </span>
+            <span className="text-purple-600">{t ? formatRate(t) : '-'}</span>
+          </div>
+        );
+      }
+    },
+    {
+      header: 'Priority',
+      accessor: 'priority' as keyof RateCard,
       cell: (rc: RateCard) => (
-        <span className="text-sm text-gray-600">
-          {rc._count?.accessorialRates || rc.accessorialRates?.length || 0}
+        <span className={`px-2 py-0.5 text-xs font-medium rounded ${
+          rc.priority ? 'bg-yellow-100 text-yellow-700' : 'bg-gray-100 text-gray-500'
+        }`}>
+          {rc.priority ? 'Yes' : 'No'}
         </span>
       )
     },
@@ -509,13 +561,6 @@ export const PayRules: React.FC = () => {
             <Edit className="w-4 h-4" />
           </button>
           <button
-            onClick={() => openAccessorialModal(rc)}
-            className="p-1 text-green-600 hover:bg-green-50 rounded"
-            title="Add Accessorial"
-          >
-            <Plus className="w-4 h-4" />
-          </button>
-          <button
             onClick={() => {
               setSelectedRateCard(rc);
               setIsDeleteModalOpen(true);
@@ -533,158 +578,41 @@ export const PayRules: React.FC = () => {
   const renderExpandedRow = (rateCard: RateCard) => {
     if (!expandedRows.has(rateCard.id)) return null;
 
-    const accessorials = rateCard.accessorialRates || [];
-
     return (
       <tr key={`expanded-${rateCard.id}`} className="bg-gray-50">
         <td colSpan={columns.length} className="px-6 py-4">
           <div className="ml-8">
-            <div className="flex items-center justify-between mb-3">
-              <h4 className="text-sm font-medium text-gray-700">Accessorial Rates</h4>
-              {isAdmin && (
-                <button
-                  onClick={() => openAccessorialModal(rateCard)}
-                  className="text-sm text-indigo-600 hover:text-indigo-800 flex items-center"
-                >
-                  <Plus className="w-3 h-3 mr-1" /> Add Accessorial
-                </button>
+            <h4 className="text-sm font-medium text-gray-700 mb-3">Additional Details</h4>
+            <div className="grid grid-cols-2 md:grid-cols-4 lg:grid-cols-6 gap-3">
+              {rateCard.autoArrive && (
+                <div className="bg-blue-50 border border-blue-200 rounded-lg p-2 text-center">
+                  <div className="text-xs text-blue-600">Auto Arrive</div>
+                  <div className="text-sm font-medium text-blue-800">Yes</div>
+                </div>
+              )}
+              {rateCard.cutMiles && (
+                <div className="bg-orange-50 border border-orange-200 rounded-lg p-2 text-center">
+                  <div className="text-xs text-orange-600">Cut Miles</div>
+                  <div className="text-sm font-medium text-orange-800">{Number(rateCard.cutMiles).toFixed(1)} {rateCard.cutMilesType || ''}</div>
+                </div>
+              )}
+              {rateCard.perChainUp && (
+                <div className="bg-white border rounded-lg p-2 text-center">
+                  <div className="text-xs text-gray-500">Chain Up</div>
+                  <div className="text-sm font-medium">${Number(rateCard.perChainUp).toFixed(2)}</div>
+                </div>
+              )}
+              {rateCard.fuelSurcharge && (
+                <div className="bg-purple-50 border border-purple-200 rounded-lg p-2 text-center">
+                  <div className="text-xs text-purple-600">Fuel Surcharge</div>
+                  <div className="text-sm font-medium text-purple-800">{Number(rateCard.fuelSurcharge).toFixed(2)}%</div>
+                </div>
               )}
             </div>
-            {accessorials.length > 0 ? (
-              <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-4 gap-3">
-                {accessorials.map(ar => (
-                  <div
-                    key={ar.id}
-                    className="bg-white border rounded-lg p-3 flex items-center justify-between"
-                  >
-                    <div>
-                      <div className="text-sm font-medium">{formatAccessorialType(ar.accessorialType)}</div>
-                      <div className="text-sm text-gray-600">
-                        {formatCurrency(ar.rateAmount)}
-                        {ar.rateMethod === 'HOURLY' && '/hr'}
-                      </div>
-                    </div>
-                    {isAdmin && (
-                      <button
-                        onClick={() => openAccessorialModal(rateCard, ar)}
-                        className="p-1 text-gray-400 hover:text-indigo-600"
-                      >
-                        <Edit className="w-3 h-3" />
-                      </button>
-                    )}
-                  </div>
-                ))}
-              </div>
-            ) : (
-              <p className="text-sm text-gray-500 italic">No accessorial rates configured</p>
-            )}
 
             {rateCard.notes && (
               <div className="mt-3 text-sm text-gray-600">
                 <span className="font-medium">Notes:</span> {rateCard.notes}
-              </div>
-            )}
-
-            {/* Flattened Pay Rule Fields */}
-            {(rateCard.perSingleMile || rateCard.perDoubleMile || rateCard.perTripleMile ||
-              rateCard.perSingleDH || rateCard.perDoubleDH || rateCard.perTripleDH ||
-              rateCard.perChainUp || rateCard.perWorkHour || rateCard.perStopHour ||
-              rateCard.perTrip || rateCard.perCutTrip || rateCard.cutMiles ||
-              rateCard.priority || rateCard.autoArrive || rateCard.fuelSurcharge) && (
-              <div className="mt-4 border-t pt-4">
-                <h4 className="text-sm font-medium text-gray-700 mb-3">Pay Rule Rates</h4>
-                <div className="grid grid-cols-2 md:grid-cols-4 lg:grid-cols-6 gap-3">
-                  {rateCard.priority && (
-                    <div className="bg-green-50 border border-green-200 rounded-lg p-2 text-center">
-                      <div className="text-xs text-green-600">Priority</div>
-                      <div className="text-sm font-medium text-green-800">Yes</div>
-                    </div>
-                  )}
-                  {rateCard.autoArrive && (
-                    <div className="bg-blue-50 border border-blue-200 rounded-lg p-2 text-center">
-                      <div className="text-xs text-blue-600">Auto Arrive</div>
-                      <div className="text-sm font-medium text-blue-800">Yes</div>
-                    </div>
-                  )}
-                  {rateCard.perTrip && (
-                    <div className="bg-white border rounded-lg p-2 text-center">
-                      <div className="text-xs text-gray-500">Per Trip</div>
-                      <div className="text-sm font-medium">${Number(rateCard.perTrip).toFixed(2)}</div>
-                    </div>
-                  )}
-                  {rateCard.perCutTrip && (
-                    <div className="bg-orange-50 border border-orange-200 rounded-lg p-2 text-center">
-                      <div className="text-xs text-orange-600">Per Cut Trip</div>
-                      <div className="text-sm font-medium text-orange-800">${Number(rateCard.perCutTrip).toFixed(2)}</div>
-                    </div>
-                  )}
-                  {rateCard.cutMiles && (
-                    <div className="bg-white border rounded-lg p-2 text-center">
-                      <div className="text-xs text-gray-500">Cut Miles</div>
-                      <div className="text-sm font-medium">{Number(rateCard.cutMiles).toFixed(1)} {rateCard.cutMilesType || ''}</div>
-                    </div>
-                  )}
-                  {rateCard.perSingleMile && (
-                    <div className="bg-white border rounded-lg p-2 text-center">
-                      <div className="text-xs text-gray-500">Single Mile</div>
-                      <div className="text-sm font-medium">${Number(rateCard.perSingleMile).toFixed(4)}/mi</div>
-                    </div>
-                  )}
-                  {rateCard.perDoubleMile && (
-                    <div className="bg-white border rounded-lg p-2 text-center">
-                      <div className="text-xs text-gray-500">Double Mile</div>
-                      <div className="text-sm font-medium">${Number(rateCard.perDoubleMile).toFixed(4)}/mi</div>
-                    </div>
-                  )}
-                  {rateCard.perTripleMile && (
-                    <div className="bg-white border rounded-lg p-2 text-center">
-                      <div className="text-xs text-gray-500">Triple Mile</div>
-                      <div className="text-sm font-medium">${Number(rateCard.perTripleMile).toFixed(4)}/mi</div>
-                    </div>
-                  )}
-                  {rateCard.perWorkHour && (
-                    <div className="bg-white border rounded-lg p-2 text-center">
-                      <div className="text-xs text-gray-500">Work Hour</div>
-                      <div className="text-sm font-medium">${Number(rateCard.perWorkHour).toFixed(2)}/hr</div>
-                    </div>
-                  )}
-                  {rateCard.perStopHour && (
-                    <div className="bg-white border rounded-lg p-2 text-center">
-                      <div className="text-xs text-gray-500">Stop Hour</div>
-                      <div className="text-sm font-medium">${Number(rateCard.perStopHour).toFixed(2)}/hr</div>
-                    </div>
-                  )}
-                  {rateCard.perSingleDH && (
-                    <div className="bg-white border rounded-lg p-2 text-center">
-                      <div className="text-xs text-gray-500">Single D/H</div>
-                      <div className="text-sm font-medium">${Number(rateCard.perSingleDH).toFixed(2)}</div>
-                    </div>
-                  )}
-                  {rateCard.perDoubleDH && (
-                    <div className="bg-white border rounded-lg p-2 text-center">
-                      <div className="text-xs text-gray-500">Double D/H</div>
-                      <div className="text-sm font-medium">${Number(rateCard.perDoubleDH).toFixed(2)}</div>
-                    </div>
-                  )}
-                  {rateCard.perTripleDH && (
-                    <div className="bg-white border rounded-lg p-2 text-center">
-                      <div className="text-xs text-gray-500">Triple D/H</div>
-                      <div className="text-sm font-medium">${Number(rateCard.perTripleDH).toFixed(2)}</div>
-                    </div>
-                  )}
-                  {rateCard.perChainUp && (
-                    <div className="bg-white border rounded-lg p-2 text-center">
-                      <div className="text-xs text-gray-500">Chain Up</div>
-                      <div className="text-sm font-medium">${Number(rateCard.perChainUp).toFixed(2)}</div>
-                    </div>
-                  )}
-                  {rateCard.fuelSurcharge && (
-                    <div className="bg-purple-50 border border-purple-200 rounded-lg p-2 text-center">
-                      <div className="text-xs text-purple-600">Fuel Surcharge</div>
-                      <div className="text-sm font-medium text-purple-800">{(Number(rateCard.fuelSurcharge) * 100).toFixed(2)}%</div>
-                    </div>
-                  )}
-                </div>
               </div>
             )}
           </div>
