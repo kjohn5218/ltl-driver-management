@@ -1,6 +1,12 @@
 import { Router } from 'express';
 import { body } from 'express-validator';
-import { getSystemSettings, updateFuelSurchargeRate, updateFuelSurchargeExternal } from '../controllers/settings.controller';
+import {
+  getSystemSettings,
+  updateFuelSurchargeRate,
+  updateFuelSurchargeExternal,
+  syncFuelSurcharge,
+  getFuelPriceSyncStatus
+} from '../controllers/settings.controller';
 import { authenticate, authorize } from '../middleware/auth.middleware';
 import { validateRequest } from '../middleware/validation.middleware';
 import { UserRole } from '@prisma/client';
@@ -35,6 +41,21 @@ router.put(
   ],
   validateRequest,
   updateFuelSurchargeRate
+);
+
+// Sync fuel surcharge from external fuel price API (Admin/Dispatcher only)
+// GET /api/settings/fuel-surcharge/sync?effectiveDate=YYYY-MM-DD
+router.post(
+  '/fuel-surcharge/sync',
+  authorize(UserRole.ADMIN, UserRole.DISPATCHER),
+  syncFuelSurcharge
+);
+
+// Get fuel price sync status (Admin/Dispatcher only)
+router.get(
+  '/fuel-surcharge/status',
+  authorize(UserRole.ADMIN, UserRole.DISPATCHER),
+  getFuelPriceSyncStatus
 );
 
 export default router;

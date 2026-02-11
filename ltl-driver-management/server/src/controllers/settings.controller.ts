@@ -1,5 +1,7 @@
 import { Request, Response } from 'express';
 import { prisma } from '../index';
+import { isFuelPriceConfigured } from '../config/fuelPrice.config';
+import { getFuelPriceService } from '../services/fuelPrice.service';
 
 export const getSystemSettings = async (_req: Request, res: Response) => {
   try {
@@ -110,5 +112,79 @@ export const updateFuelSurchargeExternal = async (req: Request, res: Response) =
   } catch (error) {
     console.error('External fuel surcharge update error:', error);
     return res.status(500).json({ message: 'Failed to update fuel surcharge rate' });
+  }
+};
+
+// Sync fuel surcharge from external fuel price API
+export const syncFuelSurcharge = async (req: Request, res: Response) => {
+  try {
+    // Check if fuel price API is configured
+    if (!isFuelPriceConfigured()) {
+      return res.status(400).json({
+        success: false,
+        message: 'Fuel Price API is not configured. Please set FUEL_PRICE_API_URL in environment variables.'
+      });
+    }
+
+    const { effectiveDate } = req.query;
+    const dateParam = effectiveDate ? String(effectiveDate) : undefined;
+
+    const service = getFuelPriceService();
+    const result = await service.syncFuelSurcharge(dateParam);
+
+    if (result.success) {
+      return res.json({
+        success: true,
+        previousRate: result.previousRate,
+        newRate: result.newRate,
+        source: result.source,
+        effectiveDate: result.effectiveDate,
+        syncedAt: result.syncedAt
+      });
+    } else {
+      return res.status(500).json({
+        success: false,
+        message: result.error || 'Failed to sync fuel surcharge',
+        effectiveDate: result.effectiveDate,
+        syncedAt: result.syncedAt
+      });
+    }
+  } catch (error) {
+    console.error('Sync fuel surcharge error:', error);
+    const message = error instanceof Error ? error.message : 'Unknown error';
+    return res.status(500).json({
+      success: false,
+      message: `Failed to sync fuel surcharge: ${message}`
+    });
+  }
+};
+
+// Get fuel price sync status
+export const getFuelPriceSyncStatus = async (_req: Request, res: Response) => {
+  try {
+    const configured = isFuelPriceConfigured();
+
+    if (!configured) {
+      return res.json({
+        configured: false,
+        message: 'Fuel Price API is not configured'
+      });
+    }
+
+    const service = getFuelPriceService();
+    const status = service.getSyncStatus();
+    const currentRate = await service.getCurrentRate();
+
+    return res.json({
+      configured: true,
+      currentRate: currentRate?.rate,
+      source: currentRate?.source,
+      lastUpdated: currentRate?.updatedAt,
+      lastSyncAt: status.lastSyncAt,
+      lastSyncResult: status.lastResult
+    });
+  } catch (error) {
+    console.error('Get fuel price sync status error:', error);
+    return res.status(500).json({ message: 'Failed to get fuel price sync status' });
   }
 };

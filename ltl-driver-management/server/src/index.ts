@@ -52,8 +52,8 @@ import expectedShipmentRoutes from './routes/expectedShipment.routes';
 // External integrations
 import hrIntegrationRoutes from './routes/hrIntegration.routes';
 
-// Scheduler
-import { startEquipmentSyncScheduler } from './scheduler';
+// Schedulers
+import { startEquipmentSyncScheduler, startFuelPriceSyncScheduler } from './scheduler';
 
 // Public driver routes (no SSO auth required)
 import publicDriverRoutes from './routes/publicDriver.routes';
@@ -209,6 +209,9 @@ async function startServer() {
 
       // Start equipment sync scheduler (if FormsApp is configured)
       startEquipmentSyncScheduler();
+
+      // Start fuel price sync scheduler (if Fuel Price API is configured)
+      startFuelPriceSyncScheduler();
     });
   } catch (error) {
     console.error('❌ Failed to connect to database:', error);
