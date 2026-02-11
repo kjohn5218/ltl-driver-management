@@ -18,7 +18,7 @@
   "author": "",
   "license": "ISC",
   "dependencies": {
-    "@aws-sdk/client-ses": "^3.987.0",
+    "@aws-sdk/client-sesv2": "^3.987.0",
     "@prisma/client": "^5.19.1",
     "@types/cookie-parser": "^1.4.10",
     "@types/puppeteer": "^5.4.7",

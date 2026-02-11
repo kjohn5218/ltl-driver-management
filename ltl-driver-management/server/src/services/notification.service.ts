@@ -1,5 +1,5 @@
 import nodemailer from 'nodemailer';
-import { SESClient, SendRawEmailCommand } from '@aws-sdk/client-ses';
+import * as aws from '@aws-sdk/client-sesv2';
 import { Booking, Carrier, Route } from '@prisma/client';
 import { PDFService } from './pdf.service';
 
@@ -20,8 +20,8 @@ const createTransporter = (): nodemailer.Transporter => {
   const provider = process.env.EMAIL_PROVIDER?.toUpperCase();
 
   if (provider === 'SES') {
-    // AWS SES configuration
-    const sesClient = new SESClient({
+    // AWS SES v2 configuration
+    const sesClient = new aws.SESv2Client({
       region: process.env.AWS_REGION || 'us-west-2',
       credentials: {
         accessKeyId: process.env.AWS_ACCESS_KEY_ID || '',
@@ -33,7 +33,7 @@ const createTransporter = (): nodemailer.Transporter => {
 
     // Use type assertion for SES transport (nodemailer types don't include SES)
     return nodemailer.createTransport({
-      SES: { ses: sesClient, aws: { SendRawEmailCommand } }
+      SES: { sesClient, SendEmailCommand: aws.SendEmailCommand }
     } as nodemailer.TransportOptions);
   }
 
