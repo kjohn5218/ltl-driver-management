@@ -152,7 +152,6 @@ export const createRateCard = async (req: Request, res: Response): Promise<void>
       notes,
       active,
       // Flattened pay rule fields
-      prioritize,
       autoArrive,
       perTrip,
       perCutTrip,
@@ -202,11 +201,10 @@ export const createRateCard = async (req: Request, res: Response): Promise<void>
         effectiveDate: new Date(effectiveDate),
         expirationDate: expirationDate ? new Date(expirationDate) : null,
         equipmentType,
-        priority: priority || 5,
+        priority: priority ?? false,
         notes,
         active: active !== undefined ? active : true,
         // Flattened pay rule fields
-        prioritize: prioritize ?? false,
         autoArrive: autoArrive ?? false,
         perTrip: perTrip ? new Prisma.Decimal(perTrip) : null,
         perCutTrip: perCutTrip ? new Prisma.Decimal(perCutTrip) : null,
@@ -270,7 +268,6 @@ export const updateRateCard = async (req: Request, res: Response): Promise<void>
       notes,
       active,
       // Flattened pay rule fields
-      prioritize,
       autoArrive,
       perTrip,
       perCutTrip,
@@ -302,7 +299,6 @@ export const updateRateCard = async (req: Request, res: Response): Promise<void>
         ...(notes !== undefined && { notes }),
         ...(active !== undefined && { active }),
         // Flattened pay rule fields
-        ...(prioritize !== undefined && { prioritize }),
         ...(autoArrive !== undefined && { autoArrive }),
         ...(perTrip !== undefined && { perTrip: perTrip ? new Prisma.Decimal(perTrip) : null }),
         ...(perCutTrip !== undefined && { perCutTrip: perCutTrip ? new Prisma.Decimal(perCutTrip) : null }),
@@ -394,7 +390,7 @@ export const getApplicableRate = async (req: Request, res: Response): Promise<vo
           ]
         },
         include: { accessorialRates: true },
-        orderBy: { priority: 'asc' }
+        orderBy: { priority: 'desc' }
       });
     }
 
@@ -412,7 +408,7 @@ export const getApplicableRate = async (req: Request, res: Response): Promise<vo
           ]
         },
         include: { accessorialRates: true },
-        orderBy: { priority: 'asc' }
+        orderBy: { priority: 'desc' }
       });
     }
 
@@ -430,7 +426,7 @@ export const getApplicableRate = async (req: Request, res: Response): Promise<vo
           ]
         },
         include: { accessorialRates: true },
-        orderBy: { priority: 'asc' }
+        orderBy: { priority: 'desc' }
       });
     }
 
@@ -449,7 +445,7 @@ export const getApplicableRate = async (req: Request, res: Response): Promise<vo
           ]
         },
         include: { accessorialRates: true },
-        orderBy: { priority: 'asc' }
+        orderBy: { priority: 'desc' }
       });
     }
 
@@ -466,7 +462,7 @@ export const getApplicableRate = async (req: Request, res: Response): Promise<vo
           ]
         },
         include: { accessorialRates: true },
-        orderBy: { priority: 'asc' }
+        orderBy: { priority: 'desc' }
       });
     }
 
@@ -702,12 +698,11 @@ export const importRateCards = async (req: Request, res: Response): Promise<void
           effectiveDate: new Date(rc.effectiveDate),
           expirationDate: rc.expirationDate ? new Date(rc.expirationDate) : null,
           equipmentType: rc.equipmentType || null,
-          priority: rc.priority || 5,
+          priority: rc.priority ?? false,
           externalRateId: rc.externalRateId || null,
           notes: rc.notes || null,
           active: rc.active !== undefined ? rc.active : true,
           // Flattened pay rule fields
-          prioritize: rc.prioritize ?? false,
           autoArrive: rc.autoArrive ?? false,
           perTrip: rc.perTrip ? new Prisma.Decimal(rc.perTrip) : null,
           perCutTrip: rc.perCutTrip ? new Prisma.Decimal(rc.perCutTrip) : null,
@@ -806,12 +801,11 @@ export const importRateCardsExternal = async (req: Request, res: Response): Prom
             effectiveDate: new Date(rc.effectiveDate),
             expirationDate: rc.expirationDate ? new Date(rc.expirationDate) : null,
             equipmentType: rc.equipmentType || null,
-            priority: rc.priority || 5,
+            priority: rc.priority ?? false,
             externalRateId: rc.externalRateId,
             notes: rc.notes || null,
             active: rc.active !== undefined ? rc.active : true,
             // Flattened pay rule fields
-            prioritize: rc.prioritize ?? false,
             autoArrive: rc.autoArrive ?? false,
             perTrip: rc.perTrip ? new Prisma.Decimal(rc.perTrip) : null,
             perCutTrip: rc.perCutTrip ? new Prisma.Decimal(rc.perCutTrip) : null,
@@ -1212,7 +1206,7 @@ export const updateDefaultRates = async (req: Request, res: Response): Promise<v
           maximumAmount: maximumAmount ? new Prisma.Decimal(maximumAmount) : null,
           effectiveDate: effectiveDate ? new Date(effectiveDate) : today,
           expirationDate: expirationDate ? new Date(expirationDate) : null,
-          priority: 10, // Lowest priority
+          priority: false, // Default rates have no priority override
           notes: notes || 'Default rate card',
           active: true
         }

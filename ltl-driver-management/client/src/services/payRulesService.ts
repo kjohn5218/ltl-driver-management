@@ -1,5 +1,5 @@
 import { api } from './api';
-import { RateCard, AccessorialRate, RateCardType, RateMethod, AccessorialType, LinehaulProfile, Terminal } from '../types';
+import { RateCard, AccessorialRate, RateCardType, RateMethod, AccessorialType, LinehaulProfile } from '../types';
 
 // Types for Pay Rules module
 export interface PayRulesFilters {
@@ -93,11 +93,10 @@ export interface CreateRateCardData {
   effectiveDate: string;
   expirationDate?: string;
   equipmentType?: string;
-  priority?: number;
+  priority?: boolean;
   notes?: string;
   active?: boolean;
   // Flattened pay rule fields
-  prioritize?: boolean;
   autoArrive?: boolean;
   perTrip?: number;
   perCutTrip?: number;
@@ -123,11 +122,10 @@ export interface UpdateRateCardData {
   effectiveDate?: string;
   expirationDate?: string | null;
   equipmentType?: string | null;
-  priority?: number;
+  priority?: boolean;
   notes?: string | null;
   active?: boolean;
   // Flattened pay rule fields
-  prioritize?: boolean;
   autoArrive?: boolean;
   perTrip?: number | null;
   perCutTrip?: number | null;
@@ -167,12 +165,11 @@ export interface ImportRateCardData {
   effectiveDate: string;
   expirationDate?: string;
   equipmentType?: string;
-  priority?: number;
+  priority?: boolean;
   externalRateId?: string;
   notes?: string;
   active?: boolean;
   // Flattened pay rule fields
-  prioritize?: boolean;
   autoArrive?: boolean;
   perTrip?: number;
   perCutTrip?: number;

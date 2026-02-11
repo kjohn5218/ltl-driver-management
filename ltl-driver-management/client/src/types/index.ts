@@ -741,12 +741,11 @@ export interface RateCard {
   effectiveDate: string;
   expirationDate?: string;
   equipmentType?: string;
-  priority: number;
+  priority: boolean;
   externalRateId?: string;
   notes?: string;
   active: boolean;
   // Flattened pay rule fields
-  prioritize?: boolean;
   autoArrive?: boolean;
   perTrip?: number;
   perCutTrip?: number;

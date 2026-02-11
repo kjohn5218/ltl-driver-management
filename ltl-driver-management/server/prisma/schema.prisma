@@ -1048,7 +1048,7 @@ model RateCard {
   effectiveDate         DateTime
   expirationDate        DateTime?
   equipmentType         String?
-  priority              Int          @default(5) // Lower = higher priority
+  priority              Boolean      @default(false) // True = this rate card takes precedence
   externalRateId        String?
   notes                 String?
   active                Boolean      @default(true)
@@ -1057,7 +1057,6 @@ model RateCard {
 
   // Flattened Pay Rule Fields
   // Behavioral Flags
-  prioritize            Boolean?     @default(false)
   autoArrive            Boolean?     @default(false)
 
   // Flat/Trip Rates

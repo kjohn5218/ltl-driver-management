@@ -1,8 +1,85 @@
 import { Request, Response } from 'express';
 import { prisma } from '../index';
+import { Prisma } from '@prisma/client';
 
 // Note: This is a mock implementation for Workday integration.
 // In production, this would make actual API calls to Workday.
+
+// Helper interface for Workday rate info
+interface WorkdayPayRates {
+  singleMiles?: number;
+  doubleMiles?: number;
+  tripleMiles?: number;
+  singleCutMiles?: number;
+  doubleCutMiles?: number;
+  tripleCutMiles?: number;
+  dropHookSingle?: number;
+  dropHookDouble?: number;
+  dropHookTriple?: number;
+  chainUp?: number;
+  stopHours?: number;
+}
+
+interface WorkdayRateInfo {
+  employeeId: string;
+  payRates: WorkdayPayRates;
+  lastUpdated: string;
+}
+
+// Helper function to upsert a RateCard from Workday rate info
+async function upsertDriverRateCardFromWorkday(
+  driverId: number,
+  rateInfo: WorkdayRateInfo
+): Promise<void> {
+  const payRates = rateInfo.payRates;
+
+  // Check if a DRIVER rate card already exists for this driver
+  const existingRateCard = await prisma.rateCard.findFirst({
+    where: {
+      rateType: 'DRIVER',
+      entityId: driverId,
+      active: true
+    }
+  });
+
+  const rateCardData = {
+    // Map Workday rates to flattened RateCard fields
+    perSingleMile: payRates.singleMiles ? new Prisma.Decimal(payRates.singleMiles) : null,
+    perDoubleMile: payRates.doubleMiles ? new Prisma.Decimal(payRates.doubleMiles) : null,
+    perTripleMile: payRates.tripleMiles ? new Prisma.Decimal(payRates.tripleMiles) : null,
+    perSingleDH: payRates.dropHookSingle ? new Prisma.Decimal(payRates.dropHookSingle) : null,
+    perDoubleDH: payRates.dropHookDouble ? new Prisma.Decimal(payRates.dropHookDouble) : null,
+    perTripleDH: payRates.dropHookTriple ? new Prisma.Decimal(payRates.dropHookTriple) : null,
+    perChainUp: payRates.chainUp ? new Prisma.Decimal(payRates.chainUp) : null,
+    perStopHour: payRates.stopHours ? new Prisma.Decimal(payRates.stopHours) : null
+  };
+
+  if (existingRateCard) {
+    // Update existing rate card with new rates from Workday
+    await prisma.rateCard.update({
+      where: { id: existingRateCard.id },
+      data: {
+        ...rateCardData,
+        notes: `Auto-synced from Workday on ${new Date().toISOString()}`
+      }
+    });
+  } else {
+    // Create new rate card for driver
+    await prisma.rateCard.create({
+      data: {
+        rateType: 'DRIVER',
+        entityId: driverId,
+        rateMethod: 'PER_MILE',
+        rateAmount: new Prisma.Decimal(payRates.singleMiles || 0),
+        effectiveDate: new Date(),
+        priority: true, // Driver-specific rates have priority
+        active: true,
+        notes: `Auto-created from Workday sync on ${new Date().toISOString()}`,
+        ...rateCardData
+      }
+    });
+  }
+}
 
 // Get all Workday paycodes
 export const getWorkdayPaycodes = async (req: Request, res: Response): Promise<void> => {
@@ -178,6 +255,8 @@ export const syncDriverRates = async (req: Request, res: Response): Promise<void
 
     const results = {
       synced: 0,
+      rateCardsCreated: 0,
+      rateCardsUpdated: 0,
       errors: [] as { driverId: number; name: string; error: string }[]
     };
 
@@ -186,8 +265,8 @@ export const syncDriverRates = async (req: Request, res: Response): Promise<void
     for (const driver of drivers) {
       try {
         // Mock rate info - in production this would come from Workday
-        const mockRateInfo = {
-          employeeId: driver.workdayEmployeeId,
+        const mockRateInfo: WorkdayRateInfo = {
+          employeeId: driver.workdayEmployeeId!,
           payRates: {
             singleMiles: 0.55 + Math.random() * 0.1,
             doubleMiles: 0.65 + Math.random() * 0.1,
@@ -204,6 +283,7 @@ export const syncDriverRates = async (req: Request, res: Response): Promise<void
           lastUpdated: new Date().toISOString()
         };
 
+        // Update driver's workday rate info
         await prisma.carrierDriver.update({
           where: { id: driver.id },
           data: {
@@ -212,7 +292,24 @@ export const syncDriverRates = async (req: Request, res: Response): Promise<void
           }
         });
 
+        // Check if rate card exists before upserting (for tracking created vs updated)
+        const existingRateCard = await prisma.rateCard.findFirst({
+          where: {
+            rateType: 'DRIVER',
+            entityId: driver.id,
+            active: true
+          }
+        });
+
+        // Auto-sync to RateCard
+        await upsertDriverRateCardFromWorkday(driver.id, mockRateInfo);
+
         results.synced++;
+        if (existingRateCard) {
+          results.rateCardsUpdated++;
+        } else {
+          results.rateCardsCreated++;
+        }
       } catch (err: any) {
         results.errors.push({
           driverId: driver.id,
@@ -223,8 +320,10 @@ export const syncDriverRates = async (req: Request, res: Response): Promise<void
     }
 
     res.json({
-      message: `Synced ${results.synced} driver(s) from Workday`,
+      message: `Synced ${results.synced} driver(s) from Workday. Rate cards: ${results.rateCardsCreated} created, ${results.rateCardsUpdated} updated.`,
       synced: results.synced,
+      rateCardsCreated: results.rateCardsCreated,
+      rateCardsUpdated: results.rateCardsUpdated,
       errors: results.errors
     });
   } catch (error) {
@@ -249,6 +348,7 @@ export const workdayWebhook = async (req: Request, res: Response): Promise<void>
           });
 
           if (driver) {
+            // Update driver's workday rate info
             await prisma.carrierDriver.update({
               where: { id: driver.id },
               data: {
@@ -257,9 +357,17 @@ export const workdayWebhook = async (req: Request, res: Response): Promise<void>
               }
             });
 
+            // Auto-sync to RateCard
+            const rateInfo: WorkdayRateInfo = {
+              employeeId: data.employeeId,
+              payRates: data.rateInfo.payRates || data.rateInfo,
+              lastUpdated: data.rateInfo.lastUpdated || new Date().toISOString()
+            };
+            await upsertDriverRateCardFromWorkday(driver.id, rateInfo);
+
             res.json({
               success: true,
-              message: `Rate info updated for driver ${driver.name}`
+              message: `Rate info updated for driver ${driver.name} and synced to Pay Rules`
             });
             return;
           }
