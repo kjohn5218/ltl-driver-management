@@ -34,6 +34,7 @@ import {
   Filter,
   ChevronDown,
   ChevronUp,
+  ArrowUpDown,
   Settings
 } from 'lucide-react';
 
@@ -93,6 +94,10 @@ export const PayRules: React.FC = () => {
   const [typeFilter, setTypeFilter] = useState<RateCardType | ''>('');
   const [methodFilter, setMethodFilter] = useState<RateMethod | ''>('');
   const [activeFilter, setActiveFilter] = useState<boolean | ''>('');
+
+  // Sort states
+  const [sortColumn, setSortColumn] = useState<string | null>(null);
+  const [sortDirection, setSortDirection] = useState<'asc' | 'desc'>('asc');
 
   // Pagination
   const [currentPage, setCurrentPage] = useState(1);
@@ -423,10 +428,86 @@ export const PayRules: React.FC = () => {
     };
   };
 
+  // Handle column sort click
+  const handleSort = (columnKey: string) => {
+    if (sortColumn === columnKey) {
+      // Toggle direction or clear sort
+      if (sortDirection === 'asc') {
+        setSortDirection('desc');
+      } else {
+        setSortColumn(null);
+        setSortDirection('asc');
+      }
+    } else {
+      setSortColumn(columnKey);
+      setSortDirection('asc');
+    }
+  };
+
+  // Get sortable value from rate card for a given column
+  const getSortValue = (rc: RateCard, key: string): string | number | boolean | null => {
+    switch (key) {
+      case 'rateType':
+        return rc.rateType;
+      case 'driverName':
+        return rc.driver?.name || parseNotesInfo(rc.notes).driverName || '';
+      case 'driverNumber':
+        return rc.driver?.number || '';
+      case 'employer':
+        if (rc.rateType === 'DRIVER') {
+          return rc.driver?.carrier?.name || parseNotesInfo(rc.notes).employer || '';
+        }
+        return rc.carrier?.name || parseNotesInfo(rc.notes).employer || '';
+      case 'origin':
+        return rc.originTerminal?.code || parseODFromNotes(rc.notes).origin || '';
+      case 'dest':
+        return rc.destinationTerminal?.code || parseODFromNotes(rc.notes).dest || '';
+      case 'perTrip':
+        return rc.perTrip ? Number(rc.perTrip) : 0;
+      case 'perMile':
+        return rc.perSingleMile ? Number(rc.perSingleMile) : 0;
+      case 'perHour':
+        return rc.perWorkHour ? Number(rc.perWorkHour) : 0;
+      case 'fsc':
+        return parseNotesInfo(rc.notes).fuelSurcharge || (rc.fuelSurcharge ? Number(rc.fuelSurcharge) : 0);
+      case 'priority':
+        return rc.priority ? 1 : 0;
+      case 'active':
+        return rc.active ? 1 : 0;
+      default:
+        return '';
+    }
+  };
+
+  // Sort rate cards
+  const sortedRateCards = React.useMemo(() => {
+    if (!sortColumn) return rateCards;
+
+    return [...rateCards].sort((a, b) => {
+      const aVal = getSortValue(a, sortColumn);
+      const bVal = getSortValue(b, sortColumn);
+
+      // Handle nulls
+      if (aVal === null || aVal === '') return sortDirection === 'asc' ? 1 : -1;
+      if (bVal === null || bVal === '') return sortDirection === 'asc' ? -1 : 1;
+
+      // Compare values
+      let comparison = 0;
+      if (typeof aVal === 'number' && typeof bVal === 'number') {
+        comparison = aVal - bVal;
+      } else {
+        comparison = String(aVal).localeCompare(String(bVal), undefined, { sensitivity: 'base' });
+      }
+
+      return sortDirection === 'asc' ? comparison : -comparison;
+    });
+  }, [rateCards, sortColumn, sortDirection]);
+
   const columns = [
     {
       header: '',
       accessor: 'id' as keyof RateCard,
+      sortKey: null as string | null,
       cell: (rc: RateCard) => (
         <button
           onClick={() => toggleRowExpand(rc.id)}
@@ -439,6 +520,7 @@ export const PayRules: React.FC = () => {
     {
       header: 'Type',
       accessor: 'rateType' as keyof RateCard,
+      sortKey: 'rateType',
       cell: (rc: RateCard) => {
         const typeConfig: Record<string, { bg: string; text: string; label: string }> = {
           'DRIVER': { bg: 'bg-blue-100', text: 'text-blue-700', label: 'Driver' },
@@ -458,6 +540,7 @@ export const PayRules: React.FC = () => {
     {
       header: 'Driver Name',
       accessor: 'entityId' as keyof RateCard,
+      sortKey: 'driverName',
       cell: (rc: RateCard) => {
         // For DRIVER types, show driver from API or notes
         if (rc.rateType === 'DRIVER') {
@@ -477,6 +560,7 @@ export const PayRules: React.FC = () => {
     {
       header: 'Driver #',
       accessor: 'id' as keyof RateCard,
+      sortKey: 'driverNumber',
       cell: (rc: RateCard) => {
         if (rc.rateType !== 'DRIVER') return <span className="text-gray-400">-</span>;
         return <span className="text-gray-600">{rc.driver?.number || '-'}</span>;
@@ -485,6 +569,7 @@ export const PayRules: React.FC = () => {
     {
       header: 'Employer/Carrier',
       accessor: 'carrier' as keyof RateCard,
+      sortKey: 'employer',
       cell: (rc: RateCard) => {
         // For DRIVER types, show the driver's carrier (employer) or from notes
         if (rc.rateType === 'DRIVER') {
@@ -506,6 +591,7 @@ export const PayRules: React.FC = () => {
     {
       header: 'Origin',
       accessor: 'originTerminalId' as keyof RateCard,
+      sortKey: 'origin',
       cell: (rc: RateCard) => {
         // Try terminal from API first, then fallback to notes for any rate type
         const code = rc.originTerminal?.code || parseODFromNotes(rc.notes).origin;
@@ -516,6 +602,7 @@ export const PayRules: React.FC = () => {
     {
       header: 'Dest',
       accessor: 'destinationTerminalId' as keyof RateCard,
+      sortKey: 'dest',
       cell: (rc: RateCard) => {
         // Try terminal from API first, then fallback to notes for any rate type
         const code = rc.destinationTerminal?.code || parseODFromNotes(rc.notes).dest;
@@ -526,6 +613,7 @@ export const PayRules: React.FC = () => {
     {
       header: 'Per Trip',
       accessor: 'perTrip' as keyof RateCard,
+      sortKey: 'perTrip',
       cell: (rc: RateCard) => {
         const trip = rc.perTrip;
         const cutTrip = rc.perCutTrip;
@@ -541,6 +629,7 @@ export const PayRules: React.FC = () => {
     {
       header: 'Per Mile (S/D/T)',
       accessor: 'perSingleMile' as keyof RateCard,
+      sortKey: 'perMile',
       cell: (rc: RateCard) => {
         const s = rc.perSingleMile;
         const d = rc.perDoubleMile;
@@ -560,6 +649,7 @@ export const PayRules: React.FC = () => {
     {
       header: 'Per Hour (Work/Stop)',
       accessor: 'perWorkHour' as keyof RateCard,
+      sortKey: 'perHour',
       cell: (rc: RateCard) => {
         const work = rc.perWorkHour;
         const stop = rc.perStopHour;
@@ -576,6 +666,7 @@ export const PayRules: React.FC = () => {
     {
       header: 'D/H (S/D/T)',
       accessor: 'perSingleDH' as keyof RateCard,
+      sortKey: null as string | null,
       cell: (rc: RateCard) => {
         const s = rc.perSingleDH;
         const d = rc.perDoubleDH;
@@ -595,6 +686,7 @@ export const PayRules: React.FC = () => {
     {
       header: 'FSC',
       accessor: 'fuelSurcharge' as keyof RateCard,
+      sortKey: 'fsc',
       cell: (rc: RateCard) => {
         // Check for fuel surcharge in notes
         const fsc = parseNotesInfo(rc.notes).fuelSurcharge;
@@ -612,6 +704,7 @@ export const PayRules: React.FC = () => {
     {
       header: 'Priority',
       accessor: 'priority' as keyof RateCard,
+      sortKey: 'priority',
       cell: (rc: RateCard) => (
         <span className={`px-2 py-0.5 text-xs font-medium rounded ${
           rc.priority ? 'bg-yellow-100 text-yellow-700' : 'bg-gray-100 text-gray-500'
@@ -623,6 +716,7 @@ export const PayRules: React.FC = () => {
     {
       header: 'Status',
       accessor: 'active' as keyof RateCard,
+      sortKey: 'active',
       cell: (rc: RateCard) => (
         <span className={`px-2 py-1 text-xs font-medium rounded-full ${
           rc.active ? 'bg-green-100 text-green-700' : 'bg-gray-100 text-gray-500'
@@ -634,6 +728,7 @@ export const PayRules: React.FC = () => {
     ...(isAdmin ? [{
       header: 'Actions',
       accessor: 'id' as keyof RateCard,
+      sortKey: null as string | null,
       cell: (rc: RateCard) => (
         <div className="flex items-center space-x-1">
           <button
@@ -844,15 +939,33 @@ export const PayRules: React.FC = () => {
                 {columns.map((col, idx) => (
                   <th
                     key={idx}
-                    className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider"
+                    className={`px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider ${
+                      col.sortKey ? 'cursor-pointer hover:bg-gray-100 select-none' : ''
+                    }`}
+                    onClick={() => col.sortKey && handleSort(col.sortKey)}
                   >
-                    {col.header}
+                    <div className="flex items-center gap-1">
+                      {col.header}
+                      {col.sortKey && (
+                        <span className="text-gray-400">
+                          {sortColumn === col.sortKey ? (
+                            sortDirection === 'asc' ? (
+                              <ChevronUp className="w-4 h-4 text-indigo-600" />
+                            ) : (
+                              <ChevronDown className="w-4 h-4 text-indigo-600" />
+                            )
+                          ) : (
+                            <ArrowUpDown className="w-3 h-3" />
+                          )}
+                        </span>
+                      )}
+                    </div>
                   </th>
                 ))}
               </tr>
             </thead>
             <tbody className="bg-white divide-y divide-gray-200">
-              {rateCards.map(rc => (
+              {sortedRateCards.map(rc => (
                 <React.Fragment key={rc.id}>
                   <tr className={`hover:bg-gray-50 ${expandedRows.has(rc.id) ? 'bg-indigo-50' : ''}`}>
                     {columns.map((col, idx) => (
