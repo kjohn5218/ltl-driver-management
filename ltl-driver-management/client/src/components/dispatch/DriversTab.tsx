@@ -336,7 +336,7 @@ export const DriversTab: React.FC<DriversTabProps> = ({ onDriverSelect }) => {
             className="rounded-md border border-gray-300 shadow-sm text-sm focus:ring-indigo-500 focus:border-indigo-500"
           >
             <option value="">All Carriers</option>
-            {carriers.map(carrier => (
+            {[...carriers].sort((a, b) => a.name.localeCompare(b.name)).map(carrier => (
               <option key={carrier.id} value={carrier.id}>
                 {carrier.name}
               </option>
