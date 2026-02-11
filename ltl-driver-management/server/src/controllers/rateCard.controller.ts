@@ -141,34 +141,43 @@ export const getRateCards = async (req: Request, res: Response): Promise<void> =
       return { ...rc, driver, carrier };
     });
 
-    // Deduplicate: If multiple rate cards exist for the same driver number,
+    // Deduplicate: If multiple rate cards exist for the same driver (by name),
     // keep only the one linked to a Workday-connected driver
-    const driverRateCards = enrichedRateCards.filter(rc => rc.rateType === 'DRIVER' && rc.driver?.number);
-    const otherRateCards = enrichedRateCards.filter(rc => rc.rateType !== 'DRIVER' || !rc.driver?.number);
+    const driverRateCards = enrichedRateCards.filter(rc => rc.rateType === 'DRIVER' && rc.driver?.name);
+    const otherRateCards = enrichedRateCards.filter(rc => rc.rateType !== 'DRIVER' || !rc.driver?.name);
 
-    // Group driver rate cards by driver number
-    const byDriverNumber = new Map<string, typeof enrichedRateCards>();
+    // Normalize driver name for comparison (lowercase, trim)
+    const normalizeName = (name: string) => name.toLowerCase().trim();
+
+    // Group driver rate cards by normalized driver name
+    const byDriverName = new Map<string, typeof enrichedRateCards>();
     for (const rc of driverRateCards) {
-      const num = rc.driver!.number!;
-      if (!byDriverNumber.has(num)) {
-        byDriverNumber.set(num, []);
+      const name = normalizeName(rc.driver!.name);
+      if (!byDriverName.has(name)) {
+        byDriverName.set(name, []);
       }
-      byDriverNumber.get(num)!.push(rc);
+      byDriverName.get(name)!.push(rc);
     }
 
-    // For each driver number, prefer the Workday-connected record
+    // For each driver name, prefer: 1) Workday-connected, 2) Has driver number, 3) First one
     const deduplicatedDriverRateCards: typeof enrichedRateCards = [];
-    for (const [, cards] of byDriverNumber) {
+    for (const [, cards] of byDriverName) {
       if (cards.length === 1) {
         deduplicatedDriverRateCards.push(cards[0]);
       } else {
-        // Multiple cards for same driver number - prefer Workday-connected
+        // Multiple cards for same driver name - prefer Workday-connected
         const workdayCard = cards.find(c => c.driver?.workdayEmployeeId);
         if (workdayCard) {
           deduplicatedDriverRateCards.push(workdayCard);
         } else {
-          // No Workday card, just take the first one
-          deduplicatedDriverRateCards.push(cards[0]);
+          // No Workday card, prefer one with driver number
+          const cardWithNumber = cards.find(c => c.driver?.number);
+          if (cardWithNumber) {
+            deduplicatedDriverRateCards.push(cardWithNumber);
+          } else {
+            // No card with number, just take the first one
+            deduplicatedDriverRateCards.push(cards[0]);
+          }
         }
       }
     }
