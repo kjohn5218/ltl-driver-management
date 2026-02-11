@@ -1055,6 +1055,37 @@ model RateCard {
   createdAt             DateTime     @default(now())
   updatedAt             DateTime     @updatedAt
 
+  // Flattened Pay Rule Fields
+  // Behavioral Flags
+  prioritize            Boolean?     @default(false)
+  autoArrive            Boolean?     @default(false)
+
+  // Flat/Trip Rates
+  perTrip               Decimal?     @db.Decimal(10, 2)
+  perCutTrip            Decimal?     @db.Decimal(10, 2)
+
+  // Cut Miles
+  cutMiles              Decimal?     @db.Decimal(8, 1)
+  cutMilesType          String?
+
+  // Mileage Rates by Trailer Configuration
+  perSingleMile         Decimal?     @db.Decimal(10, 4)
+  perDoubleMile         Decimal?     @db.Decimal(10, 4)
+  perTripleMile         Decimal?     @db.Decimal(10, 4)
+
+  // Hourly Rates
+  perWorkHour           Decimal?     @db.Decimal(10, 2)
+  perStopHour           Decimal?     @db.Decimal(10, 2)
+
+  // Drop & Hook Rates
+  perSingleDH           Decimal?     @db.Decimal(10, 2)
+  perDoubleDH           Decimal?     @db.Decimal(10, 2)
+  perTripleDH           Decimal?     @db.Decimal(10, 2)
+
+  // Other Rates
+  perChainUp            Decimal?     @db.Decimal(10, 2)
+  fuelSurcharge         Decimal?     @db.Decimal(6, 4)
+
   // Relations
   originTerminal      Terminal?         @relation("RateCardOrigin", fields: [originTerminalId], references: [id])
   destinationTerminal Terminal?         @relation("RateCardDestination", fields: [destinationTerminalId], references: [id])

@@ -202,7 +202,24 @@ router.post(
     body('equipmentType').optional().trim(),
     body('priority').optional().isInt({ min: 1, max: 10 }),
     body('notes').optional().trim(),
-    body('active').optional().isBoolean()
+    body('active').optional().isBoolean(),
+    // Flattened pay rule fields
+    body('prioritize').optional().isBoolean(),
+    body('autoArrive').optional().isBoolean(),
+    body('perTrip').optional().isDecimal(),
+    body('perCutTrip').optional().isDecimal(),
+    body('cutMiles').optional().isDecimal(),
+    body('cutMilesType').optional().trim(),
+    body('perSingleMile').optional().isDecimal(),
+    body('perDoubleMile').optional().isDecimal(),
+    body('perTripleMile').optional().isDecimal(),
+    body('perWorkHour').optional().isDecimal(),
+    body('perStopHour').optional().isDecimal(),
+    body('perSingleDH').optional().isDecimal(),
+    body('perDoubleDH').optional().isDecimal(),
+    body('perTripleDH').optional().isDecimal(),
+    body('perChainUp').optional().isDecimal(),
+    body('fuelSurcharge').optional().isDecimal()
   ],
   validateRequest,
   createRateCard
@@ -223,7 +240,24 @@ router.put(
     body('equipmentType').optional().trim(),
     body('priority').optional().isInt({ min: 1, max: 10 }),
     body('notes').optional().trim(),
-    body('active').optional().isBoolean()
+    body('active').optional().isBoolean(),
+    // Flattened pay rule fields
+    body('prioritize').optional().isBoolean(),
+    body('autoArrive').optional().isBoolean(),
+    body('perTrip').optional().isDecimal(),
+    body('perCutTrip').optional().isDecimal(),
+    body('cutMiles').optional().isDecimal(),
+    body('cutMilesType').optional().trim(),
+    body('perSingleMile').optional().isDecimal(),
+    body('perDoubleMile').optional().isDecimal(),
+    body('perTripleMile').optional().isDecimal(),
+    body('perWorkHour').optional().isDecimal(),
+    body('perStopHour').optional().isDecimal(),
+    body('perSingleDH').optional().isDecimal(),
+    body('perDoubleDH').optional().isDecimal(),
+    body('perTripleDH').optional().isDecimal(),
+    body('perChainUp').optional().isDecimal(),
+    body('fuelSurcharge').optional().isDecimal()
   ],
   validateRequest,
   updateRateCard

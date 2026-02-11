@@ -314,7 +314,24 @@ export const PayRules: React.FC = () => {
       equipmentType: rateCard.equipmentType || undefined,
       priority: rateCard.priority,
       notes: rateCard.notes || undefined,
-      active: rateCard.active
+      active: rateCard.active,
+      // Flattened pay rule fields
+      prioritize: rateCard.prioritize || false,
+      autoArrive: rateCard.autoArrive || false,
+      perTrip: rateCard.perTrip ? parseFloat(String(rateCard.perTrip)) : undefined,
+      perCutTrip: rateCard.perCutTrip ? parseFloat(String(rateCard.perCutTrip)) : undefined,
+      cutMiles: rateCard.cutMiles ? parseFloat(String(rateCard.cutMiles)) : undefined,
+      cutMilesType: rateCard.cutMilesType || undefined,
+      perSingleMile: rateCard.perSingleMile ? parseFloat(String(rateCard.perSingleMile)) : undefined,
+      perDoubleMile: rateCard.perDoubleMile ? parseFloat(String(rateCard.perDoubleMile)) : undefined,
+      perTripleMile: rateCard.perTripleMile ? parseFloat(String(rateCard.perTripleMile)) : undefined,
+      perWorkHour: rateCard.perWorkHour ? parseFloat(String(rateCard.perWorkHour)) : undefined,
+      perStopHour: rateCard.perStopHour ? parseFloat(String(rateCard.perStopHour)) : undefined,
+      perSingleDH: rateCard.perSingleDH ? parseFloat(String(rateCard.perSingleDH)) : undefined,
+      perDoubleDH: rateCard.perDoubleDH ? parseFloat(String(rateCard.perDoubleDH)) : undefined,
+      perTripleDH: rateCard.perTripleDH ? parseFloat(String(rateCard.perTripleDH)) : undefined,
+      perChainUp: rateCard.perChainUp ? parseFloat(String(rateCard.perChainUp)) : undefined,
+      fuelSurcharge: rateCard.fuelSurcharge ? parseFloat(String(rateCard.fuelSurcharge)) : undefined
     });
     setIsRateModalOpen(true);
   };
@@ -335,7 +352,24 @@ export const PayRules: React.FC = () => {
           equipmentType: rateFormData.equipmentType,
           priority: rateFormData.priority,
           notes: rateFormData.notes,
-          active: rateFormData.active
+          active: rateFormData.active,
+          // Flattened pay rule fields
+          prioritize: rateFormData.prioritize,
+          autoArrive: rateFormData.autoArrive,
+          perTrip: rateFormData.perTrip,
+          perCutTrip: rateFormData.perCutTrip,
+          cutMiles: rateFormData.cutMiles,
+          cutMilesType: rateFormData.cutMilesType,
+          perSingleMile: rateFormData.perSingleMile,
+          perDoubleMile: rateFormData.perDoubleMile,
+          perTripleMile: rateFormData.perTripleMile,
+          perWorkHour: rateFormData.perWorkHour,
+          perStopHour: rateFormData.perStopHour,
+          perSingleDH: rateFormData.perSingleDH,
+          perDoubleDH: rateFormData.perDoubleDH,
+          perTripleDH: rateFormData.perTripleDH,
+          perChainUp: rateFormData.perChainUp,
+          fuelSurcharge: rateFormData.fuelSurcharge
         };
         await payRulesService.updateRateCard(selectedRateCard.id, updateData);
         toast.success('Rate card updated successfully');
@@ -594,6 +628,109 @@ export const PayRules: React.FC = () => {
             {rateCard.notes && (
               <div className="mt-3 text-sm text-gray-600">
                 <span className="font-medium">Notes:</span> {rateCard.notes}
+              </div>
+            )}
+
+            {/* Flattened Pay Rule Fields */}
+            {(rateCard.perSingleMile || rateCard.perDoubleMile || rateCard.perTripleMile ||
+              rateCard.perSingleDH || rateCard.perDoubleDH || rateCard.perTripleDH ||
+              rateCard.perChainUp || rateCard.perWorkHour || rateCard.perStopHour ||
+              rateCard.perTrip || rateCard.perCutTrip || rateCard.cutMiles ||
+              rateCard.prioritize || rateCard.autoArrive || rateCard.fuelSurcharge) && (
+              <div className="mt-4 border-t pt-4">
+                <h4 className="text-sm font-medium text-gray-700 mb-3">Pay Rule Rates</h4>
+                <div className="grid grid-cols-2 md:grid-cols-4 lg:grid-cols-6 gap-3">
+                  {rateCard.prioritize && (
+                    <div className="bg-green-50 border border-green-200 rounded-lg p-2 text-center">
+                      <div className="text-xs text-green-600">Prioritize</div>
+                      <div className="text-sm font-medium text-green-800">Yes</div>
+                    </div>
+                  )}
+                  {rateCard.autoArrive && (
+                    <div className="bg-blue-50 border border-blue-200 rounded-lg p-2 text-center">
+                      <div className="text-xs text-blue-600">Auto Arrive</div>
+                      <div className="text-sm font-medium text-blue-800">Yes</div>
+                    </div>
+                  )}
+                  {rateCard.perTrip && (
+                    <div className="bg-white border rounded-lg p-2 text-center">
+                      <div className="text-xs text-gray-500">Per Trip</div>
+                      <div className="text-sm font-medium">${Number(rateCard.perTrip).toFixed(2)}</div>
+                    </div>
+                  )}
+                  {rateCard.perCutTrip && (
+                    <div className="bg-orange-50 border border-orange-200 rounded-lg p-2 text-center">
+                      <div className="text-xs text-orange-600">Per Cut Trip</div>
+                      <div className="text-sm font-medium text-orange-800">${Number(rateCard.perCutTrip).toFixed(2)}</div>
+                    </div>
+                  )}
+                  {rateCard.cutMiles && (
+                    <div className="bg-white border rounded-lg p-2 text-center">
+                      <div className="text-xs text-gray-500">Cut Miles</div>
+                      <div className="text-sm font-medium">{Number(rateCard.cutMiles).toFixed(1)} {rateCard.cutMilesType || ''}</div>
+                    </div>
+                  )}
+                  {rateCard.perSingleMile && (
+                    <div className="bg-white border rounded-lg p-2 text-center">
+                      <div className="text-xs text-gray-500">Single Mile</div>
+                      <div className="text-sm font-medium">${Number(rateCard.perSingleMile).toFixed(4)}/mi</div>
+                    </div>
+                  )}
+                  {rateCard.perDoubleMile && (
+                    <div className="bg-white border rounded-lg p-2 text-center">
+                      <div className="text-xs text-gray-500">Double Mile</div>
+                      <div className="text-sm font-medium">${Number(rateCard.perDoubleMile).toFixed(4)}/mi</div>
+                    </div>
+                  )}
+                  {rateCard.perTripleMile && (
+                    <div className="bg-white border rounded-lg p-2 text-center">
+                      <div className="text-xs text-gray-500">Triple Mile</div>
+                      <div className="text-sm font-medium">${Number(rateCard.perTripleMile).toFixed(4)}/mi</div>
+                    </div>
+                  )}
+                  {rateCard.perWorkHour && (
+                    <div className="bg-white border rounded-lg p-2 text-center">
+                      <div className="text-xs text-gray-500">Work Hour</div>
+                      <div className="text-sm font-medium">${Number(rateCard.perWorkHour).toFixed(2)}/hr</div>
+                    </div>
+                  )}
+                  {rateCard.perStopHour && (
+                    <div className="bg-white border rounded-lg p-2 text-center">
+                      <div className="text-xs text-gray-500">Stop Hour</div>
+                      <div className="text-sm font-medium">${Number(rateCard.perStopHour).toFixed(2)}/hr</div>
+                    </div>
+                  )}
+                  {rateCard.perSingleDH && (
+                    <div className="bg-white border rounded-lg p-2 text-center">
+                      <div className="text-xs text-gray-500">Single D/H</div>
+                      <div className="text-sm font-medium">${Number(rateCard.perSingleDH).toFixed(2)}</div>
+                    </div>
+                  )}
+                  {rateCard.perDoubleDH && (
+                    <div className="bg-white border rounded-lg p-2 text-center">
+                      <div className="text-xs text-gray-500">Double D/H</div>
+                      <div className="text-sm font-medium">${Number(rateCard.perDoubleDH).toFixed(2)}</div>
+                    </div>
+                  )}
+                  {rateCard.perTripleDH && (
+                    <div className="bg-white border rounded-lg p-2 text-center">
+                      <div className="text-xs text-gray-500">Triple D/H</div>
+                      <div className="text-sm font-medium">${Number(rateCard.perTripleDH).toFixed(2)}</div>
+                    </div>
+                  )}
+                  {rateCard.perChainUp && (
+                    <div className="bg-white border rounded-lg p-2 text-center">
+                      <div className="text-xs text-gray-500">Chain Up</div>
+                      <div className="text-sm font-medium">${Number(rateCard.perChainUp).toFixed(2)}</div>
+                    </div>
+                  )}
+                  {rateCard.fuelSurcharge && (
+                    <div className="bg-purple-50 border border-purple-200 rounded-lg p-2 text-center">
+                      <div className="text-xs text-purple-600">Fuel Surcharge</div>
+                      <div className="text-sm font-medium text-purple-800">{(Number(rateCard.fuelSurcharge) * 100).toFixed(2)}%</div>
+                    </div>
+                  )}
+                </div>
               </div>
             )}
           </div>
@@ -1123,6 +1260,223 @@ export const PayRules: React.FC = () => {
             />
           </div>
 
+          {/* Flattened Pay Rule Fields */}
+          <div className="border-t pt-4 mt-4">
+            <h4 className="text-sm font-medium text-gray-700 mb-3">Behavioral Flags</h4>
+            <div className="grid grid-cols-2 gap-4">
+              <label className="flex items-center space-x-2 cursor-pointer">
+                <input
+                  type="checkbox"
+                  checked={rateFormData.prioritize ?? false}
+                  onChange={(e) => setRateFormData({ ...rateFormData, prioritize: e.target.checked })}
+                  className="w-4 h-4 text-indigo-600 rounded focus:ring-indigo-500"
+                />
+                <span className="text-sm text-gray-700">Prioritize</span>
+              </label>
+              <label className="flex items-center space-x-2 cursor-pointer">
+                <input
+                  type="checkbox"
+                  checked={rateFormData.autoArrive ?? false}
+                  onChange={(e) => setRateFormData({ ...rateFormData, autoArrive: e.target.checked })}
+                  className="w-4 h-4 text-indigo-600 rounded focus:ring-indigo-500"
+                />
+                <span className="text-sm text-gray-700">Auto Arrive</span>
+              </label>
+            </div>
+          </div>
+
+          <div className="border-t pt-4 mt-4">
+            <h4 className="text-sm font-medium text-gray-700 mb-3">Flat/Trip Rates</h4>
+            <div className="grid grid-cols-2 gap-4">
+              <div>
+                <label className="block text-xs text-gray-500 mb-1">Per Trip ($)</label>
+                <input
+                  type="number"
+                  step="0.01"
+                  value={rateFormData.perTrip ?? ''}
+                  onChange={(e) => setRateFormData({ ...rateFormData, perTrip: e.target.value ? parseFloat(e.target.value) : undefined })}
+                  placeholder="Optional"
+                  className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-indigo-500 text-sm"
+                />
+              </div>
+              <div>
+                <label className="block text-xs text-gray-500 mb-1">Per Cut Trip ($)</label>
+                <input
+                  type="number"
+                  step="0.01"
+                  value={rateFormData.perCutTrip ?? ''}
+                  onChange={(e) => setRateFormData({ ...rateFormData, perCutTrip: e.target.value ? parseFloat(e.target.value) : undefined })}
+                  placeholder="Optional"
+                  className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-indigo-500 text-sm"
+                />
+              </div>
+            </div>
+          </div>
+
+          <div className="border-t pt-4 mt-4">
+            <h4 className="text-sm font-medium text-gray-700 mb-3">Cut Miles</h4>
+            <div className="grid grid-cols-2 gap-4">
+              <div>
+                <label className="block text-xs text-gray-500 mb-1">Cut Miles Threshold</label>
+                <input
+                  type="number"
+                  step="0.1"
+                  value={rateFormData.cutMiles ?? ''}
+                  onChange={(e) => setRateFormData({ ...rateFormData, cutMiles: e.target.value ? parseFloat(e.target.value) : undefined })}
+                  placeholder="Optional"
+                  className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-indigo-500 text-sm"
+                />
+              </div>
+              <div>
+                <label className="block text-xs text-gray-500 mb-1">Cut Miles Type</label>
+                <input
+                  type="text"
+                  value={rateFormData.cutMilesType ?? ''}
+                  onChange={(e) => setRateFormData({ ...rateFormData, cutMilesType: e.target.value || undefined })}
+                  placeholder="Optional"
+                  className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-indigo-500 text-sm"
+                />
+              </div>
+            </div>
+          </div>
+
+          <div className="border-t pt-4 mt-4">
+            <h4 className="text-sm font-medium text-gray-700 mb-3">Mileage Rates ($/mi)</h4>
+            <div className="grid grid-cols-3 gap-4">
+              <div>
+                <label className="block text-xs text-gray-500 mb-1">Single</label>
+                <input
+                  type="number"
+                  step="0.0001"
+                  value={rateFormData.perSingleMile ?? ''}
+                  onChange={(e) => setRateFormData({ ...rateFormData, perSingleMile: e.target.value ? parseFloat(e.target.value) : undefined })}
+                  placeholder="0.0000"
+                  className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-indigo-500 text-sm"
+                />
+              </div>
+              <div>
+                <label className="block text-xs text-gray-500 mb-1">Double</label>
+                <input
+                  type="number"
+                  step="0.0001"
+                  value={rateFormData.perDoubleMile ?? ''}
+                  onChange={(e) => setRateFormData({ ...rateFormData, perDoubleMile: e.target.value ? parseFloat(e.target.value) : undefined })}
+                  placeholder="0.0000"
+                  className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-indigo-500 text-sm"
+                />
+              </div>
+              <div>
+                <label className="block text-xs text-gray-500 mb-1">Triple</label>
+                <input
+                  type="number"
+                  step="0.0001"
+                  value={rateFormData.perTripleMile ?? ''}
+                  onChange={(e) => setRateFormData({ ...rateFormData, perTripleMile: e.target.value ? parseFloat(e.target.value) : undefined })}
+                  placeholder="0.0000"
+                  className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-indigo-500 text-sm"
+                />
+              </div>
+            </div>
+          </div>
+
+          <div className="border-t pt-4 mt-4">
+            <h4 className="text-sm font-medium text-gray-700 mb-3">Hourly Rates ($/hr)</h4>
+            <div className="grid grid-cols-2 gap-4">
+              <div>
+                <label className="block text-xs text-gray-500 mb-1">Work Hour</label>
+                <input
+                  type="number"
+                  step="0.01"
+                  value={rateFormData.perWorkHour ?? ''}
+                  onChange={(e) => setRateFormData({ ...rateFormData, perWorkHour: e.target.value ? parseFloat(e.target.value) : undefined })}
+                  placeholder="0.00"
+                  className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-indigo-500 text-sm"
+                />
+              </div>
+              <div>
+                <label className="block text-xs text-gray-500 mb-1">Stop Hour</label>
+                <input
+                  type="number"
+                  step="0.01"
+                  value={rateFormData.perStopHour ?? ''}
+                  onChange={(e) => setRateFormData({ ...rateFormData, perStopHour: e.target.value ? parseFloat(e.target.value) : undefined })}
+                  placeholder="0.00"
+                  className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-indigo-500 text-sm"
+                />
+              </div>
+            </div>
+          </div>
+
+          <div className="border-t pt-4 mt-4">
+            <h4 className="text-sm font-medium text-gray-700 mb-3">Drop & Hook Rates ($)</h4>
+            <div className="grid grid-cols-3 gap-4">
+              <div>
+                <label className="block text-xs text-gray-500 mb-1">Single</label>
+                <input
+                  type="number"
+                  step="0.01"
+                  value={rateFormData.perSingleDH ?? ''}
+                  onChange={(e) => setRateFormData({ ...rateFormData, perSingleDH: e.target.value ? parseFloat(e.target.value) : undefined })}
+                  placeholder="0.00"
+                  className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-indigo-500 text-sm"
+                />
+              </div>
+              <div>
+                <label className="block text-xs text-gray-500 mb-1">Double</label>
+                <input
+                  type="number"
+                  step="0.01"
+                  value={rateFormData.perDoubleDH ?? ''}
+                  onChange={(e) => setRateFormData({ ...rateFormData, perDoubleDH: e.target.value ? parseFloat(e.target.value) : undefined })}
+                  placeholder="0.00"
+                  className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-indigo-500 text-sm"
+                />
+              </div>
+              <div>
+                <label className="block text-xs text-gray-500 mb-1">Triple</label>
+                <input
+                  type="number"
+                  step="0.01"
+                  value={rateFormData.perTripleDH ?? ''}
+                  onChange={(e) => setRateFormData({ ...rateFormData, perTripleDH: e.target.value ? parseFloat(e.target.value) : undefined })}
+                  placeholder="0.00"
+                  className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-indigo-500 text-sm"
+                />
+              </div>
+            </div>
+          </div>
+
+          <div className="border-t pt-4 mt-4">
+            <h4 className="text-sm font-medium text-gray-700 mb-3">Other Rates</h4>
+            <div className="grid grid-cols-2 gap-4">
+              <div>
+                <label className="block text-xs text-gray-500 mb-1">Chain Up ($)</label>
+                <input
+                  type="number"
+                  step="0.01"
+                  value={rateFormData.perChainUp ?? ''}
+                  onChange={(e) => setRateFormData({ ...rateFormData, perChainUp: e.target.value ? parseFloat(e.target.value) : undefined })}
+                  placeholder="0.00"
+                  className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-indigo-500 text-sm"
+                />
+              </div>
+              <div>
+                <label className="block text-xs text-gray-500 mb-1">Fuel Surcharge (%)</label>
+                <input
+                  type="number"
+                  step="0.01"
+                  value={rateFormData.fuelSurcharge != null ? rateFormData.fuelSurcharge * 100 : ''}
+                  onChange={(e) => setRateFormData({
+                    ...rateFormData,
+                    fuelSurcharge: e.target.value ? parseFloat(e.target.value) / 100 : undefined
+                  })}
+                  placeholder="0.00"
+                  className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-indigo-500 text-sm"
+                />
+              </div>
+            </div>
+          </div>
+
           <div className="flex justify-end space-x-3 pt-4">
             <button
               onClick={() => setIsRateModalOpen(false)}
@@ -1262,11 +1616,18 @@ export const PayRules: React.FC = () => {
               </p>
               <button
                 onClick={() => {
-                  const headers = ['rateType', 'entityId', 'linehaulProfileId', 'originTerminalId', 'destinationTerminalId', 'rateMethod', 'rateAmount', 'minimumAmount', 'maximumAmount', 'effectiveDate', 'expirationDate', 'equipmentType', 'priority', 'notes', 'externalRateId'];
+                  const headers = [
+                    'rateType', 'entityId', 'linehaulProfileId', 'originTerminalId', 'destinationTerminalId',
+                    'rateMethod', 'rateAmount', 'minimumAmount', 'maximumAmount', 'effectiveDate', 'expirationDate',
+                    'equipmentType', 'priority', 'notes', 'externalRateId',
+                    // Flattened pay rule fields
+                    'prioritize', 'autoArrive', 'perTrip', 'perCutTrip', 'cutMiles', 'cutMilesType',
+                    'perSingleMile', 'perDoubleMile', 'perTripleMile', 'perWorkHour', 'perStopHour',
+                    'perSingleDH', 'perDoubleDH', 'perTripleDH', 'perChainUp', 'fuelSurcharge'
+                  ];
                   const exampleRows = [
-                    ['DRIVER', '123', '', '', '', 'PER_MILE', '0.55', '', '', '2026-01-01', '', '', '5', 'Driver rate example', 'EXT-001'],
-                    ['LINEHAUL', '', '45', '', '', 'FLAT_RATE', '350.00', '300.00', '500.00', '2026-01-01', '2026-12-31', '', '3', 'Linehaul profile rate', 'EXT-002'],
-                    ['OD_PAIR', '', '', '10', '20', 'PER_MILE', '0.60', '', '', '2026-01-01', '', '', '4', 'O/D pair rate example', 'EXT-003']
+                    ['DRIVER', '123', '', '', '', 'PER_MILE', '0.55', '', '', '2026-01-01', '', '', '5', 'Driver rate example', 'EXT-001', 'false', 'false', '', '250', '', '', '0.55', '0.65', '0.75', '', '', '25', '35', '45', '50', ''],
+                    ['CARRIER', '456', '', '', '', 'FLAT_RATE', '350.00', '300.00', '500.00', '2026-01-01', '2026-12-31', '', '3', 'Carrier rate', 'EXT-002', 'true', 'true', '400', '', '150', 'single', '', '', '', '35', '25', '', '', '', '75', '0.05']
                   ];
                   const csvContent = [headers.join(','), ...exampleRows.map(row => row.join(','))].join('\n');
                   const blob = new Blob([csvContent], { type: 'text/csv' });
@@ -1339,7 +1700,24 @@ export const PayRules: React.FC = () => {
                           equipmentType: obj.equipmentType || undefined,
                           priority: obj.priority ? parseInt(obj.priority) : undefined,
                           notes: obj.notes || undefined,
-                          externalRateId: obj.externalRateId
+                          externalRateId: obj.externalRateId,
+                          // Flattened pay rule fields
+                          prioritize: obj.prioritize === 'true' || obj.prioritize === 'Yes' || obj.prioritize === '1',
+                          autoArrive: obj.autoArrive === 'true' || obj.autoArrive === 'Yes' || obj.autoArrive === '1',
+                          perTrip: obj.perTrip ? parseFloat(obj.perTrip) : undefined,
+                          perCutTrip: obj.perCutTrip ? parseFloat(obj.perCutTrip) : undefined,
+                          cutMiles: obj.cutMiles ? parseFloat(obj.cutMiles) : undefined,
+                          cutMilesType: obj.cutMilesType || undefined,
+                          perSingleMile: obj.perSingleMile ? parseFloat(obj.perSingleMile) : undefined,
+                          perDoubleMile: obj.perDoubleMile ? parseFloat(obj.perDoubleMile) : undefined,
+                          perTripleMile: obj.perTripleMile ? parseFloat(obj.perTripleMile) : undefined,
+                          perWorkHour: obj.perWorkHour ? parseFloat(obj.perWorkHour) : undefined,
+                          perStopHour: obj.perStopHour ? parseFloat(obj.perStopHour) : undefined,
+                          perSingleDH: obj.perSingleDH ? parseFloat(obj.perSingleDH) : undefined,
+                          perDoubleDH: obj.perDoubleDH ? parseFloat(obj.perDoubleDH) : undefined,
+                          perTripleDH: obj.perTripleDH ? parseFloat(obj.perTripleDH) : undefined,
+                          perChainUp: obj.perChainUp ? parseFloat(obj.perChainUp) : undefined,
+                          fuelSurcharge: obj.fuelSurcharge ? parseFloat(obj.fuelSurcharge) : undefined
                         };
                       });
                     }

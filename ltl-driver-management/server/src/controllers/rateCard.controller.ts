@@ -150,7 +150,24 @@ export const createRateCard = async (req: Request, res: Response): Promise<void>
       equipmentType,
       priority,
       notes,
-      active
+      active,
+      // Flattened pay rule fields
+      prioritize,
+      autoArrive,
+      perTrip,
+      perCutTrip,
+      cutMiles,
+      cutMilesType,
+      perSingleMile,
+      perDoubleMile,
+      perTripleMile,
+      perWorkHour,
+      perStopHour,
+      perSingleDH,
+      perDoubleDH,
+      perTripleDH,
+      perChainUp,
+      fuelSurcharge
     } = req.body;
 
     // Validate type-specific requirements
@@ -187,7 +204,24 @@ export const createRateCard = async (req: Request, res: Response): Promise<void>
         equipmentType,
         priority: priority || 5,
         notes,
-        active: active !== undefined ? active : true
+        active: active !== undefined ? active : true,
+        // Flattened pay rule fields
+        prioritize: prioritize ?? false,
+        autoArrive: autoArrive ?? false,
+        perTrip: perTrip ? new Prisma.Decimal(perTrip) : null,
+        perCutTrip: perCutTrip ? new Prisma.Decimal(perCutTrip) : null,
+        cutMiles: cutMiles ? new Prisma.Decimal(cutMiles) : null,
+        cutMilesType: cutMilesType || null,
+        perSingleMile: perSingleMile ? new Prisma.Decimal(perSingleMile) : null,
+        perDoubleMile: perDoubleMile ? new Prisma.Decimal(perDoubleMile) : null,
+        perTripleMile: perTripleMile ? new Prisma.Decimal(perTripleMile) : null,
+        perWorkHour: perWorkHour ? new Prisma.Decimal(perWorkHour) : null,
+        perStopHour: perStopHour ? new Prisma.Decimal(perStopHour) : null,
+        perSingleDH: perSingleDH ? new Prisma.Decimal(perSingleDH) : null,
+        perDoubleDH: perDoubleDH ? new Prisma.Decimal(perDoubleDH) : null,
+        perTripleDH: perTripleDH ? new Prisma.Decimal(perTripleDH) : null,
+        perChainUp: perChainUp ? new Prisma.Decimal(perChainUp) : null,
+        fuelSurcharge: fuelSurcharge ? new Prisma.Decimal(fuelSurcharge) : null
       },
       include: {
         originTerminal: {
@@ -234,7 +268,24 @@ export const updateRateCard = async (req: Request, res: Response): Promise<void>
       equipmentType,
       priority,
       notes,
-      active
+      active,
+      // Flattened pay rule fields
+      prioritize,
+      autoArrive,
+      perTrip,
+      perCutTrip,
+      cutMiles,
+      cutMilesType,
+      perSingleMile,
+      perDoubleMile,
+      perTripleMile,
+      perWorkHour,
+      perStopHour,
+      perSingleDH,
+      perDoubleDH,
+      perTripleDH,
+      perChainUp,
+      fuelSurcharge
     } = req.body;
 
     const rateCard = await prisma.rateCard.update({
@@ -249,7 +300,24 @@ export const updateRateCard = async (req: Request, res: Response): Promise<void>
         ...(equipmentType !== undefined && { equipmentType }),
         ...(priority !== undefined && { priority }),
         ...(notes !== undefined && { notes }),
-        ...(active !== undefined && { active })
+        ...(active !== undefined && { active }),
+        // Flattened pay rule fields
+        ...(prioritize !== undefined && { prioritize }),
+        ...(autoArrive !== undefined && { autoArrive }),
+        ...(perTrip !== undefined && { perTrip: perTrip ? new Prisma.Decimal(perTrip) : null }),
+        ...(perCutTrip !== undefined && { perCutTrip: perCutTrip ? new Prisma.Decimal(perCutTrip) : null }),
+        ...(cutMiles !== undefined && { cutMiles: cutMiles ? new Prisma.Decimal(cutMiles) : null }),
+        ...(cutMilesType !== undefined && { cutMilesType: cutMilesType || null }),
+        ...(perSingleMile !== undefined && { perSingleMile: perSingleMile ? new Prisma.Decimal(perSingleMile) : null }),
+        ...(perDoubleMile !== undefined && { perDoubleMile: perDoubleMile ? new Prisma.Decimal(perDoubleMile) : null }),
+        ...(perTripleMile !== undefined && { perTripleMile: perTripleMile ? new Prisma.Decimal(perTripleMile) : null }),
+        ...(perWorkHour !== undefined && { perWorkHour: perWorkHour ? new Prisma.Decimal(perWorkHour) : null }),
+        ...(perStopHour !== undefined && { perStopHour: perStopHour ? new Prisma.Decimal(perStopHour) : null }),
+        ...(perSingleDH !== undefined && { perSingleDH: perSingleDH ? new Prisma.Decimal(perSingleDH) : null }),
+        ...(perDoubleDH !== undefined && { perDoubleDH: perDoubleDH ? new Prisma.Decimal(perDoubleDH) : null }),
+        ...(perTripleDH !== undefined && { perTripleDH: perTripleDH ? new Prisma.Decimal(perTripleDH) : null }),
+        ...(perChainUp !== undefined && { perChainUp: perChainUp ? new Prisma.Decimal(perChainUp) : null }),
+        ...(fuelSurcharge !== undefined && { fuelSurcharge: fuelSurcharge ? new Prisma.Decimal(fuelSurcharge) : null })
       },
       include: {
         originTerminal: {
@@ -637,7 +705,24 @@ export const importRateCards = async (req: Request, res: Response): Promise<void
           priority: rc.priority || 5,
           externalRateId: rc.externalRateId || null,
           notes: rc.notes || null,
-          active: rc.active !== undefined ? rc.active : true
+          active: rc.active !== undefined ? rc.active : true,
+          // Flattened pay rule fields
+          prioritize: rc.prioritize ?? false,
+          autoArrive: rc.autoArrive ?? false,
+          perTrip: rc.perTrip ? new Prisma.Decimal(rc.perTrip) : null,
+          perCutTrip: rc.perCutTrip ? new Prisma.Decimal(rc.perCutTrip) : null,
+          cutMiles: rc.cutMiles ? new Prisma.Decimal(rc.cutMiles) : null,
+          cutMilesType: rc.cutMilesType || null,
+          perSingleMile: rc.perSingleMile ? new Prisma.Decimal(rc.perSingleMile) : null,
+          perDoubleMile: rc.perDoubleMile ? new Prisma.Decimal(rc.perDoubleMile) : null,
+          perTripleMile: rc.perTripleMile ? new Prisma.Decimal(rc.perTripleMile) : null,
+          perWorkHour: rc.perWorkHour ? new Prisma.Decimal(rc.perWorkHour) : null,
+          perStopHour: rc.perStopHour ? new Prisma.Decimal(rc.perStopHour) : null,
+          perSingleDH: rc.perSingleDH ? new Prisma.Decimal(rc.perSingleDH) : null,
+          perDoubleDH: rc.perDoubleDH ? new Prisma.Decimal(rc.perDoubleDH) : null,
+          perTripleDH: rc.perTripleDH ? new Prisma.Decimal(rc.perTripleDH) : null,
+          perChainUp: rc.perChainUp ? new Prisma.Decimal(rc.perChainUp) : null,
+          fuelSurcharge: rc.fuelSurcharge ? new Prisma.Decimal(rc.fuelSurcharge) : null
         };
 
         if (existingCard) {
@@ -724,7 +809,24 @@ export const importRateCardsExternal = async (req: Request, res: Response): Prom
             priority: rc.priority || 5,
             externalRateId: rc.externalRateId,
             notes: rc.notes || null,
-            active: rc.active !== undefined ? rc.active : true
+            active: rc.active !== undefined ? rc.active : true,
+            // Flattened pay rule fields
+            prioritize: rc.prioritize ?? false,
+            autoArrive: rc.autoArrive ?? false,
+            perTrip: rc.perTrip ? new Prisma.Decimal(rc.perTrip) : null,
+            perCutTrip: rc.perCutTrip ? new Prisma.Decimal(rc.perCutTrip) : null,
+            cutMiles: rc.cutMiles ? new Prisma.Decimal(rc.cutMiles) : null,
+            cutMilesType: rc.cutMilesType || null,
+            perSingleMile: rc.perSingleMile ? new Prisma.Decimal(rc.perSingleMile) : null,
+            perDoubleMile: rc.perDoubleMile ? new Prisma.Decimal(rc.perDoubleMile) : null,
+            perTripleMile: rc.perTripleMile ? new Prisma.Decimal(rc.perTripleMile) : null,
+            perWorkHour: rc.perWorkHour ? new Prisma.Decimal(rc.perWorkHour) : null,
+            perStopHour: rc.perStopHour ? new Prisma.Decimal(rc.perStopHour) : null,
+            perSingleDH: rc.perSingleDH ? new Prisma.Decimal(rc.perSingleDH) : null,
+            perDoubleDH: rc.perDoubleDH ? new Prisma.Decimal(rc.perDoubleDH) : null,
+            perTripleDH: rc.perTripleDH ? new Prisma.Decimal(rc.perTripleDH) : null,
+            perChainUp: rc.perChainUp ? new Prisma.Decimal(rc.perChainUp) : null,
+            fuelSurcharge: rc.fuelSurcharge ? new Prisma.Decimal(rc.fuelSurcharge) : null
           };
 
           if (existingCard) {

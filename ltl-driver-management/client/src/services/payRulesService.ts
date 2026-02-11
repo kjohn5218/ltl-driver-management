@@ -96,6 +96,23 @@ export interface CreateRateCardData {
   priority?: number;
   notes?: string;
   active?: boolean;
+  // Flattened pay rule fields
+  prioritize?: boolean;
+  autoArrive?: boolean;
+  perTrip?: number;
+  perCutTrip?: number;
+  cutMiles?: number;
+  cutMilesType?: string;
+  perSingleMile?: number;
+  perDoubleMile?: number;
+  perTripleMile?: number;
+  perWorkHour?: number;
+  perStopHour?: number;
+  perSingleDH?: number;
+  perDoubleDH?: number;
+  perTripleDH?: number;
+  perChainUp?: number;
+  fuelSurcharge?: number;
 }
 
 export interface UpdateRateCardData {
@@ -109,6 +126,23 @@ export interface UpdateRateCardData {
   priority?: number;
   notes?: string | null;
   active?: boolean;
+  // Flattened pay rule fields
+  prioritize?: boolean;
+  autoArrive?: boolean;
+  perTrip?: number | null;
+  perCutTrip?: number | null;
+  cutMiles?: number | null;
+  cutMilesType?: string | null;
+  perSingleMile?: number | null;
+  perDoubleMile?: number | null;
+  perTripleMile?: number | null;
+  perWorkHour?: number | null;
+  perStopHour?: number | null;
+  perSingleDH?: number | null;
+  perDoubleDH?: number | null;
+  perTripleDH?: number | null;
+  perChainUp?: number | null;
+  fuelSurcharge?: number | null;
 }
 
 export interface CreateAccessorialRateData {
@@ -137,6 +171,23 @@ export interface ImportRateCardData {
   externalRateId?: string;
   notes?: string;
   active?: boolean;
+  // Flattened pay rule fields
+  prioritize?: boolean;
+  autoArrive?: boolean;
+  perTrip?: number;
+  perCutTrip?: number;
+  cutMiles?: number;
+  cutMilesType?: string;
+  perSingleMile?: number;
+  perDoubleMile?: number;
+  perTripleMile?: number;
+  perWorkHour?: number;
+  perStopHour?: number;
+  perSingleDH?: number;
+  perDoubleDH?: number;
+  perTripleDH?: number;
+  perChainUp?: number;
+  fuelSurcharge?: number;
   accessorialRates?: CreateAccessorialRateData[];
 }
 

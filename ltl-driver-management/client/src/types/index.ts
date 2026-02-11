@@ -745,6 +745,24 @@ export interface RateCard {
   externalRateId?: string;
   notes?: string;
   active: boolean;
+  // Flattened pay rule fields
+  prioritize?: boolean;
+  autoArrive?: boolean;
+  perTrip?: number;
+  perCutTrip?: number;
+  cutMiles?: number;
+  cutMilesType?: string;
+  perSingleMile?: number;
+  perDoubleMile?: number;
+  perTripleMile?: number;
+  perWorkHour?: number;
+  perStopHour?: number;
+  perSingleDH?: number;
+  perDoubleDH?: number;
+  perTripleDH?: number;
+  perChainUp?: number;
+  fuelSurcharge?: number;
+  // Timestamps and relations
   createdAt: string;
   updatedAt: string;
   originTerminal?: Terminal;
