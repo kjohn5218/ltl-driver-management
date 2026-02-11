@@ -1033,7 +1033,7 @@ export const PayRules: React.FC = () => {
                 disabled={modalMode === 'edit'}
               >
                 <option value="">Select driver...</option>
-                {drivers.map(d => (
+                {[...drivers].sort((a, b) => (a.name || '').localeCompare(b.name || '')).map(d => (
                   <option key={d.id} value={d.id}>{d.name} {d.number ? `(#${d.number})` : ''}</option>
                 ))}
               </select>
@@ -1050,7 +1050,7 @@ export const PayRules: React.FC = () => {
                 disabled={modalMode === 'edit'}
               >
                 <option value="">Select carrier...</option>
-                {carriers.map(c => (
+                {[...carriers].sort((a, b) => (a.name || '').localeCompare(b.name || '')).map(c => (
                   <option key={c.id} value={c.id}>{c.name}</option>
                 ))}
               </select>
@@ -1067,7 +1067,7 @@ export const PayRules: React.FC = () => {
                 disabled={modalMode === 'edit'}
               >
                 <option value="">Select profile...</option>
-                {profiles.map(p => (
+                {[...profiles].sort((a, b) => (a.profileCode || '').localeCompare(b.profileCode || '')).map(p => (
                   <option key={p.id} value={p.id}>{p.profileCode} - {p.name}</option>
                 ))}
               </select>
@@ -1085,7 +1085,7 @@ export const PayRules: React.FC = () => {
                   disabled={modalMode === 'edit'}
                 >
                   <option value="">Select origin...</option>
-                  {terminals.map(t => (
+                  {[...terminals].sort((a, b) => (a.code || '').localeCompare(b.code || '')).map(t => (
                     <option key={t.id} value={t.id}>{t.code} - {t.name}</option>
                   ))}
                 </select>
@@ -1099,7 +1099,7 @@ export const PayRules: React.FC = () => {
                   disabled={modalMode === 'edit'}
                 >
                   <option value="">Select destination...</option>
-                  {terminals.map(t => (
+                  {[...terminals].sort((a, b) => (a.code || '').localeCompare(b.code || '')).map(t => (
                     <option key={t.id} value={t.id}>{t.code} - {t.name}</option>
                   ))}
                 </select>

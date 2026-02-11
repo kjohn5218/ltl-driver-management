@@ -123,7 +123,7 @@ export const TripForm: React.FC<TripFormProps> = ({
           className="mt-1 block w-full rounded-md border-gray-300 shadow-sm focus:border-indigo-500 focus:ring-indigo-500 sm:text-sm"
         >
           <option value="">Select Profile</option>
-          {profiles.map((profile) => (
+          {[...profiles].sort((a, b) => (a.profileCode || '').localeCompare(b.profileCode || '')).map((profile) => (
             <option key={profile.id} value={profile.id}>
               {profile.profileCode} - {profile.name}
             </option>
@@ -181,7 +181,7 @@ export const TripForm: React.FC<TripFormProps> = ({
             className="mt-1 block w-full rounded-md border-gray-300 shadow-sm focus:border-indigo-500 focus:ring-indigo-500 sm:text-sm"
           >
             <option value="">Select Driver</option>
-            {drivers.filter(d => d.active).map((driver) => (
+            {[...drivers].filter(d => d.active).sort((a, b) => (a.name || '').localeCompare(b.name || '')).map((driver) => (
               <option key={driver.id} value={driver.id}>
                 {driver.name} {driver.number && `(#${driver.number})`}
               </option>
@@ -197,7 +197,7 @@ export const TripForm: React.FC<TripFormProps> = ({
             className="mt-1 block w-full rounded-md border-gray-300 shadow-sm focus:border-indigo-500 focus:ring-indigo-500 sm:text-sm"
           >
             <option value="">Select Team Driver (optional)</option>
-            {drivers.filter(d => d.active && d.id !== parseInt(formData.driverId)).map((driver) => (
+            {[...drivers].filter(d => d.active && d.id !== parseInt(formData.driverId)).sort((a, b) => (a.name || '').localeCompare(b.name || '')).map((driver) => (
               <option key={driver.id} value={driver.id}>
                 {driver.name} {driver.number && `(#${driver.number})`}
               </option>
@@ -216,7 +216,7 @@ export const TripForm: React.FC<TripFormProps> = ({
             className="mt-1 block w-full rounded-md border-gray-300 shadow-sm focus:border-indigo-500 focus:ring-indigo-500 sm:text-sm"
           >
             <option value="">Select Truck</option>
-            {trucks.filter(t => t.status === 'AVAILABLE' || t.id === trip?.truckId).map((truck) => (
+            {[...trucks].filter(t => t.status === 'AVAILABLE' || t.id === trip?.truckId).sort((a, b) => (a.unitNumber || '').localeCompare(b.unitNumber || '')).map((truck) => (
               <option key={truck.id} value={truck.id}>
                 {truck.unitNumber} - {truck.make} {truck.model}
               </option>
@@ -232,7 +232,7 @@ export const TripForm: React.FC<TripFormProps> = ({
             className="mt-1 block w-full rounded-md border-gray-300 shadow-sm focus:border-indigo-500 focus:ring-indigo-500 sm:text-sm"
           >
             <option value="">Select Trailer</option>
-            {trailers.filter(t => t.status === 'AVAILABLE' || t.id === trip?.trailerId).map((trailer) => (
+            {[...trailers].filter(t => t.status === 'AVAILABLE' || t.id === trip?.trailerId).sort((a, b) => (a.unitNumber || '').localeCompare(b.unitNumber || '')).map((trailer) => (
               <option key={trailer.id} value={trailer.id}>
                 {trailer.unitNumber} - {trailer.trailerType} ({trailer.lengthFeet}')
               </option>
@@ -250,7 +250,7 @@ export const TripForm: React.FC<TripFormProps> = ({
             className="mt-1 block w-full rounded-md border-gray-300 shadow-sm focus:border-indigo-500 focus:ring-indigo-500 sm:text-sm"
           >
             <option value="">Select Second Trailer (optional)</option>
-            {trailers.filter(t => (t.status === 'AVAILABLE' || t.id === trip?.trailer2Id) && t.id !== parseInt(formData.trailerId)).map((trailer) => (
+            {[...trailers].filter(t => (t.status === 'AVAILABLE' || t.id === trip?.trailer2Id) && t.id !== parseInt(formData.trailerId)).sort((a, b) => (a.unitNumber || '').localeCompare(b.unitNumber || '')).map((trailer) => (
               <option key={trailer.id} value={trailer.id}>
                 {trailer.unitNumber} - {trailer.trailerType} ({trailer.lengthFeet}')
               </option>
@@ -266,7 +266,7 @@ export const TripForm: React.FC<TripFormProps> = ({
             className="mt-1 block w-full rounded-md border-gray-300 shadow-sm focus:border-indigo-500 focus:ring-indigo-500 sm:text-sm"
           >
             <option value="">Select Dolly (optional)</option>
-            {dollies.filter(d => d.status === 'AVAILABLE' || d.id === trip?.dollyId).map((dolly) => (
+            {[...dollies].filter(d => d.status === 'AVAILABLE' || d.id === trip?.dollyId).sort((a, b) => (a.unitNumber || '').localeCompare(b.unitNumber || '')).map((dolly) => (
               <option key={dolly.id} value={dolly.id}>
                 {dolly.unitNumber} - {dolly.dollyType}
               </option>

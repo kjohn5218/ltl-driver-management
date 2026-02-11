@@ -151,7 +151,7 @@ export const DriverForm: React.FC<DriverFormProps> = ({
           }`}
         >
           <option value="">Select a carrier</option>
-          {carriers.map((carrier) => (
+          {[...carriers].sort((a, b) => (a.name || '').localeCompare(b.name || '')).map((carrier) => (
             <option key={carrier.id} value={carrier.id}>
               {carrier.name}
             </option>
@@ -300,7 +300,7 @@ export const DriverForm: React.FC<DriverFormProps> = ({
           className="mt-1 block w-full rounded-md border-gray-300 shadow-sm focus:border-indigo-500 focus:ring-indigo-500 sm:text-sm"
         >
           <option value="">Select a location (optional)</option>
-          {locations.map((location) => (
+          {[...locations].sort((a, b) => (a.code || '').localeCompare(b.code || '')).map((location) => (
             <option key={location.id} value={location.id}>
               {location.code}{location.name ? ` - ${location.name}` : ''}{location.city && location.state ? ` (${location.city}, ${location.state})` : ''}
             </option>
