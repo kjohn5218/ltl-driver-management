@@ -410,6 +410,17 @@ export const PayRules: React.FC = () => {
     };
   };
 
+  // Helper to parse O/D info from notes
+  const parseODFromNotes = (notes: string | undefined | null) => {
+    if (!notes) return { origin: null, dest: null };
+    const origMatch = notes.match(/dispatchOrig:\s*([^;\s]+)/i);
+    const destMatch = notes.match(/dest:\s*([^;\s]+)/i);
+    return {
+      origin: origMatch ? origMatch[1].trim() : null,
+      dest: destMatch ? destMatch[1].trim() : null
+    };
+  };
+
   const columns = [
     {
       header: '',
@@ -422,6 +433,25 @@ export const PayRules: React.FC = () => {
           {expandedRows.has(rc.id) ? <ChevronUp className="w-4 h-4" /> : <ChevronDown className="w-4 h-4" />}
         </button>
       )
+    },
+    {
+      header: 'Type',
+      accessor: 'rateType' as keyof RateCard,
+      cell: (rc: RateCard) => {
+        const typeConfig: Record<string, { bg: string; text: string; label: string }> = {
+          'DRIVER': { bg: 'bg-blue-100', text: 'text-blue-700', label: 'Driver' },
+          'CARRIER': { bg: 'bg-green-100', text: 'text-green-700', label: 'Carrier' },
+          'OD_PAIR': { bg: 'bg-purple-100', text: 'text-purple-700', label: 'O/D' },
+          'LINEHAUL': { bg: 'bg-orange-100', text: 'text-orange-700', label: 'Linehaul' },
+          'DEFAULT': { bg: 'bg-gray-100', text: 'text-gray-700', label: 'Default' }
+        };
+        const cfg = typeConfig[rc.rateType] || typeConfig['DEFAULT'];
+        return (
+          <span className={`px-2 py-0.5 text-xs font-medium rounded ${cfg.bg} ${cfg.text}`}>
+            {cfg.label}
+          </span>
+        );
+      }
     },
     {
       header: 'Driver Name',
@@ -442,19 +472,44 @@ export const PayRules: React.FC = () => {
       }
     },
     {
-      header: 'Employer',
-      accessor: 'rateType' as keyof RateCard,
+      header: 'Employer/Carrier',
+      accessor: 'carrier' as keyof RateCard,
       cell: (rc: RateCard) => {
         // For DRIVER types, show the driver's carrier (employer) or from notes
         if (rc.rateType === 'DRIVER') {
           const employer = rc.driver?.carrier?.name || parseNotesInfo(rc.notes).employer;
           return <span className="text-gray-700">{employer || '-'}</span>;
         }
-        // For CARRIER types, show the carrier name
-        if (rc.rateType === 'CARRIER' && rc.carrier?.name) {
+        // For CARRIER or OD_PAIR types, show the carrier name
+        if ((rc.rateType === 'CARRIER' || rc.rateType === 'OD_PAIR') && rc.carrier?.name) {
           return <span className="text-gray-700">{rc.carrier.name}</span>;
         }
+        // Try to get from notes for OD_PAIR
+        if (rc.rateType === 'OD_PAIR') {
+          const employer = parseNotesInfo(rc.notes).employer;
+          return <span className="text-gray-700">{employer || '-'}</span>;
+        }
         return <span className="text-gray-400">-</span>;
+      }
+    },
+    {
+      header: 'Origin',
+      accessor: 'originTerminalId' as keyof RateCard,
+      cell: (rc: RateCard) => {
+        if (rc.rateType !== 'OD_PAIR' && rc.rateType !== 'LINEHAUL') return <span className="text-gray-400">-</span>;
+        // Try terminal from API, fallback to notes
+        const code = rc.originTerminal?.code || parseODFromNotes(rc.notes).origin;
+        return <span className="font-mono text-sm text-purple-600">{code || '-'}</span>;
+      }
+    },
+    {
+      header: 'Dest',
+      accessor: 'destinationTerminalId' as keyof RateCard,
+      cell: (rc: RateCard) => {
+        if (rc.rateType !== 'OD_PAIR' && rc.rateType !== 'LINEHAUL') return <span className="text-gray-400">-</span>;
+        // Try terminal from API, fallback to notes
+        const code = rc.destinationTerminal?.code || parseODFromNotes(rc.notes).dest;
+        return <span className="font-mono text-sm text-purple-600">{code || '-'}</span>;
       }
     },
     {
