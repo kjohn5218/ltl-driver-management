@@ -768,6 +768,9 @@ export interface RateCard {
   destinationTerminal?: Terminal;
   linehaulProfile?: LinehaulProfile;
   accessorialRates?: AccessorialRate[];
+  // Driver/Carrier info (populated by API for DRIVER/CARRIER rate types)
+  driver?: { id: number; name: string; number?: string } | null;
+  carrier?: { id: number; name: string } | null;
   _count?: {
     accessorialRates: number;
     tripPays: number;

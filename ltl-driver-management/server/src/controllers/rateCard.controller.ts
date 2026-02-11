@@ -65,7 +65,7 @@ export const getRateCards = async (req: Request, res: Response): Promise<void> =
             select: { id: true, code: true, name: true }
           },
           linehaulProfile: {
-            select: { id: true, profileCode: true, name: true }
+            select: { id: true, profileCode: true, name: true, originTerminal: { select: { code: true } }, destinationTerminal: { select: { code: true } } }
           },
           _count: {
             select: { accessorialRates: true }
@@ -75,8 +75,39 @@ export const getRateCards = async (req: Request, res: Response): Promise<void> =
       prisma.rateCard.count({ where })
     ]);
 
+    // Collect driver and carrier IDs that need to be looked up
+    const driverIds = rateCards.filter(rc => rc.rateType === 'DRIVER' && rc.entityId).map(rc => rc.entityId!);
+    const carrierIds = rateCards.filter(rc => rc.rateType === 'CARRIER' && rc.entityId).map(rc => rc.entityId!);
+
+    // Fetch driver and carrier names in parallel
+    const [drivers, carriers] = await Promise.all([
+      driverIds.length > 0
+        ? prisma.carrierDriver.findMany({
+            where: { id: { in: driverIds } },
+            select: { id: true, name: true, number: true }
+          })
+        : [],
+      carrierIds.length > 0
+        ? prisma.carrier.findMany({
+            where: { id: { in: carrierIds } },
+            select: { id: true, name: true }
+          })
+        : []
+    ]);
+
+    // Create lookup maps
+    const driverMap = new Map(drivers.map(d => [d.id, d]));
+    const carrierMap = new Map(carriers.map(c => [c.id, c]));
+
+    // Attach driver/carrier info to rate cards
+    const enrichedRateCards = rateCards.map(rc => ({
+      ...rc,
+      driver: rc.rateType === 'DRIVER' && rc.entityId ? driverMap.get(rc.entityId) || null : null,
+      carrier: rc.rateType === 'CARRIER' && rc.entityId ? carrierMap.get(rc.entityId) || null : null
+    }));
+
     res.json({
-      rateCards,
+      rateCards: enrichedRateCards,
       pagination: {
         page: pageNum,
         limit: limitNum,
