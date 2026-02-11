@@ -507,20 +507,20 @@ export const PayRules: React.FC = () => {
       header: 'Origin',
       accessor: 'originTerminalId' as keyof RateCard,
       cell: (rc: RateCard) => {
-        if (rc.rateType !== 'OD_PAIR' && rc.rateType !== 'LINEHAUL') return <span className="text-gray-400">-</span>;
-        // Try terminal from API, fallback to notes
+        // Try terminal from API first, then fallback to notes for any rate type
         const code = rc.originTerminal?.code || parseODFromNotes(rc.notes).origin;
-        return <span className="font-mono text-sm text-purple-600">{code || '-'}</span>;
+        if (!code) return <span className="text-gray-400">-</span>;
+        return <span className="font-mono text-sm text-purple-600">{code}</span>;
       }
     },
     {
       header: 'Dest',
       accessor: 'destinationTerminalId' as keyof RateCard,
       cell: (rc: RateCard) => {
-        if (rc.rateType !== 'OD_PAIR' && rc.rateType !== 'LINEHAUL') return <span className="text-gray-400">-</span>;
-        // Try terminal from API, fallback to notes
+        // Try terminal from API first, then fallback to notes for any rate type
         const code = rc.destinationTerminal?.code || parseODFromNotes(rc.notes).dest;
-        return <span className="font-mono text-sm text-purple-600">{code || '-'}</span>;
+        if (!code) return <span className="text-gray-400">-</span>;
+        return <span className="font-mono text-sm text-purple-600">{code}</span>;
       }
     },
     {
