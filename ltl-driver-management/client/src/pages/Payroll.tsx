@@ -27,7 +27,10 @@ import {
   X,
   Truck,
   Clock,
-  FileSpreadsheet
+  FileSpreadsheet,
+  ArrowUpDown,
+  ChevronUp,
+  ChevronDown
 } from 'lucide-react';
 
 const statusConfig: Record<string, { label: string; color: string }> = {
@@ -64,6 +67,10 @@ export const Payroll: React.FC = () => {
 
   // Selection
   const [selectedIds, setSelectedIds] = useState<string[]>([]);
+
+  // Sorting
+  const [sortColumn, setSortColumn] = useState<string | null>(null);
+  const [sortDirection, setSortDirection] = useState<'asc' | 'desc'>('asc');
 
   // Modals
   const [isEditModalOpen, setIsEditModalOpen] = useState(false);
@@ -217,6 +224,64 @@ export const Payroll: React.FC = () => {
     setCurrentPage(1);
   };
 
+  // Sorting logic
+  const handleSort = (columnKey: string) => {
+    if (sortColumn === columnKey) {
+      if (sortDirection === 'asc') {
+        setSortDirection('desc');
+      } else {
+        // Third click resets to no sort
+        setSortColumn(null);
+        setSortDirection('asc');
+      }
+    } else {
+      setSortColumn(columnKey);
+      setSortDirection('asc');
+    }
+  };
+
+  const getSortValue = (item: PayrollLineItem, key: string): string | number => {
+    switch (key) {
+      case 'source':
+        return item.source;
+      case 'driverName':
+        return item.driverName?.toLowerCase() || '';
+      case 'date':
+        return new Date(item.date).getTime();
+      case 'route':
+        return `${item.origin || ''}-${item.destination || ''}`.toLowerCase();
+      case 'basePay':
+        return item.basePay + item.mileagePay;
+      case 'accessorials':
+        return item.dropAndHookPay + item.chainUpPay + item.waitTimePay + item.otherAccessorialPay;
+      case 'totalGrossPay':
+        return item.totalGrossPay;
+      case 'status':
+        return item.status;
+      default:
+        return '';
+    }
+  };
+
+  const sortedItems = React.useMemo(() => {
+    if (!sortColumn) return items;
+
+    return [...items].sort((a, b) => {
+      const aVal = getSortValue(a, sortColumn);
+      const bVal = getSortValue(b, sortColumn);
+
+      if (typeof aVal === 'number' && typeof bVal === 'number') {
+        return sortDirection === 'asc' ? aVal - bVal : bVal - aVal;
+      }
+
+      const aStr = String(aVal);
+      const bStr = String(bVal);
+      return sortDirection === 'asc'
+        ? aStr.localeCompare(bStr)
+        : bStr.localeCompare(aStr);
+    });
+  }, [items, sortColumn, sortDirection]);
+
   const clearFilters = () => {
     const end = new Date();
     const start = new Date();
@@ -233,6 +298,25 @@ export const Payroll: React.FC = () => {
     });
     setCurrentPage(1);
   };
+
+  // Sortable header component
+  const SortableHeader = ({ label, sortKey }: { label: string; sortKey: string }) => (
+    <button
+      onClick={() => handleSort(sortKey)}
+      className="flex items-center gap-1 hover:text-gray-900 dark:hover:text-gray-100 transition-colors"
+    >
+      {label}
+      {sortColumn === sortKey ? (
+        sortDirection === 'asc' ? (
+          <ChevronUp className="w-4 h-4" />
+        ) : (
+          <ChevronDown className="w-4 h-4" />
+        )
+      ) : (
+        <ArrowUpDown className="w-3 h-3 opacity-50" />
+      )}
+    </button>
+  );
 
   // Table columns
   const columns = [
@@ -254,7 +338,7 @@ export const Payroll: React.FC = () => {
         ]
       : []),
     {
-      header: 'Type',
+      header: <SortableHeader label="Type" sortKey="source" />,
       accessor: 'source' as keyof PayrollLineItem,
       cell: (item: PayrollLineItem) => (
         <span className={`inline-flex items-center px-2 py-0.5 rounded text-xs font-medium ${
@@ -277,7 +361,7 @@ export const Payroll: React.FC = () => {
       )
     },
     {
-      header: 'Driver',
+      header: <SortableHeader label="Driver" sortKey="driverName" />,
       accessor: 'driverName' as keyof PayrollLineItem,
       cell: (item: PayrollLineItem) => (
         <div>
@@ -289,7 +373,7 @@ export const Payroll: React.FC = () => {
       )
     },
     {
-      header: 'Date',
+      header: <SortableHeader label="Date" sortKey="date" />,
       accessor: 'date' as keyof PayrollLineItem,
       cell: (item: PayrollLineItem) => (
         <span className="text-sm text-gray-600 dark:text-gray-400">
@@ -298,7 +382,7 @@ export const Payroll: React.FC = () => {
       )
     },
     {
-      header: 'Route',
+      header: <SortableHeader label="Route" sortKey="route" />,
       accessor: 'origin' as keyof PayrollLineItem,
       cell: (item: PayrollLineItem) => (
         <div className="text-sm">
@@ -323,7 +407,7 @@ export const Payroll: React.FC = () => {
       )
     },
     {
-      header: 'Base + Mileage',
+      header: <SortableHeader label="Base + Mileage" sortKey="basePay" />,
       accessor: 'basePay' as keyof PayrollLineItem,
       cell: (item: PayrollLineItem) => (
         <div className="text-sm text-right">
@@ -343,7 +427,7 @@ export const Payroll: React.FC = () => {
       )
     },
     {
-      header: 'Accessorials',
+      header: <SortableHeader label="Accessorials" sortKey="accessorials" />,
       accessor: 'dropAndHookPay' as keyof PayrollLineItem,
       cell: (item: PayrollLineItem) => {
         const totalAccessorial = item.dropAndHookPay + item.chainUpPay + item.waitTimePay + item.otherAccessorialPay;
@@ -361,7 +445,7 @@ export const Payroll: React.FC = () => {
       }
     },
     {
-      header: 'Total',
+      header: <SortableHeader label="Total" sortKey="totalGrossPay" />,
       accessor: 'totalGrossPay' as keyof PayrollLineItem,
       cell: (item: PayrollLineItem) => (
         <span className="font-medium text-green-600 dark:text-green-400">
@@ -370,7 +454,7 @@ export const Payroll: React.FC = () => {
       )
     },
     {
-      header: 'Status',
+      header: <SortableHeader label="Status" sortKey="status" />,
       accessor: 'status' as keyof PayrollLineItem,
       cell: (item: PayrollLineItem) => {
         const config = statusConfig[item.status] || statusConfig.PENDING;
@@ -512,7 +596,7 @@ export const Payroll: React.FC = () => {
               className="rounded-md border-gray-300 dark:border-gray-600 dark:bg-gray-700 dark:text-white text-sm"
             >
               <option value="">All Locations</option>
-              {locations.map((loc) => (
+              {[...locations].sort((a, b) => (a.code || '').localeCompare(b.code || '')).map((loc) => (
                 <option key={loc.id} value={loc.id}>{loc.code} - {loc.name || loc.city}</option>
               ))}
             </select>
@@ -569,12 +653,12 @@ export const Payroll: React.FC = () => {
         {/* Data Table */}
         <DataTable
           columns={columns}
-          data={items}
+          data={sortedItems}
           loading={loading}
         />
 
         {/* Pagination */}
-        {!loading && items.length > 0 && (
+        {!loading && sortedItems.length > 0 && (
           <div className="p-4 border-t border-gray-200 dark:border-gray-700">
             <TablePagination
               currentPage={currentPage}
