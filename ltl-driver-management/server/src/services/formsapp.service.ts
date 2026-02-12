@@ -218,24 +218,48 @@ export class FormsAppService {
     let lengthFeet = 53;
 
     const modelLower = (asset.model || '').toLowerCase();
-    const assetNumberLower = (asset.assetNumber || '').toLowerCase();
+    const assetNumber = asset.assetNumber || '';
+    const assetNumberLower = assetNumber.toLowerCase();
 
-    if (modelLower.includes('28') || assetNumberLower.includes('28')) {
-      trailerType = TrailerType.DRY_VAN_28;
-      lengthFeet = 28;
-    } else if (modelLower.includes('pup')) {
+    // Check for specific lengths in model or asset number
+    // Order matters: check more specific patterns first
+    if (modelLower.includes('pup')) {
       trailerType = TrailerType.PUP_TRAILER;
       lengthFeet = 28;
     } else if (modelLower.includes('reefer')) {
-      trailerType = modelLower.includes('28') ? TrailerType.REEFER_28 : TrailerType.REEFER_53;
+      if (modelLower.includes('28') || assetNumberLower.includes('28')) {
+        trailerType = TrailerType.REEFER_28;
+        lengthFeet = 28;
+      } else {
+        trailerType = TrailerType.REEFER_53;
+        lengthFeet = 53;
+      }
     } else if (modelLower.includes('flatbed')) {
       trailerType = TrailerType.FLATBED;
+      lengthFeet = 53;
     } else if (modelLower.includes('tanker')) {
       trailerType = TrailerType.TANKER;
+      lengthFeet = 53;
+    } else {
+      // For dry vans, detect length from model or asset number
+      // Use regex to find length patterns like "28", "45", "48", "53"
+      // Check model first, then asset number
+      const lengthMatch = modelLower.match(/\b(28|40|45|48|53)\b/) ||
+                          assetNumber.match(/\b(28|40|45|48|53)\b/) ||
+                          assetNumber.match(/(28|40|45|48|53)/);
+
+      if (lengthMatch) {
+        lengthFeet = parseInt(lengthMatch[1], 10);
+        if (lengthFeet === 28) {
+          trailerType = TrailerType.DRY_VAN_28;
+        } else {
+          trailerType = TrailerType.DRY_VAN_53; // Use 53 type for 40, 45, 48, 53
+        }
+      }
     }
 
     return {
-      unitNumber: asset.assetNumber?.toUpperCase() || `TRAILER-${asset.id}`,
+      unitNumber: assetNumber.toUpperCase() || `TRAILER-${asset.id}`,
       trailerType,
       lengthFeet,
       status: this.mapStatus(asset.status),

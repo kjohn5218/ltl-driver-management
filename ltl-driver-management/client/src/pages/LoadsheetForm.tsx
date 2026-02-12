@@ -162,6 +162,33 @@ export const LoadsheetForm: React.FC = () => {
   const [selectedTrailer, setSelectedTrailer] = useState<EquipmentTrailer | null>(null);
   const [selectedProfile, setSelectedProfile] = useState<LinehaulProfile | null>(null);
 
+  // Filter linehaul profiles based on selected terminal
+  // Only show profiles where the name starts with the terminal code
+  const filteredLinehaulProfiles = useMemo(() => {
+    if (!selectedTerminal) {
+      return linehaulProfiles;
+    }
+    const terminalCode = selectedTerminal.code.toUpperCase();
+    return linehaulProfiles.filter(profile => {
+      const profileName = (profile.name || profile.profileCode || '').toUpperCase();
+      return profileName.startsWith(terminalCode);
+    });
+  }, [linehaulProfiles, selectedTerminal]);
+
+  // Handle terminal selection - also clear linehaul if it no longer matches
+  const handleTerminalSelect = (terminal: Terminal | null) => {
+    setSelectedTerminal(terminal);
+    // Clear the selected profile if it doesn't match the new terminal filter
+    if (terminal && selectedProfile) {
+      const terminalCode = terminal.code.toUpperCase();
+      const profileName = (selectedProfile.name || selectedProfile.profileCode || '').toUpperCase();
+      if (!profileName.startsWith(terminalCode)) {
+        setSelectedProfile(null);
+        setTargetDispatchTime('');
+      }
+    }
+  };
+
   // Manual trailer entry for interline profiles
   const [manualTrailerNumber, setManualTrailerNumber] = useState<string>('');
   const isInterlineProfile = selectedProfile?.interlineTrailer === true;
@@ -196,12 +223,32 @@ export const LoadsheetForm: React.FC = () => {
 
   const fetchTrailers = async () => {
     try {
-      const response = await equipmentService.getTrailers({ limit: 500 });
+      const response = await equipmentService.getTrailers({ limit: 2000 });
       console.log('Loaded trailers:', response.trailers?.length, response);
       setTrailers(response.trailers || []);
     } catch (error) {
       console.error('Failed to fetch trailers:', error);
     }
+  };
+
+  // Get trailer length with fallback based on trailer type or unit number
+  const getTrailerLength = (trailer: EquipmentTrailer): number => {
+    if (trailer.lengthFeet) return trailer.lengthFeet;
+
+    // Try to detect from trailer type
+    const trailerType = trailer.trailerType || '';
+    if (trailerType.includes('28')) return 28;
+    if (trailerType.includes('53')) return 53;
+
+    // Try to detect from unit number (e.g., "11148S" contains "48")
+    const unitNumber = trailer.unitNumber || '';
+    const lengthMatch = unitNumber.match(/(28|40|45|48|53)/);
+    if (lengthMatch) {
+      return parseInt(lengthMatch[1], 10);
+    }
+
+    // Default to 53 for standard dry van
+    return 53;
   };
 
   const fetchLinehaulProfiles = async () => {
@@ -229,7 +276,7 @@ export const LoadsheetForm: React.FC = () => {
       const trailer = trailers.find(t => t.unitNumber === loadsheet.trailerNumber);
       if (trailer) {
         setSelectedTrailer(trailer);
-        setTrailerLength(trailer.lengthFeet);
+        setTrailerLength(getTrailerLength(trailer));
       }
 
       // Find profile by name
@@ -252,7 +299,7 @@ export const LoadsheetForm: React.FC = () => {
   const handleTrailerSelect = (trailer: EquipmentTrailer | null) => {
     setSelectedTrailer(trailer);
     if (trailer) {
-      setTrailerLength(trailer.lengthFeet);
+      setTrailerLength(getTrailerLength(trailer));
       setPintleHook(trailer.pintleHook || false);
     } else {
       setTrailerLength(undefined);
@@ -426,7 +473,7 @@ export const LoadsheetForm: React.FC = () => {
               placeholder="Type to search terminals..."
               items={terminals}
               value={selectedTerminal}
-              onChange={setSelectedTerminal}
+              onChange={handleTerminalSelect}
               getDisplayValue={(terminal) => `${terminal.code}${terminal.name ? ` - ${terminal.name}` : ''}`}
               getSearchValue={(terminal) => `${terminal.code} ${terminal.name || ''} ${terminal.city || ''}`}
             />
@@ -472,7 +519,7 @@ export const LoadsheetForm: React.FC = () => {
               label="Linehaul Name"
               required
               placeholder="Type to search linehauls..."
-              items={linehaulProfiles}
+              items={filteredLinehaulProfiles}
               value={selectedProfile}
               onChange={handleProfileSelect}
               getDisplayValue={(profile) => profile.name || profile.profileCode}

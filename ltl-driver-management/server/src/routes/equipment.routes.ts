@@ -59,7 +59,7 @@ router.get(
     query('carrierId').optional().isInt({ min: 1 }),
     query('available').optional().isBoolean(),
     query('page').optional().isInt({ min: 1 }),
-    query('limit').optional().isInt({ min: 1, max: 500 })
+    query('limit').optional().isInt({ min: 1, max: 2000 })
   ],
   validateRequest,
   getTrucks
@@ -180,7 +180,7 @@ router.get(
     query('carrierId').optional().isInt({ min: 1 }),
     query('available').optional().isBoolean(),
     query('page').optional().isInt({ min: 1 }),
-    query('limit').optional().isInt({ min: 1, max: 500 })
+    query('limit').optional().isInt({ min: 1, max: 2000 })
   ],
   validateRequest,
   getTrailers
@@ -294,7 +294,7 @@ router.get(
     query('carrierId').optional().isInt({ min: 1 }),
     query('available').optional().isBoolean(),
     query('page').optional().isInt({ min: 1 }),
-    query('limit').optional().isInt({ min: 1, max: 500 })
+    query('limit').optional().isInt({ min: 1, max: 2000 })
   ],
   validateRequest,
   getDollies
