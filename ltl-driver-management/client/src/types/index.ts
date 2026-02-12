@@ -1319,6 +1319,11 @@ export interface PayrollLineItem {
   chainUpPay: number;
   waitTimePay: number;
   otherAccessorialPay: number;
+  // Accessorial counts from driver trip report (for auditing)
+  dropAndHookCount?: number;
+  chainUpCount?: number;
+  waitTimeMinutes?: number;
+  waitTimeReason?: string;
   bonusPay: number;
   deductions: number;
   totalGrossPay: number;

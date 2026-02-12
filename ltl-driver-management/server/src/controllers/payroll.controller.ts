@@ -941,6 +941,18 @@ export const getUnifiedPayrollItems = async (req: Request, res: Response): Promi
         include: {
           driver: {
             select: { id: true, name: true, number: true, workdayEmployeeId: true, locationId: true }
+          },
+          trip: {
+            select: {
+              driverTripReport: {
+                select: {
+                  dropAndHook: true,
+                  chainUpCycles: true,
+                  waitTimeMinutes: true,
+                  waitTimeReason: true
+                }
+              }
+            }
           }
         }
       }),
@@ -956,36 +968,44 @@ export const getUnifiedPayrollItems = async (req: Request, res: Response): Promi
     });
 
     // Transform items for response
-    const transformedItems = items.map(item => ({
-      id: `${item.sourceType === 'TRIP_PAY' ? 'trip' : 'cut'}-${item.tripPayId || item.cutPayRequestId}`,
-      source: item.sourceType,
-      sourceId: item.tripPayId || item.cutPayRequestId || item.id,
-      driverId: item.driverId,
-      driverName: item.driverName || item.driver?.name || 'Unknown',
-      driverNumber: item.driverNumber || item.driver?.number,
-      workdayEmployeeId: item.workdayEmployeeId || item.driver?.workdayEmployeeId,
-      date: item.date.toISOString().split('T')[0],
-      origin: item.origin,
-      destination: item.destination,
-      tripNumber: item.tripNumber,
-      totalMiles: item.totalMiles ? Number(item.totalMiles) : undefined,
-      basePay: Number(item.basePay),
-      mileagePay: Number(item.mileagePay),
-      dropAndHookPay: Number(item.dropAndHookPay),
-      chainUpPay: Number(item.chainUpPay),
-      waitTimePay: Number(item.waitTimePay),
-      otherAccessorialPay: Number(item.otherAccessorialPay),
-      bonusPay: Number(item.bonusPay),
-      deductions: Number(item.deductions),
-      totalGrossPay: Number(item.totalGrossPay),
-      cutPayType: item.cutPayType,
-      cutPayHours: item.cutPayHours ? Number(item.cutPayHours) : undefined,
-      cutPayMiles: item.cutPayMiles ? Number(item.cutPayMiles) : undefined,
-      trailerConfig: item.trailerConfig,
-      rateApplied: item.rateApplied ? Number(item.rateApplied) : undefined,
-      status: item.status,
-      notes: item.notes
-    }));
+    const transformedItems = items.map(item => {
+      const tripReport = item.trip?.driverTripReport;
+      return {
+        id: `${item.sourceType === 'TRIP_PAY' ? 'trip' : 'cut'}-${item.tripPayId || item.cutPayRequestId}`,
+        source: item.sourceType,
+        sourceId: item.tripPayId || item.cutPayRequestId || item.id,
+        driverId: item.driverId,
+        driverName: item.driverName || item.driver?.name || 'Unknown',
+        driverNumber: item.driverNumber || item.driver?.number,
+        workdayEmployeeId: item.workdayEmployeeId || item.driver?.workdayEmployeeId,
+        date: item.date.toISOString().split('T')[0],
+        origin: item.origin,
+        destination: item.destination,
+        tripNumber: item.tripNumber,
+        totalMiles: item.totalMiles ? Number(item.totalMiles) : undefined,
+        basePay: Number(item.basePay),
+        mileagePay: Number(item.mileagePay),
+        dropAndHookPay: Number(item.dropAndHookPay),
+        chainUpPay: Number(item.chainUpPay),
+        waitTimePay: Number(item.waitTimePay),
+        otherAccessorialPay: Number(item.otherAccessorialPay),
+        // Accessorial counts from driver trip report
+        dropAndHookCount: tripReport?.dropAndHook ?? undefined,
+        chainUpCount: tripReport?.chainUpCycles ?? undefined,
+        waitTimeMinutes: tripReport?.waitTimeMinutes ?? undefined,
+        waitTimeReason: tripReport?.waitTimeReason ?? undefined,
+        bonusPay: Number(item.bonusPay),
+        deductions: Number(item.deductions),
+        totalGrossPay: Number(item.totalGrossPay),
+        cutPayType: item.cutPayType,
+        cutPayHours: item.cutPayHours ? Number(item.cutPayHours) : undefined,
+        cutPayMiles: item.cutPayMiles ? Number(item.cutPayMiles) : undefined,
+        trailerConfig: item.trailerConfig,
+        rateApplied: item.rateApplied ? Number(item.rateApplied) : undefined,
+        status: item.status,
+        notes: item.notes
+      };
+    });
 
     res.json({
       items: transformedItems,

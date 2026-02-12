@@ -256,8 +256,12 @@ export const Payroll: React.FC = () => {
         return item.trailerConfig || '';
       case 'basePay':
         return item.basePay + item.mileagePay;
-      case 'accessorials':
-        return item.dropAndHookPay + item.chainUpPay + item.waitTimePay + item.otherAccessorialPay;
+      case 'dropAndHook':
+        return item.dropAndHookCount || item.dropAndHookPay || 0;
+      case 'chainUp':
+        return item.chainUpCount || item.chainUpPay || 0;
+      case 'waitTime':
+        return item.waitTimeMinutes || item.waitTimePay || 0;
       case 'totalGrossPay':
         return item.totalGrossPay;
       case 'status':
@@ -471,26 +475,83 @@ export const Payroll: React.FC = () => {
       )
     },
     {
-      header: <SortableHeader label="Accessorials" sortKey="accessorials" />,
+      header: <SortableHeader label="D&H" sortKey="dropAndHook" />,
       accessor: 'dropAndHookPay' as keyof PayrollLineItem,
+      cell: (item: PayrollLineItem) => (
+        <div className="text-sm text-right">
+          {item.source === 'TRIP_PAY' ? (
+            item.dropAndHookCount !== undefined && item.dropAndHookCount > 0 ? (
+              <>
+                <div className="font-medium">{item.dropAndHookCount}x</div>
+                <div className="text-xs text-gray-500 dark:text-gray-400">
+                  {formatCurrency(item.dropAndHookPay)}
+                </div>
+              </>
+            ) : item.dropAndHookPay > 0 ? (
+              <div className="text-xs text-gray-500">{formatCurrency(item.dropAndHookPay)}</div>
+            ) : (
+              <span className="text-gray-400">-</span>
+            )
+          ) : (
+            <span className="text-gray-400">-</span>
+          )}
+        </div>
+      )
+    },
+    {
+      header: <SortableHeader label="Chain" sortKey="chainUp" />,
+      accessor: 'chainUpPay' as keyof PayrollLineItem,
+      cell: (item: PayrollLineItem) => (
+        <div className="text-sm text-right">
+          {item.source === 'TRIP_PAY' ? (
+            item.chainUpCount !== undefined && item.chainUpCount > 0 ? (
+              <>
+                <div className="font-medium">{item.chainUpCount}x</div>
+                <div className="text-xs text-gray-500 dark:text-gray-400">
+                  {formatCurrency(item.chainUpPay)}
+                </div>
+              </>
+            ) : item.chainUpPay > 0 ? (
+              <div className="text-xs text-gray-500">{formatCurrency(item.chainUpPay)}</div>
+            ) : (
+              <span className="text-gray-400">-</span>
+            )
+          ) : (
+            <span className="text-gray-400">-</span>
+          )}
+        </div>
+      )
+    },
+    {
+      header: <SortableHeader label="Wait" sortKey="waitTime" />,
+      accessor: 'waitTimePay' as keyof PayrollLineItem,
       cell: (item: PayrollLineItem) => {
-        const totalAccessorial = item.dropAndHookPay + item.chainUpPay + item.waitTimePay + item.otherAccessorialPay;
-        const hasBreakdown = item.dropAndHookPay > 0 || item.chainUpPay > 0 || item.waitTimePay > 0;
+        const formatWaitTime = (minutes: number) => {
+          if (minutes < 60) return `${minutes}m`;
+          const hours = Math.floor(minutes / 60);
+          const mins = minutes % 60;
+          return mins > 0 ? `${hours}h ${mins}m` : `${hours}h`;
+        };
         return (
           <div className="text-sm text-right">
-            {item.source === 'TRIP_PAY' && totalAccessorial > 0 ? (
-              <>
-                <div>{formatCurrency(totalAccessorial)}</div>
-                {hasBreakdown && (
+            {item.source === 'TRIP_PAY' ? (
+              item.waitTimeMinutes !== undefined && item.waitTimeMinutes > 0 ? (
+                <>
+                  <div className="font-medium">{formatWaitTime(item.waitTimeMinutes)}</div>
                   <div className="text-xs text-gray-500 dark:text-gray-400">
-                    {[
-                      item.dropAndHookPay > 0 ? `D&H: ${formatCurrency(item.dropAndHookPay)}` : null,
-                      item.chainUpPay > 0 ? `Chain: ${formatCurrency(item.chainUpPay)}` : null,
-                      item.waitTimePay > 0 ? `Wait: ${formatCurrency(item.waitTimePay)}` : null
-                    ].filter(Boolean).join(', ')}
+                    {formatCurrency(item.waitTimePay)}
                   </div>
-                )}
-              </>
+                  {item.waitTimeReason && (
+                    <div className="text-xs text-gray-400" title={item.waitTimeReason}>
+                      {item.waitTimeReason.replace(/_/g, ' ').toLowerCase()}
+                    </div>
+                  )}
+                </>
+              ) : item.waitTimePay > 0 ? (
+                <div className="text-xs text-gray-500">{formatCurrency(item.waitTimePay)}</div>
+              ) : (
+                <span className="text-gray-400">-</span>
+              )
             ) : (
               <span className="text-gray-400">-</span>
             )}
