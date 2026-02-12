@@ -1312,6 +1312,7 @@ export interface PayrollLineItem {
   origin?: string;
   destination?: string;
   tripNumber?: string;
+  totalMiles?: number;
   basePay: number;
   mileagePay: number;
   dropAndHookPay: number;
@@ -1325,6 +1326,7 @@ export interface PayrollLineItem {
   cutPayHours?: number;
   cutPayMiles?: number;
   trailerConfig?: string;
+  rateApplied?: number;
   reason?: string;
   status: string;
   notes?: string;

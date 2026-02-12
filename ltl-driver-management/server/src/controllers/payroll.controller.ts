@@ -968,6 +968,7 @@ export const getUnifiedPayrollItems = async (req: Request, res: Response): Promi
       origin: item.origin,
       destination: item.destination,
       tripNumber: item.tripNumber,
+      totalMiles: item.totalMiles ? Number(item.totalMiles) : undefined,
       basePay: Number(item.basePay),
       mileagePay: Number(item.mileagePay),
       dropAndHookPay: Number(item.dropAndHookPay),

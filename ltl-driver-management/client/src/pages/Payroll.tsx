@@ -250,6 +250,10 @@ export const Payroll: React.FC = () => {
         return new Date(item.date).getTime();
       case 'route':
         return `${item.origin || ''}-${item.destination || ''}`.toLowerCase();
+      case 'miles':
+        return item.totalMiles || item.cutPayMiles || 0;
+      case 'equipment':
+        return item.trailerConfig || '';
       case 'basePay':
         return item.basePay + item.mileagePay;
       case 'accessorials':
@@ -399,12 +403,52 @@ export const Payroll: React.FC = () => {
             <span className="text-gray-500 dark:text-gray-400">
               {item.cutPayType === 'HOURS'
                 ? `${item.cutPayHours}h`
-                : `${item.cutPayMiles}mi (${item.trailerConfig})`
+                : `${item.cutPayMiles}mi`
               }
             </span>
           )}
         </div>
       )
+    },
+    {
+      header: <SortableHeader label="Miles" sortKey="miles" />,
+      accessor: 'totalMiles' as keyof PayrollLineItem,
+      cell: (item: PayrollLineItem) => (
+        <div className="text-sm text-right">
+          {item.source === 'TRIP_PAY' ? (
+            <span className="text-gray-900 dark:text-gray-100">
+              {item.totalMiles ? `${item.totalMiles.toLocaleString()} mi` : '-'}
+            </span>
+          ) : (
+            <span className="text-gray-500 dark:text-gray-400">
+              {item.cutPayType === 'MILES' && item.cutPayMiles
+                ? `${item.cutPayMiles.toLocaleString()} mi`
+                : '-'
+              }
+            </span>
+          )}
+        </div>
+      )
+    },
+    {
+      header: <SortableHeader label="Equipment" sortKey="equipment" />,
+      accessor: 'trailerConfig' as keyof PayrollLineItem,
+      cell: (item: PayrollLineItem) => {
+        const config = item.trailerConfig;
+        if (!config) return <span className="text-gray-400">-</span>;
+
+        const configColors: Record<string, string> = {
+          SINGLE: 'bg-gray-100 text-gray-700 dark:bg-gray-700 dark:text-gray-300',
+          DOUBLE: 'bg-blue-100 text-blue-700 dark:bg-blue-900/50 dark:text-blue-300',
+          TRIPLE: 'bg-purple-100 text-purple-700 dark:bg-purple-900/50 dark:text-purple-300'
+        };
+
+        return (
+          <span className={`inline-flex items-center px-2 py-0.5 rounded text-xs font-medium ${configColors[config] || configColors.SINGLE}`}>
+            {config.charAt(0) + config.slice(1).toLowerCase()}
+          </span>
+        );
+      }
     },
     {
       header: <SortableHeader label="Base + Mileage" sortKey="basePay" />,
@@ -431,12 +475,22 @@ export const Payroll: React.FC = () => {
       accessor: 'dropAndHookPay' as keyof PayrollLineItem,
       cell: (item: PayrollLineItem) => {
         const totalAccessorial = item.dropAndHookPay + item.chainUpPay + item.waitTimePay + item.otherAccessorialPay;
+        const hasBreakdown = item.dropAndHookPay > 0 || item.chainUpPay > 0 || item.waitTimePay > 0;
         return (
           <div className="text-sm text-right">
             {item.source === 'TRIP_PAY' && totalAccessorial > 0 ? (
-              <div title={`D&H: ${formatCurrency(item.dropAndHookPay)}, Chain: ${formatCurrency(item.chainUpPay)}, Wait: ${formatCurrency(item.waitTimePay)}`}>
-                {formatCurrency(totalAccessorial)}
-              </div>
+              <>
+                <div>{formatCurrency(totalAccessorial)}</div>
+                {hasBreakdown && (
+                  <div className="text-xs text-gray-500 dark:text-gray-400">
+                    {[
+                      item.dropAndHookPay > 0 ? `D&H: ${formatCurrency(item.dropAndHookPay)}` : null,
+                      item.chainUpPay > 0 ? `Chain: ${formatCurrency(item.chainUpPay)}` : null,
+                      item.waitTimePay > 0 ? `Wait: ${formatCurrency(item.waitTimePay)}` : null
+                    ].filter(Boolean).join(', ')}
+                  </div>
+                )}
+              </>
             ) : (
               <span className="text-gray-400">-</span>
             )}
