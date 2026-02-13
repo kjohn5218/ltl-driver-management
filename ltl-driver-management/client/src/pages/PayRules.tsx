@@ -43,11 +43,12 @@ const RATE_TYPES: { value: RateCardType; label: string; icon: React.ReactNode }[
   { value: 'DRIVER', label: 'Driver', icon: <User className="w-4 h-4" /> }
 ];
 
-const RATE_METHODS: { value: RateMethod | 'LINEHAUL_PROFILE'; label: string }[] = [
+const RATE_METHODS: { value: RateMethod | 'LINEHAUL_PROFILE' | 'ORIGIN_DESTINATION'; label: string }[] = [
   { value: 'PER_MILE', label: 'Per Mile' },
   { value: 'LINEHAUL_PROFILE', label: 'Linehaul Profile' },
   { value: 'FLAT_RATE', label: 'Flat Rate' },
-  { value: 'HOURLY', label: 'Hourly' }
+  { value: 'HOURLY', label: 'Hourly' },
+  { value: 'ORIGIN_DESTINATION', label: 'Origin/Destination' }
 ];
 
 const ACCESSORIAL_TYPES: { value: AccessorialType; label: string }[] = [
@@ -89,7 +90,7 @@ export const PayRules: React.FC = () => {
   // Filter states
   const [searchTerm, setSearchTerm] = useState('');
   const [typeFilter, setTypeFilter] = useState<RateCardType | ''>('');
-  const [methodFilter, setMethodFilter] = useState<RateMethod | ''>('');
+  const [methodFilter, setMethodFilter] = useState<RateMethod | 'LINEHAUL_PROFILE' | 'ORIGIN_DESTINATION' | ''>('');
   const [activeFilter, setActiveFilter] = useState<boolean | ''>('');
 
   // Sort states
@@ -168,7 +169,15 @@ export const PayRules: React.FC = () => {
       // Filter by rate method client-side if needed
       let filteredCards = response.rateCards;
       if (methodFilter) {
-        filteredCards = filteredCards.filter(rc => rc.rateMethod === methodFilter);
+        if (methodFilter === 'LINEHAUL_PROFILE') {
+          // Filter rate cards that have a linehaul profile linked
+          filteredCards = filteredCards.filter(rc => rc.linehaulProfileId != null);
+        } else if (methodFilter === 'ORIGIN_DESTINATION') {
+          // Filter rate cards that have both origin and destination terminals
+          filteredCards = filteredCards.filter(rc => rc.originTerminalId != null && rc.destinationTerminalId != null);
+        } else {
+          filteredCards = filteredCards.filter(rc => rc.rateMethod === methodFilter);
+        }
       }
 
       setRateCards(filteredCards);
@@ -885,7 +894,7 @@ export const PayRules: React.FC = () => {
           {/* Method Filter */}
           <select
             value={methodFilter}
-            onChange={(e) => setMethodFilter(e.target.value as RateMethod | '')}
+            onChange={(e) => setMethodFilter(e.target.value as RateMethod | 'LINEHAUL_PROFILE' | 'ORIGIN_DESTINATION' | '')}
             className="px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-indigo-500"
           >
             <option value="">All Methods</option>
