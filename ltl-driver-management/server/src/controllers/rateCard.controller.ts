@@ -25,7 +25,65 @@ export const getRateCards = async (req: Request, res: Response): Promise<void> =
     const where: Prisma.RateCardWhereInput = {};
 
     if (search) {
-      where.notes = { contains: search as string, mode: 'insensitive' };
+      const searchTerm = search as string;
+      // Search across notes, driver name/number, and carrier name
+      where.OR = [
+        { notes: { contains: searchTerm, mode: 'insensitive' } },
+        // Search driver name and number for DRIVER rate cards
+        {
+          rateType: 'DRIVER',
+          entityId: { not: null },
+          // We need to do a subquery approach - first find matching driver IDs
+        }
+      ];
+
+      // For more comprehensive search, we'll handle driver/carrier search separately
+      // by first finding matching IDs, then including them in the query
+    }
+
+    // If searching, find matching driver and carrier IDs first
+    let matchingDriverIds: number[] = [];
+    let matchingCarrierIds: number[] = [];
+
+    if (search) {
+      const searchTerm = search as string;
+
+      // Find drivers matching the search term (by name, number, or carrier name)
+      const matchingDrivers = await prisma.carrierDriver.findMany({
+        where: {
+          OR: [
+            { name: { contains: searchTerm, mode: 'insensitive' } },
+            { number: { contains: searchTerm, mode: 'insensitive' } },
+            { carrier: { name: { contains: searchTerm, mode: 'insensitive' } } }
+          ]
+        },
+        select: { id: true }
+      });
+      matchingDriverIds = matchingDrivers.map(d => d.id);
+
+      // Find carriers matching the search term
+      const matchingCarriers = await prisma.carrier.findMany({
+        where: {
+          name: { contains: searchTerm, mode: 'insensitive' }
+        },
+        select: { id: true }
+      });
+      matchingCarrierIds = matchingCarriers.map(c => c.id);
+
+      // Build comprehensive OR clause
+      where.OR = [
+        { notes: { contains: searchTerm, mode: 'insensitive' } },
+        // Match DRIVER rate cards where driver matches
+        ...(matchingDriverIds.length > 0 ? [{
+          rateType: 'DRIVER' as RateCardType,
+          entityId: { in: matchingDriverIds }
+        }] : []),
+        // Match CARRIER rate cards where carrier matches
+        ...(matchingCarrierIds.length > 0 ? [{
+          rateType: 'CARRIER' as RateCardType,
+          entityId: { in: matchingCarrierIds }
+        }] : [])
+      ];
     }
 
     if (type) {
