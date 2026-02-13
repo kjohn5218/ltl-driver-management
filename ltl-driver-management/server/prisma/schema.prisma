@@ -443,8 +443,28 @@ model Location {
   isPhysicalTerminal Boolean  @default(false)
   isVirtualTerminal  Boolean  @default(false)
 
-  // Relations
+  // Relations - Driver assignment
   drivers CarrierDriver[]
+
+  // Relations - Equipment (migrated from Terminal)
+  trucks                           EquipmentTruck[]              @relation("LocationTrucks")
+  trailers                         EquipmentTrailer[]            @relation("LocationTrailers")
+  dollies                          EquipmentDolly[]              @relation("LocationDollies")
+  equipmentRequirements            LocationEquipmentRequirement[]
+
+  // Relations - Linehaul Profiles (migrated from Terminal)
+  originLinehaulProfiles           LinehaulProfile[]             @relation("OriginLocation")
+  destLinehaulProfiles             LinehaulProfile[]             @relation("DestinationLocation")
+
+  // Relations - Rate Cards (migrated from Terminal)
+  originRateCards                  RateCard[]                    @relation("RateCardOriginLocation")
+  destRateCards                    RateCard[]                    @relation("RateCardDestinationLocation")
+
+  // Relations - Operations (migrated from Terminal)
+  loadsheets                       Loadsheet[]                   @relation("LoadsheetOriginLocation")
+  okayToLoadProfiles               ProfileOkayToLoad[]           @relation("OkayToLoadLocation")
+  okayToDispatchProfiles           ProfileOkayToDispatch[]       @relation("OkayToDispatchLocation")
+  accountableLateDepartureReasons  LateDepartureReason[]         @relation("LateDepartureLocation")
 
   @@map("locations")
 }
@@ -746,7 +766,8 @@ model EquipmentTruck {
   model               String?
   year                Int?
   vin                 String?
-  currentTerminalId   Int?
+  currentTerminalId   Int?            // DEPRECATED - use currentLocationId
+  currentLocationId   Int?            // New: references Location
   status              EquipmentStatus @default(AVAILABLE)
   assignedDriverId    Int?
   lastLocationUpdate  DateTime?
@@ -766,10 +787,12 @@ model EquipmentTruck {
 
   // Relations
   currentTerminal Terminal?      @relation(fields: [currentTerminalId], references: [id])
+  currentLocation Location?      @relation("LocationTrucks", fields: [currentLocationId], references: [id])
   assignedDriver  CarrierDriver? @relation(fields: [assignedDriverId], references: [id])
   linehaulTrips   LinehaulTrip[]
 
   @@index([currentTerminalId])
+  @@index([currentLocationId])
   @@index([status])
   @@index([assignedDriverId])
   @@map("equipment_trucks")
@@ -783,7 +806,8 @@ model EquipmentTrailer {
   lengthFeet         Int?
   capacityWeight     Int?
   capacityCube       Int?
-  currentTerminalId  Int?
+  currentTerminalId  Int?            // DEPRECATED - use currentLocationId
+  currentLocationId  Int?            // New: references Location
   status             EquipmentStatus @default(AVAILABLE)
   currentLocation    String?
   externalFleetId    String?
@@ -800,12 +824,14 @@ model EquipmentTrailer {
   updatedAt          DateTime        @updatedAt
 
   // Relations
-  currentTerminal Terminal?      @relation(fields: [currentTerminalId], references: [id])
-  primaryTrips    LinehaulTrip[] @relation("PrimaryTrailer")
-  secondaryTrips  LinehaulTrip[] @relation("SecondaryTrailer")
-  tertiaryTrips   LinehaulTrip[] @relation("TertiaryTrailer")
+  currentTerminal   Terminal?      @relation(fields: [currentTerminalId], references: [id])
+  currentLocationRef Location?     @relation("LocationTrailers", fields: [currentLocationId], references: [id])
+  primaryTrips      LinehaulTrip[] @relation("PrimaryTrailer")
+  secondaryTrips    LinehaulTrip[] @relation("SecondaryTrailer")
+  tertiaryTrips     LinehaulTrip[] @relation("TertiaryTrailer")
 
   @@index([currentTerminalId])
+  @@index([currentLocationId])
   @@index([status])
   @@index([trailerType])
   @@map("equipment_trailers")
@@ -816,7 +842,8 @@ model EquipmentDolly {
   id                 Int             @id @default(autoincrement())
   unitNumber         String          @unique
   dollyType          DollyType       @default(A_DOLLY)
-  currentTerminalId  Int?
+  currentTerminalId  Int?            // DEPRECATED - use currentLocationId
+  currentLocationId  Int?            // New: references Location
   status             EquipmentStatus @default(AVAILABLE)
   externalFleetId    String?
   lastInspectionDate DateTime?
@@ -828,15 +855,17 @@ model EquipmentDolly {
 
   // Relations
   currentTerminal  Terminal?      @relation(fields: [currentTerminalId], references: [id])
+  currentLocation  Location?      @relation("LocationDollies", fields: [currentLocationId], references: [id])
   linehaulTrips    LinehaulTrip[] @relation("PrimaryDolly")
   linehaulTrips2   LinehaulTrip[] @relation("SecondaryDolly")
 
   @@index([currentTerminalId])
+  @@index([currentLocationId])
   @@index([status])
   @@map("equipment_dollies")
 }
 
-// Terminal Equipment Requirements
+// Terminal Equipment Requirements (DEPRECATED - migrating to LocationEquipmentRequirement)
 model TerminalEquipmentRequirement {
   id             Int       @id @default(autoincrement())
   terminalId     Int
@@ -858,13 +887,37 @@ model TerminalEquipmentRequirement {
   @@map("terminal_equipment_requirements")
 }
 
+// Location Equipment Requirements (migrated from TerminalEquipmentRequirement)
+model LocationEquipmentRequirement {
+  id             Int       @id @default(autoincrement())
+  locationId     Int
+  equipmentType  String // truck, trailer_53, trailer_28, dolly_a, dolly_b, etc.
+  minCount       Int       @default(0)
+  maxCount       Int?
+  dayOfWeek      Int? // 0-6, null for all days
+  effectiveDate  DateTime?
+  expirationDate DateTime?
+  seasonalNote   String?
+  createdAt      DateTime  @default(now())
+  updatedAt      DateTime  @updatedAt
+
+  // Relations
+  location Location @relation(fields: [locationId], references: [id], onDelete: Cascade)
+
+  @@index([locationId])
+  @@index([equipmentType])
+  @@map("location_equipment_requirements")
+}
+
 // Linehaul Profiles (Standard Routes)
 model LinehaulProfile {
   id                    Int      @id @default(autoincrement())
   profileCode           String   @unique
   name                  String
-  originTerminalId      Int
-  destinationTerminalId Int
+  originTerminalId      Int      // DEPRECATED - use originLocationId
+  destinationTerminalId Int      // DEPRECATED - use destinationLocationId
+  originLocationId      Int?     // New: references Location
+  destinationLocationId Int?     // New: references Location
   standardDepartureTime String? // Time in HH:MM format
   standardArrivalTime   String? // Time in HH:MM format
   distanceMiles         Int?
@@ -882,9 +935,12 @@ model LinehaulProfile {
   createdAt             DateTime @default(now())
   updatedAt             DateTime @updatedAt
 
-  // Relations
+  // Relations (Terminal - DEPRECATED)
   originTerminal          Terminal                @relation("OriginTerminal", fields: [originTerminalId], references: [id])
   destinationTerminal     Terminal                @relation("DestinationTerminal", fields: [destinationTerminalId], references: [id])
+  // Relations (Location - New)
+  originLocation          Location?               @relation("OriginLocation", fields: [originLocationId], references: [id])
+  destinationLocation     Location?               @relation("DestinationLocation", fields: [destinationLocationId], references: [id])
   interlineCarrier        InterlineCarrier?       @relation(fields: [interlineCarrierId], references: [id])
   trips                   LinehaulTrip[]
   rateCards               RateCard[]
@@ -893,6 +949,8 @@ model LinehaulProfile {
 
   @@index([originTerminalId])
   @@index([destinationTerminalId])
+  @@index([originLocationId])
+  @@index([destinationLocationId])
   @@index([active])
   @@index([interlineCarrierId])
   @@map("linehaul_profiles")
@@ -1036,8 +1094,10 @@ model RateCard {
   id                    Int          @id @default(autoincrement())
   rateType              RateCardType
   entityId              Int? // References driver_id, carrier_id, linehaul_profile_id based on rateType
-  originTerminalId      Int?
-  destinationTerminalId Int?
+  originTerminalId      Int?         // DEPRECATED - use originLocationId
+  destinationTerminalId Int?         // DEPRECATED - use destinationLocationId
+  originLocationId      Int?         // New: references Location
+  destinationLocationId Int?         // New: references Location
   linehaulProfileId     Int?
   rateMethod            RateMethod   @default(PER_MILE)
   rateAmount            Decimal      @db.Decimal(8, 2)
@@ -1083,15 +1143,20 @@ model RateCard {
   perChainUp            Decimal?     @db.Decimal(10, 2)
   fuelSurcharge         Decimal?     @db.Decimal(6, 4)
 
-  // Relations
-  originTerminal      Terminal?         @relation("RateCardOrigin", fields: [originTerminalId], references: [id])
-  destinationTerminal Terminal?         @relation("RateCardDestination", fields: [destinationTerminalId], references: [id])
-  linehaulProfile     LinehaulProfile?  @relation(fields: [linehaulProfileId], references: [id])
-  accessorialRates    AccessorialRate[]
-  tripPays            TripPay[]
+  // Relations (Terminal - DEPRECATED)
+  originTerminal        Terminal?         @relation("RateCardOrigin", fields: [originTerminalId], references: [id])
+  destinationTerminal   Terminal?         @relation("RateCardDestination", fields: [destinationTerminalId], references: [id])
+  // Relations (Location - New)
+  originLocation        Location?         @relation("RateCardOriginLocation", fields: [originLocationId], references: [id])
+  destinationLocation   Location?         @relation("RateCardDestinationLocation", fields: [destinationLocationId], references: [id])
+  linehaulProfile       LinehaulProfile?  @relation(fields: [linehaulProfileId], references: [id])
+  accessorialRates      AccessorialRate[]
+  tripPays              TripPay[]
 
   @@index([rateType])
   @@index([entityId])
+  @@index([originLocationId])
+  @@index([destinationLocationId])
   @@index([effectiveDate])
   @@index([active])
   @@map("rate_cards")
@@ -1313,7 +1378,8 @@ model Loadsheet {
   scheduledDepartDate     String?         // Date in YYYY-MM-DD format
   linehaulName            String          // e.g., "ABQELP2"
   preloadManifest         String?
-  originTerminalId        Int?
+  originTerminalId        Int?            // DEPRECATED - use originLocationId
+  originLocationId        Int?            // New: references Location
   originTerminalCode      String?         // e.g., "ABQ"
   destinationTerminalCode String?         // e.g., "ELP" - destination for this leg
   routeId                 Int?            // Reference to specific route/leg for multi-leg profiles
@@ -1352,8 +1418,10 @@ model Loadsheet {
   printedAt               DateTime?
   lastScanAt              DateTime?       // Last LHLOAD barcode scan timestamp
 
-  // Relations
+  // Relations (Terminal - DEPRECATED)
   originTerminal          Terminal?       @relation(fields: [originTerminalId], references: [id])
+  // Relations (Location - New)
+  originLocation          Location?       @relation("LoadsheetOriginLocation", fields: [originLocationId], references: [id])
   route                   Route?          @relation(fields: [routeId], references: [id])
   linehaulTrip            LinehaulTrip?   @relation(fields: [linehaulTripId], references: [id])
   hazmatItems             LoadsheetHazmatItem[]
@@ -1365,6 +1433,7 @@ model Loadsheet {
   @@index([loadDate])
   @@index([linehaulTripId])
   @@index([routeId])
+  @@index([originLocationId])
   @@index([linehaulName, originTerminalCode])
   @@map("loadsheets")
 }
@@ -1452,7 +1521,8 @@ model LateDepartureReason {
   tripId                  Int             @unique // One late reason per trip
   reason                  LateReasonType
   willCauseServiceFailure Boolean
-  accountableTerminalId   Int?            // Optional when service failure is No
+  accountableTerminalId   Int?            // DEPRECATED - use accountableLocationId
+  accountableLocationId   Int?            // New: references Location
   accountableTerminalCode String?         // Stored for historical reference
   notes                   String?
   scheduledDepartTime     String?         // Original scheduled time (HH:mm)
@@ -1462,14 +1532,17 @@ model LateDepartureReason {
   createdAt               DateTime        @default(now())
   updatedAt               DateTime        @updatedAt
 
-  // Relations
+  // Relations (Terminal - DEPRECATED)
   trip                LinehaulTrip @relation(fields: [tripId], references: [id], onDelete: Cascade)
   accountableTerminal Terminal?    @relation(fields: [accountableTerminalId], references: [id])
+  // Relations (Location - New)
+  accountableLocation Location?    @relation("LateDepartureLocation", fields: [accountableLocationId], references: [id])
   creator             User?        @relation(fields: [createdBy], references: [id])
 
   @@index([tripId])
   @@index([reason])
   @@index([accountableTerminalId])
+  @@index([accountableLocationId])
   @@index([createdAt])
   @@map("late_departure_reasons")
 }
@@ -1615,28 +1688,34 @@ model RequiredPlacard {
 // Okay to Load - Terminals where freight for these destinations can be loaded from profile's origin
 model ProfileOkayToLoad {
   linehaulProfileId Int
-  terminalId        Int
-  createdAt         DateTime @default(now())
+  terminalId        Int       // DEPRECATED - use locationId
+  locationId        Int?      // New: references Location
+  createdAt         DateTime  @default(now())
 
   linehaulProfile LinehaulProfile @relation("OkayToLoadTerminals", fields: [linehaulProfileId], references: [id], onDelete: Cascade)
   terminal        Terminal        @relation("OkayToLoadProfiles", fields: [terminalId], references: [id], onDelete: Cascade)
+  location        Location?       @relation("OkayToLoadLocation", fields: [locationId], references: [id], onDelete: Cascade)
 
   @@id([linehaulProfileId, terminalId])
   @@index([terminalId])
+  @@index([locationId])
   @@map("profile_okay_to_load")
 }
 
 // Okay to Dispatch - Acceptable dispatch destinations from profile's origin
 model ProfileOkayToDispatch {
   linehaulProfileId Int
-  terminalId        Int
-  createdAt         DateTime @default(now())
+  terminalId        Int       // DEPRECATED - use locationId
+  locationId        Int?      // New: references Location
+  createdAt         DateTime  @default(now())
 
   linehaulProfile LinehaulProfile @relation("OkayToDispatchTerminals", fields: [linehaulProfileId], references: [id], onDelete: Cascade)
   terminal        Terminal        @relation("OkayToDispatchProfiles", fields: [terminalId], references: [id], onDelete: Cascade)
+  location        Location?       @relation("OkayToDispatchLocation", fields: [locationId], references: [id], onDelete: Cascade)
 
   @@id([linehaulProfileId, terminalId])
   @@index([terminalId])
+  @@index([locationId])
   @@map("profile_okay_to_dispatch")
 }
 

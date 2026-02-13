@@ -392,21 +392,26 @@ export type DelayType = 'WEATHER' | 'TRAFFIC' | 'BREAKDOWN' | 'DETENTION' | 'LOA
 export type WaitTimeReason = 'LATE_MEET_DRIVER' | 'DOCK_DELAY' | 'BREAKDOWN';
 export type EquipmentIssueType = 'TRAILER' | 'DOLLY';
 
-// Terminal
+// Terminal/Location - These are now unified in the Location table
 export interface Terminal {
   id: number;
   code: string;
-  name: string;
+  name?: string;
   address?: string;
-  city: string;
-  state: string;
+  city?: string;
+  state?: string;
   zipCode?: string;
   phone?: string;
   email?: string;
+  contact?: string;
   latitude?: number;
   longitude?: number;
-  timezone: string;
+  timezone?: string;
+  timeZone?: string; // Location model uses timeZone (camelCase)
   notes?: string;
+  hours?: string;
+  isPhysicalTerminal?: boolean;
+  isVirtualTerminal?: boolean;
   active: boolean;
   createdAt: string;
   updatedAt: string;
@@ -419,6 +424,9 @@ export interface Terminal {
     linehaulProfilesDestination: number;
   };
 }
+
+// Alias for Location - Terminal and Location are now the same table
+export type Location = Terminal;
 
 export interface TerminalEquipmentRequirement {
   id: number;

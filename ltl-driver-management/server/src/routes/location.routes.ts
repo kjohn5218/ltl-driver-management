@@ -8,7 +8,14 @@ import {
   updateLocation,
   deleteLocation,
   getTerminalLocations,
-  lookupMileage
+  lookupMileage,
+  getLocationsList,
+  getLocationEquipmentSummary,
+  getLocationEquipmentRequirements,
+  upsertLocationEquipmentRequirement,
+  bulkUpdateLocationEquipmentRequirements,
+  deleteLocationEquipmentRequirement,
+  getLocationEquipmentAvailability
 } from '../controllers/location.controller';
 import { authenticate } from '../middleware/auth.middleware';
 
@@ -19,6 +26,9 @@ router.use(authenticate);
 
 // GET /api/locations - Get all locations with pagination and filtering
 router.get('/', getLocations);
+
+// GET /api/locations/list - Simple list for dropdowns (active locations only)
+router.get('/list', getLocationsList);
 
 // GET /api/locations/search - Search locations for autocomplete
 router.get('/search', searchLocations);
@@ -43,5 +53,25 @@ router.put('/:id', updateLocation);
 
 // DELETE /api/locations/:id - Delete location
 router.delete('/:id', deleteLocation);
+
+// ==================== EQUIPMENT FUNCTIONALITY (migrated from Terminal) ====================
+
+// GET /api/locations/:id/equipment-summary - Get equipment status breakdown
+router.get('/:id/equipment-summary', getLocationEquipmentSummary);
+
+// GET /api/locations/:id/availability - Get equipment availability vs requirements
+router.get('/:id/availability', getLocationEquipmentAvailability);
+
+// GET /api/locations/:id/requirements - Get equipment requirements
+router.get('/:id/requirements', getLocationEquipmentRequirements);
+
+// POST /api/locations/:id/requirements - Create/update single requirement
+router.post('/:id/requirements', upsertLocationEquipmentRequirement);
+
+// PUT /api/locations/:id/requirements - Bulk update requirements
+router.put('/:id/requirements', bulkUpdateLocationEquipmentRequirements);
+
+// DELETE /api/locations/:id/requirements/:requirementId - Delete requirement
+router.delete('/:id/requirements/:requirementId', deleteLocationEquipmentRequirement);
 
 export default router;

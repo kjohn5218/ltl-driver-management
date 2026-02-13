@@ -3,6 +3,26 @@ import { prisma } from '../index';
 import { Prisma, EquipmentStatus, TruckType, TrailerType, DollyType } from '@prisma/client';
 import { fleetMockService } from '../services/fleet.mock.service';
 
+// Helper function to get Location ID from Terminal ID (for migration)
+// During the transition period, we need to keep both currentTerminalId and currentLocationId in sync
+async function getLocationIdFromTerminalId(terminalId: number | null): Promise<number | null> {
+  if (!terminalId) return null;
+
+  const terminal = await prisma.terminal.findUnique({
+    where: { id: terminalId },
+    select: { code: true }
+  });
+
+  if (!terminal) return null;
+
+  const location = await prisma.location.findUnique({
+    where: { code: terminal.code },
+    select: { id: true }
+  });
+
+  return location?.id || null;
+}
+
 // ==================== TRUCKS ====================
 
 // Get all trucks with filtering
@@ -248,6 +268,10 @@ export const createTruck = async (req: Request, res: Response): Promise<void> =>
       return;
     }
 
+    // Get corresponding Location ID for the terminal (migration support)
+    const terminalIdParsed = currentTerminalId ? parseInt(currentTerminalId, 10) : null;
+    const locationId = await getLocationIdFromTerminalId(terminalIdParsed);
+
     const truck = await prisma.equipmentTruck.create({
       data: {
         unitNumber: unitNumber.toUpperCase(),
@@ -258,7 +282,8 @@ export const createTruck = async (req: Request, res: Response): Promise<void> =>
         year: year ? parseInt(year, 10) : null,
         licensePlate: licensePlate?.toUpperCase(),
         licensePlateState: licensePlateState?.toUpperCase(),
-        currentTerminalId: currentTerminalId ? parseInt(currentTerminalId, 10) : null,
+        currentTerminalId: terminalIdParsed,
+        currentLocationId: locationId,
         assignedDriverId: assignedDriverId ? parseInt(assignedDriverId, 10) : null,
         fuelType,
         nextMaintenanceDate: nextMaintenanceDate ? new Date(nextMaintenanceDate) : null,
@@ -266,6 +291,9 @@ export const createTruck = async (req: Request, res: Response): Promise<void> =>
       },
       include: {
         currentTerminal: {
+          select: { id: true, code: true, name: true }
+        },
+        currentLocation: {
           select: { id: true, code: true, name: true }
         }
       }
@@ -322,6 +350,13 @@ export const updateTruck = async (req: Request, res: Response): Promise<void> =>
       }
     }
 
+    // Get corresponding Location ID if terminal is being updated (migration support)
+    let locationId: number | null | undefined = undefined;
+    if (currentTerminalId !== undefined) {
+      const terminalIdParsed = currentTerminalId ? parseInt(currentTerminalId, 10) : null;
+      locationId = await getLocationIdFromTerminalId(terminalIdParsed);
+    }
+
     const truck = await prisma.equipmentTruck.update({
       where: { id: truckId },
       data: {
@@ -334,6 +369,7 @@ export const updateTruck = async (req: Request, res: Response): Promise<void> =>
         ...(licensePlate !== undefined && { licensePlate: licensePlate?.toUpperCase() }),
         ...(licensePlateState !== undefined && { licensePlateState: licensePlateState?.toUpperCase() }),
         ...(currentTerminalId !== undefined && { currentTerminalId: currentTerminalId ? parseInt(currentTerminalId, 10) : null }),
+        ...(locationId !== undefined && { currentLocationId: locationId }),
         ...(assignedDriverId !== undefined && { assignedDriverId: assignedDriverId ? parseInt(assignedDriverId, 10) : null }),
         ...(fuelType !== undefined && { fuelType }),
         ...(nextMaintenanceDate !== undefined && { nextMaintenanceDate: nextMaintenanceDate ? new Date(nextMaintenanceDate) : null }),
@@ -343,6 +379,9 @@ export const updateTruck = async (req: Request, res: Response): Promise<void> =>
       },
       include: {
         currentTerminal: {
+          select: { id: true, code: true, name: true }
+        },
+        currentLocation: {
           select: { id: true, code: true, name: true }
         }
       }
@@ -684,6 +723,10 @@ export const createTrailer = async (req: Request, res: Response): Promise<void> 
       return;
     }
 
+    // Get corresponding Location ID for the terminal (migration support)
+    const terminalIdParsed = currentTerminalId ? parseInt(currentTerminalId, 10) : null;
+    const locationId = await getLocationIdFromTerminalId(terminalIdParsed);
+
     const trailer = await prisma.equipmentTrailer.create({
       data: {
         unitNumber: unitNumber.toUpperCase(),
@@ -691,7 +734,8 @@ export const createTrailer = async (req: Request, res: Response): Promise<void> 
         lengthFeet: lengthFeet ? parseInt(lengthFeet, 10) : null,
         capacityWeight: capacityWeight ? parseInt(capacityWeight, 10) : null,
         capacityCube: capacityCube ? parseInt(capacityCube, 10) : null,
-        currentTerminalId: currentTerminalId ? parseInt(currentTerminalId, 10) : null,
+        currentTerminalId: terminalIdParsed,
+        currentLocationId: locationId,
         licensePlate: licensePlate?.toUpperCase(),
         licensePlateState: licensePlateState?.toUpperCase(),
         lastInspectionDate: lastInspectionDate ? new Date(lastInspectionDate) : null,
@@ -700,6 +744,9 @@ export const createTrailer = async (req: Request, res: Response): Promise<void> 
       },
       include: {
         currentTerminal: {
+          select: { id: true, code: true, name: true }
+        },
+        currentLocationRef: {
           select: { id: true, code: true, name: true }
         }
       }
@@ -753,6 +800,13 @@ export const updateTrailer = async (req: Request, res: Response): Promise<void> 
       }
     }
 
+    // Get corresponding Location ID if terminal is being updated (migration support)
+    let locationId: number | null | undefined = undefined;
+    if (currentTerminalId !== undefined) {
+      const terminalIdParsed = currentTerminalId ? parseInt(currentTerminalId, 10) : null;
+      locationId = await getLocationIdFromTerminalId(terminalIdParsed);
+    }
+
     const trailer = await prisma.equipmentTrailer.update({
       where: { id: trailerId },
       data: {
@@ -762,6 +816,7 @@ export const updateTrailer = async (req: Request, res: Response): Promise<void> 
         ...(capacityWeight !== undefined && { capacityWeight: capacityWeight ? parseInt(capacityWeight, 10) : null }),
         ...(capacityCube !== undefined && { capacityCube: capacityCube ? parseInt(capacityCube, 10) : null }),
         ...(currentTerminalId !== undefined && { currentTerminalId: currentTerminalId ? parseInt(currentTerminalId, 10) : null }),
+        ...(locationId !== undefined && { currentLocationId: locationId }),
         ...(licensePlate !== undefined && { licensePlate: licensePlate?.toUpperCase() }),
         ...(licensePlateState !== undefined && { licensePlateState: licensePlateState?.toUpperCase() }),
         ...(lastInspectionDate !== undefined && { lastInspectionDate: lastInspectionDate ? new Date(lastInspectionDate) : null }),
@@ -772,6 +827,9 @@ export const updateTrailer = async (req: Request, res: Response): Promise<void> 
       },
       include: {
         currentTerminal: {
+          select: { id: true, code: true, name: true }
+        },
+        currentLocationRef: {
           select: { id: true, code: true, name: true }
         }
       }
@@ -1077,17 +1135,25 @@ export const createDolly = async (req: Request, res: Response): Promise<void> =>
       return;
     }
 
+    // Get corresponding Location ID for the terminal (migration support)
+    const terminalIdParsed = currentTerminalId ? parseInt(currentTerminalId, 10) : null;
+    const locationId = await getLocationIdFromTerminalId(terminalIdParsed);
+
     const dolly = await prisma.equipmentDolly.create({
       data: {
         unitNumber: unitNumber.toUpperCase(),
         dollyType: dollyType || 'A_DOLLY',
-        currentTerminalId: currentTerminalId ? parseInt(currentTerminalId, 10) : null,
+        currentTerminalId: terminalIdParsed,
+        currentLocationId: locationId,
         lastInspectionDate: lastInspectionDate ? new Date(lastInspectionDate) : null,
         nextInspectionDate: nextInspectionDate ? new Date(nextInspectionDate) : null,
         status: status || 'AVAILABLE'
       },
       include: {
         currentTerminal: {
+          select: { id: true, code: true, name: true }
+        },
+        currentLocation: {
           select: { id: true, code: true, name: true }
         }
       }
@@ -1136,12 +1202,20 @@ export const updateDolly = async (req: Request, res: Response): Promise<void> =>
       }
     }
 
+    // Get corresponding Location ID if terminal is being updated (migration support)
+    let locationId: number | null | undefined = undefined;
+    if (currentTerminalId !== undefined) {
+      const terminalIdParsed = currentTerminalId ? parseInt(currentTerminalId, 10) : null;
+      locationId = await getLocationIdFromTerminalId(terminalIdParsed);
+    }
+
     const dolly = await prisma.equipmentDolly.update({
       where: { id: dollyId },
       data: {
         ...(unitNumber && { unitNumber: unitNumber.toUpperCase() }),
         ...(dollyType && { dollyType }),
         ...(currentTerminalId !== undefined && { currentTerminalId: currentTerminalId ? parseInt(currentTerminalId, 10) : null }),
+        ...(locationId !== undefined && { currentLocationId: locationId }),
         ...(lastInspectionDate !== undefined && { lastInspectionDate: lastInspectionDate ? new Date(lastInspectionDate) : null }),
         ...(nextInspectionDate !== undefined && { nextInspectionDate: nextInspectionDate ? new Date(nextInspectionDate) : null }),
         ...(status && { status }),
@@ -1150,6 +1224,9 @@ export const updateDolly = async (req: Request, res: Response): Promise<void> =>
       },
       include: {
         currentTerminal: {
+          select: { id: true, code: true, name: true }
+        },
+        currentLocation: {
           select: { id: true, code: true, name: true }
         }
       }

@@ -420,3 +420,330 @@ export const deleteLocation = async (req: Request, res: Response) => {
     return res.status(500).json({ message: 'Failed to delete location' });
   }
 };
+
+// Get all locations as a simple list (for dropdowns)
+export const getLocationsList = async (_req: Request, res: Response) => {
+  try {
+    const locations = await prisma.location.findMany({
+      where: { active: true },
+      select: {
+        id: true,
+        code: true,
+        name: true,
+        city: true,
+        state: true,
+        isPhysicalTerminal: true,
+        isVirtualTerminal: true
+      },
+      orderBy: { code: 'asc' }
+    });
+
+    return res.json(locations);
+  } catch (error) {
+    console.error('Get locations list error:', error);
+    return res.status(500).json({ message: 'Failed to fetch locations list' });
+  }
+};
+
+// ==================== EQUIPMENT FUNCTIONALITY (migrated from Terminal) ====================
+
+// Get location equipment summary
+export const getLocationEquipmentSummary = async (req: Request, res: Response) => {
+  try {
+    const { id } = req.params;
+    const locationId = parseInt(id, 10);
+
+    const location = await prisma.location.findUnique({
+      where: { id: locationId }
+    });
+
+    if (!location) {
+      return res.status(404).json({ message: 'Location not found' });
+    }
+
+    const [trucks, trailers, dollies] = await Promise.all([
+      prisma.equipmentTruck.groupBy({
+        by: ['status'],
+        where: { currentLocationId: locationId },
+        _count: { id: true }
+      }),
+      prisma.equipmentTrailer.groupBy({
+        by: ['status'],
+        where: { currentLocationId: locationId },
+        _count: { id: true }
+      }),
+      prisma.equipmentDolly.groupBy({
+        by: ['status'],
+        where: { currentLocationId: locationId },
+        _count: { id: true }
+      })
+    ]);
+
+    return res.json({
+      locationCode: location.code,
+      locationName: location.name,
+      trucks: trucks.map(t => ({ status: t.status, count: t._count.id })),
+      trailers: trailers.map(t => ({ status: t.status, count: t._count.id })),
+      dollies: dollies.map(d => ({ status: d.status, count: d._count.id }))
+    });
+  } catch (error) {
+    console.error('Get location equipment summary error:', error);
+    return res.status(500).json({ message: 'Failed to fetch location equipment summary' });
+  }
+};
+
+// Get location equipment requirements
+export const getLocationEquipmentRequirements = async (req: Request, res: Response) => {
+  try {
+    const { id } = req.params;
+    const locationId = parseInt(id, 10);
+
+    const requirements = await prisma.locationEquipmentRequirement.findMany({
+      where: { locationId },
+      orderBy: { dayOfWeek: 'asc' }
+    });
+
+    return res.json(requirements);
+  } catch (error) {
+    console.error('Get location equipment requirements error:', error);
+    return res.status(500).json({ message: 'Failed to fetch location equipment requirements' });
+  }
+};
+
+// Create or update location equipment requirement
+export const upsertLocationEquipmentRequirement = async (req: Request, res: Response) => {
+  try {
+    const { id } = req.params;
+    const locationId = parseInt(id, 10);
+    const {
+      dayOfWeek,
+      equipmentType,
+      minCount,
+      maxCount,
+      effectiveDate,
+      expirationDate,
+      seasonalNote
+    } = req.body;
+
+    // Verify location exists
+    const location = await prisma.location.findUnique({
+      where: { id: locationId }
+    });
+
+    if (!location) {
+      return res.status(404).json({ message: 'Location not found' });
+    }
+
+    // Check if requirement for this day and equipment type already exists
+    const existingRequirement = await prisma.locationEquipmentRequirement.findFirst({
+      where: {
+        locationId,
+        dayOfWeek,
+        equipmentType
+      }
+    });
+
+    let requirement;
+    if (existingRequirement) {
+      requirement = await prisma.locationEquipmentRequirement.update({
+        where: { id: existingRequirement.id },
+        data: {
+          minCount: minCount !== undefined ? minCount : existingRequirement.minCount,
+          maxCount: maxCount !== undefined ? maxCount : existingRequirement.maxCount,
+          effectiveDate: effectiveDate !== undefined ? (effectiveDate ? new Date(effectiveDate) : null) : existingRequirement.effectiveDate,
+          expirationDate: expirationDate !== undefined ? (expirationDate ? new Date(expirationDate) : null) : existingRequirement.expirationDate,
+          seasonalNote: seasonalNote !== undefined ? seasonalNote : existingRequirement.seasonalNote
+        }
+      });
+    } else {
+      requirement = await prisma.locationEquipmentRequirement.create({
+        data: {
+          locationId,
+          dayOfWeek,
+          equipmentType,
+          minCount: minCount || 0,
+          maxCount: maxCount || null,
+          effectiveDate: effectiveDate ? new Date(effectiveDate) : null,
+          expirationDate: expirationDate ? new Date(expirationDate) : null,
+          seasonalNote
+        }
+      });
+    }
+
+    return res.status(existingRequirement ? 200 : 201).json(requirement);
+  } catch (error) {
+    console.error('Upsert location equipment requirement error:', error);
+    return res.status(500).json({ message: 'Failed to save location equipment requirement' });
+  }
+};
+
+// Bulk update location equipment requirements
+export const bulkUpdateLocationEquipmentRequirements = async (req: Request, res: Response) => {
+  try {
+    const { id } = req.params;
+    const locationId = parseInt(id, 10);
+    const { requirements } = req.body;
+
+    // Verify location exists
+    const location = await prisma.location.findUnique({
+      where: { id: locationId }
+    });
+
+    if (!location) {
+      return res.status(404).json({ message: 'Location not found' });
+    }
+
+    // Delete existing requirements and create new ones
+    await prisma.$transaction(async (tx) => {
+      await tx.locationEquipmentRequirement.deleteMany({
+        where: { locationId }
+      });
+
+      if (requirements && requirements.length > 0) {
+        await tx.locationEquipmentRequirement.createMany({
+          data: requirements.map((req: { dayOfWeek: number; equipmentType: string; minCount?: number; maxCount?: number; effectiveDate?: string; expirationDate?: string; seasonalNote?: string }) => ({
+            locationId,
+            dayOfWeek: req.dayOfWeek,
+            equipmentType: req.equipmentType,
+            minCount: req.minCount || 0,
+            maxCount: req.maxCount || null,
+            effectiveDate: req.effectiveDate ? new Date(req.effectiveDate) : null,
+            expirationDate: req.expirationDate ? new Date(req.expirationDate) : null,
+            seasonalNote: req.seasonalNote
+          }))
+        });
+      }
+    });
+
+    const updatedRequirements = await prisma.locationEquipmentRequirement.findMany({
+      where: { locationId },
+      orderBy: { dayOfWeek: 'asc' }
+    });
+
+    return res.json(updatedRequirements);
+  } catch (error) {
+    console.error('Bulk update location equipment requirements error:', error);
+    return res.status(500).json({ message: 'Failed to update location equipment requirements' });
+  }
+};
+
+// Delete location equipment requirement
+export const deleteLocationEquipmentRequirement = async (req: Request, res: Response) => {
+  try {
+    const { id, requirementId } = req.params;
+    const locationId = parseInt(id, 10);
+    const reqId = parseInt(requirementId, 10);
+
+    const requirement = await prisma.locationEquipmentRequirement.findFirst({
+      where: {
+        id: reqId,
+        locationId
+      }
+    });
+
+    if (!requirement) {
+      return res.status(404).json({ message: 'Equipment requirement not found' });
+    }
+
+    await prisma.locationEquipmentRequirement.delete({
+      where: { id: reqId }
+    });
+
+    return res.json({ message: 'Equipment requirement deleted successfully' });
+  } catch (error) {
+    console.error('Delete location equipment requirement error:', error);
+    return res.status(500).json({ message: 'Failed to delete location equipment requirement' });
+  }
+};
+
+// Get equipment availability vs requirements for a location
+export const getLocationEquipmentAvailability = async (req: Request, res: Response) => {
+  try {
+    const { id } = req.params;
+    const locationId = parseInt(id, 10);
+    const { date } = req.query;
+
+    const location = await prisma.location.findUnique({
+      where: { id: locationId }
+    });
+
+    if (!location) {
+      return res.status(404).json({ message: 'Location not found' });
+    }
+
+    // Get the day of week (0 = Sunday, 6 = Saturday)
+    const targetDate = date ? new Date(date as string) : new Date();
+    const dayOfWeek = targetDate.getDay();
+
+    // Get requirements for this day
+    const requirements = await prisma.locationEquipmentRequirement.findMany({
+      where: {
+        locationId,
+        dayOfWeek
+      }
+    });
+
+    // Get current available counts using new Location FK
+    const [availableTrucks, availableTrailers, availableDollies, availableDrivers] = await Promise.all([
+      prisma.equipmentTruck.count({
+        where: {
+          currentLocationId: locationId,
+          status: 'AVAILABLE'
+        }
+      }),
+      prisma.equipmentTrailer.count({
+        where: {
+          currentLocationId: locationId,
+          status: 'AVAILABLE'
+        }
+      }),
+      prisma.equipmentDolly.count({
+        where: {
+          currentLocationId: locationId,
+          status: 'AVAILABLE'
+        }
+      }),
+      prisma.carrierDriver.count({
+        where: {
+          currentTerminalCode: location.code,
+          driverStatus: 'AVAILABLE',
+          active: true
+        }
+      })
+    ]);
+
+    // Group requirements by equipment type
+    const requirementsByType: Record<string, { minCount: number; maxCount: number | null }> = {};
+    for (const req of requirements) {
+      requirementsByType[req.equipmentType] = {
+        minCount: req.minCount,
+        maxCount: req.maxCount
+      };
+    }
+
+    return res.json({
+      location: {
+        id: location.id,
+        code: location.code,
+        name: location.name
+      },
+      date: targetDate.toISOString().split('T')[0],
+      dayOfWeek,
+      requirements: requirementsByType,
+      available: {
+        trucks: availableTrucks,
+        trailers: availableTrailers,
+        dollies: availableDollies,
+        drivers: availableDrivers
+      },
+      variance: {
+        trucks: availableTrucks - (requirementsByType['truck']?.minCount || 0),
+        trailers: availableTrailers - (requirementsByType['trailer_53']?.minCount || 0) - (requirementsByType['trailer_28']?.minCount || 0),
+        dollies: availableDollies - (requirementsByType['dolly_a']?.minCount || 0) - (requirementsByType['dolly_b']?.minCount || 0)
+      }
+    });
+  } catch (error) {
+    console.error('Get location equipment availability error:', error);
+    return res.status(500).json({ message: 'Failed to fetch location equipment availability' });
+  }
+};
