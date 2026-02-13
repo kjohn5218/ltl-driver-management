@@ -34,7 +34,7 @@ export const Carriers: React.FC = () => {
   const [showAddCarrierModal, setShowAddCarrierModal] = useState(false);
   const [showInviteModal, setShowInviteModal] = useState(false);
   const [showResendModal, setShowResendModal] = useState(false);
-  const [viewMode, setViewMode] = useState<'grid' | 'list'>('grid');
+  const [viewMode, setViewMode] = useState<'grid' | 'list'>('list');
   const [isSyncing, setIsSyncing] = useState(false);
   const [showBatchUpdateModal, setShowBatchUpdateModal] = useState(false);
   const [batchUpdateResult, setBatchUpdateResult] = useState<any>(null);
