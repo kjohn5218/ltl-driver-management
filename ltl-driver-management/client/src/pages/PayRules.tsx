@@ -39,18 +39,15 @@ import {
 } from 'lucide-react';
 
 const RATE_TYPES: { value: RateCardType; label: string; icon: React.ReactNode }[] = [
-  { value: 'DRIVER', label: 'Driver', icon: <User className="w-4 h-4" /> },
   { value: 'CARRIER', label: 'Carrier', icon: <Truck className="w-4 h-4" /> },
-  { value: 'LINEHAUL', label: 'Linehaul Profile', icon: <FileText className="w-4 h-4" /> },
-  { value: 'OD_PAIR', label: 'O/D Pair', icon: <Link className="w-4 h-4" /> },
-  { value: 'DEFAULT', label: 'Default', icon: <Settings className="w-4 h-4" /> }
+  { value: 'DRIVER', label: 'Driver', icon: <User className="w-4 h-4" /> }
 ];
 
-const RATE_METHODS: { value: RateMethod; label: string }[] = [
+const RATE_METHODS: { value: RateMethod | 'LINEHAUL_PROFILE'; label: string }[] = [
   { value: 'PER_MILE', label: 'Per Mile' },
+  { value: 'LINEHAUL_PROFILE', label: 'Linehaul Profile' },
   { value: 'FLAT_RATE', label: 'Flat Rate' },
-  { value: 'HOURLY', label: 'Hourly' },
-  { value: 'PERCENTAGE', label: 'Percentage' }
+  { value: 'HOURLY', label: 'Hourly' }
 ];
 
 const ACCESSORIAL_TYPES: { value: AccessorialType; label: string }[] = [
@@ -115,7 +112,7 @@ export const PayRules: React.FC = () => {
 
   // Form states
   const [rateFormData, setRateFormData] = useState<CreateRateCardData>({
-    rateType: 'DRIVER',
+    rateType: 'CARRIER',
     rateMethod: 'PER_MILE',
     rateAmount: 0,
     effectiveDate: new Date().toISOString().split('T')[0]
@@ -246,7 +243,7 @@ export const PayRules: React.FC = () => {
     setModalMode('create');
     setSelectedRateCard(null);
     setRateFormData({
-      rateType: 'DRIVER',
+      rateType: 'CARRIER',
       rateMethod: 'PER_MILE',
       rateAmount: 0,
       effectiveDate: new Date().toISOString().split('T')[0]
@@ -462,6 +459,8 @@ export const PayRules: React.FC = () => {
         return rc.originTerminal?.code || parseODFromNotes(rc.notes).origin || '';
       case 'dest':
         return rc.destinationTerminal?.code || parseODFromNotes(rc.notes).dest || '';
+      case 'linehaulProfile':
+        return rc.linehaulProfile?.profileCode || rc.linehaulProfile?.name || '';
       case 'perTrip':
         return rc.perTrip ? Number(rc.perTrip) : 0;
       case 'perMile':
@@ -584,6 +583,28 @@ export const PayRules: React.FC = () => {
         if (rc.rateType === 'OD_PAIR') {
           const employer = parseNotesInfo(rc.notes).employer;
           return <span className="text-gray-700">{employer || '-'}</span>;
+        }
+        return <span className="text-gray-400">-</span>;
+      }
+    },
+    {
+      header: 'Linehaul Profile',
+      accessor: 'linehaulProfileId' as keyof RateCard,
+      sortKey: 'linehaulProfile',
+      cell: (rc: RateCard) => {
+        if (rc.linehaulProfile) {
+          return (
+            <span className="font-mono text-sm text-orange-600">
+              {rc.linehaulProfile.profileCode || rc.linehaulProfile.name}
+            </span>
+          );
+        }
+        if (rc.linehaulProfileId) {
+          const profile = profiles.find(p => p.id === rc.linehaulProfileId);
+          if (profile) {
+            return <span className="font-mono text-sm text-orange-600">{profile.profileCode || profile.name}</span>;
+          }
+          return <span className="text-gray-400">Profile #{rc.linehaulProfileId}</span>;
         }
         return <span className="text-gray-400">-</span>;
       }
@@ -997,10 +1018,12 @@ export const PayRules: React.FC = () => {
         isOpen={isRateModalOpen}
         onClose={() => setIsRateModalOpen(false)}
         title={`${modalMode === 'create' ? 'Create' : 'Edit'} Rate Card`}
+        size="4xl"
       >
         <div className="space-y-4">
-          {/* Rate Type (only editable on create) */}
-          {modalMode === 'create' && (
+          {/* Row 1: Rate Type, Entity Selection, Rate Method */}
+          <div className="grid grid-cols-3 gap-4">
+            {/* Rate Type */}
             <div>
               <label className="block text-sm font-medium text-gray-700 mb-1">Rate Type</label>
               <select
@@ -1014,50 +1037,67 @@ export const PayRules: React.FC = () => {
                   destinationTerminalId: undefined
                 })}
                 className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-indigo-500"
+                disabled={modalMode === 'edit'}
               >
                 {RATE_TYPES.map(type => (
                   <option key={type.value} value={type.value}>{type.label}</option>
                 ))}
               </select>
             </div>
-          )}
 
-          {/* Entity Selection based on type */}
-          {rateFormData.rateType === 'DRIVER' && (
+            {/* Entity Selection based on type */}
             <div>
-              <label className="block text-sm font-medium text-gray-700 mb-1">Driver</label>
+              <label className="block text-sm font-medium text-gray-700 mb-1">
+                {rateFormData.rateType === 'DRIVER' ? 'Driver' : 'Carrier'}
+              </label>
+              {rateFormData.rateType === 'DRIVER' ? (
+                <select
+                  value={rateFormData.entityId || ''}
+                  onChange={(e) => setRateFormData({ ...rateFormData, entityId: parseInt(e.target.value) || undefined })}
+                  className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-indigo-500"
+                  disabled={modalMode === 'edit'}
+                >
+                  <option value="">Select driver...</option>
+                  {[...drivers].sort((a, b) => (a.name || '').localeCompare(b.name || '')).map(d => (
+                    <option key={d.id} value={d.id}>{d.name} {d.number ? `(#${d.number})` : ''}</option>
+                  ))}
+                </select>
+              ) : (
+                <select
+                  value={rateFormData.entityId || ''}
+                  onChange={(e) => setRateFormData({ ...rateFormData, entityId: parseInt(e.target.value) || undefined })}
+                  className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-indigo-500"
+                  disabled={modalMode === 'edit'}
+                >
+                  <option value="">Select carrier...</option>
+                  {[...carriers].sort((a, b) => (a.name || '').localeCompare(b.name || '')).map(c => (
+                    <option key={c.id} value={c.id}>{c.name}</option>
+                  ))}
+                </select>
+              )}
+            </div>
+
+            {/* Rate Method */}
+            <div>
+              <label className="block text-sm font-medium text-gray-700 mb-1">Rate Method</label>
               <select
-                value={rateFormData.entityId || ''}
-                onChange={(e) => setRateFormData({ ...rateFormData, entityId: parseInt(e.target.value) || undefined })}
+                value={rateFormData.rateMethod}
+                onChange={(e) => setRateFormData({
+                  ...rateFormData,
+                  rateMethod: e.target.value as RateMethod,
+                  linehaulProfileId: e.target.value !== 'LINEHAUL_PROFILE' ? undefined : rateFormData.linehaulProfileId
+                })}
                 className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-indigo-500"
-                disabled={modalMode === 'edit'}
               >
-                <option value="">Select driver...</option>
-                {[...drivers].sort((a, b) => (a.name || '').localeCompare(b.name || '')).map(d => (
-                  <option key={d.id} value={d.id}>{d.name} {d.number ? `(#${d.number})` : ''}</option>
+                {RATE_METHODS.map(method => (
+                  <option key={method.value} value={method.value}>{method.label}</option>
                 ))}
               </select>
             </div>
-          )}
+          </div>
 
-          {rateFormData.rateType === 'CARRIER' && (
-            <div>
-              <label className="block text-sm font-medium text-gray-700 mb-1">Carrier</label>
-              <select
-                value={rateFormData.entityId || ''}
-                onChange={(e) => setRateFormData({ ...rateFormData, entityId: parseInt(e.target.value) || undefined })}
-                className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-indigo-500"
-                disabled={modalMode === 'edit'}
-              >
-                <option value="">Select carrier...</option>
-                {[...carriers].sort((a, b) => (a.name || '').localeCompare(b.name || '')).map(c => (
-                  <option key={c.id} value={c.id}>{c.name}</option>
-                ))}
-              </select>
-            </div>
-          )}
-
-          {rateFormData.rateType === 'LINEHAUL' && (
+          {/* Linehaul Profile Selection (when rate method is Linehaul Profile) */}
+          {rateFormData.rateMethod === 'LINEHAUL_PROFILE' && (
             <div>
               <label className="block text-sm font-medium text-gray-700 mb-1">Linehaul Profile</label>
               <select
@@ -1074,91 +1114,8 @@ export const PayRules: React.FC = () => {
             </div>
           )}
 
-          {rateFormData.rateType === 'OD_PAIR' && (
-            <div className="grid grid-cols-2 gap-4">
-              <div>
-                <label className="block text-sm font-medium text-gray-700 mb-1">Origin Terminal</label>
-                <select
-                  value={rateFormData.originTerminalId || ''}
-                  onChange={(e) => setRateFormData({ ...rateFormData, originTerminalId: parseInt(e.target.value) || undefined })}
-                  className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-indigo-500"
-                  disabled={modalMode === 'edit'}
-                >
-                  <option value="">Select origin...</option>
-                  {[...terminals].sort((a, b) => (a.code || '').localeCompare(b.code || '')).map(t => (
-                    <option key={t.id} value={t.id}>{t.code} - {t.name}</option>
-                  ))}
-                </select>
-              </div>
-              <div>
-                <label className="block text-sm font-medium text-gray-700 mb-1">Destination Terminal</label>
-                <select
-                  value={rateFormData.destinationTerminalId || ''}
-                  onChange={(e) => setRateFormData({ ...rateFormData, destinationTerminalId: parseInt(e.target.value) || undefined })}
-                  className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-indigo-500"
-                  disabled={modalMode === 'edit'}
-                >
-                  <option value="">Select destination...</option>
-                  {[...terminals].sort((a, b) => (a.code || '').localeCompare(b.code || '')).map(t => (
-                    <option key={t.id} value={t.id}>{t.code} - {t.name}</option>
-                  ))}
-                </select>
-              </div>
-            </div>
-          )}
-
-          {/* Rate Details */}
-          <div className="grid grid-cols-2 gap-4">
-            <div>
-              <label className="block text-sm font-medium text-gray-700 mb-1">Rate Method</label>
-              <select
-                value={rateFormData.rateMethod}
-                onChange={(e) => setRateFormData({ ...rateFormData, rateMethod: e.target.value as RateMethod })}
-                className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-indigo-500"
-              >
-                {RATE_METHODS.map(method => (
-                  <option key={method.value} value={method.value}>{method.label}</option>
-                ))}
-              </select>
-            </div>
-            <div>
-              <label className="block text-sm font-medium text-gray-700 mb-1">Rate Amount</label>
-              <input
-                type="number"
-                step="0.01"
-                value={rateFormData.rateAmount}
-                onChange={(e) => setRateFormData({ ...rateFormData, rateAmount: parseFloat(e.target.value) || 0 })}
-                className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-indigo-500"
-              />
-            </div>
-          </div>
-
-          <div className="grid grid-cols-2 gap-4">
-            <div>
-              <label className="block text-sm font-medium text-gray-700 mb-1">Minimum Amount</label>
-              <input
-                type="number"
-                step="0.01"
-                value={rateFormData.minimumAmount || ''}
-                onChange={(e) => setRateFormData({ ...rateFormData, minimumAmount: e.target.value ? parseFloat(e.target.value) : undefined })}
-                placeholder="Optional"
-                className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-indigo-500"
-              />
-            </div>
-            <div>
-              <label className="block text-sm font-medium text-gray-700 mb-1">Maximum Amount</label>
-              <input
-                type="number"
-                step="0.01"
-                value={rateFormData.maximumAmount || ''}
-                onChange={(e) => setRateFormData({ ...rateFormData, maximumAmount: e.target.value ? parseFloat(e.target.value) : undefined })}
-                placeholder="Optional"
-                className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-indigo-500"
-              />
-            </div>
-          </div>
-
-          <div className="grid grid-cols-2 gap-4">
+          {/* Row 2: Dates, Priority, Active, Auto Arrive */}
+          <div className="grid grid-cols-5 gap-4">
             <div>
               <label className="block text-sm font-medium text-gray-700 mb-1">Effective Date</label>
               <input
@@ -1177,10 +1134,7 @@ export const PayRules: React.FC = () => {
                 className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-indigo-500"
               />
             </div>
-          </div>
-
-          <div className="grid grid-cols-2 gap-4">
-            <div className="flex items-center">
+            <div className="flex items-end pb-2">
               <label className="flex items-center space-x-2 cursor-pointer">
                 <input
                   type="checkbox"
@@ -1188,10 +1142,10 @@ export const PayRules: React.FC = () => {
                   onChange={(e) => setRateFormData({ ...rateFormData, priority: e.target.checked })}
                   className="w-4 h-4 text-green-600 rounded focus:ring-green-500"
                 />
-                <span className="text-sm font-medium text-gray-700">Priority (use this rate if multiple apply)</span>
+                <span className="text-sm text-gray-700">Priority</span>
               </label>
             </div>
-            <div className="flex items-center">
+            <div className="flex items-end pb-2">
               <label className="flex items-center space-x-2 cursor-pointer">
                 <input
                   type="checkbox"
@@ -1199,25 +1153,10 @@ export const PayRules: React.FC = () => {
                   onChange={(e) => setRateFormData({ ...rateFormData, active: e.target.checked })}
                   className="w-4 h-4 text-indigo-600 rounded focus:ring-indigo-500"
                 />
-                <span className="text-sm font-medium text-gray-700">Active</span>
+                <span className="text-sm text-gray-700">Active</span>
               </label>
             </div>
-          </div>
-
-          <div>
-            <label className="block text-sm font-medium text-gray-700 mb-1">Notes</label>
-            <textarea
-              value={rateFormData.notes || ''}
-              onChange={(e) => setRateFormData({ ...rateFormData, notes: e.target.value || undefined })}
-              rows={2}
-              className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-indigo-500"
-            />
-          </div>
-
-          {/* Flattened Pay Rule Fields */}
-          <div className="border-t pt-4 mt-4">
-            <h4 className="text-sm font-medium text-gray-700 mb-3">Behavioral Flags</h4>
-            <div className="grid grid-cols-2 gap-4">
+            <div className="flex items-end pb-2">
               <label className="flex items-center space-x-2 cursor-pointer">
                 <input
                   type="checkbox"
@@ -1230,9 +1169,10 @@ export const PayRules: React.FC = () => {
             </div>
           </div>
 
-          <div className="border-t pt-4 mt-4">
-            <h4 className="text-sm font-medium text-gray-700 mb-3">Flat/Trip Rates</h4>
-            <div className="grid grid-cols-2 gap-4">
+          {/* Rate Fields Section */}
+          <div className="border-t pt-4">
+            <div className="grid grid-cols-6 gap-3">
+              {/* Flat/Trip Rates */}
               <div>
                 <label className="block text-xs text-gray-500 mb-1">Per Trip ($)</label>
                 <input
@@ -1240,8 +1180,8 @@ export const PayRules: React.FC = () => {
                   step="0.01"
                   value={rateFormData.perTrip ?? ''}
                   onChange={(e) => setRateFormData({ ...rateFormData, perTrip: e.target.value ? parseFloat(e.target.value) : undefined })}
-                  placeholder="Optional"
-                  className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-indigo-500 text-sm"
+                  placeholder="0.00"
+                  className="w-full px-2 py-1.5 border border-gray-300 rounded-lg focus:ring-2 focus:ring-indigo-500 text-sm"
                 />
               </div>
               <div>
@@ -1251,25 +1191,19 @@ export const PayRules: React.FC = () => {
                   step="0.01"
                   value={rateFormData.perCutTrip ?? ''}
                   onChange={(e) => setRateFormData({ ...rateFormData, perCutTrip: e.target.value ? parseFloat(e.target.value) : undefined })}
-                  placeholder="Optional"
-                  className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-indigo-500 text-sm"
+                  placeholder="0.00"
+                  className="w-full px-2 py-1.5 border border-gray-300 rounded-lg focus:ring-2 focus:ring-indigo-500 text-sm"
                 />
               </div>
-            </div>
-          </div>
-
-          <div className="border-t pt-4 mt-4">
-            <h4 className="text-sm font-medium text-gray-700 mb-3">Cut Miles</h4>
-            <div className="grid grid-cols-2 gap-4">
               <div>
-                <label className="block text-xs text-gray-500 mb-1">Cut Miles Threshold</label>
+                <label className="block text-xs text-gray-500 mb-1">Cut Miles</label>
                 <input
                   type="number"
                   step="0.1"
                   value={rateFormData.cutMiles ?? ''}
                   onChange={(e) => setRateFormData({ ...rateFormData, cutMiles: e.target.value ? parseFloat(e.target.value) : undefined })}
-                  placeholder="Optional"
-                  className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-indigo-500 text-sm"
+                  placeholder="0.0"
+                  className="w-full px-2 py-1.5 border border-gray-300 rounded-lg focus:ring-2 focus:ring-indigo-500 text-sm"
                 />
               </div>
               <div>
@@ -1278,122 +1212,10 @@ export const PayRules: React.FC = () => {
                   type="text"
                   value={rateFormData.cutMilesType ?? ''}
                   onChange={(e) => setRateFormData({ ...rateFormData, cutMilesType: e.target.value || undefined })}
-                  placeholder="Optional"
-                  className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-indigo-500 text-sm"
+                  placeholder="Type"
+                  className="w-full px-2 py-1.5 border border-gray-300 rounded-lg focus:ring-2 focus:ring-indigo-500 text-sm"
                 />
               </div>
-            </div>
-          </div>
-
-          <div className="border-t pt-4 mt-4">
-            <h4 className="text-sm font-medium text-gray-700 mb-3">Mileage Rates ($/mi)</h4>
-            <div className="grid grid-cols-3 gap-4">
-              <div>
-                <label className="block text-xs text-gray-500 mb-1">Single</label>
-                <input
-                  type="number"
-                  step="0.0001"
-                  value={rateFormData.perSingleMile ?? ''}
-                  onChange={(e) => setRateFormData({ ...rateFormData, perSingleMile: e.target.value ? parseFloat(e.target.value) : undefined })}
-                  placeholder="0.0000"
-                  className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-indigo-500 text-sm"
-                />
-              </div>
-              <div>
-                <label className="block text-xs text-gray-500 mb-1">Double</label>
-                <input
-                  type="number"
-                  step="0.0001"
-                  value={rateFormData.perDoubleMile ?? ''}
-                  onChange={(e) => setRateFormData({ ...rateFormData, perDoubleMile: e.target.value ? parseFloat(e.target.value) : undefined })}
-                  placeholder="0.0000"
-                  className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-indigo-500 text-sm"
-                />
-              </div>
-              <div>
-                <label className="block text-xs text-gray-500 mb-1">Triple</label>
-                <input
-                  type="number"
-                  step="0.0001"
-                  value={rateFormData.perTripleMile ?? ''}
-                  onChange={(e) => setRateFormData({ ...rateFormData, perTripleMile: e.target.value ? parseFloat(e.target.value) : undefined })}
-                  placeholder="0.0000"
-                  className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-indigo-500 text-sm"
-                />
-              </div>
-            </div>
-          </div>
-
-          <div className="border-t pt-4 mt-4">
-            <h4 className="text-sm font-medium text-gray-700 mb-3">Hourly Rates ($/hr)</h4>
-            <div className="grid grid-cols-2 gap-4">
-              <div>
-                <label className="block text-xs text-gray-500 mb-1">Work Hour</label>
-                <input
-                  type="number"
-                  step="0.01"
-                  value={rateFormData.perWorkHour ?? ''}
-                  onChange={(e) => setRateFormData({ ...rateFormData, perWorkHour: e.target.value ? parseFloat(e.target.value) : undefined })}
-                  placeholder="0.00"
-                  className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-indigo-500 text-sm"
-                />
-              </div>
-              <div>
-                <label className="block text-xs text-gray-500 mb-1">Stop Hour</label>
-                <input
-                  type="number"
-                  step="0.01"
-                  value={rateFormData.perStopHour ?? ''}
-                  onChange={(e) => setRateFormData({ ...rateFormData, perStopHour: e.target.value ? parseFloat(e.target.value) : undefined })}
-                  placeholder="0.00"
-                  className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-indigo-500 text-sm"
-                />
-              </div>
-            </div>
-          </div>
-
-          <div className="border-t pt-4 mt-4">
-            <h4 className="text-sm font-medium text-gray-700 mb-3">Drop & Hook Rates ($)</h4>
-            <div className="grid grid-cols-3 gap-4">
-              <div>
-                <label className="block text-xs text-gray-500 mb-1">Single</label>
-                <input
-                  type="number"
-                  step="0.01"
-                  value={rateFormData.perSingleDH ?? ''}
-                  onChange={(e) => setRateFormData({ ...rateFormData, perSingleDH: e.target.value ? parseFloat(e.target.value) : undefined })}
-                  placeholder="0.00"
-                  className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-indigo-500 text-sm"
-                />
-              </div>
-              <div>
-                <label className="block text-xs text-gray-500 mb-1">Double</label>
-                <input
-                  type="number"
-                  step="0.01"
-                  value={rateFormData.perDoubleDH ?? ''}
-                  onChange={(e) => setRateFormData({ ...rateFormData, perDoubleDH: e.target.value ? parseFloat(e.target.value) : undefined })}
-                  placeholder="0.00"
-                  className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-indigo-500 text-sm"
-                />
-              </div>
-              <div>
-                <label className="block text-xs text-gray-500 mb-1">Triple</label>
-                <input
-                  type="number"
-                  step="0.01"
-                  value={rateFormData.perTripleDH ?? ''}
-                  onChange={(e) => setRateFormData({ ...rateFormData, perTripleDH: e.target.value ? parseFloat(e.target.value) : undefined })}
-                  placeholder="0.00"
-                  className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-indigo-500 text-sm"
-                />
-              </div>
-            </div>
-          </div>
-
-          <div className="border-t pt-4 mt-4">
-            <h4 className="text-sm font-medium text-gray-700 mb-3">Other Rates</h4>
-            <div className="grid grid-cols-2 gap-4">
               <div>
                 <label className="block text-xs text-gray-500 mb-1">Chain Up ($)</label>
                 <input
@@ -1402,7 +1224,7 @@ export const PayRules: React.FC = () => {
                   value={rateFormData.perChainUp ?? ''}
                   onChange={(e) => setRateFormData({ ...rateFormData, perChainUp: e.target.value ? parseFloat(e.target.value) : undefined })}
                   placeholder="0.00"
-                  className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-indigo-500 text-sm"
+                  className="w-full px-2 py-1.5 border border-gray-300 rounded-lg focus:ring-2 focus:ring-indigo-500 text-sm"
                 />
               </div>
               <div>
@@ -1416,13 +1238,136 @@ export const PayRules: React.FC = () => {
                     fuelSurcharge: e.target.value ? parseFloat(e.target.value) / 100 : undefined
                   })}
                   placeholder="0.00"
-                  className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-indigo-500 text-sm"
+                  className="w-full px-2 py-1.5 border border-gray-300 rounded-lg focus:ring-2 focus:ring-indigo-500 text-sm"
                 />
               </div>
             </div>
           </div>
 
-          <div className="flex justify-end space-x-3 pt-4">
+          {/* Mileage Rates */}
+          <div className="border-t pt-4">
+            <h4 className="text-xs font-medium text-gray-500 mb-2 uppercase tracking-wide">Mileage Rates ($/mi)</h4>
+            <div className="grid grid-cols-3 gap-3">
+              <div>
+                <label className="block text-xs text-gray-500 mb-1">Single</label>
+                <input
+                  type="number"
+                  step="0.0001"
+                  value={rateFormData.perSingleMile ?? ''}
+                  onChange={(e) => setRateFormData({ ...rateFormData, perSingleMile: e.target.value ? parseFloat(e.target.value) : undefined })}
+                  placeholder="0.0000"
+                  className="w-full px-2 py-1.5 border border-gray-300 rounded-lg focus:ring-2 focus:ring-indigo-500 text-sm"
+                />
+              </div>
+              <div>
+                <label className="block text-xs text-gray-500 mb-1">Double</label>
+                <input
+                  type="number"
+                  step="0.0001"
+                  value={rateFormData.perDoubleMile ?? ''}
+                  onChange={(e) => setRateFormData({ ...rateFormData, perDoubleMile: e.target.value ? parseFloat(e.target.value) : undefined })}
+                  placeholder="0.0000"
+                  className="w-full px-2 py-1.5 border border-gray-300 rounded-lg focus:ring-2 focus:ring-indigo-500 text-sm"
+                />
+              </div>
+              <div>
+                <label className="block text-xs text-gray-500 mb-1">Triple</label>
+                <input
+                  type="number"
+                  step="0.0001"
+                  value={rateFormData.perTripleMile ?? ''}
+                  onChange={(e) => setRateFormData({ ...rateFormData, perTripleMile: e.target.value ? parseFloat(e.target.value) : undefined })}
+                  placeholder="0.0000"
+                  className="w-full px-2 py-1.5 border border-gray-300 rounded-lg focus:ring-2 focus:ring-indigo-500 text-sm"
+                />
+              </div>
+            </div>
+          </div>
+
+          {/* Hourly and Drop & Hook Rates */}
+          <div className="border-t pt-4">
+            <div className="grid grid-cols-2 gap-6">
+              <div>
+                <h4 className="text-xs font-medium text-gray-500 mb-2 uppercase tracking-wide">Hourly Rates ($/hr)</h4>
+                <div className="grid grid-cols-2 gap-3">
+                  <div>
+                    <label className="block text-xs text-gray-500 mb-1">Work Hour</label>
+                    <input
+                      type="number"
+                      step="0.01"
+                      value={rateFormData.perWorkHour ?? ''}
+                      onChange={(e) => setRateFormData({ ...rateFormData, perWorkHour: e.target.value ? parseFloat(e.target.value) : undefined })}
+                      placeholder="0.00"
+                      className="w-full px-2 py-1.5 border border-gray-300 rounded-lg focus:ring-2 focus:ring-indigo-500 text-sm"
+                    />
+                  </div>
+                  <div>
+                    <label className="block text-xs text-gray-500 mb-1">Stop Hour</label>
+                    <input
+                      type="number"
+                      step="0.01"
+                      value={rateFormData.perStopHour ?? ''}
+                      onChange={(e) => setRateFormData({ ...rateFormData, perStopHour: e.target.value ? parseFloat(e.target.value) : undefined })}
+                      placeholder="0.00"
+                      className="w-full px-2 py-1.5 border border-gray-300 rounded-lg focus:ring-2 focus:ring-indigo-500 text-sm"
+                    />
+                  </div>
+                </div>
+              </div>
+              <div>
+                <h4 className="text-xs font-medium text-gray-500 mb-2 uppercase tracking-wide">Drop & Hook Rates ($)</h4>
+                <div className="grid grid-cols-3 gap-3">
+                  <div>
+                    <label className="block text-xs text-gray-500 mb-1">Single</label>
+                    <input
+                      type="number"
+                      step="0.01"
+                      value={rateFormData.perSingleDH ?? ''}
+                      onChange={(e) => setRateFormData({ ...rateFormData, perSingleDH: e.target.value ? parseFloat(e.target.value) : undefined })}
+                      placeholder="0.00"
+                      className="w-full px-2 py-1.5 border border-gray-300 rounded-lg focus:ring-2 focus:ring-indigo-500 text-sm"
+                    />
+                  </div>
+                  <div>
+                    <label className="block text-xs text-gray-500 mb-1">Double</label>
+                    <input
+                      type="number"
+                      step="0.01"
+                      value={rateFormData.perDoubleDH ?? ''}
+                      onChange={(e) => setRateFormData({ ...rateFormData, perDoubleDH: e.target.value ? parseFloat(e.target.value) : undefined })}
+                      placeholder="0.00"
+                      className="w-full px-2 py-1.5 border border-gray-300 rounded-lg focus:ring-2 focus:ring-indigo-500 text-sm"
+                    />
+                  </div>
+                  <div>
+                    <label className="block text-xs text-gray-500 mb-1">Triple</label>
+                    <input
+                      type="number"
+                      step="0.01"
+                      value={rateFormData.perTripleDH ?? ''}
+                      onChange={(e) => setRateFormData({ ...rateFormData, perTripleDH: e.target.value ? parseFloat(e.target.value) : undefined })}
+                      placeholder="0.00"
+                      className="w-full px-2 py-1.5 border border-gray-300 rounded-lg focus:ring-2 focus:ring-indigo-500 text-sm"
+                    />
+                  </div>
+                </div>
+              </div>
+            </div>
+          </div>
+
+          {/* Notes */}
+          <div className="border-t pt-4">
+            <label className="block text-sm font-medium text-gray-700 mb-1">Notes</label>
+            <input
+              type="text"
+              value={rateFormData.notes || ''}
+              onChange={(e) => setRateFormData({ ...rateFormData, notes: e.target.value || undefined })}
+              placeholder="Optional notes..."
+              className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-indigo-500"
+            />
+          </div>
+
+          <div className="flex justify-end space-x-3 pt-4 border-t">
             <button
               onClick={() => setIsRateModalOpen(false)}
               className="px-4 py-2 text-gray-700 border border-gray-300 rounded-lg hover:bg-gray-50"
