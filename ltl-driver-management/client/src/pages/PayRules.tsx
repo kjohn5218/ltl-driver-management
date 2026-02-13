@@ -519,9 +519,9 @@ export const PayRules: React.FC = () => {
       cell: (rc: RateCard) => (
         <button
           onClick={() => toggleRowExpand(rc.id)}
-          className="p-1 text-gray-400 hover:text-gray-600"
+          className="p-0.5 text-gray-400 hover:text-gray-600"
         >
-          {expandedRows.has(rc.id) ? <ChevronUp className="w-4 h-4" /> : <ChevronDown className="w-4 h-4" />}
+          {expandedRows.has(rc.id) ? <ChevronUp className="w-3 h-3" /> : <ChevronDown className="w-3 h-3" />}
         </button>
       )
     },
@@ -531,185 +531,148 @@ export const PayRules: React.FC = () => {
       sortKey: 'rateType',
       cell: (rc: RateCard) => {
         const typeConfig: Record<string, { bg: string; text: string; label: string }> = {
-          'DRIVER': { bg: 'bg-blue-100', text: 'text-blue-700', label: 'Driver' },
-          'CARRIER': { bg: 'bg-green-100', text: 'text-green-700', label: 'Carrier' },
-          'OD_PAIR': { bg: 'bg-purple-100', text: 'text-purple-700', label: 'O/D' },
-          'LINEHAUL': { bg: 'bg-orange-100', text: 'text-orange-700', label: 'Linehaul' },
-          'DEFAULT': { bg: 'bg-gray-100', text: 'text-gray-700', label: 'Default' }
+          'DRIVER': { bg: 'bg-blue-100', text: 'text-blue-700', label: 'D' },
+          'CARRIER': { bg: 'bg-green-100', text: 'text-green-700', label: 'C' },
+          'OD_PAIR': { bg: 'bg-purple-100', text: 'text-purple-700', label: 'OD' },
+          'LINEHAUL': { bg: 'bg-orange-100', text: 'text-orange-700', label: 'LH' },
+          'DEFAULT': { bg: 'bg-gray-100', text: 'text-gray-700', label: 'Def' }
         };
         const cfg = typeConfig[rc.rateType] || typeConfig['DEFAULT'];
         return (
-          <span className={`px-2 py-0.5 text-xs font-medium rounded ${cfg.bg} ${cfg.text}`}>
+          <span className={`px-1.5 py-0.5 text-xs font-medium rounded ${cfg.bg} ${cfg.text}`} title={rc.rateType}>
             {cfg.label}
           </span>
         );
       }
     },
     {
-      header: 'Driver Name',
+      header: 'Driver',
       accessor: 'entityId' as keyof RateCard,
       sortKey: 'driverName',
       cell: (rc: RateCard) => {
-        // For DRIVER types, show driver from API or notes
         if (rc.rateType === 'DRIVER') {
           const name = rc.driver?.name || parseNotesInfo(rc.notes).driverName;
-          return <span className="font-medium text-gray-900">{name || '-'}</span>;
+          const num = rc.driver?.number;
+          return (
+            <div className="text-xs">
+              <div className="font-medium text-gray-900 truncate max-w-[100px]" title={name || ''}>{name || '-'}</div>
+              {num && <div className="text-gray-500">#{num}</div>}
+            </div>
+          );
         }
-        // For OD_PAIR types, show driver from notes if present (driver-specific lane rate)
         if (rc.rateType === 'OD_PAIR') {
           const name = parseNotesInfo(rc.notes).driverName;
-          if (name) {
-            return <span className="font-medium text-blue-600">{name}</span>;
-          }
+          if (name) return <span className="text-xs font-medium text-blue-600 truncate max-w-[100px]" title={name}>{name}</span>;
         }
-        return <span className="text-gray-400">-</span>;
+        return <span className="text-gray-400 text-xs">-</span>;
       }
     },
     {
-      header: 'Driver #',
-      accessor: 'id' as keyof RateCard,
-      sortKey: 'driverNumber',
-      cell: (rc: RateCard) => {
-        if (rc.rateType !== 'DRIVER') return <span className="text-gray-400">-</span>;
-        return <span className="text-gray-600">{rc.driver?.number || '-'}</span>;
-      }
-    },
-    {
-      header: 'Employer/Carrier',
+      header: 'Carrier',
       accessor: 'carrier' as keyof RateCard,
       sortKey: 'employer',
       cell: (rc: RateCard) => {
-        // For DRIVER types, show the driver's carrier (employer) or from notes
+        let name = '';
         if (rc.rateType === 'DRIVER') {
-          const employer = rc.driver?.carrier?.name || parseNotesInfo(rc.notes).employer;
-          return <span className="text-gray-700">{employer || '-'}</span>;
+          name = rc.driver?.carrier?.name || parseNotesInfo(rc.notes).employer || '';
+        } else if ((rc.rateType === 'CARRIER' || rc.rateType === 'OD_PAIR') && rc.carrier?.name) {
+          name = rc.carrier.name;
+        } else if (rc.rateType === 'OD_PAIR') {
+          name = parseNotesInfo(rc.notes).employer || '';
         }
-        // For CARRIER or OD_PAIR types, show the carrier name
-        if ((rc.rateType === 'CARRIER' || rc.rateType === 'OD_PAIR') && rc.carrier?.name) {
-          return <span className="text-gray-700">{rc.carrier.name}</span>;
-        }
-        // Try to get from notes for OD_PAIR
-        if (rc.rateType === 'OD_PAIR') {
-          const employer = parseNotesInfo(rc.notes).employer;
-          return <span className="text-gray-700">{employer || '-'}</span>;
-        }
-        return <span className="text-gray-400">-</span>;
+        if (!name) return <span className="text-gray-400 text-xs">-</span>;
+        return <span className="text-xs text-gray-700 truncate max-w-[80px]" title={name}>{name}</span>;
       }
     },
     {
-      header: 'Linehaul Profile',
+      header: 'Profile',
       accessor: 'linehaulProfileId' as keyof RateCard,
       sortKey: 'linehaulProfile',
       cell: (rc: RateCard) => {
-        if (rc.linehaulProfile) {
-          return (
-            <span className="font-mono text-sm text-orange-600">
-              {rc.linehaulProfile.profileCode || rc.linehaulProfile.name}
-            </span>
-          );
-        }
+        const code = rc.linehaulProfile?.profileCode || rc.linehaulProfile?.name;
+        if (code) return <span className="text-xs font-mono text-orange-600">{code}</span>;
         if (rc.linehaulProfileId) {
           const profile = profiles.find(p => p.id === rc.linehaulProfileId);
-          if (profile) {
-            return <span className="font-mono text-sm text-orange-600">{profile.profileCode || profile.name}</span>;
-          }
-          return <span className="text-gray-400">Profile #{rc.linehaulProfileId}</span>;
+          if (profile) return <span className="text-xs font-mono text-orange-600">{profile.profileCode || profile.name}</span>;
         }
-        return <span className="text-gray-400">-</span>;
+        return <span className="text-gray-400 text-xs">-</span>;
       }
     },
     {
-      header: 'Origin',
+      header: 'O/D',
       accessor: 'originTerminalId' as keyof RateCard,
       sortKey: 'origin',
       cell: (rc: RateCard) => {
-        // Try terminal from API first, then fallback to notes for any rate type
-        const code = rc.originTerminal?.code || parseODFromNotes(rc.notes).origin;
-        if (!code) return <span className="text-gray-400">-</span>;
-        return <span className="font-mono text-sm text-purple-600">{code}</span>;
+        const origin = rc.originTerminal?.code || parseODFromNotes(rc.notes).origin;
+        const dest = rc.destinationTerminal?.code || parseODFromNotes(rc.notes).dest;
+        if (!origin && !dest) return <span className="text-gray-400 text-xs">-</span>;
+        return (
+          <span className="text-xs font-mono text-purple-600">
+            {origin || '?'}→{dest || '?'}
+          </span>
+        );
       }
     },
     {
-      header: 'Dest',
-      accessor: 'destinationTerminalId' as keyof RateCard,
-      sortKey: 'dest',
-      cell: (rc: RateCard) => {
-        // Try terminal from API first, then fallback to notes for any rate type
-        const code = rc.destinationTerminal?.code || parseODFromNotes(rc.notes).dest;
-        if (!code) return <span className="text-gray-400">-</span>;
-        return <span className="font-mono text-sm text-purple-600">{code}</span>;
-      }
-    },
-    {
-      header: 'Per Trip',
+      header: 'Trip',
       accessor: 'perTrip' as keyof RateCard,
       sortKey: 'perTrip',
       cell: (rc: RateCard) => {
         const trip = rc.perTrip;
         const cutTrip = rc.perCutTrip;
-        if (!trip && !cutTrip) return <span className="text-gray-400">-</span>;
+        if (!trip && !cutTrip) return <span className="text-gray-400 text-xs">-</span>;
         return (
-          <div className="text-sm">
-            {trip && <div className="font-medium text-green-600">{formatRate(trip)}</div>}
-            {cutTrip && <div className="text-orange-600 text-xs">Cut: {formatRate(cutTrip)}</div>}
+          <div className="text-xs">
+            {trip && <div className="text-green-600">{formatRate(trip)}</div>}
+            {cutTrip && <div className="text-orange-500 text-[10px]">C:{formatRate(cutTrip)}</div>}
           </div>
         );
       }
     },
     {
-      header: 'Per Mile (S/D/T)',
+      header: '$/Mi S/D/T',
       accessor: 'perSingleMile' as keyof RateCard,
       sortKey: 'perMile',
       cell: (rc: RateCard) => {
         const s = rc.perSingleMile;
         const d = rc.perDoubleMile;
         const t = rc.perTripleMile;
-        if (!s && !d && !t) return <span className="text-gray-400">-</span>;
+        if (!s && !d && !t) return <span className="text-gray-400 text-xs">-</span>;
         return (
-          <div className="text-xs font-mono">
-            <span className="text-gray-700">{s ? formatRate(s) : '-'}</span>
-            <span className="text-gray-400"> / </span>
-            <span className="text-gray-700">{d ? formatRate(d) : '-'}</span>
-            <span className="text-gray-400"> / </span>
-            <span className="text-gray-700">{t ? formatRate(t) : '-'}</span>
-          </div>
+          <span className="text-[10px] font-mono text-gray-700">
+            {s ? Number(s).toFixed(2) : '-'}/{d ? Number(d).toFixed(2) : '-'}/{t ? Number(t).toFixed(2) : '-'}
+          </span>
         );
       }
     },
     {
-      header: 'Per Hour (Work/Stop)',
+      header: '$/Hr W/S',
       accessor: 'perWorkHour' as keyof RateCard,
       sortKey: 'perHour',
       cell: (rc: RateCard) => {
         const work = rc.perWorkHour;
         const stop = rc.perStopHour;
-        if (!work && !stop) return <span className="text-gray-400">-</span>;
+        if (!work && !stop) return <span className="text-gray-400 text-xs">-</span>;
         return (
-          <div className="text-xs font-mono">
-            <span className="text-blue-600">{work ? formatRate(work) : '-'}</span>
-            <span className="text-gray-400"> / </span>
-            <span className="text-blue-600">{stop ? formatRate(stop) : '-'}</span>
-          </div>
+          <span className="text-[10px] font-mono text-blue-600">
+            {work ? Number(work).toFixed(0) : '-'}/{stop ? Number(stop).toFixed(0) : '-'}
+          </span>
         );
       }
     },
     {
-      header: 'D/H (S/D/T)',
+      header: 'D&H S/D/T',
       accessor: 'perSingleDH' as keyof RateCard,
       sortKey: null as string | null,
       cell: (rc: RateCard) => {
         const s = rc.perSingleDH;
         const d = rc.perDoubleDH;
         const t = rc.perTripleDH;
-        if (!s && !d && !t) return <span className="text-gray-400">-</span>;
+        if (!s && !d && !t) return <span className="text-gray-400 text-xs">-</span>;
         return (
-          <div className="text-xs font-mono">
-            <span className="text-purple-600">{s ? formatRate(s) : '-'}</span>
-            <span className="text-gray-400"> / </span>
-            <span className="text-purple-600">{d ? formatRate(d) : '-'}</span>
-            <span className="text-gray-400"> / </span>
-            <span className="text-purple-600">{t ? formatRate(t) : '-'}</span>
-          </div>
+          <span className="text-[10px] font-mono text-purple-600">
+            {s ? Number(s).toFixed(0) : '-'}/{d ? Number(d).toFixed(0) : '-'}/{t ? Number(t).toFixed(0) : '-'}
+          </span>
         );
       }
     },
@@ -718,41 +681,22 @@ export const PayRules: React.FC = () => {
       accessor: 'fuelSurcharge' as keyof RateCard,
       sortKey: 'fsc',
       cell: (rc: RateCard) => {
-        // Check for fuel surcharge in notes
         const fsc = parseNotesInfo(rc.notes).fuelSurcharge;
-        // Also check the fuelSurcharge field itself
         const fscValue = rc.fuelSurcharge;
-        if (fsc) {
-          return <span className="text-xs font-mono text-teal-600">{fsc}</span>;
-        }
-        if (fscValue) {
-          return <span className="text-xs text-teal-600">{Number(fscValue).toFixed(2)}%</span>;
-        }
-        return <span className="text-gray-400">-</span>;
+        if (fsc) return <span className="text-[10px] font-mono text-teal-600">{fsc}</span>;
+        if (fscValue) return <span className="text-[10px] text-teal-600">{Number(fscValue).toFixed(1)}%</span>;
+        return <span className="text-gray-400 text-xs">-</span>;
       }
     },
     {
-      header: 'Priority',
+      header: '',
       accessor: 'priority' as keyof RateCard,
       sortKey: 'priority',
       cell: (rc: RateCard) => (
-        <span className={`px-2 py-0.5 text-xs font-medium rounded ${
-          rc.priority ? 'bg-yellow-100 text-yellow-700' : 'bg-gray-100 text-gray-500'
-        }`}>
-          {rc.priority ? 'Yes' : 'No'}
-        </span>
-      )
-    },
-    {
-      header: 'Status',
-      accessor: 'active' as keyof RateCard,
-      sortKey: 'active',
-      cell: (rc: RateCard) => (
-        <span className={`px-2 py-1 text-xs font-medium rounded-full ${
-          rc.active ? 'bg-green-100 text-green-700' : 'bg-gray-100 text-gray-500'
-        }`}>
-          {rc.active ? 'Active' : 'Inactive'}
-        </span>
+        <div className="flex items-center gap-1">
+          {rc.priority && <span className="w-2 h-2 rounded-full bg-yellow-400" title="Priority" />}
+          <span className={`w-2 h-2 rounded-full ${rc.active ? 'bg-green-500' : 'bg-gray-300'}`} title={rc.active ? 'Active' : 'Inactive'} />
+        </div>
       )
     },
     ...(isAdmin ? [{
@@ -791,9 +735,9 @@ export const PayRules: React.FC = () => {
 
     return (
       <tr key={`expanded-${rateCard.id}`} className="bg-gray-50">
-        <td colSpan={columns.length} className="px-6 py-4">
-          <div className="ml-8">
-            <h4 className="text-sm font-medium text-gray-700 mb-3">Additional Details</h4>
+        <td colSpan={columns.length} className="px-3 py-3">
+          <div className="ml-4">
+            <h4 className="text-xs font-medium text-gray-700 mb-2">Additional Details</h4>
             <div className="grid grid-cols-2 md:grid-cols-4 lg:grid-cols-6 gap-3">
               {rateCard.autoArrive && (
                 <div className="bg-blue-50 border border-blue-200 rounded-lg p-2 text-center">
@@ -969,7 +913,7 @@ export const PayRules: React.FC = () => {
                 {columns.map((col, idx) => (
                   <th
                     key={idx}
-                    className={`px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider ${
+                    className={`px-2 py-2 text-left text-[10px] font-medium text-gray-500 uppercase tracking-wide ${
                       col.sortKey ? 'cursor-pointer hover:bg-gray-100 select-none' : ''
                     }`}
                     onClick={() => col.sortKey && handleSort(col.sortKey)}
@@ -999,7 +943,7 @@ export const PayRules: React.FC = () => {
                 <React.Fragment key={rc.id}>
                   <tr className={`hover:bg-gray-50 ${expandedRows.has(rc.id) ? 'bg-indigo-50' : ''}`}>
                     {columns.map((col, idx) => (
-                      <td key={idx} className="px-6 py-4 whitespace-nowrap">
+                      <td key={idx} className="px-2 py-2 whitespace-nowrap">
                         {col.cell(rc)}
                       </td>
                     ))}
