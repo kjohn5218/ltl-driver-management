@@ -95,9 +95,9 @@ const loadsheetToLoadItem = (loadsheet: Loadsheet, index: number): LoadItem => {
   // Current load is now weight-based (in lbs)
   const currentLoad = Math.round(trailerCapacity * loadPercentage);
 
-  // Use actual loadsheet pieces/weight if available, otherwise estimate
-  const weight = loadsheet.weight || currentLoad;
-  const pieces = loadsheet.pieces || Math.round(currentLoad / 50); // ~50 lbs per piece average
+  // Use actual loadsheet pieces/weight if available, otherwise show 0 (no estimate)
+  const weight = loadsheet.weight ?? 0;
+  const pieces = loadsheet.pieces ?? 0;
 
   return {
     id: loadsheet.id,
