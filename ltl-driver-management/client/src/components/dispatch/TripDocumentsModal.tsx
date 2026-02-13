@@ -50,6 +50,7 @@ export const TripDocumentsModal: React.FC<TripDocumentsModalProps> = ({
   const queryClient = useQueryClient();
   const [downloadingId, setDownloadingId] = useState<number | null>(null);
   const [printingId, setPrintingId] = useState<number | null>(null);
+  const [printingAll, setPrintingAll] = useState(false);
 
   // Fetch documents for the trip
   const { data, isLoading, error, refetch } = useQuery({
@@ -125,6 +126,26 @@ export const TripDocumentsModal: React.FC<TripDocumentsModalProps> = ({
       if (doc.status === 'GENERATED') {
         await handleDownload(doc);
       }
+    }
+  };
+
+  const handlePrintAll = async () => {
+    if (!data?.documents) return;
+
+    setPrintingAll(true);
+    try {
+      const generatedDocs = data.documents.filter(d => d.status === 'GENERATED');
+
+      for (const doc of generatedDocs) {
+        await tripDocumentService.printDocument(doc.id);
+        // Small delay between opening tabs to prevent browser blocking
+        await new Promise(resolve => setTimeout(resolve, 300));
+      }
+      toast.success(`Opened ${generatedDocs.length} document(s) for printing`);
+    } catch (err) {
+      toast.error('Failed to open documents for printing');
+    } finally {
+      setPrintingAll(false);
     }
   };
 
@@ -308,13 +329,27 @@ export const TripDocumentsModal: React.FC<TripDocumentsModalProps> = ({
           </button>
 
           {hasGeneratedDocs && (
-            <button
-              onClick={handleDownloadAll}
-              className="inline-flex items-center gap-2 px-4 py-2 bg-indigo-600 text-white text-sm rounded-lg hover:bg-indigo-700"
-            >
-              <Download className="h-4 w-4" />
-              Download All
-            </button>
+            <div className="flex gap-2">
+              <button
+                onClick={handlePrintAll}
+                disabled={printingAll}
+                className="inline-flex items-center gap-2 px-4 py-2 border border-indigo-600 text-indigo-600 dark:text-indigo-400 dark:border-indigo-400 text-sm rounded-lg hover:bg-indigo-50 dark:hover:bg-indigo-900/20 disabled:opacity-50"
+              >
+                {printingAll ? (
+                  <Loader2 className="h-4 w-4 animate-spin" />
+                ) : (
+                  <Printer className="h-4 w-4" />
+                )}
+                Print All
+              </button>
+              <button
+                onClick={handleDownloadAll}
+                className="inline-flex items-center gap-2 px-4 py-2 bg-indigo-600 text-white text-sm rounded-lg hover:bg-indigo-700"
+              >
+                <Download className="h-4 w-4" />
+                Download All
+              </button>
+            </div>
           )}
         </div>
       </div>

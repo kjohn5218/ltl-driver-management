@@ -156,7 +156,7 @@ export const DispatchTripModal: React.FC<DispatchTripModalProps> = ({
   const { data: driversData, isLoading: driversLoading } = useQuery({
     queryKey: ['drivers-dispatch'],
     queryFn: async () => {
-      const response = await driverService.getDrivers({ active: true, limit: 100 });
+      const response = await driverService.getDrivers({ active: true, limit: 2000 });
       return response;
     },
     enabled: isOpen
