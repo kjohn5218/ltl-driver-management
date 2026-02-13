@@ -31,6 +31,7 @@ import { clsx } from 'clsx';
 import { api } from '../../services/api';
 import { settingsService } from '../../services/settingsService';
 import { CutPayModal } from '../dispatch/CutPayModal';
+import { CreateLoadsheetModal } from '../loadsheet/CreateLoadsheetModal';
 
 interface SidebarProps {
   isOpen: boolean;
@@ -48,6 +49,7 @@ export const Sidebar: React.FC<SidebarProps> = ({ isOpen, onClose }) => {
   const [isSyncing, setIsSyncing] = useState(false);
   const [error, setError] = useState<string>('');
   const [isCutPayModalOpen, setIsCutPayModalOpen] = useState(false);
+  const [isCreateLoadsheetModalOpen, setIsCreateLoadsheetModalOpen] = useState(false);
 
   const navigation = [
     { name: 'Dashboard', href: '/dashboard', icon: Home },
@@ -58,7 +60,8 @@ export const Sidebar: React.FC<SidebarProps> = ({ isOpen, onClose }) => {
     { name: 'Enter Cut Pay', href: '#cut-pay', icon: Scissors, section: 'dispatch', isCutPay: true },
     { name: 'Transfer Scans', href: '/transfer-scans', icon: QrCode, section: 'dispatch' },
     { name: 'Print Hazmat BOL', href: '/print-hazmat-bol', icon: Printer, section: 'dispatch' },
-    { name: 'Create Loadsheet', href: '/dispatch?tab=loads&action=create', icon: FileSpreadsheet, section: 'dispatch' },
+    { name: 'Create Loadsheet', href: '#create-loadsheet', icon: FileSpreadsheet, section: 'dispatch', isCreateLoadsheet: true },
+    { name: 'Loadsheets', href: '/loadsheets', icon: FileSpreadsheet, section: 'dispatch' },
     { name: 'Equipment', href: '/equipment', icon: Package, section: 'dispatch' },
     // Core Management
     { name: 'Drivers', href: '/drivers', icon: User, section: 'management' },
@@ -241,6 +244,24 @@ export const Sidebar: React.FC<SidebarProps> = ({ isOpen, onClose }) => {
               );
             }
 
+            // Special rendering for Create Loadsheet item (opens modal)
+            if ((item as any).isCreateLoadsheet) {
+              return (
+                <React.Fragment key={item.name}>
+                  <button
+                    onClick={() => setIsCreateLoadsheetModalOpen(true)}
+                    className="w-full group flex items-center px-3 py-2.5 text-sm font-medium rounded-lg transition-colors text-gray-700 dark:text-gray-300 hover:bg-gray-50 dark:hover:bg-gray-700 hover:text-gray-900 dark:hover:text-white"
+                  >
+                    <FileSpreadsheet
+                      className="mr-3 h-5 w-5 flex-shrink-0 text-gray-500 dark:text-gray-400 group-hover:text-gray-700 dark:group-hover:text-gray-200"
+                      aria-hidden="true"
+                    />
+                    {item.name}
+                  </button>
+                </React.Fragment>
+              );
+            }
+
             // Special rendering for Fuel Surcharge item
             if ((item as any).isFuelSurcharge) {
               return (
@@ -404,6 +425,13 @@ export const Sidebar: React.FC<SidebarProps> = ({ isOpen, onClose }) => {
       <CutPayModal
         isOpen={isCutPayModalOpen}
         onClose={() => setIsCutPayModalOpen(false)}
+      />
+
+      {/* Create Loadsheet Modal */}
+      <CreateLoadsheetModal
+        isOpen={isCreateLoadsheetModalOpen}
+        onClose={() => setIsCreateLoadsheetModalOpen(false)}
+        onSuccess={() => setIsCreateLoadsheetModalOpen(false)}
       />
     </>
   );
