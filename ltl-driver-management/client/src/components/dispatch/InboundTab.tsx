@@ -4,7 +4,6 @@ import { linehaulTripService, EtaResult, VehicleLocationResult } from '../../ser
 import { loadsheetService } from '../../services/loadsheetService';
 import { locationService } from '../../services/locationService';
 import { LinehaulTrip, Loadsheet, TripStatus } from '../../types';
-import { LocationMultiSelect } from '../LocationMultiSelect';
 import { TripStatusBadge } from './TripStatusBadge';
 import { ManifestDetailsModal } from './ManifestDetailsModal';
 import { EditTripModal } from './EditTripModal';
@@ -76,13 +75,16 @@ interface InboundTripRow {
   eta?: EtaResult;
 }
 
-export const InboundTab: React.FC = () => {
+interface InboundTabProps {
+  selectedLocations?: number[];
+}
+
+export const InboundTab: React.FC<InboundTabProps> = ({ selectedLocations = [] }) => {
   const queryClient = useQueryClient();
   const [searchTerm, setSearchTerm] = useState('');
   const today = format(new Date(), 'yyyy-MM-dd');
   const [startDate, setStartDate] = useState(today);
   const [endDate, setEndDate] = useState(today);
-  const [selectedDestinations, setSelectedDestinations] = useState<number[]>([]);
   const [tripEtas, setTripEtas] = useState<Record<number, EtaResult>>({});
   const [showUnarrivedOnly, setShowUnarrivedOnly] = useState(false);
 
@@ -186,10 +188,10 @@ export const InboundTab: React.FC = () => {
         if (!unarrivedStatuses.includes(row.trip.status)) return false;
       }
 
-      // Apply destination filter
-      if (selectedDestinations.length > 0) {
-        const tripDestinationId = row.trip.destinationTerminalId;
-        if (!tripDestinationId || !selectedDestinations.includes(tripDestinationId)) return false;
+      // Apply location filter (matches destination for inbound)
+      if (selectedLocations.length > 0) {
+        const tripDestinationId = row.trip.linehaulProfile?.destinationTerminalId;
+        if (!tripDestinationId || !selectedLocations.includes(tripDestinationId)) return false;
       }
 
       // Then apply search filter
@@ -210,7 +212,7 @@ export const InboundTab: React.FC = () => {
 
       return false;
     });
-  }, [inboundRows, selectedDestinations, searchTerm, showUnarrivedOnly]);
+  }, [inboundRows, selectedLocations, searchTerm, showUnarrivedOnly]);
 
   // Handle column sort
   const handleSort = (column: SortColumn) => {
@@ -594,17 +596,6 @@ export const InboundTab: React.FC = () => {
               }}
             />
 
-            {/* Destination Filter */}
-            <div className="flex items-center gap-2">
-              <MapPin className="h-4 w-4 text-gray-400" />
-              <LocationMultiSelect
-                value={selectedDestinations}
-                onChange={setSelectedDestinations}
-                placeholder="Filter by destination..."
-                className="w-56"
-              />
-            </div>
-
             {/* Unarrived Only Filter */}
             <label className="flex items-center gap-2 cursor-pointer">
               <input
@@ -653,8 +644,8 @@ export const InboundTab: React.FC = () => {
             ) : (
               'All inbound trips'
             )}
-            {selectedDestinations.length > 0 && (
-              ` to ${selectedDestinations.map(id => locations.find(l => l.id === id)?.code).filter(Boolean).join(', ')}`
+            {selectedLocations.length > 0 && (
+              ` to ${selectedLocations.map(id => locations.find(l => l.id === id)?.code).filter(Boolean).join(', ')}`
             )}
           </p>
         </div>

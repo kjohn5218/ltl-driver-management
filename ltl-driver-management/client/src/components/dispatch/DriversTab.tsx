@@ -2,7 +2,6 @@ import React, { useState, useEffect, useCallback, useMemo } from 'react';
 import { DataTable, SortDirection } from '../common/DataTable';
 import { TablePagination } from '../common/TablePagination';
 import { Search } from '../common/Search';
-import { LocationMultiSelect } from '../LocationMultiSelect';
 import { CarrierDriver, DriverStatus, Carrier } from '../../types';
 import { driverService } from '../../services/driverService';
 import { carrierService } from '../../services/carrierService';
@@ -11,6 +10,7 @@ import { toast } from 'react-hot-toast';
 
 interface DriversTabProps {
   onDriverSelect?: (driver: CarrierDriver) => void;
+  selectedLocations?: number[];
 }
 
 // Available endorsement types
@@ -26,13 +26,12 @@ const formatDriverStatus = (status: string): string => {
   return status.replace(/_/g, ' ').toLowerCase().replace(/\b\w/g, l => l.toUpperCase());
 };
 
-export const DriversTab: React.FC<DriversTabProps> = ({ onDriverSelect }) => {
+export const DriversTab: React.FC<DriversTabProps> = ({ onDriverSelect, selectedLocations = [] }) => {
   const [drivers, setDrivers] = useState<CarrierDriver[]>([]);
   const [carriers, setCarriers] = useState<Carrier[]>([]);
   const [loading, setLoading] = useState(true);
   const [isSyncing, setIsSyncing] = useState(false);
   const [searchTerm, setSearchTerm] = useState('');
-  const [selectedLocations, setSelectedLocations] = useState<number[]>([]);
   const [currentPage, setCurrentPage] = useState(1);
   const [totalPages, setTotalPages] = useState(1);
   const [totalDrivers, setTotalDrivers] = useState(0);
@@ -173,13 +172,12 @@ export const DriversTab: React.FC<DriversTabProps> = ({ onDriverSelect }) => {
 
   const clearFilters = () => {
     setCarrierFilter('');
-    setSelectedLocations([]);
     setEndorsementFilter('');
     setAvailabilityFilter('');
     setCurrentPage(1);
   };
 
-  const hasActiveFilters = carrierFilter !== '' || selectedLocations.length > 0 || endorsementFilter !== '' || availabilityFilter !== '';
+  const hasActiveFilters = carrierFilter !== '' || endorsementFilter !== '' || availabilityFilter !== '';
 
   const columns = [
     {
@@ -342,17 +340,6 @@ export const DriversTab: React.FC<DriversTabProps> = ({ onDriverSelect }) => {
               </option>
             ))}
           </select>
-
-          {/* Location Filter */}
-          <div className="flex items-center gap-2">
-            <MapPin className="h-4 w-4 text-gray-400" />
-            <LocationMultiSelect
-              value={selectedLocations}
-              onChange={setSelectedLocations}
-              placeholder="Filter by location..."
-              className="w-56"
-            />
-          </div>
 
           {/* Endorsement Filter */}
           <select

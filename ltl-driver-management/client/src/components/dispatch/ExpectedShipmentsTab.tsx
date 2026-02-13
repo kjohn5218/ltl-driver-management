@@ -3,7 +3,6 @@ import { useQuery } from '@tanstack/react-query';
 import { expectedShipmentService } from '../../services/expectedShipmentService';
 import { locationService } from '../../services/locationService';
 import { ExpectedLaneVolume, ExpectedShipmentDetail } from '../../types';
-import { LocationMultiSelect } from '../LocationMultiSelect';
 import { DateRangePicker } from '../common/DateRangePicker';
 import {
   Package,
@@ -173,14 +172,17 @@ const LaneDetailsModal: React.FC<LaneDetailsModalProps> = ({
   );
 };
 
-export const ExpectedShipmentsTab: React.FC = () => {
+interface ExpectedShipmentsTabProps {
+  selectedLocations?: number[];
+}
+
+export const ExpectedShipmentsTab: React.FC<ExpectedShipmentsTabProps> = ({ selectedLocations = [] }) => {
   const today = format(new Date(), 'yyyy-MM-dd');
   const nextWeek = format(addDays(new Date(), 7), 'yyyy-MM-dd');
 
   const [startDate, setStartDate] = useState(today);
   const [endDate, setEndDate] = useState(nextWeek);
   const [searchTerm, setSearchTerm] = useState('');
-  const [selectedOrigins, setSelectedOrigins] = useState<number[]>([]);
   const [expandedLanes, setExpandedLanes] = useState<Set<string>>(new Set());
   const [aggregateView, setAggregateView] = useState(true);
 
@@ -200,10 +202,10 @@ export const ExpectedShipmentsTab: React.FC = () => {
 
   // Get selected origin codes for filtering
   const selectedOriginCodes = useMemo(() => {
-    return selectedOrigins
+    return selectedLocations
       .map(id => locations.find(l => l.id === id)?.code)
       .filter(Boolean) as string[];
-  }, [selectedOrigins, locations]);
+  }, [selectedLocations, locations]);
 
   // Fetch expected shipments from TMS
   const { data: shipmentsData, isLoading, refetch } = useQuery({
@@ -296,16 +298,6 @@ export const ExpectedShipmentsTab: React.FC = () => {
               endDate={endDate}
               onStartDateChange={setStartDate}
               onEndDateChange={setEndDate}
-            />
-          </div>
-
-          {/* Origin Filter */}
-          <div className="flex-shrink-0 min-w-[200px]">
-            <LocationMultiSelect
-              label=""
-              selectedIds={selectedOrigins}
-              onChange={setSelectedOrigins}
-              placeholder="Filter by origin..."
             />
           </div>
 

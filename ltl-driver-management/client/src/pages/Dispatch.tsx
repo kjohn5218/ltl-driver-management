@@ -19,6 +19,7 @@ import { InboundTab } from '../components/dispatch/InboundTab';
 import { ExpectedShipmentsTab } from '../components/dispatch/ExpectedShipmentsTab';
 import { DispatchTripModal } from '../components/dispatch/DispatchTripModal';
 import { ArriveTripModal } from '../components/dispatch/ArriveTripModal';
+import { LocationMultiSelect } from '../components/LocationMultiSelect';
 import {
   LinehaulTrip,
   LinehaulProfile,
@@ -60,6 +61,9 @@ export const Dispatch: React.FC = () => {
   const [dollies, setDollies] = useState<EquipmentDolly[]>([]);
   const [locations, setLocations] = useState<Location[]>([]);
   const [loading, setLoading] = useState(true);
+
+  // Global location filter state - shared across all tabs
+  const [selectedLocations, setSelectedLocations] = useState<number[]>([]);
 
   // Tab state - read from URL params
   const tabFromUrl = searchParams.get('tab') as DispatchTab | null;
@@ -420,87 +424,98 @@ export const Dispatch: React.FC = () => {
         subtitle="Manage linehaul trip dispatch and driver assignments"
       />
 
-      {/* Tabs */}
+      {/* Tabs and Location Filter */}
       <div className="bg-white shadow rounded-lg">
         <div className="border-b border-gray-200">
-          <nav className="flex -mb-px gap-1 p-1">
-            <button
-              onClick={() => handleTabChange('loads')}
-              className={`flex items-center px-6 py-3 text-sm font-medium rounded-t-lg transition-all ${
-                activeTab === 'loads'
-                  ? 'bg-purple-100 text-purple-700 border-b-2 border-purple-500'
-                  : 'bg-purple-50 text-purple-600 hover:bg-purple-100 border-b-2 border-transparent'
-              }`}
-            >
-              <Container className="w-4 h-4 mr-2" />
-              Loads
-            </button>
-            <button
-              onClick={() => handleTabChange('outbound')}
-              className={`flex items-center px-6 py-3 text-sm font-medium rounded-t-lg transition-all ${
-                activeTab === 'outbound'
-                  ? 'bg-green-100 text-green-700 border-b-2 border-green-500'
-                  : 'bg-green-50 text-green-600 hover:bg-green-100 border-b-2 border-transparent'
-              }`}
-            >
-              <LogOut className="w-4 h-4 mr-2" />
-              Outbound
-            </button>
-            <button
-              onClick={() => handleTabChange('inbound')}
-              className={`flex items-center px-6 py-3 text-sm font-medium rounded-t-lg transition-all ${
-                activeTab === 'inbound'
-                  ? 'bg-blue-100 text-blue-700 border-b-2 border-blue-500'
-                  : 'bg-blue-50 text-blue-600 hover:bg-blue-100 border-b-2 border-transparent'
-              }`}
-            >
-              <LogIn className="w-4 h-4 mr-2" />
-              Inbound
-            </button>
-            <button
-              onClick={() => handleTabChange('drivers')}
-              className={`flex items-center px-6 py-3 text-sm font-medium rounded-t-lg transition-all ${
-                activeTab === 'drivers'
-                  ? 'bg-amber-100 text-amber-700 border-b-2 border-amber-500'
-                  : 'bg-amber-50 text-amber-600 hover:bg-amber-100 border-b-2 border-transparent'
-              }`}
-            >
-              <Users className="w-4 h-4 mr-2" />
-              Drivers
-            </button>
-            <button
-              onClick={() => handleTabChange('expected')}
-              className={`flex items-center px-6 py-3 text-sm font-medium rounded-t-lg transition-all ${
-                activeTab === 'expected'
-                  ? 'bg-teal-100 text-teal-700 border-b-2 border-teal-500'
-                  : 'bg-teal-50 text-teal-600 hover:bg-teal-100 border-b-2 border-transparent'
-              }`}
-            >
-              <TrendingUp className="w-4 h-4 mr-2" />
-              Expected
-            </button>
-          </nav>
+          <div className="flex items-center justify-between p-1">
+            <nav className="flex -mb-px gap-1">
+              <button
+                onClick={() => handleTabChange('loads')}
+                className={`flex items-center px-6 py-3 text-sm font-medium rounded-t-lg transition-all ${
+                  activeTab === 'loads'
+                    ? 'bg-purple-100 text-purple-700 border-b-2 border-purple-500'
+                    : 'bg-purple-50 text-purple-600 hover:bg-purple-100 border-b-2 border-transparent'
+                }`}
+              >
+                <Container className="w-4 h-4 mr-2" />
+                Loads
+              </button>
+              <button
+                onClick={() => handleTabChange('outbound')}
+                className={`flex items-center px-6 py-3 text-sm font-medium rounded-t-lg transition-all ${
+                  activeTab === 'outbound'
+                    ? 'bg-green-100 text-green-700 border-b-2 border-green-500'
+                    : 'bg-green-50 text-green-600 hover:bg-green-100 border-b-2 border-transparent'
+                }`}
+              >
+                <LogOut className="w-4 h-4 mr-2" />
+                Outbound
+              </button>
+              <button
+                onClick={() => handleTabChange('inbound')}
+                className={`flex items-center px-6 py-3 text-sm font-medium rounded-t-lg transition-all ${
+                  activeTab === 'inbound'
+                    ? 'bg-blue-100 text-blue-700 border-b-2 border-blue-500'
+                    : 'bg-blue-50 text-blue-600 hover:bg-blue-100 border-b-2 border-transparent'
+                }`}
+              >
+                <LogIn className="w-4 h-4 mr-2" />
+                Inbound
+              </button>
+              <button
+                onClick={() => handleTabChange('drivers')}
+                className={`flex items-center px-6 py-3 text-sm font-medium rounded-t-lg transition-all ${
+                  activeTab === 'drivers'
+                    ? 'bg-amber-100 text-amber-700 border-b-2 border-amber-500'
+                    : 'bg-amber-50 text-amber-600 hover:bg-amber-100 border-b-2 border-transparent'
+                }`}
+              >
+                <Users className="w-4 h-4 mr-2" />
+                Drivers
+              </button>
+              <button
+                onClick={() => handleTabChange('expected')}
+                className={`flex items-center px-6 py-3 text-sm font-medium rounded-t-lg transition-all ${
+                  activeTab === 'expected'
+                    ? 'bg-teal-100 text-teal-700 border-b-2 border-teal-500'
+                    : 'bg-teal-50 text-teal-600 hover:bg-teal-100 border-b-2 border-transparent'
+                }`}
+              >
+                <TrendingUp className="w-4 h-4 mr-2" />
+                Expected
+              </button>
+            </nav>
+            <div className="flex items-center gap-2 pr-2">
+              <span className="text-sm text-gray-500">Location:</span>
+              <LocationMultiSelect
+                value={selectedLocations}
+                onChange={setSelectedLocations}
+                placeholder="All locations"
+                className="w-64"
+              />
+            </div>
+          </div>
         </div>
       </div>
 
       <div className={activeTab === 'loads' ? '' : 'hidden'}>
-        <LoadsTab onOpenCreateModal={() => setIsCreateLoadsheetModalOpen(true)} />
+        <LoadsTab onOpenCreateModal={() => setIsCreateLoadsheetModalOpen(true)} selectedLocations={selectedLocations} />
       </div>
 
       <div className={activeTab === 'outbound' ? '' : 'hidden'}>
-        <OutboundTab />
+        <OutboundTab selectedLocations={selectedLocations} />
       </div>
 
       <div className={activeTab === 'inbound' ? '' : 'hidden'}>
-        <InboundTab />
+        <InboundTab selectedLocations={selectedLocations} />
       </div>
 
       <div className={activeTab === 'drivers' ? '' : 'hidden'}>
-        <DriversTab />
+        <DriversTab selectedLocations={selectedLocations} />
       </div>
 
       <div className={activeTab === 'expected' ? '' : 'hidden'}>
-        <ExpectedShipmentsTab />
+        <ExpectedShipmentsTab selectedLocations={selectedLocations} />
       </div>
 
       {/* Create Trip Modal */}

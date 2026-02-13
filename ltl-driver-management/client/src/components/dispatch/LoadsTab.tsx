@@ -6,7 +6,6 @@ import { DateRangePicker } from '../common/DateRangePicker';
 import { Modal } from '../common/Modal';
 import { LoadsheetShipmentsModal } from '../loadsheet/LoadsheetShipmentsModal';
 import { CreateLoadsheetModal } from '../loadsheet/CreateLoadsheetModal';
-import { LocationMultiSelect } from '../LocationMultiSelect';
 import { loadsheetService } from '../../services/loadsheetService';
 import { linehaulTripService } from '../../services/linehaulTripService';
 import { linehaulProfileService } from '../../services/linehaulProfileService';
@@ -63,6 +62,7 @@ export interface LoadItem {
 interface LoadsTabProps {
   loading?: boolean;
   onOpenCreateModal?: () => void;
+  selectedLocations?: number[];
 }
 
 // Planning data for carrier/driver assignment
@@ -154,7 +154,7 @@ const CapacityDisplay: React.FC<{ weight: number; capacity: number }> = ({ weigh
   );
 };
 
-export const LoadsTab: React.FC<LoadsTabProps> = ({ loading: externalLoading = false, onOpenCreateModal }) => {
+export const LoadsTab: React.FC<LoadsTabProps> = ({ loading: externalLoading = false, onOpenCreateModal, selectedLocations = [] }) => {
   const [searchTerm, setSearchTerm] = useState('');
   const [statusFilter, setStatusFilter] = useState<string>('');
   const [sortBy, setSortBy] = useState<keyof LoadItem | null>(null);
@@ -165,7 +165,6 @@ export const LoadsTab: React.FC<LoadsTabProps> = ({ loading: externalLoading = f
   const [continuingTripData, setContinuingTripData] = useState<Record<number, PlanningData>>({});
   const [startDate, setStartDate] = useState('');
   const [endDate, setEndDate] = useState('');
-  const [selectedOrigins, setSelectedOrigins] = useState<number[]>([]);
 
   // Modal states
   const [isShipmentsModalOpen, setIsShipmentsModalOpen] = useState(false);
@@ -248,7 +247,7 @@ export const LoadsTab: React.FC<LoadsTabProps> = ({ loading: externalLoading = f
 
   // Fetch continuing trips (arrived and will continue)
   const { data: continuingTripsData, refetch: refetchContinuingTrips } = useQuery({
-    queryKey: ['continuing-trips-for-loads-tab', selectedOrigins],
+    queryKey: ['continuing-trips-for-loads-tab', selectedLocations],
     queryFn: async () => {
       const response = await linehaulTripService.getTrips({
         status: 'ARRIVED',
@@ -258,10 +257,10 @@ export const LoadsTab: React.FC<LoadsTabProps> = ({ loading: externalLoading = f
       let arrivedTrips = response.trips;
 
       // Filter to trips that arrived at one of the selected origins
-      if (selectedOrigins.length > 0) {
+      if (selectedLocations.length > 0) {
         arrivedTrips = arrivedTrips.filter(trip => {
           const destinationId = trip.linehaulProfile?.destinationTerminalId;
-          return destinationId && selectedOrigins.includes(destinationId);
+          return destinationId && selectedLocations.includes(destinationId);
         });
       }
 
@@ -276,13 +275,13 @@ export const LoadsTab: React.FC<LoadsTabProps> = ({ loading: externalLoading = f
     let filtered = loadsheetsData;
 
     // Filter by selected origins
-    if (selectedOrigins.length > 0) {
-      const selectedCodes = selectedOrigins.map(id =>
+    if (selectedLocations.length > 0) {
+      const selectedCodes = selectedLocations.map(id =>
         locations.find(l => l.id === id)?.code
       ).filter(Boolean);
 
       filtered = filtered.filter(ls => {
-        if (ls.originTerminalId && selectedOrigins.includes(ls.originTerminalId)) {
+        if (ls.originTerminalId && selectedLocations.includes(ls.originTerminalId)) {
           return true;
         }
         if (ls.originTerminalCode && selectedCodes.includes(ls.originTerminalCode)) {
@@ -293,7 +292,7 @@ export const LoadsTab: React.FC<LoadsTabProps> = ({ loading: externalLoading = f
     }
 
     return filtered.map((ls, index) => loadsheetToLoadItem(ls, index));
-  }, [loadsheetsData, selectedOrigins, locations]);
+  }, [loadsheetsData, selectedLocations, locations]);
 
   const handleSort = (column: keyof LoadItem) => {
     if (sortBy === column) {
@@ -783,19 +782,9 @@ export const LoadsTab: React.FC<LoadsTabProps> = ({ loading: externalLoading = f
             }}
           />
 
-          <div className="flex items-center space-x-2">
-            <MapPin className="w-4 h-4 text-gray-400" />
-            <LocationMultiSelect
-              value={selectedOrigins}
-              onChange={setSelectedOrigins}
-              placeholder="Filter by origin..."
-              className="w-56"
-            />
-          </div>
-
           <div className="text-sm text-gray-500 dark:text-gray-400">
             {filteredLoads.length} load{filteredLoads.length !== 1 ? 's' : ''}
-            {selectedOrigins.length > 0 && ` from ${selectedOrigins.map(id => locations.find(l => l.id === id)?.code).filter(Boolean).join(', ')}`}
+            {selectedLocations.length > 0 && ` from ${selectedLocations.map(id => locations.find(l => l.id === id)?.code).filter(Boolean).join(', ')}`}
           </div>
         </div>
       </div>

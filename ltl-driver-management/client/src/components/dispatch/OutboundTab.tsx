@@ -5,7 +5,6 @@ import { loadsheetService } from '../../services/loadsheetService';
 import { lateDepartureReasonService } from '../../services/lateDepartureReasonService';
 import { locationService } from '../../services/locationService';
 import { LinehaulTrip, Loadsheet, TripStatus } from '../../types';
-import { LocationMultiSelect } from '../LocationMultiSelect';
 import { TripStatusBadge } from './TripStatusBadge';
 import { LateReasonModal } from './LateReasonModal';
 import { LateReasonViewModal } from './LateReasonViewModal';
@@ -74,13 +73,16 @@ interface OutboundTripRow {
   loadsheets: Loadsheet[];
 }
 
-export const OutboundTab: React.FC = () => {
+interface OutboundTabProps {
+  selectedLocations?: number[];
+}
+
+export const OutboundTab: React.FC<OutboundTabProps> = ({ selectedLocations = [] }) => {
   const queryClient = useQueryClient();
   const [searchTerm, setSearchTerm] = useState('');
   const today = format(new Date(), 'yyyy-MM-dd');
   const [startDate, setStartDate] = useState(today);
   const [endDate, setEndDate] = useState(today);
-  const [selectedOrigins, setSelectedOrigins] = useState<number[]>([]);
   const [showLateOnly, setShowLateOnly] = useState(false);
   const [showHeadhaulOnly, setShowHeadhaulOnly] = useState(false);
 
@@ -245,13 +247,13 @@ export const OutboundTab: React.FC = () => {
     return dispatchMinutes > schedMinutes;
   };
 
-  // Filter by search term, origin filter, late filter, and HH filter
+  // Filter by search term, location filter (origin), late filter, and HH filter
   const filteredRows = useMemo(() => {
     return outboundRows.filter(row => {
-      // Apply origin filter first
-      if (selectedOrigins.length > 0) {
-        const tripOriginId = row.trip.originTerminalId;
-        if (!tripOriginId || !selectedOrigins.includes(tripOriginId)) return false;
+      // Apply location filter (matches origin for outbound)
+      if (selectedLocations.length > 0) {
+        const tripOriginId = row.trip.linehaulProfile?.originTerminalId;
+        if (!tripOriginId || !selectedLocations.includes(tripOriginId)) return false;
       }
 
       // Apply late filter
@@ -278,7 +280,7 @@ export const OutboundTab: React.FC = () => {
 
       return false;
     });
-  }, [outboundRows, selectedOrigins, showLateOnly, showHeadhaulOnly, searchTerm]);
+  }, [outboundRows, selectedLocations, showLateOnly, showHeadhaulOnly, searchTerm]);
 
   // Handle column sort
   const handleSort = (column: SortColumn) => {
@@ -583,17 +585,6 @@ export const OutboundTab: React.FC = () => {
               }}
             />
 
-            {/* Origin Filter */}
-            <div className="flex items-center gap-2">
-              <MapPin className="h-4 w-4 text-gray-400" />
-              <LocationMultiSelect
-                value={selectedOrigins}
-                onChange={setSelectedOrigins}
-                placeholder="Filter by origin..."
-                className="w-56"
-              />
-            </div>
-
             {/* Late Filter */}
             <label className="flex items-center gap-2 cursor-pointer">
               <input
@@ -672,8 +663,8 @@ export const OutboundTab: React.FC = () => {
             ) : (
               'All dispatched trips'
             )}
-            {selectedOrigins.length > 0 && (
-              ` from ${selectedOrigins.map(id => locations.find(l => l.id === id)?.code).filter(Boolean).join(', ')}`
+            {selectedLocations.length > 0 && (
+              ` from ${selectedLocations.map(id => locations.find(l => l.id === id)?.code).filter(Boolean).join(', ')}`
             )}
           </p>
         </div>
