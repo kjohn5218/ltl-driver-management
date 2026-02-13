@@ -574,8 +574,7 @@ enum EquipmentStatus {
 }
 
 enum TruckType {
-  DAY_CAB
-  SLEEPER
+  SEMI_TRUCK
   STRAIGHT_TRUCK
 }
 
@@ -761,7 +760,7 @@ model Terminal {
 model EquipmentTruck {
   id                  Int             @id @default(autoincrement())
   unitNumber          String          @unique
-  truckType           TruckType       @default(DAY_CAB)
+  truckType           TruckType       @default(SEMI_TRUCK)
   make                String?
   model               String?
   year                Int?

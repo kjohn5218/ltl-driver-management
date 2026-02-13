@@ -662,8 +662,9 @@ export const LoadsTab: React.FC<LoadsTabProps> = ({ loading: externalLoading = f
           <option value="">Select...</option>
           {drivers
             .filter(d => d.active && (!planningData[load.id]?.plannedCarrierId || d.carrierId === planningData[load.id]?.plannedCarrierId))
+            .sort((a, b) => a.name.localeCompare(b.name))
             .map((driver) => (
-              <option key={driver.id} value={driver.id}>{driver.name}</option>
+              <option key={driver.id} value={driver.id}>{driver.name}{driver.number ? ` (${driver.number})` : ''}</option>
             ))}
         </select>
       )
@@ -940,9 +941,10 @@ export const LoadsTab: React.FC<LoadsTabProps> = ({ loading: externalLoading = f
                             <option value="">Select...</option>
                             {drivers
                               .filter(d => d.active && (!continuingTripData[trip.id]?.plannedCarrierId || d.carrierId === continuingTripData[trip.id]?.plannedCarrierId))
+                              .sort((a, b) => a.name.localeCompare(b.name))
                               .map((driver) => (
                                 <option key={driver.id} value={driver.id}>
-                                  {driver.name}
+                                  {driver.name}{driver.number ? ` (${driver.number})` : ''}
                                 </option>
                               ))}
                           </select>

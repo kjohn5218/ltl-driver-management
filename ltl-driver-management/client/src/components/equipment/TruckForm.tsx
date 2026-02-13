@@ -9,8 +9,7 @@ interface TruckFormProps {
 }
 
 const truckTypes: { value: TruckType; label: string }[] = [
-  { value: 'DAY_CAB', label: 'Day Cab' },
-  { value: 'SLEEPER', label: 'Sleeper' },
+  { value: 'SEMI_TRUCK', label: 'Semi Truck' },
   { value: 'STRAIGHT_TRUCK', label: 'Straight Truck' }
 ];
 
@@ -30,7 +29,7 @@ export const TruckForm: React.FC<TruckFormProps> = ({
 }) => {
   const [formData, setFormData] = useState({
     unitNumber: '',
-    truckType: 'DAY_CAB' as TruckType,
+    truckType: 'SEMI_TRUCK' as TruckType,
     make: '',
     model: '',
     year: new Date().getFullYear(),
@@ -46,7 +45,7 @@ export const TruckForm: React.FC<TruckFormProps> = ({
     if (truck) {
       setFormData({
         unitNumber: truck.unitNumber || '',
-        truckType: truck.truckType || 'DAY_CAB',
+        truckType: truck.truckType || 'SEMI_TRUCK',
         make: truck.make || '',
         model: truck.model || '',
         year: truck.year || new Date().getFullYear(),

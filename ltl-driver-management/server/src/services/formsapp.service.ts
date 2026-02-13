@@ -184,11 +184,9 @@ export class FormsAppService {
     externalFleetId: string;
   } {
     // Determine truck type based on asset_type
-    let truckType: TruckType = TruckType.DAY_CAB;
+    let truckType: TruckType = TruckType.SEMI_TRUCK;
     if (asset.assetType === 'straight_truck') {
       truckType = TruckType.STRAIGHT_TRUCK;
-    } else if (asset.model?.toLowerCase().includes('sleeper')) {
-      truckType = TruckType.SLEEPER;
     }
 
     return {

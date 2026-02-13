@@ -276,7 +276,7 @@ export const createTruck = async (req: Request, res: Response): Promise<void> =>
       data: {
         unitNumber: unitNumber.toUpperCase(),
         vin: vin?.toUpperCase(),
-        truckType: truckType || 'DAY_CAB',
+        truckType: truckType || 'SEMI_TRUCK',
         make,
         model,
         year: year ? parseInt(year, 10) : null,
@@ -1761,7 +1761,7 @@ export const getAllocationSummary = async (_req: Request, res: Response): Promis
         .filter(c => c.currentTerminalId === terminal.id)
         .forEach(c => {
           let key: string;
-          if (c.truckType === 'DAY_CAB' || c.truckType === 'SLEEPER') {
+          if (c.truckType === 'SEMI_TRUCK') {
             key = 'tractor';
           } else {
             key = 'straight_truck';
@@ -1798,9 +1798,7 @@ export const getAllocationSummary = async (_req: Request, res: Response): Promis
         .filter(t => t.linehaulProfile?.originTerminalId === terminal.id)
         .forEach(trip => {
           if (trip.truck) {
-            const key = (trip.truck.truckType === 'DAY_CAB' || trip.truck.truckType === 'SLEEPER')
-              ? 'tractor'
-              : 'straight_truck';
+            const key = trip.truck.truckType === 'SEMI_TRUCK' ? 'tractor' : 'straight_truck';
             if (dispatched[key] !== undefined) dispatched[key]++;
           }
           if (trip.trailer?.lengthFeet) {
@@ -1829,9 +1827,7 @@ export const getAllocationSummary = async (_req: Request, res: Response): Promis
         .filter(t => t.linehaulProfile?.destinationTerminalId === terminal.id)
         .forEach(trip => {
           if (trip.truck) {
-            const equipmentType = (trip.truck.truckType === 'DAY_CAB' || trip.truck.truckType === 'SLEEPER')
-              ? 'tractor'
-              : 'straight_truck';
+            const equipmentType = trip.truck.truckType === 'SEMI_TRUCK' ? 'tractor' : 'straight_truck';
             inbound.push({
               equipmentType,
               unitNumber: trip.truck.unitNumber,

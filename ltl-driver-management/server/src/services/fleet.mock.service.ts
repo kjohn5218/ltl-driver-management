@@ -133,18 +133,18 @@ const mockTrailers: FleetTrailer[] = [
 
 // Mock truck data
 const mockTrucks: FleetTruck[] = [
-  { id: 1, unitNumber: 'TRK-101', truckType: 'DAY_CAB', make: 'Freightliner', model: 'Cascadia', year: 2022, status: 'AVAILABLE', owned: true, externalFleetId: 'FL-TRK-001' },
-  { id: 2, unitNumber: 'TRK-102', truckType: 'DAY_CAB', make: 'Freightliner', model: 'Cascadia', year: 2022, status: 'DISPATCHED', owned: true, externalFleetId: 'FL-TRK-002' },
-  { id: 3, unitNumber: 'TRK-103', truckType: 'DAY_CAB', make: 'Peterbilt', model: '579', year: 2021, status: 'AVAILABLE', owned: true, externalFleetId: 'FL-TRK-003' },
-  { id: 4, unitNumber: 'TRK-104', truckType: 'DAY_CAB', make: 'Kenworth', model: 'T680', year: 2023, status: 'AVAILABLE', owned: true, externalFleetId: 'FL-TRK-004' },
-  { id: 5, unitNumber: 'TRK-105', truckType: 'SLEEPER', make: 'Freightliner', model: 'Cascadia', year: 2022, status: 'IN_TRANSIT', owned: true, externalFleetId: 'FL-TRK-005' },
-  { id: 6, unitNumber: 'TRK-106', truckType: 'SLEEPER', make: 'Peterbilt', model: '389', year: 2020, status: 'AVAILABLE', owned: true, externalFleetId: 'FL-TRK-006' },
-  { id: 7, unitNumber: 'TRK-107', truckType: 'DAY_CAB', make: 'Volvo', model: 'VNL', year: 2023, status: 'AVAILABLE', owned: true, externalFleetId: 'FL-TRK-007' },
-  { id: 8, unitNumber: 'TRK-108', truckType: 'DAY_CAB', make: 'International', model: 'LT', year: 2021, status: 'MAINTENANCE', maintenanceStatus: 'Engine Service', owned: true, externalFleetId: 'FL-TRK-008' },
+  { id: 1, unitNumber: 'TRK-101', truckType: 'SEMI_TRUCK', make: 'Freightliner', model: 'Cascadia', year: 2022, status: 'AVAILABLE', owned: true, externalFleetId: 'FL-TRK-001' },
+  { id: 2, unitNumber: 'TRK-102', truckType: 'SEMI_TRUCK', make: 'Freightliner', model: 'Cascadia', year: 2022, status: 'DISPATCHED', owned: true, externalFleetId: 'FL-TRK-002' },
+  { id: 3, unitNumber: 'TRK-103', truckType: 'SEMI_TRUCK', make: 'Peterbilt', model: '579', year: 2021, status: 'AVAILABLE', owned: true, externalFleetId: 'FL-TRK-003' },
+  { id: 4, unitNumber: 'TRK-104', truckType: 'SEMI_TRUCK', make: 'Kenworth', model: 'T680', year: 2023, status: 'AVAILABLE', owned: true, externalFleetId: 'FL-TRK-004' },
+  { id: 5, unitNumber: 'TRK-105', truckType: 'SEMI_TRUCK', make: 'Freightliner', model: 'Cascadia', year: 2022, status: 'IN_TRANSIT', owned: true, externalFleetId: 'FL-TRK-005' },
+  { id: 6, unitNumber: 'TRK-106', truckType: 'SEMI_TRUCK', make: 'Peterbilt', model: '389', year: 2020, status: 'AVAILABLE', owned: true, externalFleetId: 'FL-TRK-006' },
+  { id: 7, unitNumber: 'TRK-107', truckType: 'SEMI_TRUCK', make: 'Volvo', model: 'VNL', year: 2023, status: 'AVAILABLE', owned: true, externalFleetId: 'FL-TRK-007' },
+  { id: 8, unitNumber: 'TRK-108', truckType: 'SEMI_TRUCK', make: 'International', model: 'LT', year: 2021, status: 'MAINTENANCE', maintenanceStatus: 'Engine Service', owned: true, externalFleetId: 'FL-TRK-008' },
   { id: 9, unitNumber: 'TRK-109', truckType: 'STRAIGHT_TRUCK', make: 'Freightliner', model: 'M2', year: 2022, status: 'AVAILABLE', owned: true, externalFleetId: 'FL-TRK-009' },
-  { id: 10, unitNumber: 'TRK-110', truckType: 'DAY_CAB', make: 'Kenworth', model: 'W900', year: 2019, status: 'AVAILABLE', owned: true, externalFleetId: 'FL-TRK-010' },
-  { id: 11, unitNumber: 'TRK-111', truckType: 'DAY_CAB', make: 'Freightliner', model: 'Cascadia', year: 2023, status: 'AVAILABLE', owned: true, externalFleetId: 'FL-TRK-011' },
-  { id: 12, unitNumber: 'TRK-112', truckType: 'SLEEPER', make: 'Peterbilt', model: '579', year: 2022, status: 'DISPATCHED', owned: true, externalFleetId: 'FL-TRK-012' },
+  { id: 10, unitNumber: 'TRK-110', truckType: 'SEMI_TRUCK', make: 'Kenworth', model: 'W900', year: 2019, status: 'AVAILABLE', owned: true, externalFleetId: 'FL-TRK-010' },
+  { id: 11, unitNumber: 'TRK-111', truckType: 'SEMI_TRUCK', make: 'Freightliner', model: 'Cascadia', year: 2023, status: 'AVAILABLE', owned: true, externalFleetId: 'FL-TRK-011' },
+  { id: 12, unitNumber: 'TRK-112', truckType: 'SEMI_TRUCK', make: 'Peterbilt', model: '579', year: 2022, status: 'DISPATCHED', owned: true, externalFleetId: 'FL-TRK-012' },
 ];
 
 // Mock dolly data

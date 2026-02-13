@@ -420,8 +420,7 @@ export const Equipment: React.FC = () => {
       accessor: 'truckType' as keyof EquipmentTruck,
       cell: (truck: EquipmentTruck) => {
         const typeLabels: Record<string, string> = {
-          DAY_CAB: 'Day Cab',
-          SLEEPER: 'Sleeper',
+          SEMI_TRUCK: 'Semi Truck',
           STRAIGHT_TRUCK: 'Straight Truck'
         };
         return <span className="text-gray-600">{typeLabels[truck.truckType] || truck.truckType}</span>;

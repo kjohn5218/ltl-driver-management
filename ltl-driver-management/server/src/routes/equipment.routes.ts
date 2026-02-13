@@ -58,7 +58,7 @@ router.get(
   [
     query('search').optional().trim(),
     query('status').optional().isIn(['AVAILABLE', 'DISPATCHED', 'IN_TRANSIT', 'MAINTENANCE', 'OUT_OF_SERVICE']),
-    query('type').optional().isIn(['DAY_CAB', 'SLEEPER', 'STRAIGHT_TRUCK']),
+    query('type').optional().isIn(['SEMI_TRUCK', 'STRAIGHT_TRUCK']),
     query('terminalId').optional().isInt({ min: 1 }),
     query('carrierId').optional().isInt({ min: 1 }),
     query('available').optional().isBoolean(),
@@ -84,7 +84,7 @@ router.post(
   [
     body('unitNumber').notEmpty().trim(),
     body('vin').optional().trim().isLength({ min: 17, max: 17 }),
-    body('type').optional().isIn(['DAY_CAB', 'SLEEPER', 'STRAIGHT_TRUCK']),
+    body('type').optional().isIn(['SEMI_TRUCK', 'STRAIGHT_TRUCK']),
     body('make').optional().trim(),
     body('model').optional().trim(),
     body('year').optional().isInt({ min: 1900, max: 2100 }),
@@ -113,7 +113,7 @@ router.put(
     param('id').isInt({ min: 1 }),
     body('unitNumber').optional().notEmpty().trim(),
     body('vin').optional().trim().isLength({ min: 17, max: 17 }),
-    body('type').optional().isIn(['DAY_CAB', 'SLEEPER', 'STRAIGHT_TRUCK']),
+    body('type').optional().isIn(['SEMI_TRUCK', 'STRAIGHT_TRUCK']),
     body('make').optional().trim(),
     body('model').optional().trim(),
     body('year').optional().isInt({ min: 1900, max: 2100 }),

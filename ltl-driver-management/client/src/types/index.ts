@@ -375,7 +375,7 @@ export interface PaginatedResponse<T> {
 // Enums
 export type TripStatus = 'PLANNED' | 'ASSIGNED' | 'DISPATCHED' | 'IN_TRANSIT' | 'ARRIVED' | 'UNLOADING' | 'COMPLETED' | 'CANCELLED';
 export type EquipmentStatus = 'AVAILABLE' | 'DISPATCHED' | 'IN_TRANSIT' | 'MAINTENANCE' | 'OUT_OF_SERVICE';
-export type TruckType = 'DAY_CAB' | 'SLEEPER' | 'STRAIGHT_TRUCK';
+export type TruckType = 'SEMI_TRUCK' | 'STRAIGHT_TRUCK';
 export type TrailerType = 'DRY_VAN_53' | 'DRY_VAN_28' | 'PUP_TRAILER' | 'REEFER_53' | 'REEFER_28' | 'FLATBED' | 'STEP_DECK' | 'TANKER' | 'INTERMODAL';
 export type DollyType = 'A_DOLLY' | 'B_DOLLY';
 export type EquipmentConfig = 'SINGLE' | 'DOUBLE' | 'TRIPLE' | 'ROCKY_MOUNTAIN' | 'TURNPIKE';
