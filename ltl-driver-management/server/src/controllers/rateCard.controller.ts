@@ -109,29 +109,25 @@ export const getRateCards = async (req: Request, res: Response): Promise<void> =
       where.linehaulProfileId = parseInt(profileId as string, 10);
     }
 
-    const [rateCards, total] = await Promise.all([
-      prisma.rateCard.findMany({
-        where,
-        skip,
-        take: limitNum,
-        orderBy: [{ rateType: 'asc' }, { priority: 'asc' }],
-        include: {
-          originTerminal: {
-            select: { id: true, code: true, name: true }
-          },
-          destinationTerminal: {
-            select: { id: true, code: true, name: true }
-          },
-          linehaulProfile: {
-            select: { id: true, profileCode: true, name: true, originTerminal: { select: { code: true } }, destinationTerminal: { select: { code: true } } }
-          },
-          _count: {
-            select: { accessorialRates: true }
-          }
+    // Fetch all matching rate cards (we'll paginate after filtering/deduplication)
+    const rateCards = await prisma.rateCard.findMany({
+      where,
+      orderBy: [{ rateType: 'asc' }, { priority: 'asc' }],
+      include: {
+        originTerminal: {
+          select: { id: true, code: true, name: true }
+        },
+        destinationTerminal: {
+          select: { id: true, code: true, name: true }
+        },
+        linehaulProfile: {
+          select: { id: true, profileCode: true, name: true, originTerminal: { select: { code: true } }, destinationTerminal: { select: { code: true } } }
+        },
+        _count: {
+          select: { accessorialRates: true }
         }
-      }),
-      prisma.rateCard.count({ where })
-    ]);
+      }
+    });
 
     // Collect driver and carrier IDs that need to be looked up
     const driverIds = rateCards.filter(rc => rc.rateType === 'DRIVER' && rc.entityId).map(rc => rc.entityId!);
@@ -202,7 +198,9 @@ export const getRateCards = async (req: Request, res: Response): Promise<void> =
     // Deduplicate: If multiple rate cards exist for the same driver (by name),
     // keep only the one linked to a Workday-connected driver
     const driverRateCards = enrichedRateCards.filter(rc => rc.rateType === 'DRIVER' && rc.driver?.name);
-    const otherRateCards = enrichedRateCards.filter(rc => rc.rateType !== 'DRIVER' || !rc.driver?.name);
+    // Filter out DRIVER rate cards that have no driver name (blank entries)
+    // Keep all non-DRIVER rate cards
+    const otherRateCards = enrichedRateCards.filter(rc => rc.rateType !== 'DRIVER');
 
     // Normalize driver name for comparison (lowercase, trim)
     const normalizeName = (name: string) => name.toLowerCase().trim();
@@ -242,8 +240,12 @@ export const getRateCards = async (req: Request, res: Response): Promise<void> =
 
     enrichedRateCards = [...otherRateCards, ...deduplicatedDriverRateCards];
 
+    // Calculate pagination after filtering/deduplication
+    const total = enrichedRateCards.length;
+    const paginatedRateCards = enrichedRateCards.slice(skip, skip + limitNum);
+
     res.json({
-      rateCards: enrichedRateCards,
+      rateCards: paginatedRateCards,
       pagination: {
         page: pageNum,
         limit: limitNum,

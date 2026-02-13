@@ -263,16 +263,39 @@ export const PayRules: React.FC = () => {
     setModalMode('edit');
     setSelectedRateCard(rateCard);
 
-    // Try to find entityId from rate card or match from notes
-    let entityId = rateCard.entityId;
+    // Try to find entityId from rate card or match from available data
+    let entityId: number | undefined = undefined;
 
-    // If entityId is not set but we have driver info, try to match from notes
-    if (!entityId && rateCard.rateType === 'DRIVER') {
-      // First try from driver relationship
-      if (rateCard.driver?.id) {
-        entityId = rateCard.driver.id;
-      } else {
-        // Try to match driver from notes
+    if (rateCard.rateType === 'DRIVER') {
+      // For DRIVER type, try multiple methods to find the correct driver
+      // 1. First try entityId if it exists and matches a driver in our list
+      if (rateCard.entityId) {
+        const driverExists = drivers.find(d => d.id === rateCard.entityId);
+        if (driverExists) {
+          entityId = rateCard.entityId;
+        }
+      }
+
+      // 2. If not found, try driver.id from enriched data (if it's a valid ID > 0)
+      if (!entityId && rateCard.driver?.id && rateCard.driver.id > 0) {
+        const driverExists = drivers.find(d => d.id === rateCard.driver!.id);
+        if (driverExists) {
+          entityId = rateCard.driver.id;
+        }
+      }
+
+      // 3. If still not found, try to match by driver name from enriched data
+      if (!entityId && rateCard.driver?.name) {
+        const matchedDriver = drivers.find(d =>
+          d.name?.toLowerCase() === rateCard.driver!.name.toLowerCase()
+        );
+        if (matchedDriver) {
+          entityId = matchedDriver.id;
+        }
+      }
+
+      // 4. Finally, try to match from notes
+      if (!entityId) {
         const notesInfo = parseNotesInfo(rateCard.notes);
         if (notesInfo.driverName) {
           const matchedDriver = drivers.find(d =>
@@ -287,11 +310,36 @@ export const PayRules: React.FC = () => {
       }
     }
 
-    // If entityId is not set but we have carrier info, try to match
-    if (!entityId && rateCard.rateType === 'CARRIER') {
-      if (rateCard.carrier?.id) {
-        entityId = rateCard.carrier.id;
-      } else {
+    if (rateCard.rateType === 'CARRIER') {
+      // For CARRIER type, try multiple methods to find the correct carrier
+      // 1. First try entityId if it exists and matches a carrier in our list
+      if (rateCard.entityId) {
+        const carrierExists = carriers.find(c => c.id === rateCard.entityId);
+        if (carrierExists) {
+          entityId = rateCard.entityId;
+        }
+      }
+
+      // 2. If not found, try carrier.id from enriched data (if it's a valid ID > 0)
+      if (!entityId && rateCard.carrier?.id && rateCard.carrier.id > 0) {
+        const carrierExists = carriers.find(c => c.id === rateCard.carrier!.id);
+        if (carrierExists) {
+          entityId = rateCard.carrier.id;
+        }
+      }
+
+      // 3. If still not found, try to match by carrier name from enriched data
+      if (!entityId && rateCard.carrier?.name) {
+        const matchedCarrier = carriers.find(c =>
+          c.name?.toLowerCase() === rateCard.carrier!.name.toLowerCase()
+        );
+        if (matchedCarrier) {
+          entityId = matchedCarrier.id;
+        }
+      }
+
+      // 4. Finally, try to match from notes
+      if (!entityId) {
         const notesInfo = parseNotesInfo(rateCard.notes);
         if (notesInfo.employer) {
           const matchedCarrier = carriers.find(c =>
