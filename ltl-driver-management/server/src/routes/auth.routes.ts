@@ -13,7 +13,7 @@ router.post(
     body('email').isEmail().normalizeEmail(),
     body('password').isLength({ min: 6 }).withMessage('Password must be at least 6 characters'),
     body('name').notEmpty().trim(),
-    body('role').optional().isIn(['ADMIN', 'DISPATCHER', 'USER', 'CARRIER'])
+    body('role').optional().isIn(['ADMIN', 'DISPATCHER', 'CARRIER', 'MANAGER', 'PAYROLL_ADMIN'])
   ],
   validateRequest,
   register
