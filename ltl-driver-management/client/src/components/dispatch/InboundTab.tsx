@@ -190,8 +190,35 @@ export const InboundTab: React.FC<InboundTabProps> = ({ selectedLocations = [] }
 
       // Apply location filter (matches destination for inbound)
       if (selectedLocations.length > 0) {
+        // Try multiple sources for destination
         const tripDestinationId = row.trip.linehaulProfile?.destinationTerminalId;
-        if (!tripDestinationId || !selectedLocations.includes(tripDestinationId)) return false;
+
+        // Also check loadsheet destination terminal code and map to location ID
+        const loadsheetDestCode = row.loadsheets?.[0]?.destinationTerminalCode;
+        const loadsheetDestId = loadsheetDestCode
+          ? locations.find(l => l.code === loadsheetDestCode)?.id
+          : undefined;
+
+        // Also try parsing from linehaulName (e.g., "FAR-BIS" -> destination is "BIS")
+        const linehaulName = row.trip.linehaulName || row.loadsheets?.[0]?.linehaulName;
+        let parsedDestId: number | undefined;
+        if (linehaulName) {
+          const parts = linehaulName.includes('-')
+            ? linehaulName.split('-')
+            : linehaulName.replace(/\d+$/, '').match(/.{1,3}/g);
+          if (parts && parts.length >= 2) {
+            const destCode = parts[parts.length - 1].replace(/\d+$/, '');
+            parsedDestId = locations.find(l => l.code === destCode)?.id;
+          }
+        }
+
+        // Match if any destination source matches selected locations
+        const matchesDestination =
+          (tripDestinationId && selectedLocations.includes(tripDestinationId)) ||
+          (loadsheetDestId && selectedLocations.includes(loadsheetDestId)) ||
+          (parsedDestId && selectedLocations.includes(parsedDestId));
+
+        if (!matchesDestination) return false;
       }
 
       // Then apply search filter
@@ -212,7 +239,7 @@ export const InboundTab: React.FC<InboundTabProps> = ({ selectedLocations = [] }
 
       return false;
     });
-  }, [inboundRows, selectedLocations, searchTerm, showUnarrivedOnly]);
+  }, [inboundRows, selectedLocations, searchTerm, showUnarrivedOnly, locations]);
 
   // Handle column sort
   const handleSort = (column: SortColumn) => {

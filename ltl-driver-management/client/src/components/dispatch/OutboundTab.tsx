@@ -252,8 +252,35 @@ export const OutboundTab: React.FC<OutboundTabProps> = ({ selectedLocations = []
     return outboundRows.filter(row => {
       // Apply location filter (matches origin for outbound)
       if (selectedLocations.length > 0) {
+        // Try multiple sources for origin
         const tripOriginId = row.trip.linehaulProfile?.originTerminalId;
-        if (!tripOriginId || !selectedLocations.includes(tripOriginId)) return false;
+
+        // Also check loadsheet origin terminal code and map to location ID
+        const loadsheetOriginCode = row.loadsheets?.[0]?.originTerminalCode;
+        const loadsheetOriginId = loadsheetOriginCode
+          ? locations.find(l => l.code === loadsheetOriginCode)?.id
+          : undefined;
+
+        // Also try parsing from linehaulName (e.g., "FAR-BIS" -> origin is "FAR")
+        const linehaulName = row.trip.linehaulName || row.loadsheets?.[0]?.linehaulName;
+        let parsedOriginId: number | undefined;
+        if (linehaulName) {
+          const parts = linehaulName.includes('-')
+            ? linehaulName.split('-')
+            : linehaulName.replace(/\d+$/, '').match(/.{1,3}/g);
+          if (parts && parts.length >= 1) {
+            const originCode = parts[0];
+            parsedOriginId = locations.find(l => l.code === originCode)?.id;
+          }
+        }
+
+        // Match if any origin source matches selected locations
+        const matchesOrigin =
+          (tripOriginId && selectedLocations.includes(tripOriginId)) ||
+          (loadsheetOriginId && selectedLocations.includes(loadsheetOriginId)) ||
+          (parsedOriginId && selectedLocations.includes(parsedOriginId));
+
+        if (!matchesOrigin) return false;
       }
 
       // Apply late filter
@@ -280,7 +307,7 @@ export const OutboundTab: React.FC<OutboundTabProps> = ({ selectedLocations = []
 
       return false;
     });
-  }, [outboundRows, selectedLocations, showLateOnly, showHeadhaulOnly, searchTerm]);
+  }, [outboundRows, selectedLocations, showLateOnly, showHeadhaulOnly, searchTerm, locations]);
 
   // Handle column sort
   const handleSort = (column: SortColumn) => {
