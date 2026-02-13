@@ -554,15 +554,15 @@ export const PayRules: React.FC = () => {
           const name = rc.driver?.name || parseNotesInfo(rc.notes).driverName;
           const num = rc.driver?.number;
           return (
-            <div className="text-xs">
-              <div className="font-medium text-gray-900 truncate max-w-[100px]" title={name || ''}>{name || '-'}</div>
+            <div className="text-xs min-w-[140px]">
+              <div className="font-medium text-gray-900 truncate max-w-[180px]" title={name || ''}>{name || '-'}</div>
               {num && <div className="text-gray-500">#{num}</div>}
             </div>
           );
         }
         if (rc.rateType === 'OD_PAIR') {
           const name = parseNotesInfo(rc.notes).driverName;
-          if (name) return <span className="text-xs font-medium text-blue-600 truncate max-w-[100px]" title={name}>{name}</span>;
+          if (name) return <span className="text-xs font-medium text-blue-600 truncate max-w-[180px] min-w-[140px]" title={name}>{name}</span>;
         }
         return <span className="text-gray-400 text-xs">-</span>;
       }
