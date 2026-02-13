@@ -1557,15 +1557,14 @@ export const getMotiveSyncStatus = async (_req: Request, res: Response): Promise
 
 // Equipment types for allocation
 const EQUIPMENT_TYPES = [
-  'truck_day_cab',
-  'truck_sleeper',
-  'truck_straight',
+  'tractor',
+  'straight_truck',
   'trailer_53',
   'trailer_48',
   'trailer_45',
+  'trailer_43',
   'trailer_28',
-  'dolly_a',
-  'dolly_b'
+  'dolly'
 ] as const;
 
 // Get allocation summary for all terminals
@@ -1680,13 +1679,18 @@ export const getAllocationSummary = async (_req: Request, res: Response): Promis
       const current: Record<string, number> = {};
       EQUIPMENT_TYPES.forEach(type => { current[type] = 0; });
 
-      // Count trucks
+      // Count trucks (Day Cab and Sleeper count as Tractors)
       truckCounts
         .filter(c => c.currentTerminalId === terminal.id)
         .forEach(c => {
-          const key = `truck_${c.truckType.toLowerCase()}`;
+          let key: string;
+          if (c.truckType === 'DAY_CAB' || c.truckType === 'SLEEPER') {
+            key = 'tractor';
+          } else {
+            key = 'straight_truck';
+          }
           if (current[key] !== undefined) {
-            current[key] = c._count;
+            current[key] += c._count;
           }
         });
 
@@ -1700,13 +1704,12 @@ export const getAllocationSummary = async (_req: Request, res: Response): Promis
           }
         });
 
-      // Count dollies
+      // Count dollies (all types count as one)
       dollyCounts
         .filter(c => c.currentTerminalId === terminal.id)
         .forEach(c => {
-          const key = `dolly_${c.dollyType === 'A_DOLLY' ? 'a' : 'b'}`;
-          if (current[key] !== undefined) {
-            current[key] = c._count;
+          if (current['dolly'] !== undefined) {
+            current['dolly'] += c._count;
           }
         });
 
@@ -1718,7 +1721,9 @@ export const getAllocationSummary = async (_req: Request, res: Response): Promis
         .filter(t => t.linehaulProfile?.originTerminalId === terminal.id)
         .forEach(trip => {
           if (trip.truck) {
-            const key = `truck_${trip.truck.truckType.toLowerCase()}`;
+            const key = (trip.truck.truckType === 'DAY_CAB' || trip.truck.truckType === 'SLEEPER')
+              ? 'tractor'
+              : 'straight_truck';
             if (dispatched[key] !== undefined) dispatched[key]++;
           }
           if (trip.trailer?.lengthFeet) {
@@ -1734,12 +1739,10 @@ export const getAllocationSummary = async (_req: Request, res: Response): Promis
             if (dispatched[key] !== undefined) dispatched[key]++;
           }
           if (trip.dolly) {
-            const key = `dolly_${trip.dolly.dollyType === 'A_DOLLY' ? 'a' : 'b'}`;
-            if (dispatched[key] !== undefined) dispatched[key]++;
+            if (dispatched['dolly'] !== undefined) dispatched['dolly']++;
           }
           if (trip.dolly2) {
-            const key = `dolly_${trip.dolly2.dollyType === 'A_DOLLY' ? 'a' : 'b'}`;
-            if (dispatched[key] !== undefined) dispatched[key]++;
+            if (dispatched['dolly'] !== undefined) dispatched['dolly']++;
           }
         });
 
@@ -1749,8 +1752,11 @@ export const getAllocationSummary = async (_req: Request, res: Response): Promis
         .filter(t => t.linehaulProfile?.destinationTerminalId === terminal.id)
         .forEach(trip => {
           if (trip.truck) {
+            const equipmentType = (trip.truck.truckType === 'DAY_CAB' || trip.truck.truckType === 'SLEEPER')
+              ? 'tractor'
+              : 'straight_truck';
             inbound.push({
-              equipmentType: `truck_${trip.truck.truckType.toLowerCase()}`,
+              equipmentType,
               unitNumber: trip.truck.unitNumber,
               tripId: trip.id,
               tripNumber: trip.tripNumber
@@ -1773,7 +1779,7 @@ export const getAllocationSummary = async (_req: Request, res: Response): Promis
             .forEach(dollyItem => {
               if (dollyItem) {
                 inbound.push({
-                  equipmentType: `dolly_${dollyItem.dollyType === 'A_DOLLY' ? 'a' : 'b'}`,
+                  equipmentType: 'dolly',
                   unitNumber: dollyItem.unitNumber,
                   tripId: trip.id,
                   tripNumber: trip.tripNumber

@@ -243,15 +243,14 @@ export const Equipment: React.FC = () => {
 
   const formatEquipmentTypeLabel = (type: string): string => {
     const labels: Record<string, string> = {
-      'truck_day_cab': 'Day Cab',
-      'truck_sleeper': 'Sleeper',
-      'truck_straight': 'Straight',
+      'tractor': 'Tractor',
+      'straight_truck': 'Straight',
       'trailer_53': "53'",
       'trailer_48': "48'",
       'trailer_45': "45'",
+      'trailer_43': "43'",
       'trailer_28': "28'",
-      'dolly_a': 'A-Dolly',
-      'dolly_b': 'B-Dolly'
+      'dolly': 'Dolly'
     };
     return labels[type] || type;
   };
@@ -946,9 +945,9 @@ export const Equipment: React.FC = () => {
                 const isEditing = editingAllocation === terminal.id;
 
                 // Equipment categories for display
-                const truckTypes = ['truck_day_cab', 'truck_sleeper', 'truck_straight'];
-                const trailerTypes = ['trailer_53', 'trailer_48', 'trailer_45', 'trailer_28'];
-                const dollyTypes = ['dolly_a', 'dolly_b'];
+                const truckTypes = ['tractor', 'straight_truck'];
+                const trailerTypes = ['trailer_53', 'trailer_48', 'trailer_45', 'trailer_43', 'trailer_28'];
+                const dollyTypes = ['dolly'];
 
                 return (
                   <div key={terminal.id} className="bg-white">
