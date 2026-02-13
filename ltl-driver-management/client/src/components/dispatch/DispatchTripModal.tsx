@@ -509,6 +509,7 @@ export const DispatchTripModal: React.FC<DispatchTripModalProps> = ({
 
       // Invalidate queries to refresh data
       queryClient.invalidateQueries({ queryKey: ['outbound-trips'] });
+      queryClient.invalidateQueries({ queryKey: ['inbound-trips'] });
       queryClient.invalidateQueries({ queryKey: ['loadsheets-for-outbound'] });
       queryClient.invalidateQueries({ queryKey: ['loadsheets-for-dispatch'] });
 

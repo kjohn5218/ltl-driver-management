@@ -121,18 +121,20 @@ export const OutboundTab: React.FC = () => {
       status: 'DISPATCHED' as TripStatus,
       startDate: startDate || undefined,
       endDate: endDate || undefined,
-      limit: 100
+      limit: 500
     }),
-    refetchInterval: 30000 // Refresh every 30 seconds
+    refetchInterval: 30000, // Refresh every 30 seconds
+    staleTime: 0 // Always fetch fresh data
   });
 
   // Fetch loadsheets (we'll match by linehaulTripId to the trips)
   const { data: loadsheetsData, refetch: refetchLoadsheets } = useQuery({
     queryKey: ['loadsheets-for-outbound'],
     queryFn: async () => {
-      const response = await loadsheetService.getLoadsheets({ limit: 100 });
+      const response = await loadsheetService.getLoadsheets({ limit: 500 });
       return response.loadsheets;
-    }
+    },
+    staleTime: 0
   });
 
   // Fetch late departure reasons to know which trips have reasons recorded
