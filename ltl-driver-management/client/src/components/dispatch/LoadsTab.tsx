@@ -1,5 +1,6 @@
 import React, { useState, useMemo } from 'react';
 import { useQuery } from '@tanstack/react-query';
+import { format } from 'date-fns';
 import { DataTable, SortDirection } from '../common/DataTable';
 import { Search } from '../common/Search';
 import { DateRangePicker } from '../common/DateRangePicker';
@@ -155,6 +156,7 @@ const CapacityDisplay: React.FC<{ weight: number; capacity: number }> = ({ weigh
 };
 
 export const LoadsTab: React.FC<LoadsTabProps> = ({ loading: externalLoading = false, onOpenCreateModal, selectedLocations = [] }) => {
+  const today = format(new Date(), 'yyyy-MM-dd');
   const [searchTerm, setSearchTerm] = useState('');
   const [statusFilter, setStatusFilter] = useState<string>('');
   const [sortBy, setSortBy] = useState<keyof LoadItem | null>(null);
@@ -163,8 +165,8 @@ export const LoadsTab: React.FC<LoadsTabProps> = ({ loading: externalLoading = f
   // Planning-related state
   const [planningData, setPlanningData] = useState<Record<number, PlanningData>>({});
   const [continuingTripData, setContinuingTripData] = useState<Record<number, PlanningData>>({});
-  const [startDate, setStartDate] = useState('');
-  const [endDate, setEndDate] = useState('');
+  const [startDate, setStartDate] = useState(today);
+  const [endDate, setEndDate] = useState(today);
 
   // Modal states
   const [isShipmentsModalOpen, setIsShipmentsModalOpen] = useState(false);
