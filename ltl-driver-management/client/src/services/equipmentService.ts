@@ -70,6 +70,31 @@ export interface VehicleLocationData {
   currentDriverId: string | null;
 }
 
+// Equipment Allocation Types
+export interface InboundEquipment {
+  equipmentType: string;
+  unitNumber: string;
+  tripId: number;
+  tripNumber: string;
+}
+
+export interface TerminalAllocationData {
+  id: number;
+  code: string;
+  name: string;
+  targets: Record<string, number>;
+  current: Record<string, number>;
+  dispatched: Record<string, number>;
+  inbound: InboundEquipment[];
+  inboundCounts: Record<string, number>;
+  variance: Record<string, number>;
+}
+
+export interface AllocationSummaryResponse {
+  terminals: TerminalAllocationData[];
+  equipmentTypes: string[];
+}
+
 export const equipmentService = {
   // ==================== TRUCKS ====================
 
@@ -300,6 +325,26 @@ export const equipmentService = {
   // Sync vehicle locations from Motive
   syncVehicleLocations: async (): Promise<{ success: boolean; message: string; result?: any }> => {
     const response = await api.post('/equipment/locations/sync');
+    return response.data;
+  },
+
+  // ==================== EQUIPMENT ALLOCATION ====================
+
+  // Get allocation summary for all terminals
+  getAllocationSummary: async (): Promise<AllocationSummaryResponse> => {
+    const response = await api.get('/equipment/allocation/summary');
+    return response.data;
+  },
+
+  // Get allocation targets for a specific terminal
+  getTerminalAllocations: async (terminalId: number): Promise<{ terminalId: number; allocations: Record<string, number>; equipmentTypes: string[] }> => {
+    const response = await api.get(`/equipment/allocation/terminal/${terminalId}`);
+    return response.data;
+  },
+
+  // Update allocation targets for a terminal
+  updateTerminalAllocations: async (terminalId: number, allocations: Record<string, number>): Promise<{ message: string; updated: number }> => {
+    const response = await api.put(`/equipment/allocation/terminal/${terminalId}`, { allocations });
     return response.data;
   }
 };

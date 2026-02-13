@@ -8,7 +8,7 @@ import { EquipmentStatusBadge } from '../components/equipment/EquipmentStatusBad
 import { TruckForm } from '../components/equipment/TruckForm';
 import { TrailerForm } from '../components/equipment/TrailerForm';
 import { DollyForm } from '../components/equipment/DollyForm';
-import { equipmentService, VehicleLocationData } from '../services/equipmentService';
+import { equipmentService, VehicleLocationData, TerminalAllocationData, AllocationSummaryResponse } from '../services/equipmentService';
 import { locationService } from '../services/locationService';
 import {
   EquipmentTruck,
@@ -35,10 +35,18 @@ import {
   Gauge,
   Fuel,
   User,
-  Clock
+  Clock,
+  Database,
+  TruckIcon,
+  ExternalLink,
+  BarChart3,
+  ChevronDown,
+  ChevronRight,
+  Save,
+  Settings
 } from 'lucide-react';
 
-type TabType = 'trucks' | 'trailers' | 'dollies';
+type TabType = 'trucks' | 'trailers' | 'dollies' | 'allocation';
 
 const statusFilterOptions: { value: EquipmentStatus | ''; label: string }[] = [
   { value: '', label: 'All Statuses' },
@@ -92,6 +100,14 @@ export const Equipment: React.FC = () => {
   const [selectedUnitNumber, setSelectedUnitNumber] = useState<string>('');
   const [isFetchingLocation, setIsFetchingLocation] = useState(false);
 
+  // Allocation state
+  const [allocationData, setAllocationData] = useState<AllocationSummaryResponse | null>(null);
+  const [allocationLoading, setAllocationLoading] = useState(false);
+  const [expandedTerminals, setExpandedTerminals] = useState<Set<number>>(new Set());
+  const [editingAllocation, setEditingAllocation] = useState<number | null>(null);
+  const [editedAllocations, setEditedAllocations] = useState<Record<string, number>>({});
+  const [savingAllocation, setSavingAllocation] = useState(false);
+
   const isAdmin = user?.role === 'ADMIN' || user?.role === 'DISPATCHER';
 
   useEffect(() => {
@@ -99,7 +115,11 @@ export const Equipment: React.FC = () => {
   }, []);
 
   useEffect(() => {
-    fetchData();
+    if (activeTab === 'allocation') {
+      fetchAllocationData();
+    } else {
+      fetchData();
+    }
   }, [activeTab, currentPage, searchTerm, statusFilter, terminalFilter]);
 
   const fetchLocations = async () => {
@@ -108,6 +128,19 @@ export const Equipment: React.FC = () => {
       setLocations(data);
     } catch (error) {
       console.error('Failed to fetch locations:', error);
+    }
+  };
+
+  const fetchAllocationData = async () => {
+    setAllocationLoading(true);
+    try {
+      const data = await equipmentService.getAllocationSummary();
+      setAllocationData(data);
+    } catch (error) {
+      toast.error('Failed to fetch allocation data');
+      console.error('Failed to fetch allocation data:', error);
+    } finally {
+      setAllocationLoading(false);
     }
   };
 
@@ -157,6 +190,70 @@ export const Equipment: React.FC = () => {
     setCurrentPage(1);
     setSearchTerm('');
     setStatusFilter('');
+  };
+
+  const toggleTerminalExpand = (terminalId: number) => {
+    const newExpanded = new Set(expandedTerminals);
+    if (newExpanded.has(terminalId)) {
+      newExpanded.delete(terminalId);
+    } else {
+      newExpanded.add(terminalId);
+    }
+    setExpandedTerminals(newExpanded);
+  };
+
+  const startEditingAllocation = (terminal: TerminalAllocationData) => {
+    setEditingAllocation(terminal.id);
+    setEditedAllocations({ ...terminal.targets });
+  };
+
+  const cancelEditingAllocation = () => {
+    setEditingAllocation(null);
+    setEditedAllocations({});
+  };
+
+  const saveAllocation = async (terminalId: number) => {
+    setSavingAllocation(true);
+    try {
+      await equipmentService.updateTerminalAllocations(terminalId, editedAllocations);
+      toast.success('Allocation targets saved successfully');
+      setEditingAllocation(null);
+      setEditedAllocations({});
+      fetchAllocationData();
+    } catch (error) {
+      toast.error('Failed to save allocation targets');
+    } finally {
+      setSavingAllocation(false);
+    }
+  };
+
+  const getVarianceClass = (variance: number, target: number): string => {
+    if (target === 0) return 'text-gray-500';
+    if (variance >= 0) return 'text-green-600';
+    if (variance >= -2) return 'text-amber-600';
+    return 'text-red-600';
+  };
+
+  const getVarianceBgClass = (variance: number, target: number): string => {
+    if (target === 0) return 'bg-gray-50';
+    if (variance >= 0) return 'bg-green-50';
+    if (variance >= -2) return 'bg-amber-50';
+    return 'bg-red-50';
+  };
+
+  const formatEquipmentTypeLabel = (type: string): string => {
+    const labels: Record<string, string> = {
+      'truck_day_cab': 'Day Cab',
+      'truck_sleeper': 'Sleeper',
+      'truck_straight': 'Straight',
+      'trailer_53': "53'",
+      'trailer_48': "48'",
+      'trailer_45': "45'",
+      'trailer_28': "28'",
+      'dolly_a': 'A-Dolly',
+      'dolly_b': 'B-Dolly'
+    };
+    return labels[type] || type;
   };
 
   const handleSync = async () => {
@@ -342,19 +439,52 @@ export const Equipment: React.FC = () => {
     },
     {
       header: 'Terminal',
-      accessor: 'lastArrivalTerminal' as keyof EquipmentTruck,
-      cell: (truck: EquipmentTruck) => (
-        <div className="flex items-center text-gray-600">
-          {truck.lastArrivalTerminal ? (
-            <>
-              <MapPin className="w-4 h-4 mr-1" />
-              {truck.lastArrivalTerminal.code}
-            </>
-          ) : (
-            '-'
-          )}
-        </div>
-      )
+      accessor: 'effectiveTerminal' as keyof EquipmentTruck,
+      cell: (truck: any) => {
+        const terminal = truck.effectiveTerminal;
+        const source = truck.locationSource;
+        if (!terminal) return <span className="text-gray-400">-</span>;
+
+        return (
+          <div className="flex items-center text-gray-600" title={
+            source === 'yard_sync' ? 'Location from yard inventory sync' :
+            source === 'trip_arrival' ? 'Location from last trip arrival' :
+            'Manually set location'
+          }>
+            {source === 'yard_sync' ? (
+              <Database className="w-4 h-4 mr-1 text-blue-500" />
+            ) : source === 'trip_arrival' ? (
+              <TruckIcon className="w-4 h-4 mr-1 text-green-500" />
+            ) : (
+              <MapPin className="w-4 h-4 mr-1 text-gray-400" />
+            )}
+            <span>{terminal.code}</span>
+          </div>
+        );
+      }
+    },
+    {
+      header: 'GPS',
+      accessor: 'currentLatitude' as keyof EquipmentTruck,
+      cell: (truck: any) => {
+        if (truck.currentLatitude && truck.currentLongitude) {
+          const lat = truck.currentLatitude;
+          const lng = truck.currentLongitude;
+          return (
+            <a
+              href={`https://www.google.com/maps?q=${lat},${lng}`}
+              target="_blank"
+              rel="noopener noreferrer"
+              className="flex items-center text-indigo-600 hover:text-indigo-900 hover:underline text-xs"
+              title={`Last updated: ${truck.lastLocationUpdate ? new Date(truck.lastLocationUpdate).toLocaleString() : 'Unknown'}`}
+            >
+              <ExternalLink className="w-3 h-3 mr-1" />
+              {lat.toFixed(4)}, {lng.toFixed(4)}
+            </a>
+          );
+        }
+        return <span className="text-gray-400 text-xs">-</span>;
+      }
     },
     {
       header: 'Status',
@@ -436,19 +566,29 @@ export const Equipment: React.FC = () => {
     },
     {
       header: 'Terminal',
-      accessor: 'lastArrivalTerminal' as keyof EquipmentTrailer,
-      cell: (trailer: EquipmentTrailer) => (
-        <div className="flex items-center text-gray-600">
-          {trailer.lastArrivalTerminal ? (
-            <>
-              <MapPin className="w-4 h-4 mr-1" />
-              {trailer.lastArrivalTerminal.code}
-            </>
-          ) : (
-            '-'
-          )}
-        </div>
-      )
+      accessor: 'effectiveTerminal' as keyof EquipmentTrailer,
+      cell: (trailer: any) => {
+        const terminal = trailer.effectiveTerminal;
+        const source = trailer.locationSource;
+        if (!terminal) return <span className="text-gray-400">-</span>;
+
+        return (
+          <div className="flex items-center text-gray-600" title={
+            source === 'yard_sync' ? 'Location from yard inventory sync' :
+            source === 'trip_arrival' ? 'Location from last trip arrival' :
+            'Manually set location'
+          }>
+            {source === 'yard_sync' ? (
+              <Database className="w-4 h-4 mr-1 text-blue-500" />
+            ) : source === 'trip_arrival' ? (
+              <TruckIcon className="w-4 h-4 mr-1 text-green-500" />
+            ) : (
+              <MapPin className="w-4 h-4 mr-1 text-gray-400" />
+            )}
+            <span>{terminal.code}</span>
+          </div>
+        );
+      }
     },
     {
       header: 'Status',
@@ -503,19 +643,29 @@ export const Equipment: React.FC = () => {
     },
     {
       header: 'Terminal',
-      accessor: 'lastArrivalTerminal' as keyof EquipmentDolly,
-      cell: (dolly: EquipmentDolly) => (
-        <div className="flex items-center text-gray-600">
-          {dolly.lastArrivalTerminal ? (
-            <>
-              <MapPin className="w-4 h-4 mr-1" />
-              {dolly.lastArrivalTerminal.code}
-            </>
-          ) : (
-            '-'
-          )}
-        </div>
-      )
+      accessor: 'effectiveTerminal' as keyof EquipmentDolly,
+      cell: (dolly: any) => {
+        const terminal = dolly.effectiveTerminal;
+        const source = dolly.locationSource;
+        if (!terminal) return <span className="text-gray-400">-</span>;
+
+        return (
+          <div className="flex items-center text-gray-600" title={
+            source === 'yard_sync' ? 'Location from yard inventory sync' :
+            source === 'trip_arrival' ? 'Location from last trip arrival' :
+            'Manually set location'
+          }>
+            {source === 'yard_sync' ? (
+              <Database className="w-4 h-4 mr-1 text-blue-500" />
+            ) : source === 'trip_arrival' ? (
+              <TruckIcon className="w-4 h-4 mr-1 text-green-500" />
+            ) : (
+              <MapPin className="w-4 h-4 mr-1 text-gray-400" />
+            )}
+            <span>{terminal.code}</span>
+          </div>
+        );
+      }
     },
     {
       header: 'Status',
@@ -556,6 +706,8 @@ export const Equipment: React.FC = () => {
         return trailerColumns;
       case 'dollies':
         return dollyColumns;
+      case 'allocation':
+        return [];
     }
   };
 
@@ -567,6 +719,8 @@ export const Equipment: React.FC = () => {
         return trailers;
       case 'dollies':
         return dollies;
+      case 'allocation':
+        return [];
     }
   };
 
@@ -641,94 +795,381 @@ export const Equipment: React.FC = () => {
                 {dollies.length}
               </span>
             </button>
+            <button
+              onClick={() => handleTabChange('allocation')}
+              className={`flex items-center px-6 py-3 text-sm font-medium rounded-t-lg transition-all ${
+                activeTab === 'allocation'
+                  ? 'bg-purple-100 text-purple-700 border-b-2 border-purple-500'
+                  : 'bg-purple-50 text-purple-600 hover:bg-purple-100 border-b-2 border-transparent'
+              }`}
+            >
+              <BarChart3 className="w-4 h-4 mr-2" />
+              Allocation
+            </button>
           </nav>
         </div>
       </div>
 
-      <div className="bg-white shadow rounded-lg">
-        {/* Filters */}
-        <div className="p-6 border-b border-gray-200">
-          <div className="flex flex-col md:flex-row md:items-center md:justify-between space-y-4 md:space-y-0">
-            <div className="flex flex-col md:flex-row md:items-center space-y-4 md:space-y-0 md:space-x-4 flex-1">
-              <div className="flex-1 max-w-md">
-                <Search
-                  value={searchTerm}
-                  onChange={handleSearch}
-                  placeholder={`Search ${activeTab} by unit number...`}
-                />
+      {/* Equipment Table View */}
+      {activeTab !== 'allocation' && (
+        <div className="bg-white shadow rounded-lg">
+          {/* Filters */}
+          <div className="p-6 border-b border-gray-200">
+            <div className="flex flex-col md:flex-row md:items-center md:justify-between space-y-4 md:space-y-0">
+              <div className="flex flex-col md:flex-row md:items-center space-y-4 md:space-y-0 md:space-x-4 flex-1">
+                <div className="flex-1 max-w-md">
+                  <Search
+                    value={searchTerm}
+                    onChange={handleSearch}
+                    placeholder={`Search ${activeTab} by unit number...`}
+                  />
+                </div>
+
+                <div className="flex items-center space-x-2">
+                  <Filter className="w-4 h-4 text-gray-400" />
+                  <select
+                    value={statusFilter}
+                    onChange={(e) => {
+                      setStatusFilter(e.target.value as EquipmentStatus | '');
+                      setCurrentPage(1);
+                    }}
+                    className="rounded-md border border-gray-300 shadow-sm text-sm focus:ring-indigo-500 focus:border-indigo-500"
+                  >
+                    {statusFilterOptions.map((option) => (
+                      <option key={option.value} value={option.value}>
+                        {option.label}
+                      </option>
+                    ))}
+                  </select>
+
+                  <select
+                    value={terminalFilter}
+                    onChange={(e) => {
+                      setTerminalFilter(e.target.value ? parseInt(e.target.value) : '');
+                      setCurrentPage(1);
+                    }}
+                    className="rounded-md border border-gray-300 shadow-sm text-sm focus:ring-indigo-500 focus:border-indigo-500"
+                  >
+                    <option value="">All Locations</option>
+                    {locations.map((location) => (
+                      <option key={location.id} value={location.id}>
+                        {location.code} - {location.name}
+                      </option>
+                    ))}
+                  </select>
+                </div>
               </div>
 
-              <div className="flex items-center space-x-2">
-                <Filter className="w-4 h-4 text-gray-400" />
-                <select
-                  value={statusFilter}
-                  onChange={(e) => {
-                    setStatusFilter(e.target.value as EquipmentStatus | '');
-                    setCurrentPage(1);
-                  }}
-                  className="rounded-md border border-gray-300 shadow-sm text-sm focus:ring-indigo-500 focus:border-indigo-500"
-                >
-                  {statusFilterOptions.map((option) => (
-                    <option key={option.value} value={option.value}>
-                      {option.label}
-                    </option>
-                  ))}
-                </select>
-
-                <select
-                  value={terminalFilter}
-                  onChange={(e) => {
-                    setTerminalFilter(e.target.value ? parseInt(e.target.value) : '');
-                    setCurrentPage(1);
-                  }}
-                  className="rounded-md border border-gray-300 shadow-sm text-sm focus:ring-indigo-500 focus:border-indigo-500"
-                >
-                  <option value="">All Locations</option>
-                  {locations.map((location) => (
-                    <option key={location.id} value={location.id}>
-                      {location.code} - {location.name}
-                    </option>
-                  ))}
-                </select>
-              </div>
+              {isAdmin && (
+                <div className="flex space-x-2">
+                  <button
+                    onClick={handleSync}
+                    disabled={isSyncing}
+                    className="inline-flex items-center px-4 py-2 border border-gray-300 rounded-md shadow-sm text-sm font-medium text-gray-700 bg-white hover:bg-gray-50 disabled:opacity-50 disabled:cursor-not-allowed"
+                  >
+                    <RefreshCw className={`w-4 h-4 mr-2 ${isSyncing ? 'animate-spin' : ''}`} />
+                    {isSyncing ? 'Syncing...' : 'Sync from Fleet App'}
+                  </button>
+                  <button
+                    onClick={() => setIsCreateModalOpen(true)}
+                    className="inline-flex items-center px-4 py-2 border border-transparent rounded-md shadow-sm text-sm font-medium text-white bg-indigo-600 hover:bg-indigo-700"
+                  >
+                    <Plus className="w-4 h-4 mr-2" />
+                    Add {activeTab.slice(0, -1).charAt(0).toUpperCase() + activeTab.slice(1, -1)}
+                  </button>
+                </div>
+              )}
             </div>
-
-            {isAdmin && (
-              <div className="flex space-x-2">
-                <button
-                  onClick={handleSync}
-                  disabled={isSyncing}
-                  className="inline-flex items-center px-4 py-2 border border-gray-300 rounded-md shadow-sm text-sm font-medium text-gray-700 bg-white hover:bg-gray-50 disabled:opacity-50 disabled:cursor-not-allowed"
-                >
-                  <RefreshCw className={`w-4 h-4 mr-2 ${isSyncing ? 'animate-spin' : ''}`} />
-                  {isSyncing ? 'Syncing...' : 'Sync from Fleet App'}
-                </button>
-                <button
-                  onClick={() => setIsCreateModalOpen(true)}
-                  className="inline-flex items-center px-4 py-2 border border-transparent rounded-md shadow-sm text-sm font-medium text-white bg-indigo-600 hover:bg-indigo-700"
-                >
-                  <Plus className="w-4 h-4 mr-2" />
-                  Add {activeTab.slice(0, -1).charAt(0).toUpperCase() + activeTab.slice(1, -1)}
-                </button>
-              </div>
-            )}
           </div>
+
+          {/* Table */}
+          <DataTable columns={getColumns() as any} data={getData() as any} loading={loading} />
+
+          {/* Pagination */}
+          {!loading && getData() && getData()!.length > 0 && (
+            <div className="px-6 py-4 border-t border-gray-200">
+              <TablePagination
+                currentPage={currentPage}
+                totalPages={totalPages}
+                onPageChange={setCurrentPage}
+              />
+            </div>
+          )}
         </div>
+      )}
 
-        {/* Table */}
-        <DataTable columns={getColumns() as any} data={getData() as any} loading={loading} />
-
-        {/* Pagination */}
-        {!loading && getData().length > 0 && (
-          <div className="px-6 py-4 border-t border-gray-200">
-            <TablePagination
-              currentPage={currentPage}
-              totalPages={totalPages}
-              onPageChange={setCurrentPage}
-            />
+      {/* Allocation View */}
+      {activeTab === 'allocation' && (
+        <div className="bg-white shadow rounded-lg">
+          <div className="p-6 border-b border-gray-200">
+            <div className="flex items-center justify-between">
+              <div>
+                <h2 className="text-lg font-medium text-gray-900">Equipment Allocation by Terminal</h2>
+                <p className="text-sm text-gray-500">View and manage equipment allocation targets for each terminal</p>
+              </div>
+              <button
+                onClick={fetchAllocationData}
+                disabled={allocationLoading}
+                className="inline-flex items-center px-4 py-2 border border-gray-300 rounded-md shadow-sm text-sm font-medium text-gray-700 bg-white hover:bg-gray-50 disabled:opacity-50"
+              >
+                <RefreshCw className={`w-4 h-4 mr-2 ${allocationLoading ? 'animate-spin' : ''}`} />
+                Refresh
+              </button>
+            </div>
           </div>
-        )}
-      </div>
+
+          {/* Legend */}
+          <div className="px-6 py-3 bg-gray-50 border-b border-gray-200 flex items-center space-x-6 text-xs">
+            <span className="font-medium text-gray-700">Legend:</span>
+            <span className="flex items-center">
+              <span className="w-3 h-3 rounded bg-green-500 mr-1"></span>
+              Met/Overage
+            </span>
+            <span className="flex items-center">
+              <span className="w-3 h-3 rounded bg-amber-500 mr-1"></span>
+              Near Target (-1 to -2)
+            </span>
+            <span className="flex items-center">
+              <span className="w-3 h-3 rounded bg-red-500 mr-1"></span>
+              Shortage (&lt; -2)
+            </span>
+          </div>
+
+          {allocationLoading ? (
+            <div className="flex items-center justify-center h-64">
+              <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-indigo-600"></div>
+            </div>
+          ) : allocationData ? (
+            <div className="divide-y divide-gray-200">
+              {allocationData.terminals.map((terminal) => {
+                const isExpanded = expandedTerminals.has(terminal.id);
+                const isEditing = editingAllocation === terminal.id;
+
+                // Equipment categories for display
+                const truckTypes = ['truck_day_cab', 'truck_sleeper', 'truck_straight'];
+                const trailerTypes = ['trailer_53', 'trailer_48', 'trailer_45', 'trailer_28'];
+                const dollyTypes = ['dolly_a', 'dolly_b'];
+
+                return (
+                  <div key={terminal.id} className="bg-white">
+                    {/* Terminal Header */}
+                    <div className="px-6 py-4 flex items-center justify-between">
+                      <div className="flex items-center space-x-4">
+                        <button
+                          onClick={() => toggleTerminalExpand(terminal.id)}
+                          className="text-gray-500 hover:text-gray-700"
+                        >
+                          {isExpanded ? (
+                            <ChevronDown className="w-5 h-5" />
+                          ) : (
+                            <ChevronRight className="w-5 h-5" />
+                          )}
+                        </button>
+                        <div>
+                          <h3 className="text-sm font-medium text-gray-900">{terminal.code}</h3>
+                          <p className="text-xs text-gray-500">{terminal.name}</p>
+                        </div>
+                      </div>
+
+                      {/* Summary Badges */}
+                      <div className="flex items-center space-x-6">
+                        {/* Trucks Summary */}
+                        <div className="text-center">
+                          <div className="text-xs text-gray-500 mb-1">Trucks</div>
+                          <div className="flex space-x-1">
+                            {truckTypes.map(type => {
+                              const variance = terminal.variance[type];
+                              const target = terminal.targets[type];
+                              if (target === 0 && terminal.current[type] === 0) return null;
+                              return (
+                                <span
+                                  key={type}
+                                  className={`px-2 py-1 rounded text-xs font-medium ${getVarianceBgClass(variance, target)} ${getVarianceClass(variance, target)}`}
+                                  title={`${formatEquipmentTypeLabel(type)}: ${terminal.current[type]}/${target} (${variance >= 0 ? '+' : ''}${variance})`}
+                                >
+                                  {terminal.current[type]}/{target}
+                                </span>
+                              );
+                            })}
+                          </div>
+                        </div>
+
+                        {/* Trailers Summary */}
+                        <div className="text-center">
+                          <div className="text-xs text-gray-500 mb-1">Trailers</div>
+                          <div className="flex space-x-1">
+                            {trailerTypes.map(type => {
+                              const variance = terminal.variance[type];
+                              const target = terminal.targets[type];
+                              if (target === 0 && terminal.current[type] === 0) return null;
+                              return (
+                                <span
+                                  key={type}
+                                  className={`px-2 py-1 rounded text-xs font-medium ${getVarianceBgClass(variance, target)} ${getVarianceClass(variance, target)}`}
+                                  title={`${formatEquipmentTypeLabel(type)}: ${terminal.current[type]}/${target} (${variance >= 0 ? '+' : ''}${variance})`}
+                                >
+                                  {terminal.current[type]}/{target}
+                                </span>
+                              );
+                            })}
+                          </div>
+                        </div>
+
+                        {/* Dollies Summary */}
+                        <div className="text-center">
+                          <div className="text-xs text-gray-500 mb-1">Dollies</div>
+                          <div className="flex space-x-1">
+                            {dollyTypes.map(type => {
+                              const variance = terminal.variance[type];
+                              const target = terminal.targets[type];
+                              if (target === 0 && terminal.current[type] === 0) return null;
+                              return (
+                                <span
+                                  key={type}
+                                  className={`px-2 py-1 rounded text-xs font-medium ${getVarianceBgClass(variance, target)} ${getVarianceClass(variance, target)}`}
+                                  title={`${formatEquipmentTypeLabel(type)}: ${terminal.current[type]}/${target} (${variance >= 0 ? '+' : ''}${variance})`}
+                                >
+                                  {terminal.current[type]}/{target}
+                                </span>
+                              );
+                            })}
+                          </div>
+                        </div>
+
+                        {/* Actions */}
+                        {isAdmin && !isEditing && (
+                          <button
+                            onClick={() => startEditingAllocation(terminal)}
+                            className="text-indigo-600 hover:text-indigo-900"
+                            title="Edit allocation targets"
+                          >
+                            <Settings className="w-5 h-5" />
+                          </button>
+                        )}
+                      </div>
+                    </div>
+
+                    {/* Expanded Details */}
+                    {isExpanded && (
+                      <div className="px-6 pb-4 bg-gray-50">
+                        {/* Edit Mode */}
+                        {isEditing && (
+                          <div className="mb-4 p-4 bg-white rounded-lg border border-gray-200">
+                            <h4 className="text-sm font-medium text-gray-900 mb-3">Edit Allocation Targets</h4>
+                            <div className="grid grid-cols-3 gap-4">
+                              {/* Trucks */}
+                              <div>
+                                <h5 className="text-xs font-medium text-gray-700 mb-2">Trucks</h5>
+                                {truckTypes.map(type => (
+                                  <div key={type} className="flex items-center justify-between mb-2">
+                                    <label className="text-sm text-gray-600">{formatEquipmentTypeLabel(type)}</label>
+                                    <input
+                                      type="number"
+                                      min="0"
+                                      value={editedAllocations[type] || 0}
+                                      onChange={(e) => setEditedAllocations({
+                                        ...editedAllocations,
+                                        [type]: parseInt(e.target.value) || 0
+                                      })}
+                                      className="w-20 px-2 py-1 text-sm border border-gray-300 rounded focus:ring-indigo-500 focus:border-indigo-500"
+                                    />
+                                  </div>
+                                ))}
+                              </div>
+                              {/* Trailers */}
+                              <div>
+                                <h5 className="text-xs font-medium text-gray-700 mb-2">Trailers</h5>
+                                {trailerTypes.map(type => (
+                                  <div key={type} className="flex items-center justify-between mb-2">
+                                    <label className="text-sm text-gray-600">{formatEquipmentTypeLabel(type)}</label>
+                                    <input
+                                      type="number"
+                                      min="0"
+                                      value={editedAllocations[type] || 0}
+                                      onChange={(e) => setEditedAllocations({
+                                        ...editedAllocations,
+                                        [type]: parseInt(e.target.value) || 0
+                                      })}
+                                      className="w-20 px-2 py-1 text-sm border border-gray-300 rounded focus:ring-indigo-500 focus:border-indigo-500"
+                                    />
+                                  </div>
+                                ))}
+                              </div>
+                              {/* Dollies */}
+                              <div>
+                                <h5 className="text-xs font-medium text-gray-700 mb-2">Dollies</h5>
+                                {dollyTypes.map(type => (
+                                  <div key={type} className="flex items-center justify-between mb-2">
+                                    <label className="text-sm text-gray-600">{formatEquipmentTypeLabel(type)}</label>
+                                    <input
+                                      type="number"
+                                      min="0"
+                                      value={editedAllocations[type] || 0}
+                                      onChange={(e) => setEditedAllocations({
+                                        ...editedAllocations,
+                                        [type]: parseInt(e.target.value) || 0
+                                      })}
+                                      className="w-20 px-2 py-1 text-sm border border-gray-300 rounded focus:ring-indigo-500 focus:border-indigo-500"
+                                    />
+                                  </div>
+                                ))}
+                              </div>
+                            </div>
+                            <div className="flex justify-end space-x-2 mt-4">
+                              <button
+                                onClick={cancelEditingAllocation}
+                                className="px-3 py-1 text-sm text-gray-700 bg-gray-100 hover:bg-gray-200 rounded"
+                              >
+                                Cancel
+                              </button>
+                              <button
+                                onClick={() => saveAllocation(terminal.id)}
+                                disabled={savingAllocation}
+                                className="px-3 py-1 text-sm text-white bg-indigo-600 hover:bg-indigo-700 rounded disabled:opacity-50 flex items-center"
+                              >
+                                <Save className="w-4 h-4 mr-1" />
+                                {savingAllocation ? 'Saving...' : 'Save'}
+                              </button>
+                            </div>
+                          </div>
+                        )}
+
+                        {/* Inbound Equipment */}
+                        {terminal.inbound.length > 0 && (
+                          <div>
+                            <h4 className="text-sm font-medium text-gray-700 mb-2">Inbound Equipment ({terminal.inbound.length})</h4>
+                            <div className="grid grid-cols-4 gap-2">
+                              {terminal.inbound.map((item, idx) => (
+                                <div
+                                  key={idx}
+                                  className="flex items-center justify-between px-3 py-2 bg-white rounded border border-gray-200 text-sm"
+                                >
+                                  <span className="font-medium">{item.unitNumber}</span>
+                                  <span className="text-xs text-gray-500">{formatEquipmentTypeLabel(item.equipmentType)}</span>
+                                </div>
+                              ))}
+                            </div>
+                          </div>
+                        )}
+
+                        {terminal.inbound.length === 0 && !isEditing && (
+                          <p className="text-sm text-gray-500 italic">No inbound equipment</p>
+                        )}
+                      </div>
+                    )}
+                  </div>
+                );
+              })}
+            </div>
+          ) : (
+            <div className="flex flex-col items-center justify-center h-64 text-gray-500">
+              <BarChart3 className="w-12 h-12 mb-4 text-gray-300" />
+              <p className="text-lg font-medium">No allocation data available</p>
+              <p className="text-sm">Click Refresh to load allocation data</p>
+            </div>
+          )}
+        </div>
+      )}
 
       {/* Create Modal */}
       <Modal

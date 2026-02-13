@@ -83,14 +83,44 @@ export const getTrucks = async (req: Request, res: Response): Promise<void> => {
       prisma.equipmentTruck.count({ where })
     ]);
 
-    // Transform trucks to include lastArrivalTerminal
+    // Transform trucks to include lastArrivalTerminal, locationSource, and GPS data
     const transformedTrucks = trucks.map(truck => {
       const lastTrip = truck.linehaulTrips?.[0];
       const lastArrivalTerminal = lastTrip?.linehaulProfile?.destinationTerminal || null;
+      const lastTripArrivalTime = lastTrip?.actualArrival ? new Date(lastTrip.actualArrival) : null;
+      const lastSyncTime = truck.lastLocationUpdate ? new Date(truck.lastLocationUpdate) : null;
+
+      // Determine location source and effective terminal
+      let locationSource: 'yard_sync' | 'trip_arrival' | 'manual' | null = null;
+      let effectiveTerminal = null;
+
+      if (lastTripArrivalTime && lastSyncTime) {
+        // Both sources available - use the more recent one
+        if (lastSyncTime > lastTripArrivalTime) {
+          locationSource = 'yard_sync';
+          effectiveTerminal = truck.currentTerminal;
+        } else {
+          locationSource = 'trip_arrival';
+          effectiveTerminal = lastArrivalTerminal;
+        }
+      } else if (lastTripArrivalTime) {
+        locationSource = 'trip_arrival';
+        effectiveTerminal = lastArrivalTerminal;
+      } else if (truck.currentTerminal) {
+        locationSource = truck.lastLocationUpdate ? 'yard_sync' : 'manual';
+        effectiveTerminal = truck.currentTerminal;
+      }
+
       const { linehaulTrips, ...truckData } = truck;
       return {
         ...truckData,
-        lastArrivalTerminal
+        lastArrivalTerminal,
+        locationSource,
+        effectiveTerminal,
+        // Include GPS data (convert Decimal to number)
+        currentLatitude: truck.currentLatitude ? Number(truck.currentLatitude) : null,
+        currentLongitude: truck.currentLongitude ? Number(truck.currentLongitude) : null,
+        lastLocationUpdate: truck.lastLocationUpdate
       };
     });
 
@@ -486,7 +516,7 @@ export const getTrailers = async (req: Request, res: Response): Promise<void> =>
       prisma.equipmentTrailer.count({ where })
     ]);
 
-    // Transform trailers to include lastArrivalTerminal from any trip position
+    // Transform trailers to include lastArrivalTerminal, locationSource, and effectiveTerminal
     const transformedTrailers = trailers.map((trailer: any) => {
       // Get all trips and find the most recent arrival
       const allTrips = [
@@ -504,10 +534,37 @@ export const getTrailers = async (req: Request, res: Response): Promise<void> =>
 
       const lastTrip = allTrips[0];
       const lastArrivalTerminal = lastTrip?.linehaulProfile?.destinationTerminal || null;
+      const lastTripArrivalTime = lastTrip?.actualArrival ? new Date(lastTrip.actualArrival) : null;
+      const lastSyncTime = trailer.lastLocationUpdate ? new Date(trailer.lastLocationUpdate) : null;
+
+      // Determine location source and effective terminal
+      let locationSource: 'yard_sync' | 'trip_arrival' | 'manual' | null = null;
+      let effectiveTerminal = null;
+
+      if (lastTripArrivalTime && lastSyncTime) {
+        // Both sources available - use the more recent one
+        if (lastSyncTime > lastTripArrivalTime) {
+          locationSource = 'yard_sync';
+          effectiveTerminal = trailer.currentTerminal;
+        } else {
+          locationSource = 'trip_arrival';
+          effectiveTerminal = lastArrivalTerminal;
+        }
+      } else if (lastTripArrivalTime) {
+        locationSource = 'trip_arrival';
+        effectiveTerminal = lastArrivalTerminal;
+      } else if (trailer.currentTerminal) {
+        locationSource = trailer.lastLocationUpdate ? 'yard_sync' : 'manual';
+        effectiveTerminal = trailer.currentTerminal;
+      }
+
       const { primaryTrips, secondaryTrips, tertiaryTrips, ...trailerData } = trailer;
       return {
         ...trailerData,
-        lastArrivalTerminal
+        lastArrivalTerminal,
+        locationSource,
+        effectiveTerminal,
+        lastLocationUpdate: trailer.lastLocationUpdate
       };
     });
 
@@ -865,7 +922,7 @@ export const getDollies = async (req: Request, res: Response): Promise<void> => 
       prisma.equipmentDolly.count({ where })
     ]);
 
-    // Transform dollies to include lastArrivalTerminal from any trip position
+    // Transform dollies to include lastArrivalTerminal, locationSource, and effectiveTerminal
     const transformedDollies = dollies.map((dolly: any) => {
       // Get all trips and find the most recent arrival
       const allTrips = [
@@ -882,10 +939,37 @@ export const getDollies = async (req: Request, res: Response): Promise<void> => 
 
       const lastTrip = allTrips[0];
       const lastArrivalTerminal = lastTrip?.linehaulProfile?.destinationTerminal || null;
+      const lastTripArrivalTime = lastTrip?.actualArrival ? new Date(lastTrip.actualArrival) : null;
+      const lastSyncTime = dolly.lastLocationUpdate ? new Date(dolly.lastLocationUpdate) : null;
+
+      // Determine location source and effective terminal
+      let locationSource: 'yard_sync' | 'trip_arrival' | 'manual' | null = null;
+      let effectiveTerminal = null;
+
+      if (lastTripArrivalTime && lastSyncTime) {
+        // Both sources available - use the more recent one
+        if (lastSyncTime > lastTripArrivalTime) {
+          locationSource = 'yard_sync';
+          effectiveTerminal = dolly.currentTerminal;
+        } else {
+          locationSource = 'trip_arrival';
+          effectiveTerminal = lastArrivalTerminal;
+        }
+      } else if (lastTripArrivalTime) {
+        locationSource = 'trip_arrival';
+        effectiveTerminal = lastArrivalTerminal;
+      } else if (dolly.currentTerminal) {
+        locationSource = dolly.lastLocationUpdate ? 'yard_sync' : 'manual';
+        effectiveTerminal = dolly.currentTerminal;
+      }
+
       const { linehaulTrips, linehaulTrips2, ...dollyData } = dolly;
       return {
         ...dollyData,
-        lastArrivalTerminal
+        lastArrivalTerminal,
+        locationSource,
+        effectiveTerminal,
+        lastLocationUpdate: dolly.lastLocationUpdate
       };
     });
 
@@ -1466,5 +1550,351 @@ export const getMotiveSyncStatus = async (_req: Request, res: Response): Promise
   } catch (error) {
     console.error('Error getting Motive sync status:', error);
     res.status(500).json({ message: 'Failed to get sync status' });
+  }
+};
+
+// ==================== EQUIPMENT ALLOCATION ====================
+
+// Equipment types for allocation
+const EQUIPMENT_TYPES = [
+  'truck_day_cab',
+  'truck_sleeper',
+  'truck_straight',
+  'trailer_53',
+  'trailer_48',
+  'trailer_45',
+  'trailer_28',
+  'dolly_a',
+  'dolly_b'
+] as const;
+
+// Get allocation summary for all terminals
+export const getAllocationSummary = async (_req: Request, res: Response): Promise<void> => {
+  try {
+    // Get all terminals with their allocation requirements
+    const terminals = await prisma.terminal.findMany({
+      where: { active: true },
+      include: {
+        equipmentRequirements: true
+      },
+      orderBy: { code: 'asc' }
+    });
+
+    // Get current equipment counts by terminal
+    const [truckCounts, trailerCounts, dollyCounts] = await Promise.all([
+      prisma.equipmentTruck.groupBy({
+        by: ['currentTerminalId', 'truckType'],
+        where: { status: { not: 'OUT_OF_SERVICE' } },
+        _count: true
+      }),
+      prisma.equipmentTrailer.groupBy({
+        by: ['currentTerminalId', 'lengthFeet'],
+        where: { status: { not: 'OUT_OF_SERVICE' } },
+        _count: true
+      }),
+      prisma.equipmentDolly.groupBy({
+        by: ['currentTerminalId', 'dollyType'],
+        where: { status: { not: 'OUT_OF_SERVICE' } },
+        _count: true
+      })
+    ]);
+
+    // Get dispatched equipment (currently on trips FROM each terminal)
+    const activeTrips = await prisma.linehaulTrip.findMany({
+      where: {
+        status: { in: ['DISPATCHED', 'IN_TRANSIT'] }
+      },
+      include: {
+        linehaulProfile: {
+          select: {
+            originTerminalId: true,
+            destinationTerminalId: true
+          }
+        },
+        truck: {
+          select: { truckType: true }
+        },
+        trailer: {
+          select: { lengthFeet: true }
+        },
+        trailer2: {
+          select: { lengthFeet: true }
+        },
+        trailer3: {
+          select: { lengthFeet: true }
+        },
+        dolly: {
+          select: { dollyType: true }
+        },
+        dolly2: {
+          select: { dollyType: true }
+        }
+      }
+    });
+
+    // Get inbound equipment (on trips returning TO each terminal)
+    const inboundTrips = await prisma.linehaulTrip.findMany({
+      where: {
+        status: { in: ['DISPATCHED', 'IN_TRANSIT', 'UNLOADING'] }
+      },
+      include: {
+        linehaulProfile: {
+          select: {
+            destinationTerminalId: true,
+            destinationTerminal: {
+              select: { id: true, code: true }
+            }
+          }
+        },
+        truck: {
+          select: { unitNumber: true, truckType: true }
+        },
+        trailer: {
+          select: { unitNumber: true, lengthFeet: true }
+        },
+        trailer2: {
+          select: { unitNumber: true, lengthFeet: true }
+        },
+        trailer3: {
+          select: { unitNumber: true, lengthFeet: true }
+        },
+        dolly: {
+          select: { unitNumber: true, dollyType: true }
+        },
+        dolly2: {
+          select: { unitNumber: true, dollyType: true }
+        }
+      }
+    });
+
+    // Build the response data
+    const terminalData = terminals.map(terminal => {
+      // Build targets from requirements
+      const targets: Record<string, number> = {};
+      EQUIPMENT_TYPES.forEach(type => {
+        const req = terminal.equipmentRequirements.find((r: any) => r.equipmentType === type);
+        targets[type] = req?.minCount || 0;
+      });
+
+      // Build current counts
+      const current: Record<string, number> = {};
+      EQUIPMENT_TYPES.forEach(type => { current[type] = 0; });
+
+      // Count trucks
+      truckCounts
+        .filter(c => c.currentTerminalId === terminal.id)
+        .forEach(c => {
+          const key = `truck_${c.truckType.toLowerCase()}`;
+          if (current[key] !== undefined) {
+            current[key] = c._count;
+          }
+        });
+
+      // Count trailers by length
+      trailerCounts
+        .filter(c => c.currentTerminalId === terminal.id)
+        .forEach(c => {
+          const key = `trailer_${c.lengthFeet}`;
+          if (current[key] !== undefined) {
+            current[key] = c._count;
+          }
+        });
+
+      // Count dollies
+      dollyCounts
+        .filter(c => c.currentTerminalId === terminal.id)
+        .forEach(c => {
+          const key = `dolly_${c.dollyType === 'A_DOLLY' ? 'a' : 'b'}`;
+          if (current[key] !== undefined) {
+            current[key] = c._count;
+          }
+        });
+
+      // Build dispatched counts (equipment on trips FROM this terminal)
+      const dispatched: Record<string, number> = {};
+      EQUIPMENT_TYPES.forEach(type => { dispatched[type] = 0; });
+
+      activeTrips
+        .filter(t => t.linehaulProfile?.originTerminalId === terminal.id)
+        .forEach(trip => {
+          if (trip.truck) {
+            const key = `truck_${trip.truck.truckType.toLowerCase()}`;
+            if (dispatched[key] !== undefined) dispatched[key]++;
+          }
+          if (trip.trailer?.lengthFeet) {
+            const key = `trailer_${trip.trailer.lengthFeet}`;
+            if (dispatched[key] !== undefined) dispatched[key]++;
+          }
+          if (trip.trailer2?.lengthFeet) {
+            const key = `trailer_${trip.trailer2.lengthFeet}`;
+            if (dispatched[key] !== undefined) dispatched[key]++;
+          }
+          if (trip.trailer3?.lengthFeet) {
+            const key = `trailer_${trip.trailer3.lengthFeet}`;
+            if (dispatched[key] !== undefined) dispatched[key]++;
+          }
+          if (trip.dolly) {
+            const key = `dolly_${trip.dolly.dollyType === 'A_DOLLY' ? 'a' : 'b'}`;
+            if (dispatched[key] !== undefined) dispatched[key]++;
+          }
+          if (trip.dolly2) {
+            const key = `dolly_${trip.dolly2.dollyType === 'A_DOLLY' ? 'a' : 'b'}`;
+            if (dispatched[key] !== undefined) dispatched[key]++;
+          }
+        });
+
+      // Build inbound equipment list
+      const inbound: any[] = [];
+      inboundTrips
+        .filter(t => t.linehaulProfile?.destinationTerminalId === terminal.id)
+        .forEach(trip => {
+          if (trip.truck) {
+            inbound.push({
+              equipmentType: `truck_${trip.truck.truckType.toLowerCase()}`,
+              unitNumber: trip.truck.unitNumber,
+              tripId: trip.id,
+              tripNumber: trip.tripNumber
+            });
+          }
+          [trip.trailer, trip.trailer2, trip.trailer3]
+            .filter(t => t)
+            .forEach(trailerItem => {
+              if (trailerItem) {
+                inbound.push({
+                  equipmentType: `trailer_${trailerItem.lengthFeet}`,
+                  unitNumber: trailerItem.unitNumber,
+                  tripId: trip.id,
+                  tripNumber: trip.tripNumber
+                });
+              }
+            });
+          [trip.dolly, trip.dolly2]
+            .filter(d => d)
+            .forEach(dollyItem => {
+              if (dollyItem) {
+                inbound.push({
+                  equipmentType: `dolly_${dollyItem.dollyType === 'A_DOLLY' ? 'a' : 'b'}`,
+                  unitNumber: dollyItem.unitNumber,
+                  tripId: trip.id,
+                  tripNumber: trip.tripNumber
+                });
+              }
+            });
+        });
+
+      // Calculate inbound counts by type
+      const inboundCounts: Record<string, number> = {};
+      EQUIPMENT_TYPES.forEach(type => { inboundCounts[type] = 0; });
+      inbound.forEach(item => {
+        if (inboundCounts[item.equipmentType] !== undefined) {
+          inboundCounts[item.equipmentType]++;
+        }
+      });
+
+      // Calculate variance: (current + inbound) - target
+      const variance: Record<string, number> = {};
+      EQUIPMENT_TYPES.forEach(type => {
+        variance[type] = (current[type] + inboundCounts[type]) - targets[type];
+      });
+
+      return {
+        id: terminal.id,
+        code: terminal.code,
+        name: terminal.name,
+        targets,
+        current,
+        dispatched,
+        inbound,
+        inboundCounts,
+        variance
+      };
+    });
+
+    res.json({
+      terminals: terminalData,
+      equipmentTypes: EQUIPMENT_TYPES
+    });
+  } catch (error) {
+    console.error('Error fetching allocation summary:', error);
+    res.status(500).json({ message: 'Failed to fetch allocation summary' });
+  }
+};
+
+// Get allocation targets for a specific terminal
+export const getTerminalAllocations = async (req: Request, res: Response): Promise<void> => {
+  try {
+    const { terminalId } = req.params;
+    const termId = parseInt(terminalId, 10);
+
+    const requirements = await prisma.terminalEquipmentRequirement.findMany({
+      where: { terminalId: termId }
+    });
+
+    // Build a map of equipment type to target count
+    const allocations: Record<string, number> = {};
+    EQUIPMENT_TYPES.forEach(type => {
+      const req = requirements.find(r => r.equipmentType === type);
+      allocations[type] = req?.minCount || 0;
+    });
+
+    res.json({
+      terminalId: termId,
+      allocations,
+      equipmentTypes: EQUIPMENT_TYPES
+    });
+  } catch (error) {
+    console.error('Error fetching terminal allocations:', error);
+    res.status(500).json({ message: 'Failed to fetch terminal allocations' });
+  }
+};
+
+// Update allocation targets for a terminal
+export const updateTerminalAllocations = async (req: Request, res: Response): Promise<void> => {
+  try {
+    const { terminalId } = req.params;
+    const { allocations } = req.body;
+    const termId = parseInt(terminalId, 10);
+
+    // Verify terminal exists
+    const terminal = await prisma.terminal.findUnique({
+      where: { id: termId }
+    });
+
+    if (!terminal) {
+      res.status(404).json({ message: 'Terminal not found' });
+      return;
+    }
+
+    // Update or create requirements for each equipment type
+    const updates = await Promise.all(
+      Object.entries(allocations).map(async ([equipmentType, minCount]) => {
+        const existing = await prisma.terminalEquipmentRequirement.findFirst({
+          where: { terminalId: termId, equipmentType }
+        });
+
+        if (existing) {
+          return prisma.terminalEquipmentRequirement.update({
+            where: { id: existing.id },
+            data: { minCount: minCount as number }
+          });
+        } else {
+          return prisma.terminalEquipmentRequirement.create({
+            data: {
+              terminalId: termId,
+              equipmentType,
+              minCount: minCount as number
+            }
+          });
+        }
+      })
+    );
+
+    res.json({
+      message: 'Allocations updated successfully',
+      updated: updates.length
+    });
+  } catch (error) {
+    console.error('Error updating terminal allocations:', error);
+    res.status(500).json({ message: 'Failed to update terminal allocations' });
   }
 };

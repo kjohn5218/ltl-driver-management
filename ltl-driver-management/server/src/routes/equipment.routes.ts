@@ -35,7 +35,11 @@ import {
   syncVehicleLocations,
   getVehicleLocations,
   getTruckLocation,
-  getMotiveSyncStatus
+  getMotiveSyncStatus,
+  // Allocation
+  getAllocationSummary,
+  getTerminalAllocations,
+  updateTerminalAllocations
 } from '../controllers/equipment.controller';
 import { authenticate, authorize } from '../middleware/auth.middleware';
 import { validateRequest } from '../middleware/validation.middleware';
@@ -457,6 +461,34 @@ router.get(
   '/locations/sync/status',
   authorize(UserRole.ADMIN, UserRole.DISPATCHER),
   getMotiveSyncStatus
+);
+
+// ==================== EQUIPMENT ALLOCATION ====================
+
+// Get allocation summary for all terminals
+router.get(
+  '/allocation/summary',
+  getAllocationSummary
+);
+
+// Get allocation targets for a specific terminal
+router.get(
+  '/allocation/terminal/:terminalId',
+  [param('terminalId').isInt({ min: 1 })],
+  validateRequest,
+  getTerminalAllocations
+);
+
+// Update allocation targets for a terminal (Admin only)
+router.put(
+  '/allocation/terminal/:terminalId',
+  authorize(UserRole.ADMIN),
+  [
+    param('terminalId').isInt({ min: 1 }),
+    body('allocations').isObject()
+  ],
+  validateRequest,
+  updateTerminalAllocations
 );
 
 export default router;
