@@ -197,9 +197,25 @@ export class DriversApiService {
     };
   }
 
+  // Check if driver number contains letters and is not a temp driver
+  // These drivers should be assigned to "Other" carrier instead of CCFS
+  private shouldAssignToOtherCarrier(driverNumber: string): boolean {
+    if (!driverNumber) return false;
+
+    // Check if contains any letters
+    const hasLetters = /[a-zA-Z]/.test(driverNumber);
+
+    // Check if contains "Temp" (case-insensitive)
+    const isTemp = /temp/i.test(driverNumber);
+
+    // Assign to Other if has letters AND is not a temp driver
+    return hasLetters && !isTemp;
+  }
+
   // Sync drivers from external API
   async syncDrivers(): Promise<DriverSyncResult> {
     const result: DriverSyncResult = { created: 0, updated: 0, errors: [], total: 0 };
+    let assignedToOther = 0;
 
     try {
       console.log('[DriversAPI] Fetching drivers from external API...');
@@ -224,15 +240,38 @@ export class DriversApiService {
         console.log(`[DriversAPI] Created carrier: ${carrier.name} (ID: ${carrier.id})`);
       }
 
-      const carrierId = carrier.id;
+      const defaultCarrierId = carrier.id;
+
+      // Get the "Other" carrier (ID 5014) for drivers with alphanumeric numbers
+      const otherCarrier = await prisma.carrier.findFirst({
+        where: { id: 5014 }
+      });
+      const otherCarrierId = otherCarrier?.id || defaultCarrierId;
+
+      if (otherCarrier) {
+        console.log(`[DriversAPI] Using "Other" carrier (ID: ${otherCarrierId}) for alphanumeric driver numbers`);
+      } else {
+        console.log(`[DriversAPI] Warning: "Other" carrier (ID: 5014) not found, using default carrier`);
+      }
 
       // Process drivers in batches
       const batchSize = 100;
+
       for (let i = 0; i < apiDrivers.length; i += batchSize) {
         const batch = apiDrivers.slice(i, i + batchSize);
 
         for (const apiDriver of batch) {
           try {
+            // Determine which carrier to assign based on driver number
+            // Drivers with alphanumeric numbers (not containing "Temp") go to "Other" carrier
+            const carrierId = this.shouldAssignToOtherCarrier(apiDriver.refNum)
+              ? otherCarrierId
+              : defaultCarrierId;
+
+            if (carrierId === otherCarrierId && otherCarrier) {
+              assignedToOther++;
+            }
+
             const driverData = this.mapToDriver(apiDriver, carrierId);
 
             // Find existing by externalDriverId first, then by number
@@ -285,6 +324,9 @@ export class DriversApiService {
 
     const summary = `Synced: ${result.created} created, ${result.updated} updated, ${result.errors.length} errors`;
     console.log(`[DriversAPI] ${summary}`);
+    if (assignedToOther > 0) {
+      console.log(`[DriversAPI] ${assignedToOther} drivers assigned to "Other" carrier (alphanumeric driver numbers)`);
+    }
 
     return result;
   }
