@@ -70,10 +70,10 @@ router.get(
   getTerminalEquipmentSummary
 );
 
-// Create new terminal (Admin/Dispatcher/Yard Manager only)
+// Create new terminal (Admin/Dispatcher only)
 router.post(
   '/',
-  authorize(UserRole.ADMIN, UserRole.DISPATCHER, UserRole.YARD_MANAGER),
+  authorize(UserRole.ADMIN, UserRole.DISPATCHER),
   [
     body('code').notEmpty().trim().isLength({ min: 2, max: 10 }).toUpperCase(),
     body('name').notEmpty().trim(),
@@ -96,10 +96,10 @@ router.post(
   createTerminal
 );
 
-// Update terminal (Admin/Dispatcher/Yard Manager only)
+// Update terminal (Admin/Dispatcher only)
 router.put(
   '/:id',
-  authorize(UserRole.ADMIN, UserRole.DISPATCHER, UserRole.YARD_MANAGER),
+  authorize(UserRole.ADMIN, UserRole.DISPATCHER),
   [
     param('id').isInt({ min: 1 }),
     body('code').optional().trim().isLength({ min: 2, max: 10 }).toUpperCase(),
@@ -158,7 +158,7 @@ router.get(
 // Create or update single equipment requirement
 router.post(
   '/:id/requirements',
-  authorize(UserRole.ADMIN, UserRole.DISPATCHER, UserRole.YARD_MANAGER),
+  authorize(UserRole.ADMIN, UserRole.DISPATCHER),
   [
     param('id').isInt({ min: 1 }),
     body('dayOfWeek').isInt({ min: 0, max: 6 }),
@@ -175,7 +175,7 @@ router.post(
 // Bulk update equipment requirements
 router.put(
   '/:id/requirements',
-  authorize(UserRole.ADMIN, UserRole.DISPATCHER, UserRole.YARD_MANAGER),
+  authorize(UserRole.ADMIN, UserRole.DISPATCHER),
   [
     param('id').isInt({ min: 1 }),
     body('requirements').isArray(),
@@ -193,7 +193,7 @@ router.put(
 // Delete equipment requirement
 router.delete(
   '/:id/requirements/:requirementId',
-  authorize(UserRole.ADMIN, UserRole.DISPATCHER, UserRole.YARD_MANAGER),
+  authorize(UserRole.ADMIN, UserRole.DISPATCHER),
   [
     param('id').isInt({ min: 1 }),
     param('requirementId').isInt({ min: 1 })

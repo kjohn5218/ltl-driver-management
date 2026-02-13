@@ -2,15 +2,20 @@ import React, { useState } from 'react';
 import { useQuery, useQueryClient, useMutation } from '@tanstack/react-query';
 import { api } from '../services/api';
 import { User } from '../types';
-import { Plus, Search, Edit, Trash2, X, Shield, User as UserIcon, AlertCircle, CheckCircle } from 'lucide-react';
+import { useAuth } from '../contexts/AuthContext';
+import { Plus, Search, Edit, Trash2, X, Shield, User as UserIcon, AlertCircle, CheckCircle, Briefcase } from 'lucide-react';
 
 export const Administration: React.FC = () => {
   const queryClient = useQueryClient();
+  const { user: currentUser } = useAuth();
   const [searchTerm, setSearchTerm] = useState('');
   const [roleFilter, setRoleFilter] = useState('');
   const [showAddUserModal, setShowAddUserModal] = useState(false);
   const [editingUser, setEditingUser] = useState<User | null>(null);
   const [deletingUser, setDeletingUser] = useState<User | null>(null);
+
+  const isManager = currentUser?.role === 'MANAGER';
+  const isAdmin = currentUser?.role === 'ADMIN';
 
   const { data: usersData, isLoading } = useQuery({
     queryKey: ['users'],
@@ -34,9 +39,9 @@ export const Administration: React.FC = () => {
   const getRoleBadge = (role: string) => {
     const roleColors = {
       ADMIN: 'bg-red-100 text-red-800',
-      USER: 'bg-blue-100 text-blue-800',
       DISPATCHER: 'bg-green-100 text-green-800',
-      CARRIER: 'bg-gray-100 text-gray-800'
+      CARRIER: 'bg-gray-100 text-gray-800',
+      MANAGER: 'bg-purple-100 text-purple-800'
     };
     return roleColors[role as keyof typeof roleColors] || 'bg-gray-100 text-gray-800';
   };
@@ -45,10 +50,10 @@ export const Administration: React.FC = () => {
     switch (role) {
       case 'ADMIN':
         return <Shield className="w-4 h-4" />;
-      case 'USER':
-        return <UserIcon className="w-4 h-4" />;
       case 'DISPATCHER':
         return <CheckCircle className="w-4 h-4" />;
+      case 'MANAGER':
+        return <Briefcase className="w-4 h-4" />;
       default:
         return <UserIcon className="w-4 h-4" />;
     }
@@ -98,7 +103,8 @@ export const Administration: React.FC = () => {
         >
           <option value="">All Roles</option>
           <option value="ADMIN">Admin</option>
-          <option value="USER">User</option>
+          <option value="MANAGER">Manager</option>
+          <option value="DISPATCHER">Dispatcher</option>
         </select>
       </div>
 
@@ -118,22 +124,25 @@ export const Administration: React.FC = () => {
                   </span>
                 </div>
               </div>
-              <div className="flex gap-1">
-                <button 
-                  className="p-1 text-gray-500 hover:text-blue-600"
-                  onClick={() => setEditingUser(user)}
-                  title="Edit User"
-                >
-                  <Edit className="w-4 h-4" />
-                </button>
-                <button 
-                  className="p-1 text-gray-500 hover:text-red-600"
-                  onClick={() => setDeletingUser(user)}
-                  title="Delete User"
-                >
-                  <Trash2 className="w-4 h-4" />
-                </button>
-              </div>
+              {/* Hide edit/delete for MANAGER when viewing non-DISPATCHER accounts */}
+              {(!isManager || user.role === 'DISPATCHER') && (
+                <div className="flex gap-1">
+                  <button
+                    className="p-1 text-gray-500 hover:text-blue-600"
+                    onClick={() => setEditingUser(user)}
+                    title="Edit User"
+                  >
+                    <Edit className="w-4 h-4" />
+                  </button>
+                  <button
+                    className="p-1 text-gray-500 hover:text-red-600"
+                    onClick={() => setDeletingUser(user)}
+                    title="Delete User"
+                  >
+                    <Trash2 className="w-4 h-4" />
+                  </button>
+                </div>
+              )}
             </div>
 
             <div className="space-y-2 text-sm text-gray-600">
@@ -171,6 +180,7 @@ export const Administration: React.FC = () => {
             queryClient.invalidateQueries({ queryKey: ['users'] });
             setShowAddUserModal(false);
           }}
+          isManager={isManager}
         />
       )}
 
@@ -183,6 +193,7 @@ export const Administration: React.FC = () => {
             queryClient.invalidateQueries({ queryKey: ['users'] });
             setEditingUser(null);
           }}
+          isManager={isManager}
         />
       )}
 
@@ -205,15 +216,16 @@ export const Administration: React.FC = () => {
 interface AddUserModalProps {
   onClose: () => void;
   onSave: () => void;
+  isManager?: boolean;
 }
 
-const AddUserModal: React.FC<AddUserModalProps> = ({ onClose, onSave }) => {
+const AddUserModal: React.FC<AddUserModalProps> = ({ onClose, onSave, isManager = false }) => {
   const [formData, setFormData] = useState({
     name: '',
     email: '',
     password: '',
     confirmPassword: '',
-    role: 'USER'
+    role: 'DISPATCHER'
   });
   
   const [isSubmitting, setIsSubmitting] = useState(false);
@@ -352,16 +364,29 @@ const AddUserModal: React.FC<AddUserModalProps> = ({ onClose, onSave }) => {
           
           <div>
             <label className="block text-sm font-medium text-gray-700 mb-1">Role <span className="text-red-500">*</span></label>
-            <select
-              value={formData.role}
-              onChange={(e) => setFormData({ ...formData, role: e.target.value })}
-              className="w-full px-3 py-2 border border-gray-300 rounded-md focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
-            >
-              <option value="USER">User</option>
-              <option value="ADMIN">Admin</option>
-            </select>
+            {isManager ? (
+              <>
+                <input
+                  type="text"
+                  value="Dispatcher"
+                  disabled
+                  className="w-full px-3 py-2 border border-gray-300 rounded-md bg-gray-100 text-gray-500"
+                />
+                <p className="mt-1 text-xs text-gray-500">Managers can only create Dispatcher accounts</p>
+              </>
+            ) : (
+              <select
+                value={formData.role}
+                onChange={(e) => setFormData({ ...formData, role: e.target.value })}
+                className="w-full px-3 py-2 border border-gray-300 rounded-md focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
+              >
+                <option value="DISPATCHER">Dispatcher</option>
+                <option value="MANAGER">Manager</option>
+                <option value="ADMIN">Admin</option>
+              </select>
+            )}
           </div>
-          
+
           <div>
             <label className="block text-sm font-medium text-gray-700 mb-1">Password <span className="text-red-500">*</span></label>
             <input
@@ -412,9 +437,10 @@ interface EditUserModalProps {
   user: User;
   onClose: () => void;
   onSave: () => void;
+  isManager?: boolean;
 }
 
-const EditUserModal: React.FC<EditUserModalProps> = ({ user, onClose, onSave }) => {
+const EditUserModal: React.FC<EditUserModalProps> = ({ user, onClose, onSave, isManager = false }) => {
   const [formData, setFormData] = useState({
     name: user.name,
     email: user.email,
@@ -561,16 +587,29 @@ const EditUserModal: React.FC<EditUserModalProps> = ({ user, onClose, onSave }) 
           
           <div>
             <label className="block text-sm font-medium text-gray-700 mb-1">Role <span className="text-red-500">*</span></label>
-            <select
-              value={formData.role}
-              onChange={(e) => setFormData({ ...formData, role: e.target.value })}
-              className="w-full px-3 py-2 border border-gray-300 rounded-md focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
-            >
-              <option value="USER">User</option>
-              <option value="ADMIN">Admin</option>
-            </select>
+            {isManager ? (
+              <>
+                <input
+                  type="text"
+                  value="Dispatcher"
+                  disabled
+                  className="w-full px-3 py-2 border border-gray-300 rounded-md bg-gray-100 text-gray-500"
+                />
+                <p className="mt-1 text-xs text-gray-500">Managers can only manage Dispatcher accounts</p>
+              </>
+            ) : (
+              <select
+                value={formData.role}
+                onChange={(e) => setFormData({ ...formData, role: e.target.value })}
+                className="w-full px-3 py-2 border border-gray-300 rounded-md focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
+              >
+                <option value="DISPATCHER">Dispatcher</option>
+                <option value="MANAGER">Manager</option>
+                <option value="ADMIN">Admin</option>
+              </select>
+            )}
           </div>
-          
+
           <div>
             <label className="block text-sm font-medium text-gray-700 mb-1">New Password</label>
             <input

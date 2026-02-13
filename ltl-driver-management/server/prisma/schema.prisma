@@ -12,7 +12,7 @@ model User {
   email                 String              @unique
   password              String
   name                  String
-  role                  UserRole            @default(USER)
+  role                  UserRole            @default(DISPATCHER)
   createdAt             DateTime            @default(now())
   updatedAt             DateTime            @updatedAt
   createdLineItems      BookingLineItem[]
@@ -492,11 +492,9 @@ model CarrierAgreement {
 enum UserRole {
   ADMIN
   DISPATCHER
-  USER
   CARRIER
-  YARD_MANAGER
   PAYROLL_ADMIN
-  PAYROLL_CLERK
+  MANAGER
 }
 
 enum CarrierStatus {

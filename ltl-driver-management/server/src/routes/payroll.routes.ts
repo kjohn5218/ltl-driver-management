@@ -119,19 +119,19 @@ router.get(
   getTripPayById
 );
 
-// Calculate pay for a trip (Admin/Dispatcher/Payroll Admin/Payroll Clerk only)
+// Calculate pay for a trip (Admin/Dispatcher/Payroll Admin only)
 router.post(
   '/trips/:tripId/calculate-pay',
-  authorize(UserRole.ADMIN, UserRole.DISPATCHER, UserRole.PAYROLL_ADMIN, UserRole.PAYROLL_CLERK),
+  authorize(UserRole.ADMIN, UserRole.DISPATCHER, UserRole.PAYROLL_ADMIN),
   [param('tripId').isInt({ min: 1 })],
   validateRequest,
   calculateTripPay
 );
 
-// Update trip pay status (Admin/Payroll Admin/Payroll Clerk only)
+// Update trip pay status (Admin/Payroll Admin only)
 router.patch(
   '/trip-pays/:id/status',
-  authorize(UserRole.ADMIN, UserRole.PAYROLL_ADMIN, UserRole.PAYROLL_CLERK),
+  authorize(UserRole.ADMIN, UserRole.PAYROLL_ADMIN),
   [
     param('id').isInt({ min: 1 }),
     body('status').notEmpty().isIn(['PENDING', 'CALCULATED', 'REVIEWED', 'APPROVED', 'PAID', 'DISPUTED']),
@@ -191,7 +191,7 @@ router.get(
 // Update payroll line item (trip or cut)
 router.patch(
   '/line-items/:type/:id',
-  authorize(UserRole.ADMIN, UserRole.PAYROLL_ADMIN, UserRole.PAYROLL_CLERK),
+  authorize(UserRole.ADMIN, UserRole.PAYROLL_ADMIN),
   [
     param('type').isIn(['trip', 'cut']),
     param('id').isInt({ min: 1 }),

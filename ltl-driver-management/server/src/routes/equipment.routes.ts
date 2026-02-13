@@ -73,10 +73,10 @@ router.get(
   getTruckById
 );
 
-// Create truck (Admin/Dispatcher/Yard Manager only)
+// Create truck (Admin/Dispatcher only)
 router.post(
   '/trucks',
-  authorize(UserRole.ADMIN, UserRole.DISPATCHER, UserRole.YARD_MANAGER),
+  authorize(UserRole.ADMIN, UserRole.DISPATCHER),
   [
     body('unitNumber').notEmpty().trim(),
     body('vin').optional().trim().isLength({ min: 17, max: 17 }),
@@ -101,10 +101,10 @@ router.post(
   createTruck
 );
 
-// Update truck (Admin/Dispatcher/Yard Manager only)
+// Update truck (Admin/Dispatcher only)
 router.put(
   '/trucks/:id',
-  authorize(UserRole.ADMIN, UserRole.DISPATCHER, UserRole.YARD_MANAGER),
+  authorize(UserRole.ADMIN, UserRole.DISPATCHER),
   [
     param('id').isInt({ min: 1 }),
     body('unitNumber').optional().notEmpty().trim(),
@@ -141,10 +141,10 @@ router.delete(
   deleteTruck
 );
 
-// Update truck status (Admin/Dispatcher/Yard Manager only)
+// Update truck status (Admin/Dispatcher only)
 router.patch(
   '/trucks/:id/status',
-  authorize(UserRole.ADMIN, UserRole.DISPATCHER, UserRole.YARD_MANAGER),
+  authorize(UserRole.ADMIN, UserRole.DISPATCHER),
   [
     param('id').isInt({ min: 1 }),
     body('status').notEmpty().isIn(['AVAILABLE', 'DISPATCHED', 'IN_TRANSIT', 'MAINTENANCE', 'OUT_OF_SERVICE']),
@@ -157,7 +157,7 @@ router.patch(
 // Update truck location
 router.patch(
   '/trucks/:id/location',
-  authorize(UserRole.ADMIN, UserRole.DISPATCHER, UserRole.YARD_MANAGER),
+  authorize(UserRole.ADMIN, UserRole.DISPATCHER),
   [
     param('id').isInt({ min: 1 }),
     body('latitude').notEmpty().isDecimal(),
@@ -194,10 +194,10 @@ router.get(
   getTrailerById
 );
 
-// Create trailer (Admin/Dispatcher/Yard Manager only)
+// Create trailer (Admin/Dispatcher only)
 router.post(
   '/trailers',
-  authorize(UserRole.ADMIN, UserRole.DISPATCHER, UserRole.YARD_MANAGER),
+  authorize(UserRole.ADMIN, UserRole.DISPATCHER),
   [
     body('unitNumber').notEmpty().trim(),
     body('vin').optional().trim().isLength({ min: 17, max: 17 }),
@@ -225,10 +225,10 @@ router.post(
   createTrailer
 );
 
-// Update trailer (Admin/Dispatcher/Yard Manager only)
+// Update trailer (Admin/Dispatcher only)
 router.put(
   '/trailers/:id',
-  authorize(UserRole.ADMIN, UserRole.DISPATCHER, UserRole.YARD_MANAGER),
+  authorize(UserRole.ADMIN, UserRole.DISPATCHER),
   [
     param('id').isInt({ min: 1 }),
     body('unitNumber').optional().notEmpty().trim(),
@@ -268,10 +268,10 @@ router.delete(
   deleteTrailer
 );
 
-// Update trailer status (Admin/Dispatcher/Yard Manager only)
+// Update trailer status (Admin/Dispatcher only)
 router.patch(
   '/trailers/:id/status',
-  authorize(UserRole.ADMIN, UserRole.DISPATCHER, UserRole.YARD_MANAGER),
+  authorize(UserRole.ADMIN, UserRole.DISPATCHER),
   [
     param('id').isInt({ min: 1 }),
     body('status').notEmpty().isIn(['AVAILABLE', 'DISPATCHED', 'IN_TRANSIT', 'MAINTENANCE', 'OUT_OF_SERVICE']),
@@ -308,10 +308,10 @@ router.get(
   getDollyById
 );
 
-// Create dolly (Admin/Dispatcher/Yard Manager only)
+// Create dolly (Admin/Dispatcher only)
 router.post(
   '/dollies',
-  authorize(UserRole.ADMIN, UserRole.DISPATCHER, UserRole.YARD_MANAGER),
+  authorize(UserRole.ADMIN, UserRole.DISPATCHER),
   [
     body('unitNumber').notEmpty().trim(),
     body('vin').optional().trim().isLength({ min: 17, max: 17 }),
@@ -333,10 +333,10 @@ router.post(
   createDolly
 );
 
-// Update dolly (Admin/Dispatcher/Yard Manager only)
+// Update dolly (Admin/Dispatcher only)
 router.put(
   '/dollies/:id',
-  authorize(UserRole.ADMIN, UserRole.DISPATCHER, UserRole.YARD_MANAGER),
+  authorize(UserRole.ADMIN, UserRole.DISPATCHER),
   [
     param('id').isInt({ min: 1 }),
     body('unitNumber').optional().notEmpty().trim(),
@@ -370,10 +370,10 @@ router.delete(
   deleteDolly
 );
 
-// Update dolly status (Admin/Dispatcher/Yard Manager only)
+// Update dolly status (Admin/Dispatcher only)
 router.patch(
   '/dollies/:id/status',
-  authorize(UserRole.ADMIN, UserRole.DISPATCHER, UserRole.YARD_MANAGER),
+  authorize(UserRole.ADMIN, UserRole.DISPATCHER),
   [
     param('id').isInt({ min: 1 }),
     body('status').notEmpty().isIn(['AVAILABLE', 'DISPATCHED', 'IN_TRANSIT', 'MAINTENANCE', 'OUT_OF_SERVICE']),
@@ -442,7 +442,7 @@ router.post(
 // Get all current vehicle locations (for map display)
 router.get(
   '/locations',
-  authorize(UserRole.ADMIN, UserRole.DISPATCHER, UserRole.YARD_MANAGER),
+  authorize(UserRole.ADMIN, UserRole.DISPATCHER),
   getVehicleLocations
 );
 

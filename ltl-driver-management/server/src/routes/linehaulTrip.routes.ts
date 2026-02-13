@@ -242,10 +242,10 @@ router.patch(
   assignDriver
 );
 
-// Assign equipment to trip (Admin/Dispatcher/Yard Manager only)
+// Assign equipment to trip (Admin/Dispatcher only)
 router.patch(
   '/:id/assign-equipment',
-  authorize(UserRole.ADMIN, UserRole.DISPATCHER, UserRole.YARD_MANAGER),
+  authorize(UserRole.ADMIN, UserRole.DISPATCHER),
   [
     param('id').isInt({ min: 1 }),
     body('truckId').optional().isInt({ min: 1 }),

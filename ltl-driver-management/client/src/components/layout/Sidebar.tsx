@@ -61,12 +61,12 @@ export const Sidebar: React.FC<SidebarProps> = ({ isOpen, onClose }) => {
     { name: 'Create Loadsheet', href: '/dispatch?tab=loads&action=create', icon: FileSpreadsheet, section: 'dispatch' },
     { name: 'Equipment', href: '/equipment', icon: Package, section: 'dispatch' },
     // Core Management
-    { name: 'Drivers', href: '/drivers', icon: User },
-    { name: 'Carriers', href: '/carriers', icon: Truck },
-    { name: 'Linehaul Profiles', href: '/routes', icon: Route },
-    { name: 'Locations', href: '/locations', icon: MapPin },
-    { name: 'Pay Rules', href: '/pay-rules', icon: DollarSign },
-    { name: 'Reports', href: '/reports', icon: BarChart3 },
+    { name: 'Drivers', href: '/drivers', icon: User, section: 'management' },
+    { name: 'Carriers', href: '/carriers', icon: Truck, section: 'management' },
+    { name: 'Linehaul Profiles', href: '/routes', icon: Route, section: 'management' },
+    { name: 'Locations', href: '/locations', icon: MapPin, section: 'management' },
+    { name: 'Pay Rules', href: '/pay-rules', icon: DollarSign, section: 'management' },
+    { name: 'Reports', href: '/reports', icon: BarChart3, section: 'management' },
     // Contract Power
     { name: 'Contract Power Home', href: '/contract-power', icon: Home, section: 'contractpower' },
     { name: 'Bookings', href: '/bookings', icon: Calendar, section: 'contractpower' },
@@ -79,6 +79,8 @@ export const Sidebar: React.FC<SidebarProps> = ({ isOpen, onClose }) => {
 
   const isAdminOrDispatcher = user?.role === 'ADMIN' || user?.role === 'DISPATCHER';
   const isAdmin = user?.role === 'ADMIN';
+  const isManager = user?.role === 'MANAGER';
+  const canAccessDispatchAndPayroll = isAdminOrDispatcher || isManager;
 
   // Load fuel surcharge rate on component mount
   useEffect(() => {
@@ -192,29 +194,34 @@ export const Sidebar: React.FC<SidebarProps> = ({ isOpen, onClose }) => {
 
         <nav className="mt-6 px-3 space-y-1">
           {navigation.map((item) => {
-            // Hide certain items for non-admin/dispatcher users
-            if ((item.name === 'Carriers' || item.name === 'Linehaul Profiles' || item.name === 'Pay Rules' || item.name === 'Reports') && !isAdminOrDispatcher) {
+            // Hide management section items for MANAGER role (they cannot access Management or Contract Power)
+            if (item.section === 'management' && (isManager || !isAdminOrDispatcher)) {
               return null;
             }
 
-            // Hide admin-only items for non-admin users
-            if (item.adminOnly && !isAdmin) {
+            // Hide contract power items for MANAGER role
+            if (item.section === 'contractpower' && (isManager || !isAdminOrDispatcher)) {
               return null;
             }
 
-            // Hide dispatch, payroll & contractpower items for non-admin/dispatcher users
-            if ((item.section === 'dispatch' || item.section === 'payroll' || item.section === 'contractpower') && !isAdminOrDispatcher) {
+            // Hide admin-only items for non-admin users (except MANAGER who can access Administration)
+            if (item.adminOnly && !isAdmin && !isManager) {
+              return null;
+            }
+
+            // Hide dispatch and payroll items for users who don't have access
+            if ((item.section === 'dispatch' || item.section === 'payroll') && !canAccessDispatchAndPayroll) {
               return null;
             }
 
             // Add section divider before Dispatch section (right after Dashboard)
-            const showDispatchDivider = item.name === 'Dispatch Board' && isAdminOrDispatcher;
-            // Add section divider before Core Management section
-            const showCoreDivider = item.name === 'Drivers';
-            // Add section divider before Contract Power section
-            const showContractPowerDivider = item.name === 'Contract Power Home' && isAdminOrDispatcher;
+            const showDispatchDivider = item.name === 'Dispatch Board' && canAccessDispatchAndPayroll;
+            // Add section divider before Core Management section (not shown to MANAGER)
+            const showCoreDivider = item.name === 'Drivers' && !isManager;
+            // Add section divider before Contract Power section (not shown to MANAGER)
+            const showContractPowerDivider = item.name === 'Contract Power Home' && isAdminOrDispatcher && !isManager;
             // Add section divider before Payroll section
-            const showPayrollDivider = item.name === 'Payroll' && isAdminOrDispatcher;
+            const showPayrollDivider = item.name === 'Payroll' && canAccessDispatchAndPayroll;
 
             // Special rendering for Cut Pay item (opens modal)
             if ((item as any).isCutPay) {

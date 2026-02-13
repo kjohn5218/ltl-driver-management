@@ -85,7 +85,7 @@ export const getUserById = async (req: Request, res: Response) => {
 
 export const createUser = async (req: Request, res: Response) => {
   try {
-    const { name, email, password, role = 'USER' } = req.body;
+    const { name, email, password, role = 'DISPATCHER' } = req.body;
 
     // Check if user already exists
     const existingUser = await prisma.user.findUnique({
@@ -128,6 +128,7 @@ export const updateUser = async (req: Request, res: Response) => {
   try {
     const { id } = req.params;
     const { name, email, password, role } = req.body;
+    const currentUser = (req as any).user;
 
     // Check if user exists
     const existingUser = await prisma.user.findUnique({
@@ -136,6 +137,11 @@ export const updateUser = async (req: Request, res: Response) => {
 
     if (!existingUser) {
       return res.status(404).json({ message: 'User not found' });
+    }
+
+    // MANAGER can only edit DISPATCHER accounts
+    if (currentUser?.role === 'MANAGER' && existingUser.role !== 'DISPATCHER') {
+      return res.status(403).json({ message: 'Managers can only modify Dispatcher accounts' });
     }
 
     // Check if email is already taken by another user
@@ -184,7 +190,8 @@ export const updateUser = async (req: Request, res: Response) => {
 export const deleteUser = async (req: Request, res: Response) => {
   try {
     const { id } = req.params;
-    const currentUserId = (req as any).user?.id;
+    const currentUser = (req as any).user;
+    const currentUserId = currentUser?.id;
 
     // Prevent users from deleting themselves
     if (parseInt(id) === currentUserId) {
@@ -198,6 +205,11 @@ export const deleteUser = async (req: Request, res: Response) => {
 
     if (!existingUser) {
       return res.status(404).json({ message: 'User not found' });
+    }
+
+    // MANAGER can only delete DISPATCHER accounts
+    if (currentUser?.role === 'MANAGER' && existingUser.role !== 'DISPATCHER') {
+      return res.status(403).json({ message: 'Managers can only delete Dispatcher accounts' });
     }
 
     // Delete user
