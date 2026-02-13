@@ -2,12 +2,13 @@ import React, { useState, useMemo, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { api } from '../services/api';
-import { Calendar, Truck, MapPin, AlertCircle, X, Plus } from 'lucide-react';
+import { Calendar, Truck, MapPin, AlertCircle, X, Plus, Search, Loader2 } from 'lucide-react';
 import { format, eachDayOfInterval, parseISO } from 'date-fns';
 import { LocationSelect } from '../components/LocationSelect';
 import { useAuth } from '../contexts/AuthContext';
-import { Location, CarrierDriver } from '../types';
+import { Location, CarrierDriver, RateCard } from '../types';
 import { driverService } from '../services/driverService';
+import { payRulesService } from '../services/payRulesService';
 import { toast } from 'react-hot-toast';
 
 type RateType = 'MILE' | 'MILE_FSC' | 'FLAT_RATE';
@@ -94,6 +95,17 @@ export const NewBookingSimplified: React.FC<NewBookingSimplifiedProps> = () => {
   const [showCarrierDropdown, setShowCarrierDropdown] = useState(false);
   const [routeSearch, setRouteSearch] = useState('');
   const [showRouteDropdown, setShowRouteDropdown] = useState(false);
+
+  // Rate search states
+  const [isSearchingRates, setIsSearchingRates] = useState(false);
+  const [foundRates, setFoundRates] = useState<RateCard[]>([]);
+  const [showRateResults, setShowRateResults] = useState(false);
+  const [showNewRateModal, setShowNewRateModal] = useState(false);
+
+  // New rate modal state
+  const [newRateMethod, setNewRateMethod] = useState<'PER_MILE' | 'FLAT_RATE'>('FLAT_RATE');
+  const [newRateAmount, setNewRateAmount] = useState('');
+  const [isSavingRate, setIsSavingRate] = useState(false);
 
   // Fetch carriers
   const { data: carriersData } = useQuery({
@@ -523,6 +535,155 @@ export const NewBookingSimplified: React.FC<NewBookingSimplifiedProps> = () => {
     }
   };
 
+  // Search for applicable rates
+  const handleSearchRates = async () => {
+    setIsSearchingRates(true);
+    setFoundRates([]);
+    setShowRateResults(false);
+
+    try {
+      // Build search params based on current selections
+      const searchParams: {
+        driverId?: number;
+        carrierId?: number;
+        profileId?: number;
+        originTerminalId?: number;
+        destinationTerminalId?: number;
+      } = {};
+
+      if (carrierId) {
+        searchParams.carrierId = parseInt(carrierId);
+      }
+
+      if (selectedDriverId) {
+        searchParams.driverId = parseInt(selectedDriverId);
+      }
+
+      if (legType === 'route' && selectedRouteId) {
+        searchParams.profileId = parseInt(selectedRouteId);
+      } else if (legType === 'custom' && selectedOriginLocation && selectedDestinationLocation) {
+        // For custom origin-destination, we can search by terminal IDs if available
+        if (selectedOriginLocation.id) {
+          searchParams.originTerminalId = selectedOriginLocation.id;
+        }
+        if (selectedDestinationLocation.id) {
+          searchParams.destinationTerminalId = selectedDestinationLocation.id;
+        }
+      }
+
+      // Try to get applicable rate
+      const rate = await payRulesService.getApplicableRate(searchParams);
+
+      if (rate) {
+        setFoundRates([rate]);
+        setShowRateResults(true);
+      } else {
+        // No rate found, show the new rate modal
+        toast.error('No matching rate found');
+        setShowNewRateModal(true);
+      }
+    } catch (error: any) {
+      // If 404, no rate found - show new rate modal
+      if (error.response?.status === 404) {
+        toast('No matching rate found. Create a new rate.', { icon: '📝' });
+        setShowNewRateModal(true);
+      } else {
+        toast.error('Error searching for rates');
+        console.error('Rate search error:', error);
+      }
+    } finally {
+      setIsSearchingRates(false);
+    }
+  };
+
+  // Apply a found rate to the form
+  const applyRate = (rate: RateCard) => {
+    // Map rate method to our rate type
+    let rateType: RateType = 'FLAT_RATE';
+    if (rate.rateMethod === 'PER_MILE') {
+      // Check if FSC should be added
+      if (rate.fuelSurcharge && rate.fuelSurcharge > 0) {
+        rateType = 'MILE_FSC';
+      } else {
+        rateType = 'MILE';
+      }
+    }
+
+    setLegRateType(rateType);
+    setLegBaseRate(rate.rateAmount.toString());
+    setShowRateResults(false);
+    setFoundRates([]);
+    toast.success('Rate applied successfully');
+  };
+
+  // Save new rate and apply it
+  const handleSaveNewRate = async () => {
+    if (!newRateAmount || parseFloat(newRateAmount) <= 0) {
+      toast.error('Please enter a valid rate amount');
+      return;
+    }
+
+    setIsSavingRate(true);
+
+    try {
+      // Determine rate type for saving
+      let rateType: 'DRIVER' | 'CARRIER' | 'LINEHAUL' | 'OD_PAIR' = 'CARRIER';
+      let entityId: number | undefined;
+      let linehaulProfileId: number | undefined;
+      let originTerminalId: number | undefined;
+      let destinationTerminalId: number | undefined;
+
+      if (selectedDriverId) {
+        rateType = 'DRIVER';
+        entityId = parseInt(selectedDriverId);
+      } else if (carrierId) {
+        rateType = 'CARRIER';
+        entityId = parseInt(carrierId);
+      }
+
+      if (legType === 'route' && selectedRouteId) {
+        rateType = 'LINEHAUL';
+        linehaulProfileId = parseInt(selectedRouteId);
+      } else if (legType === 'custom' && selectedOriginLocation && selectedDestinationLocation) {
+        rateType = 'OD_PAIR';
+        originTerminalId = selectedOriginLocation.id;
+        destinationTerminalId = selectedDestinationLocation.id;
+      }
+
+      // Create the rate card
+      const newRate = await payRulesService.createRateCard({
+        rateType,
+        entityId,
+        linehaulProfileId,
+        originTerminalId,
+        destinationTerminalId,
+        rateMethod: newRateMethod,
+        rateAmount: parseFloat(newRateAmount),
+        effectiveDate: new Date().toISOString().split('T')[0],
+        active: true
+      });
+
+      // Apply the rate to the form
+      let appliedRateType: RateType = 'FLAT_RATE';
+      if (newRateMethod === 'PER_MILE') {
+        appliedRateType = 'MILE';
+      }
+
+      setLegRateType(appliedRateType);
+      setLegBaseRate(newRateAmount);
+      setShowNewRateModal(false);
+      setNewRateAmount('');
+      setNewRateMethod('FLAT_RATE');
+
+      toast.success('Rate saved and applied successfully');
+    } catch (error) {
+      console.error('Error saving rate:', error);
+      toast.error('Failed to save rate');
+    } finally {
+      setIsSavingRate(false);
+    }
+  };
+
   // Handle create booking
   const handleCreateBooking = async () => {
     // Check for unsaved leg data
@@ -717,7 +878,7 @@ export const NewBookingSimplified: React.FC<NewBookingSimplifiedProps> = () => {
       {/* Basic Info Section */}
       <div className="bg-white rounded-lg shadow p-6 space-y-4">
         <h2 className="text-lg font-semibold text-gray-800">Basic Information</h2>
-        
+
 
         {/* Carrier Selection */}
         <div>
@@ -781,7 +942,7 @@ export const NewBookingSimplified: React.FC<NewBookingSimplifiedProps> = () => {
               required
             />
           </div>
-          
+
           <div className="flex items-end gap-2">
             <label className="flex items-center">
               <input
@@ -841,6 +1002,181 @@ export const NewBookingSimplified: React.FC<NewBookingSimplifiedProps> = () => {
         </div>
       </div>
 
+      {/* Additional Info - moved here from below */}
+      <div className="bg-white rounded-lg shadow p-6 space-y-4">
+        <h2 className="text-lg font-semibold text-gray-800">Additional Information</h2>
+
+        <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+          <div>
+            <label className="block text-sm font-medium text-gray-700 mb-2">Driver Name</label>
+            <div className="relative">
+              <input
+                type="text"
+                value={useManualDriverEntry ? driverName : driverSearch}
+                onChange={(e) => {
+                  if (useManualDriverEntry) {
+                    setDriverName(e.target.value);
+                  } else {
+                    setDriverSearch(e.target.value);
+                    setShowDriverDropdown(true);
+                  }
+                }}
+                onFocus={() => {
+                  if (!useManualDriverEntry) {
+                    setShowDriverDropdown(true);
+                  }
+                }}
+                onBlur={() => setTimeout(() => setShowDriverDropdown(false), 200)}
+                className="w-full px-3 py-2 border border-gray-300 rounded-md"
+                placeholder={useManualDriverEntry ? "Enter driver name manually" : "Search drivers..."}
+              />
+              {!useManualDriverEntry && showDriverDropdown && filteredDrivers.length > 0 && (
+                <div className="absolute z-10 w-full mt-1 bg-white border border-gray-300 rounded-md shadow-lg max-h-60 overflow-y-auto">
+                  {filteredDrivers.map((driver: CarrierDriver) => (
+                    <button
+                      key={driver.id}
+                      type="button"
+                      onClick={() => {
+                        handleDriverSelection(driver.id.toString());
+                        setDriverSearch(driver.name);
+                        setShowDriverDropdown(false);
+                      }}
+                      className="w-full px-3 py-2 text-left hover:bg-blue-50 border-b border-gray-100"
+                    >
+                      <div className="font-medium">{driver.name}</div>
+                      <div className="text-xs text-gray-500">
+                        {driver.number ? `#${driver.number}` : ''} • {carriers.find(c => c.id === driver.carrierId)?.name || 'Unknown Carrier'}
+                      </div>
+                    </button>
+                  ))}
+                </div>
+              )}
+            </div>
+            <div className="mt-2 space-y-1">
+              <button
+                type="button"
+                onClick={() => {
+                  setUseManualDriverEntry(!useManualDriverEntry);
+                  if (!useManualDriverEntry) {
+                    setDriverSearch('');
+                    setSelectedDriverId('');
+                  } else {
+                    setDriverName('');
+                  }
+                  setPhoneNumber('');
+                  setSaveDriverToSystem(false);
+                }}
+                className="text-sm text-blue-600 hover:text-blue-800"
+              >
+                {useManualDriverEntry ? 'Search from driver list' : 'Enter manually'}
+              </button>
+              {useManualDriverEntry && carrierId && (
+                <div className="mt-2">
+                  <label className="flex items-center">
+                    <input
+                      type="checkbox"
+                      checked={saveDriverToSystem}
+                      onChange={(e) => setSaveDriverToSystem(e.target.checked)}
+                      className="mr-2 rounded border-gray-300 text-blue-600 focus:ring-blue-500"
+                    />
+                    <span className="text-sm text-gray-600">
+                      Save this driver to the carrier's driver list
+                    </span>
+                  </label>
+                </div>
+              )}
+              {carrierId && (
+                <p className="text-xs text-gray-500">
+                  {availableDrivers.length > 0
+                    ? `Showing ${availableDrivers.length} drivers from selected carrier`
+                    : 'No drivers found for selected carrier'
+                  }
+                </p>
+              )}
+              {!carrierId && (
+                <p className="text-xs text-gray-500">
+                  Showing all {availableDrivers.length} drivers (select a carrier to filter)
+                </p>
+              )}
+            </div>
+          </div>
+          <div>
+            <label className="block text-sm font-medium text-gray-700 mb-2">Phone Number</label>
+            <div className="relative">
+              <input
+                type="tel"
+                value={phoneNumber}
+                onChange={(e) => {
+                  setPhoneNumber(e.target.value);
+                  if (!useManualDriverEntry && !selectedDriverId) {
+                    setPhoneSearch(e.target.value);
+                    setShowPhoneDropdown(true);
+                  }
+                }}
+                onFocus={() => {
+                  if (!useManualDriverEntry && !selectedDriverId) {
+                    setShowPhoneDropdown(true);
+                  }
+                }}
+                onBlur={() => setTimeout(() => setShowPhoneDropdown(false), 200)}
+                className={`w-full px-3 py-2 border border-gray-300 rounded-md ${
+                  selectedDriverId && !useManualDriverEntry ? 'bg-gray-50' : ''
+                }`}
+                placeholder={selectedDriverId && !useManualDriverEntry ? "Auto-filled from driver" : "Search by phone or enter manually"}
+                readOnly={selectedDriverId && !useManualDriverEntry}
+              />
+              {!useManualDriverEntry && !selectedDriverId && showPhoneDropdown && filteredDriversByPhone.length > 0 && (
+                <div className="absolute z-10 w-full mt-1 bg-white border border-gray-300 rounded-md shadow-lg max-h-60 overflow-y-auto">
+                  {filteredDriversByPhone.map((driver: CarrierDriver) => (
+                    <button
+                      key={driver.id}
+                      type="button"
+                      onClick={() => {
+                        handleDriverSelection(driver.id.toString());
+                        setDriverSearch(driver.name);
+                        setPhoneSearch('');
+                        setShowPhoneDropdown(false);
+                      }}
+                      className="w-full px-3 py-2 text-left hover:bg-blue-50 border-b border-gray-100"
+                    >
+                      <div className="font-medium">{driver.name}</div>
+                      <div className="text-xs text-gray-500">
+                        {driver.phoneNumber} • {carriers.find(c => c.id === driver.carrierId)?.name || 'Unknown Carrier'}
+                      </div>
+                    </button>
+                  ))}
+                </div>
+              )}
+            </div>
+            {selectedDriverId && !useManualDriverEntry && phoneNumber && (
+              <p className="text-sm text-gray-500 mt-1">
+                Auto-filled from driver profile
+              </p>
+            )}
+          </div>
+          <div>
+            <label className="block text-sm font-medium text-gray-700 mb-2">Carrier Email</label>
+            <input
+              type="email"
+              value={carrierEmail}
+              onChange={(e) => setCarrierEmail(e.target.value)}
+              className="w-full px-3 py-2 border border-gray-300 rounded-md"
+            />
+          </div>
+        </div>
+
+        <div>
+          <label className="block text-sm font-medium text-gray-700 mb-2">Notes</label>
+          <textarea
+            value={notes}
+            onChange={(e) => setNotes(e.target.value)}
+            rows={3}
+            className="w-full px-3 py-2 border border-gray-300 rounded-md"
+          />
+        </div>
+
+      </div>
+
       {/* Leg Builder Section */}
       {showLegBuilder && (
         <div className="bg-white rounded-lg shadow p-6 space-y-4">
@@ -867,7 +1203,7 @@ export const NewBookingSimplified: React.FC<NewBookingSimplifiedProps> = () => {
                   onChange={() => setLegType('route')}
                   className="mr-2"
                 />
-                <span>Predefined Route</span>
+                <span>Linehaul Profile</span>
               </label>
               <label className="flex items-center">
                 <input
@@ -876,7 +1212,7 @@ export const NewBookingSimplified: React.FC<NewBookingSimplifiedProps> = () => {
                   onChange={() => setLegType('custom')}
                   className="mr-2"
                 />
-                <span>Custom Origin → Destination</span>
+                <span>Origin - Destination</span>
               </label>
             </div>
           </div>
@@ -1033,7 +1369,65 @@ export const NewBookingSimplified: React.FC<NewBookingSimplifiedProps> = () => {
 
           {/* Rate Configuration */}
           <div className="border-t pt-4">
-            <h3 className="text-sm font-medium text-gray-700 mb-3">Rate Configuration</h3>
+            <div className="flex items-center justify-between mb-3">
+              <h3 className="text-sm font-medium text-gray-700">Rate Configuration</h3>
+              <button
+                type="button"
+                onClick={handleSearchRates}
+                disabled={isSearchingRates}
+                className="px-3 py-1.5 text-sm bg-green-600 text-white rounded-md hover:bg-green-700 disabled:bg-gray-400 disabled:cursor-not-allowed flex items-center gap-2"
+              >
+                {isSearchingRates ? (
+                  <>
+                    <Loader2 className="w-4 h-4 animate-spin" />
+                    Searching...
+                  </>
+                ) : (
+                  <>
+                    <Search className="w-4 h-4" />
+                    Search Rates
+                  </>
+                )}
+              </button>
+            </div>
+
+            {/* Rate Search Results */}
+            {showRateResults && foundRates.length > 0 && (
+              <div className="mb-4 p-3 bg-green-50 border border-green-200 rounded-md">
+                <p className="text-sm font-medium text-green-800 mb-2">Found {foundRates.length} matching rate(s):</p>
+                <div className="space-y-2">
+                  {foundRates.map((rate, index) => (
+                    <div key={rate.id || index} className="flex items-center justify-between bg-white p-2 rounded border border-green-200">
+                      <div className="text-sm">
+                        <span className="font-medium">${rate.rateAmount.toFixed(2)}</span>
+                        <span className="text-gray-500 ml-2">
+                          ({rate.rateMethod === 'PER_MILE' ? 'Per Mile' : rate.rateMethod === 'FLAT_RATE' ? 'Flat Rate' : rate.rateMethod})
+                        </span>
+                        {rate.notes && <span className="text-gray-400 ml-2">- {rate.notes}</span>}
+                      </div>
+                      <button
+                        type="button"
+                        onClick={() => applyRate(rate)}
+                        className="px-2 py-1 text-xs bg-green-600 text-white rounded hover:bg-green-700"
+                      >
+                        Apply
+                      </button>
+                    </div>
+                  ))}
+                </div>
+                <button
+                  type="button"
+                  onClick={() => {
+                    setShowRateResults(false);
+                    setFoundRates([]);
+                  }}
+                  className="mt-2 text-xs text-gray-500 hover:text-gray-700"
+                >
+                  Dismiss
+                </button>
+              </div>
+            )}
+
             <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
               <div>
                 <label className="block text-xs font-medium text-gray-700 mb-1">Rate Type</label>
@@ -1220,181 +1614,6 @@ export const NewBookingSimplified: React.FC<NewBookingSimplifiedProps> = () => {
         </div>
       )}
 
-      {/* Additional Info */}
-      <div className="bg-white rounded-lg shadow p-6 space-y-4">
-        <h2 className="text-lg font-semibold text-gray-800">Additional Information</h2>
-        
-        <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-          <div>
-            <label className="block text-sm font-medium text-gray-700 mb-2">Driver Name</label>
-            <div className="relative">
-              <input
-                type="text"
-                value={useManualDriverEntry ? driverName : driverSearch}
-                onChange={(e) => {
-                  if (useManualDriverEntry) {
-                    setDriverName(e.target.value);
-                  } else {
-                    setDriverSearch(e.target.value);
-                    setShowDriverDropdown(true);
-                  }
-                }}
-                onFocus={() => {
-                  if (!useManualDriverEntry) {
-                    setShowDriverDropdown(true);
-                  }
-                }}
-                onBlur={() => setTimeout(() => setShowDriverDropdown(false), 200)}
-                className="w-full px-3 py-2 border border-gray-300 rounded-md"
-                placeholder={useManualDriverEntry ? "Enter driver name manually" : "Search drivers..."}
-              />
-              {!useManualDriverEntry && showDriverDropdown && filteredDrivers.length > 0 && (
-                <div className="absolute z-10 w-full mt-1 bg-white border border-gray-300 rounded-md shadow-lg max-h-60 overflow-y-auto">
-                  {filteredDrivers.map((driver: CarrierDriver) => (
-                    <button
-                      key={driver.id}
-                      type="button"
-                      onClick={() => {
-                        handleDriverSelection(driver.id.toString());
-                        setDriverSearch(driver.name);
-                        setShowDriverDropdown(false);
-                      }}
-                      className="w-full px-3 py-2 text-left hover:bg-blue-50 border-b border-gray-100"
-                    >
-                      <div className="font-medium">{driver.name}</div>
-                      <div className="text-xs text-gray-500">
-                        {driver.number ? `#${driver.number}` : ''} • {carriers.find(c => c.id === driver.carrierId)?.name || 'Unknown Carrier'}
-                      </div>
-                    </button>
-                  ))}
-                </div>
-              )}
-            </div>
-            <div className="mt-2 space-y-1">
-              <button
-                type="button"
-                onClick={() => {
-                  setUseManualDriverEntry(!useManualDriverEntry);
-                  if (!useManualDriverEntry) {
-                    setDriverSearch('');
-                    setSelectedDriverId('');
-                  } else {
-                    setDriverName('');
-                  }
-                  setPhoneNumber('');
-                  setSaveDriverToSystem(false);
-                }}
-                className="text-sm text-blue-600 hover:text-blue-800"
-              >
-                {useManualDriverEntry ? 'Search from driver list' : 'Enter manually'}
-              </button>
-              {useManualDriverEntry && carrierId && (
-                <div className="mt-2">
-                  <label className="flex items-center">
-                    <input
-                      type="checkbox"
-                      checked={saveDriverToSystem}
-                      onChange={(e) => setSaveDriverToSystem(e.target.checked)}
-                      className="mr-2 rounded border-gray-300 text-blue-600 focus:ring-blue-500"
-                    />
-                    <span className="text-sm text-gray-600">
-                      Save this driver to the carrier's driver list
-                    </span>
-                  </label>
-                </div>
-              )}
-              {carrierId && (
-                <p className="text-xs text-gray-500">
-                  {availableDrivers.length > 0
-                    ? `Showing ${availableDrivers.length} drivers from selected carrier`
-                    : 'No drivers found for selected carrier'
-                  }
-                </p>
-              )}
-              {!carrierId && (
-                <p className="text-xs text-gray-500">
-                  Showing all {availableDrivers.length} drivers (select a carrier to filter)
-                </p>
-              )}
-            </div>
-          </div>
-          <div>
-            <label className="block text-sm font-medium text-gray-700 mb-2">Phone Number</label>
-            <div className="relative">
-              <input
-                type="tel"
-                value={phoneNumber}
-                onChange={(e) => {
-                  setPhoneNumber(e.target.value);
-                  if (!useManualDriverEntry && !selectedDriverId) {
-                    setPhoneSearch(e.target.value);
-                    setShowPhoneDropdown(true);
-                  }
-                }}
-                onFocus={() => {
-                  if (!useManualDriverEntry && !selectedDriverId) {
-                    setShowPhoneDropdown(true);
-                  }
-                }}
-                onBlur={() => setTimeout(() => setShowPhoneDropdown(false), 200)}
-                className={`w-full px-3 py-2 border border-gray-300 rounded-md ${
-                  selectedDriverId && !useManualDriverEntry ? 'bg-gray-50' : ''
-                }`}
-                placeholder={selectedDriverId && !useManualDriverEntry ? "Auto-filled from driver" : "Search by phone or enter manually"}
-                readOnly={selectedDriverId && !useManualDriverEntry}
-              />
-              {!useManualDriverEntry && !selectedDriverId && showPhoneDropdown && filteredDriversByPhone.length > 0 && (
-                <div className="absolute z-10 w-full mt-1 bg-white border border-gray-300 rounded-md shadow-lg max-h-60 overflow-y-auto">
-                  {filteredDriversByPhone.map((driver: CarrierDriver) => (
-                    <button
-                      key={driver.id}
-                      type="button"
-                      onClick={() => {
-                        handleDriverSelection(driver.id.toString());
-                        setDriverSearch(driver.name);
-                        setPhoneSearch('');
-                        setShowPhoneDropdown(false);
-                      }}
-                      className="w-full px-3 py-2 text-left hover:bg-blue-50 border-b border-gray-100"
-                    >
-                      <div className="font-medium">{driver.name}</div>
-                      <div className="text-xs text-gray-500">
-                        {driver.phoneNumber} • {carriers.find(c => c.id === driver.carrierId)?.name || 'Unknown Carrier'}
-                      </div>
-                    </button>
-                  ))}
-                </div>
-              )}
-            </div>
-            {selectedDriverId && !useManualDriverEntry && phoneNumber && (
-              <p className="text-sm text-gray-500 mt-1">
-                Auto-filled from driver profile
-              </p>
-            )}
-          </div>
-          <div>
-            <label className="block text-sm font-medium text-gray-700 mb-2">Carrier Email</label>
-            <input
-              type="email"
-              value={carrierEmail}
-              onChange={(e) => setCarrierEmail(e.target.value)}
-              className="w-full px-3 py-2 border border-gray-300 rounded-md"
-            />
-          </div>
-        </div>
-        
-        <div>
-          <label className="block text-sm font-medium text-gray-700 mb-2">Notes</label>
-          <textarea
-            value={notes}
-            onChange={(e) => setNotes(e.target.value)}
-            rows={3}
-            className="w-full px-3 py-2 border border-gray-300 rounded-md"
-          />
-        </div>
-        
-      </div>
-
       {/* Action Buttons */}
       <div className="flex justify-end gap-3">
         <button
@@ -1413,6 +1632,100 @@ export const NewBookingSimplified: React.FC<NewBookingSimplifiedProps> = () => {
           {createBookingMutation.isPending ? 'Creating...' : 'Create Booking'}
         </button>
       </div>
+
+      {/* New Rate Modal */}
+      {showNewRateModal && (
+        <div className="fixed inset-0 z-50 overflow-y-auto">
+          <div className="flex items-center justify-center min-h-screen pt-4 px-4 pb-20 text-center sm:p-0">
+            <div className="fixed inset-0 bg-gray-500 bg-opacity-75 transition-opacity" onClick={() => setShowNewRateModal(false)} />
+
+            <div className="relative inline-block bg-white rounded-lg text-left overflow-hidden shadow-xl transform transition-all sm:my-8 sm:max-w-lg sm:w-full">
+              <div className="bg-white px-4 pt-5 pb-4 sm:p-6 sm:pb-4">
+                <div className="flex items-center justify-between mb-4">
+                  <h3 className="text-lg font-medium text-gray-900">Create New Rate</h3>
+                  <button
+                    type="button"
+                    onClick={() => setShowNewRateModal(false)}
+                    className="text-gray-400 hover:text-gray-500"
+                  >
+                    <X className="w-5 h-5" />
+                  </button>
+                </div>
+
+                <p className="text-sm text-gray-500 mb-4">
+                  No matching rate was found. Create a new rate that will be saved to Pay Rules and applied to this booking.
+                </p>
+
+                <div className="space-y-4">
+                  <div>
+                    <label className="block text-sm font-medium text-gray-700 mb-1">Rate Method</label>
+                    <select
+                      value={newRateMethod}
+                      onChange={(e) => setNewRateMethod(e.target.value as 'PER_MILE' | 'FLAT_RATE')}
+                      className="w-full px-3 py-2 border border-gray-300 rounded-md"
+                    >
+                      <option value="FLAT_RATE">Flat Rate</option>
+                      <option value="PER_MILE">Per Mile</option>
+                    </select>
+                  </div>
+
+                  <div>
+                    <label className="block text-sm font-medium text-gray-700 mb-1">
+                      {newRateMethod === 'FLAT_RATE' ? 'Rate Amount ($)' : 'Rate per Mile ($)'}
+                    </label>
+                    <input
+                      type="number"
+                      value={newRateAmount}
+                      onChange={(e) => setNewRateAmount(e.target.value)}
+                      placeholder="0.00"
+                      className="w-full px-3 py-2 border border-gray-300 rounded-md"
+                      min="0"
+                      step="0.01"
+                    />
+                  </div>
+
+                  <div className="bg-gray-50 p-3 rounded-md text-sm">
+                    <p className="font-medium text-gray-700 mb-1">Rate will be saved for:</p>
+                    <ul className="text-gray-500 space-y-1">
+                      {carrierId && <li>• Carrier: {carrierSearch || 'Selected carrier'}</li>}
+                      {selectedDriverId && <li>• Driver: {driverName || 'Selected driver'}</li>}
+                      {legType === 'route' && selectedRouteId && <li>• Linehaul Profile: {routeSearch || 'Selected route'}</li>}
+                      {legType === 'custom' && customOrigin && customDestination && (
+                        <li>• Origin - Destination: {customOrigin} → {customDestination}</li>
+                      )}
+                    </ul>
+                  </div>
+                </div>
+              </div>
+
+              <div className="bg-gray-50 px-4 py-3 sm:px-6 sm:flex sm:flex-row-reverse gap-2">
+                <button
+                  type="button"
+                  onClick={handleSaveNewRate}
+                  disabled={isSavingRate || !newRateAmount}
+                  className="w-full inline-flex justify-center rounded-md border border-transparent shadow-sm px-4 py-2 bg-blue-600 text-base font-medium text-white hover:bg-blue-700 focus:outline-none sm:w-auto sm:text-sm disabled:bg-gray-400 disabled:cursor-not-allowed"
+                >
+                  {isSavingRate ? (
+                    <>
+                      <Loader2 className="w-4 h-4 animate-spin mr-2" />
+                      Saving...
+                    </>
+                  ) : (
+                    'Save & Apply Rate'
+                  )}
+                </button>
+                <button
+                  type="button"
+                  onClick={() => setShowNewRateModal(false)}
+                  className="mt-3 w-full inline-flex justify-center rounded-md border border-gray-300 shadow-sm px-4 py-2 bg-white text-base font-medium text-gray-700 hover:bg-gray-50 focus:outline-none sm:mt-0 sm:w-auto sm:text-sm"
+                >
+                  Cancel
+                </button>
+              </div>
+            </div>
+          </div>
+        </div>
+      )}
     </div>
   );
 };
