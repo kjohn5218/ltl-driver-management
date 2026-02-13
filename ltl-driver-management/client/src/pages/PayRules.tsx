@@ -46,9 +46,8 @@ const RATE_TYPES: { value: RateCardType; label: string; icon: React.ReactNode }[
 const RATE_METHODS: { value: RateMethod | 'LINEHAUL_PROFILE' | 'ORIGIN_DESTINATION'; label: string }[] = [
   { value: 'PER_MILE', label: 'Per Mile' },
   { value: 'LINEHAUL_PROFILE', label: 'Linehaul Profile' },
-  { value: 'FLAT_RATE', label: 'Flat Rate' },
-  { value: 'HOURLY', label: 'Hourly' },
-  { value: 'ORIGIN_DESTINATION', label: 'Origin/Destination' }
+  { value: 'ORIGIN_DESTINATION', label: 'Origin/Destination' },
+  { value: 'HOURLY', label: 'Hourly' }
 ];
 
 const ACCESSORIAL_TYPES: { value: AccessorialType; label: string }[] = [
@@ -263,13 +262,65 @@ export const PayRules: React.FC = () => {
   const openEditModal = (rateCard: RateCard) => {
     setModalMode('edit');
     setSelectedRateCard(rateCard);
+
+    // Try to find entityId from rate card or match from notes
+    let entityId = rateCard.entityId;
+
+    // If entityId is not set but we have driver info, try to match from notes
+    if (!entityId && rateCard.rateType === 'DRIVER') {
+      // First try from driver relationship
+      if (rateCard.driver?.id) {
+        entityId = rateCard.driver.id;
+      } else {
+        // Try to match driver from notes
+        const notesInfo = parseNotesInfo(rateCard.notes);
+        if (notesInfo.driverName) {
+          const matchedDriver = drivers.find(d =>
+            d.name?.toLowerCase() === notesInfo.driverName?.toLowerCase() ||
+            d.name?.toLowerCase().includes(notesInfo.driverName?.toLowerCase() || '') ||
+            notesInfo.driverName?.toLowerCase().includes(d.name?.toLowerCase() || '')
+          );
+          if (matchedDriver) {
+            entityId = matchedDriver.id;
+          }
+        }
+      }
+    }
+
+    // If entityId is not set but we have carrier info, try to match
+    if (!entityId && rateCard.rateType === 'CARRIER') {
+      if (rateCard.carrier?.id) {
+        entityId = rateCard.carrier.id;
+      } else {
+        const notesInfo = parseNotesInfo(rateCard.notes);
+        if (notesInfo.employer) {
+          const matchedCarrier = carriers.find(c =>
+            c.name?.toLowerCase() === notesInfo.employer?.toLowerCase() ||
+            c.name?.toLowerCase().includes(notesInfo.employer?.toLowerCase() || '') ||
+            notesInfo.employer?.toLowerCase().includes(c.name?.toLowerCase() || '')
+          );
+          if (matchedCarrier) {
+            entityId = matchedCarrier.id;
+          }
+        }
+      }
+    }
+
+    // Determine rate method - check if it's actually LINEHAUL_PROFILE or ORIGIN_DESTINATION based on linked data
+    let rateMethod = rateCard.rateMethod;
+    if (rateCard.linehaulProfileId && rateMethod === 'PER_MILE') {
+      rateMethod = 'LINEHAUL_PROFILE' as RateMethod;
+    } else if (rateCard.originTerminalId && rateCard.destinationTerminalId && rateMethod === 'PER_MILE') {
+      rateMethod = 'ORIGIN_DESTINATION' as RateMethod;
+    }
+
     setRateFormData({
       rateType: rateCard.rateType,
-      entityId: rateCard.entityId || undefined,
+      entityId: entityId || undefined,
       linehaulProfileId: rateCard.linehaulProfileId || undefined,
       originTerminalId: rateCard.originTerminalId || undefined,
       destinationTerminalId: rateCard.destinationTerminalId || undefined,
-      rateMethod: rateCard.rateMethod,
+      rateMethod: rateMethod,
       rateAmount: parseFloat(String(rateCard.rateAmount)),
       minimumAmount: rateCard.minimumAmount ? parseFloat(String(rateCard.minimumAmount)) : undefined,
       maximumAmount: rateCard.maximumAmount ? parseFloat(String(rateCard.maximumAmount)) : undefined,
@@ -301,12 +352,30 @@ export const PayRules: React.FC = () => {
 
   const handleSaveRate = async () => {
     try {
+      // Convert UI-only rate methods back to valid backend values
+      const getActualRateMethod = (method: RateMethod | 'LINEHAUL_PROFILE' | 'ORIGIN_DESTINATION'): RateMethod => {
+        if (method === 'LINEHAUL_PROFILE' || method === 'ORIGIN_DESTINATION') {
+          return 'PER_MILE'; // These are determined by linked data, not rate method
+        }
+        return method as RateMethod;
+      };
+
       if (modalMode === 'create') {
-        await payRulesService.createRateCard(rateFormData);
+        const createData = {
+          ...rateFormData,
+          rateMethod: getActualRateMethod(rateFormData.rateMethod as RateMethod | 'LINEHAUL_PROFILE' | 'ORIGIN_DESTINATION')
+        };
+        await payRulesService.createRateCard(createData);
         toast.success('Rate card created successfully');
       } else if (selectedRateCard) {
         const updateData: UpdateRateCardData = {
-          rateMethod: rateFormData.rateMethod,
+          // Include entity linkage fields so we can update/fix driver/carrier links
+          rateType: rateFormData.rateType,
+          entityId: rateFormData.entityId,
+          linehaulProfileId: rateFormData.linehaulProfileId,
+          originTerminalId: rateFormData.originTerminalId,
+          destinationTerminalId: rateFormData.destinationTerminalId,
+          rateMethod: getActualRateMethod(rateFormData.rateMethod as RateMethod | 'LINEHAUL_PROFILE' | 'ORIGIN_DESTINATION'),
           rateAmount: rateFormData.rateAmount,
           minimumAmount: rateFormData.minimumAmount,
           maximumAmount: rateFormData.maximumAmount,
@@ -990,7 +1059,6 @@ export const PayRules: React.FC = () => {
                   destinationTerminalId: undefined
                 })}
                 className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-indigo-500"
-                disabled={modalMode === 'edit'}
               >
                 {RATE_TYPES.map(type => (
                   <option key={type.value} value={type.value}>{type.label}</option>
@@ -1008,7 +1076,6 @@ export const PayRules: React.FC = () => {
                   value={rateFormData.entityId || ''}
                   onChange={(e) => setRateFormData({ ...rateFormData, entityId: parseInt(e.target.value) || undefined })}
                   className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-indigo-500"
-                  disabled={modalMode === 'edit'}
                 >
                   <option value="">Select driver...</option>
                   {[...drivers].sort((a, b) => (a.name || '').localeCompare(b.name || '')).map(d => (
@@ -1020,7 +1087,6 @@ export const PayRules: React.FC = () => {
                   value={rateFormData.entityId || ''}
                   onChange={(e) => setRateFormData({ ...rateFormData, entityId: parseInt(e.target.value) || undefined })}
                   className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-indigo-500"
-                  disabled={modalMode === 'edit'}
                 >
                   <option value="">Select carrier...</option>
                   {[...carriers].sort((a, b) => (a.name || '').localeCompare(b.name || '')).map(c => (
@@ -1057,13 +1123,44 @@ export const PayRules: React.FC = () => {
                 value={rateFormData.linehaulProfileId || ''}
                 onChange={(e) => setRateFormData({ ...rateFormData, linehaulProfileId: parseInt(e.target.value) || undefined })}
                 className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-indigo-500"
-                disabled={modalMode === 'edit'}
               >
                 <option value="">Select profile...</option>
                 {[...profiles].sort((a, b) => (a.profileCode || '').localeCompare(b.profileCode || '')).map(p => (
                   <option key={p.id} value={p.id}>{p.profileCode} - {p.name}</option>
                 ))}
               </select>
+            </div>
+          )}
+
+          {/* Origin/Destination Selection (when rate method is Origin/Destination) */}
+          {rateFormData.rateMethod === 'ORIGIN_DESTINATION' && (
+            <div className="grid grid-cols-2 gap-4">
+              <div>
+                <label className="block text-sm font-medium text-gray-700 mb-1">Origin Terminal</label>
+                <select
+                  value={rateFormData.originTerminalId || ''}
+                  onChange={(e) => setRateFormData({ ...rateFormData, originTerminalId: parseInt(e.target.value) || undefined })}
+                  className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-indigo-500"
+                >
+                  <option value="">Select origin...</option>
+                  {[...terminals].sort((a, b) => (a.code || '').localeCompare(b.code || '')).map(t => (
+                    <option key={t.id} value={t.id}>{t.code} - {t.name}</option>
+                  ))}
+                </select>
+              </div>
+              <div>
+                <label className="block text-sm font-medium text-gray-700 mb-1">Destination Terminal</label>
+                <select
+                  value={rateFormData.destinationTerminalId || ''}
+                  onChange={(e) => setRateFormData({ ...rateFormData, destinationTerminalId: parseInt(e.target.value) || undefined })}
+                  className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-indigo-500"
+                >
+                  <option value="">Select destination...</option>
+                  {[...terminals].sort((a, b) => (a.code || '').localeCompare(b.code || '')).map(t => (
+                    <option key={t.id} value={t.id}>{t.code} - {t.name}</option>
+                  ))}
+                </select>
+              </div>
             </div>
           )}
 

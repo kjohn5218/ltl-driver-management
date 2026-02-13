@@ -115,6 +115,12 @@ export interface CreateRateCardData {
 }
 
 export interface UpdateRateCardData {
+  // Allow updating entity linkage (to fix unlinked driver/carrier references)
+  rateType?: RateCardType;
+  entityId?: number | null;
+  linehaulProfileId?: number | null;
+  originTerminalId?: number | null;
+  destinationTerminalId?: number | null;
   rateMethod?: RateMethod;
   rateAmount?: number;
   minimumAmount?: number | null;
