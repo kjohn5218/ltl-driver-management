@@ -17,13 +17,14 @@ const router = Router();
 router.use(authenticate);
 
 // Middleware to restrict MANAGER to only DISPATCHER role operations
-const restrictManagerToDispatcherRole = (req: Request, res: Response, next: NextFunction) => {
+const restrictManagerToDispatcherRole = (req: Request, res: Response, next: NextFunction): void => {
   const currentUser = (req as any).user;
 
   if (currentUser?.role === 'MANAGER') {
     // For create/update, MANAGER can only set role to DISPATCHER
     if (req.body.role && req.body.role !== 'DISPATCHER') {
-      return res.status(403).json({ message: 'Managers can only create or modify Dispatcher accounts' });
+      res.status(403).json({ message: 'Managers can only create or modify Dispatcher accounts' });
+      return;
     }
     // Force role to DISPATCHER for MANAGER creating users
     if (req.method === 'POST') {
