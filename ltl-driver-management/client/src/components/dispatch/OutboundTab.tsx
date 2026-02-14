@@ -66,7 +66,7 @@ const SortableHeader: React.FC<{
     </th>
   );
 };
-import { format, parseISO } from 'date-fns';
+import { format, parseISO, addDays } from 'date-fns';
 
 interface OutboundTripRow {
   trip: LinehaulTrip;
@@ -81,8 +81,9 @@ export const OutboundTab: React.FC<OutboundTabProps> = ({ selectedLocations = []
   const queryClient = useQueryClient();
   const [searchTerm, setSearchTerm] = useState('');
   const today = format(new Date(), 'yyyy-MM-dd');
+  const tomorrow = format(addDays(new Date(), 1), 'yyyy-MM-dd');
   const [startDate, setStartDate] = useState(today);
-  const [endDate, setEndDate] = useState(today);
+  const [endDate, setEndDate] = useState(tomorrow);
   const [showLateOnly, setShowLateOnly] = useState(false);
   const [showHeadhaulOnly, setShowHeadhaulOnly] = useState(false);
 
@@ -131,9 +132,14 @@ export const OutboundTab: React.FC<OutboundTabProps> = ({ selectedLocations = []
 
   // Fetch loadsheets (we'll match by linehaulTripId to the trips)
   const { data: loadsheetsData, refetch: refetchLoadsheets } = useQuery({
-    queryKey: ['loadsheets-for-outbound'],
+    queryKey: ['loadsheets-for-outbound', startDate, endDate],
     queryFn: async () => {
-      const response = await loadsheetService.getLoadsheets({ limit: 500 });
+      const response = await loadsheetService.getLoadsheets({
+        status: 'DISPATCHED',
+        startDate: startDate || undefined,
+        endDate: endDate || undefined,
+        limit: 500
+      });
       return response.loadsheets;
     },
     staleTime: 0
@@ -158,9 +164,14 @@ export const OutboundTab: React.FC<OutboundTabProps> = ({ selectedLocations = []
 
   // Build outbound trip rows with their loadsheets
   const outboundRows: OutboundTripRow[] = trips.map(trip => {
-    // Find loadsheets associated with this trip
+    // Find loadsheets associated with this trip from the separate query
     const tripLoadsheets = loadsheets.filter(ls => ls.linehaulTripId === trip.id);
-    return { trip, loadsheets: tripLoadsheets };
+    // If no loadsheets found from separate query, use embedded loadsheets from trip
+    // (these have fewer fields but at least have manifestNumber and linehaulName)
+    const effectiveLoadsheets = tripLoadsheets.length > 0
+      ? tripLoadsheets
+      : (trip.loadsheets as Loadsheet[] || []);
+    return { trip, loadsheets: effectiveLoadsheets };
   });
 
   // Parse time string (HH:mm, HH:mm:ss, or HH:MM:SS) to minutes since midnight for comparison

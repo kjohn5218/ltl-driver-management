@@ -306,10 +306,10 @@ export const getTripByNumber = async (req: Request, res: Response): Promise<void
   }
 };
 
-// Generate unique trip number (numeric only)
+// Generate unique trip number (numeric only, format: YYMMDD + 3-digit sequence)
 const generateTripNumber = async (): Promise<string> => {
   const date = new Date();
-  const dateStr = date.toISOString().slice(0, 10).replace(/-/g, '');
+  const dateStr = date.toISOString().slice(2, 10).replace(/-/g, '');
 
   const lastTrip = await prisma.linehaulTrip.findFirst({
     where: { tripNumber: { startsWith: dateStr } },

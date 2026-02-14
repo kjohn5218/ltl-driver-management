@@ -427,8 +427,8 @@ export const updateBooking = async (req: Request, res: Response) => {
     }
 
     // Check if status changed to COMPLETED and generate invoice automatically
-    if (currentBooking && 
-        currentBooking.status !== 'COMPLETED' && 
+    if (currentBooking &&
+        currentBooking.status !== 'COMPLETED' &&
         updateData.status === 'COMPLETED') {
       try {
         const invoice = await invoiceService.createInvoice(booking.id);
@@ -439,6 +439,37 @@ export const updateBooking = async (req: Request, res: Response) => {
         console.error('Failed to generate invoice for completed booking:', invoiceError);
         // Don't fail the booking update if invoice generation fails
         // Just log the error and continue
+      }
+    }
+
+    // Update any loadsheet linked to this booking when status changes to CONFIRMED
+    if (isStatusChangingToConfirmed) {
+      try {
+        // Find loadsheet(s) linked to this booking
+        const linkedLoadsheets = await prisma.loadsheet.findMany({
+          where: { contractPowerBookingId: parseInt(id) }
+        });
+
+        for (const loadsheet of linkedLoadsheets) {
+          // Get carrier name if carrier is assigned
+          const carrierName = booking.carrier?.name || null;
+          // Get driver name from booking, or "TBD" if not set
+          const driverName = booking.driverName || 'TBD';
+
+          await prisma.loadsheet.update({
+            where: { id: loadsheet.id },
+            data: {
+              contractPowerStatus: 'BOOKED',
+              contractPowerCarrierName: carrierName,
+              contractPowerDriverName: driverName
+            }
+          });
+
+          console.log(`Updated loadsheet ${loadsheet.id} with contract power booking info`);
+        }
+      } catch (loadsheetError) {
+        console.error('Failed to update linked loadsheets:', loadsheetError);
+        // Don't fail the booking update if loadsheet update fails
       }
     }
 

@@ -1073,6 +1073,14 @@ export interface Loadsheet {
   printedAt?: string;
   lastScanAt?: string;
 
+  // Contract Power Request
+  contractPowerStatus?: 'REQUESTED' | 'BOOKED';
+  contractPowerBookingId?: number;
+  contractPowerCarrierName?: string;
+  contractPowerDriverName?: string;
+  contractPowerRequestedAt?: string;
+  contractPowerRequestedBy?: number;
+
   // Relations
   originTerminal?: Terminal;
   linehaulTrip?: LinehaulTrip;

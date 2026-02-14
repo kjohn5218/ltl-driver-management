@@ -18,7 +18,7 @@ import {
   Gauge,
   Info
 } from 'lucide-react';
-import { format } from 'date-fns';
+import { format, addDays } from 'date-fns';
 
 interface LaneDetailsModalProps {
   isOpen: boolean;
@@ -178,9 +178,10 @@ interface ExpectedShipmentsTabProps {
 
 export const ExpectedShipmentsTab: React.FC<ExpectedShipmentsTabProps> = ({ selectedLocations = [] }) => {
   const today = format(new Date(), 'yyyy-MM-dd');
+  const tomorrow = format(addDays(new Date(), 1), 'yyyy-MM-dd');
 
   const [startDate, setStartDate] = useState(today);
-  const [endDate, setEndDate] = useState(today);
+  const [endDate, setEndDate] = useState(tomorrow);
   const [searchTerm, setSearchTerm] = useState('');
   const [expandedLanes, setExpandedLanes] = useState<Set<string>>(new Set());
   const [aggregateView, setAggregateView] = useState(true);

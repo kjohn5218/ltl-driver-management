@@ -1417,6 +1417,14 @@ model Loadsheet {
   printedAt               DateTime?
   lastScanAt              DateTime?       // Last LHLOAD barcode scan timestamp
 
+  // Contract Power Request
+  contractPowerStatus     String?         // REQUESTED, BOOKED
+  contractPowerBookingId  Int?            // Reference to booking
+  contractPowerCarrierName String?        // Carrier name when booked
+  contractPowerDriverName String?         // Driver name when booked (or "TBD")
+  contractPowerRequestedAt DateTime?      // When request was submitted
+  contractPowerRequestedBy Int?           // User who submitted request
+
   // Relations (Terminal - DEPRECATED)
   originTerminal          Terminal?       @relation(fields: [originTerminalId], references: [id])
   // Relations (Location - New)

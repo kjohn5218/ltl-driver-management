@@ -1,6 +1,6 @@
 import React, { useState, useMemo } from 'react';
 import { useQuery } from '@tanstack/react-query';
-import { format } from 'date-fns';
+import { format, addDays } from 'date-fns';
 import { DataTable, SortDirection } from '../common/DataTable';
 import { Search } from '../common/Search';
 import { DateRangePicker } from '../common/DateRangePicker';
@@ -26,8 +26,10 @@ import {
   Download,
   Printer,
   Plus,
-  AlertTriangle
+  AlertTriangle,
+  Truck
 } from 'lucide-react';
+import { RequestContractPowerModal } from './RequestContractPowerModal';
 
 // Load item type combining loadsheet data with additional load/unload info
 export interface LoadItem {
@@ -56,6 +58,10 @@ export interface LoadItem {
   scheduledDepartDate?: string;
   linehaulTripId?: number;
   doNotLoadPlacardableHazmat?: boolean;
+  // Contract Power Request
+  contractPowerStatus?: 'REQUESTED' | 'BOOKED';
+  contractPowerCarrierName?: string;
+  contractPowerDriverName?: string;
   // Reference to the original loadsheet for actions
   originalLoadsheet?: Loadsheet;
 }
@@ -121,6 +127,9 @@ const loadsheetToLoadItem = (loadsheet: Loadsheet, index: number): LoadItem => {
     scheduledDepartDate: loadsheet.scheduledDepartDate,
     linehaulTripId: loadsheet.linehaulTripId,
     doNotLoadPlacardableHazmat: loadsheet.doNotLoadPlacardableHazmat,
+    contractPowerStatus: loadsheet.contractPowerStatus,
+    contractPowerCarrierName: loadsheet.contractPowerCarrierName,
+    contractPowerDriverName: loadsheet.contractPowerDriverName,
     originalLoadsheet: loadsheet
   };
 };
@@ -157,6 +166,7 @@ const CapacityDisplay: React.FC<{ weight: number; capacity: number }> = ({ weigh
 
 export const LoadsTab: React.FC<LoadsTabProps> = ({ loading: externalLoading = false, onOpenCreateModal, selectedLocations = [] }) => {
   const today = format(new Date(), 'yyyy-MM-dd');
+  const tomorrow = format(addDays(new Date(), 1), 'yyyy-MM-dd');
   const [searchTerm, setSearchTerm] = useState('');
   const [statusFilter, setStatusFilter] = useState<string>('');
   const [sortBy, setSortBy] = useState<keyof LoadItem | null>(null);
@@ -166,13 +176,14 @@ export const LoadsTab: React.FC<LoadsTabProps> = ({ loading: externalLoading = f
   const [planningData, setPlanningData] = useState<Record<number, PlanningData>>({});
   const [continuingTripData, setContinuingTripData] = useState<Record<number, PlanningData>>({});
   const [startDate, setStartDate] = useState(today);
-  const [endDate, setEndDate] = useState(today);
+  const [endDate, setEndDate] = useState(tomorrow);
 
   // Modal states
   const [isShipmentsModalOpen, setIsShipmentsModalOpen] = useState(false);
   const [isEditModalOpen, setIsEditModalOpen] = useState(false);
   const [isDeleteModalOpen, setIsDeleteModalOpen] = useState(false);
   const [isCreateModalOpen, setIsCreateModalOpen] = useState(false);
+  const [isContractPowerModalOpen, setIsContractPowerModalOpen] = useState(false);
   const [selectedLoadItem, setSelectedLoadItem] = useState<LoadItem | null>(null);
   const [deleting, setDeleting] = useState(false);
   const [saving, setSaving] = useState(false);
@@ -655,19 +666,53 @@ export const LoadsTab: React.FC<LoadsTabProps> = ({ loading: externalLoading = f
       accessor: 'id' as keyof LoadItem,
       sortable: false,
       cell: (load: LoadItem) => (
-        <select
-          value={planningData[load.id]?.plannedDriverId || ''}
-          onChange={(e) => updatePlanningData(load.id, 'plannedDriverId', e.target.value ? parseInt(e.target.value) : undefined)}
-          className="w-28 text-xs rounded border-gray-300 dark:border-gray-600 dark:bg-gray-700 dark:text-gray-100 py-1"
-        >
-          <option value="">Select...</option>
-          {drivers
-            .filter(d => d.active && (!planningData[load.id]?.plannedCarrierId || d.carrierId === planningData[load.id]?.plannedCarrierId))
-            .sort((a, b) => a.name.localeCompare(b.name))
-            .map((driver) => (
-              <option key={driver.id} value={driver.id}>{driver.name}{driver.number ? ` (${driver.number})` : ''}</option>
-            ))}
-        </select>
+        <div className="flex items-center gap-2">
+          {/* Show contract power status if requested/booked */}
+          {load.contractPowerStatus === 'BOOKED' ? (
+            <div className="flex flex-col">
+              <span className="text-xs font-medium text-green-700 dark:text-green-400">
+                {load.contractPowerDriverName || 'TBD'}
+              </span>
+              {load.contractPowerCarrierName && (
+                <span className="text-xs text-gray-500 dark:text-gray-400">
+                  {load.contractPowerCarrierName}
+                </span>
+              )}
+            </div>
+          ) : load.contractPowerStatus === 'REQUESTED' ? (
+            <span className="inline-flex items-center px-2 py-0.5 rounded text-xs font-medium bg-yellow-100 text-yellow-800 dark:bg-yellow-900 dark:text-yellow-200">
+              <Truck className="w-3 h-3 mr-1" />
+              Requested
+            </span>
+          ) : (
+            <>
+              <select
+                value={planningData[load.id]?.plannedDriverId || ''}
+                onChange={(e) => updatePlanningData(load.id, 'plannedDriverId', e.target.value ? parseInt(e.target.value) : undefined)}
+                className="w-24 text-xs rounded border-gray-300 dark:border-gray-600 dark:bg-gray-700 dark:text-gray-100 py-1"
+              >
+                <option value="">Select...</option>
+                {drivers
+                  .filter(d => d.active && (!planningData[load.id]?.plannedCarrierId || d.carrierId === planningData[load.id]?.plannedCarrierId))
+                  .sort((a, b) => a.name.localeCompare(b.name))
+                  .map((driver) => (
+                    <option key={driver.id} value={driver.id}>{driver.name}{driver.number ? ` (${driver.number})` : ''}</option>
+                  ))}
+              </select>
+              <button
+                onClick={() => {
+                  setSelectedLoadItem(load);
+                  setIsContractPowerModalOpen(true);
+                }}
+                className="inline-flex items-center px-2 py-1 text-xs font-medium text-indigo-700 bg-indigo-100 rounded hover:bg-indigo-200 dark:bg-indigo-900 dark:text-indigo-200 dark:hover:bg-indigo-800"
+                title="Request Contract Power"
+              >
+                <Truck className="w-3 h-3 mr-1" />
+                Request
+              </button>
+            </>
+          )}
+        </div>
       )
     },
     {
@@ -1188,6 +1233,17 @@ export const LoadsTab: React.FC<LoadsTabProps> = ({ loading: externalLoading = f
       <CreateLoadsheetModal
         isOpen={isCreateModalOpen}
         onClose={() => setIsCreateModalOpen(false)}
+        onSuccess={() => refetch()}
+      />
+
+      {/* Request Contract Power Modal */}
+      <RequestContractPowerModal
+        isOpen={isContractPowerModalOpen}
+        onClose={() => {
+          setIsContractPowerModalOpen(false);
+          setSelectedLoadItem(null);
+        }}
+        loadItem={selectedLoadItem}
         onSuccess={() => refetch()}
       />
     </div>

@@ -29,7 +29,7 @@ import {
   ChevronUp,
   ChevronDown
 } from 'lucide-react';
-import { format, parseISO } from 'date-fns';
+import { format, parseISO, addDays } from 'date-fns';
 
 type SortDirection = 'asc' | 'desc' | null;
 type SortColumn = 'tripNumber' | 'driver' | 'powerUnit' | 'trailer' | 'manifests' | 'linehaul' | 'leg' | 'pieces' | 'weight' | 'schedArrival' | 'eta' | 'status';
@@ -83,8 +83,9 @@ export const InboundTab: React.FC<InboundTabProps> = ({ selectedLocations = [] }
   const queryClient = useQueryClient();
   const [searchTerm, setSearchTerm] = useState('');
   const today = format(new Date(), 'yyyy-MM-dd');
+  const tomorrow = format(addDays(new Date(), 1), 'yyyy-MM-dd');
   const [startDate, setStartDate] = useState(today);
-  const [endDate, setEndDate] = useState(today);
+  const [endDate, setEndDate] = useState(tomorrow);
   const [tripEtas, setTripEtas] = useState<Record<number, EtaResult>>({});
   const [showUnarrivedOnly, setShowUnarrivedOnly] = useState(false);
 
