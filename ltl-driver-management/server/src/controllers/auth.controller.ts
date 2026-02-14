@@ -64,9 +64,20 @@ export const login = async (req: Request, res: Response) => {
   try {
     const { email, password } = req.body;
 
-    // Find user
+    // Find user with home location
     const user = await prisma.user.findUnique({
-      where: { email }
+      where: { email },
+      include: {
+        homeLocation: {
+          select: {
+            id: true,
+            code: true,
+            name: true,
+            city: true,
+            state: true
+          }
+        }
+      }
     });
 
     if (!user) {
@@ -93,7 +104,9 @@ export const login = async (req: Request, res: Response) => {
         id: user.id,
         email: user.email,
         name: user.name,
-        role: user.role
+        role: user.role,
+        homeLocationId: user.homeLocationId,
+        homeLocation: user.homeLocation
       },
       token
     });
@@ -116,6 +129,16 @@ export const getProfile = async (req: AuthenticatedRequest, res: Response) => {
         email: true,
         name: true,
         role: true,
+        homeLocationId: true,
+        homeLocation: {
+          select: {
+            id: true,
+            code: true,
+            name: true,
+            city: true,
+            state: true
+          }
+        },
         createdAt: true,
         updatedAt: true
       }
@@ -129,5 +152,45 @@ export const getProfile = async (req: AuthenticatedRequest, res: Response) => {
   } catch (error) {
     console.error('Get profile error:', error);
     return res.status(500).json({ message: 'Failed to get profile' });
+  }
+};
+
+export const updateProfile = async (req: AuthenticatedRequest, res: Response) => {
+  try {
+    if (!req.user) {
+      return res.status(401).json({ message: 'Unauthorized' });
+    }
+
+    const { homeLocationId } = req.body;
+
+    const user = await prisma.user.update({
+      where: { id: req.user.id },
+      data: {
+        homeLocationId: homeLocationId || null
+      },
+      select: {
+        id: true,
+        email: true,
+        name: true,
+        role: true,
+        homeLocationId: true,
+        homeLocation: {
+          select: {
+            id: true,
+            code: true,
+            name: true,
+            city: true,
+            state: true
+          }
+        },
+        createdAt: true,
+        updatedAt: true
+      }
+    });
+
+    return res.json(user);
+  } catch (error) {
+    console.error('Update profile error:', error);
+    return res.status(500).json({ message: 'Failed to update profile' });
   }
 };

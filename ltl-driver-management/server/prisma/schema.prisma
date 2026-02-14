@@ -13,6 +13,8 @@ model User {
   password              String
   name                  String
   role                  UserRole            @default(DISPATCHER)
+  homeLocationId        Int?
+  homeLocation          Location?           @relation("UserHomeLocation", fields: [homeLocationId], references: [id])
   createdAt             DateTime            @default(now())
   updatedAt             DateTime            @updatedAt
   createdLineItems      BookingLineItem[]
@@ -442,6 +444,9 @@ model Location {
   notes              String?
   isPhysicalTerminal Boolean  @default(false)
   isVirtualTerminal  Boolean  @default(false)
+
+  // Relations - User home location
+  usersWithHomeLocation            User[]                        @relation("UserHomeLocation")
 
   // Relations - Driver assignment
   drivers CarrierDriver[]

@@ -431,6 +431,43 @@ export const DispatchTripModal: React.FC<DispatchTripModalProps> = ({
       return;
     }
 
+    // Validate multi-trailer dispatch: check if trailers are arrived at intermediate locations
+    const selectedLoadsheets = manifestEntries
+      .filter(entry => entry.loadsheet)
+      .map(entry => entry.loadsheet!);
+
+    if (selectedLoadsheets.length > 1) {
+      const firstOrigin = selectedLoadsheets[0].originTerminalCode?.toUpperCase();
+
+      for (let i = 1; i < selectedLoadsheets.length; i++) {
+        const loadsheet = selectedLoadsheets[i];
+        const manifestOrigin = loadsheet.originTerminalCode?.toUpperCase();
+
+        // Check if this manifest originates from a different (intermediate) location
+        if (manifestOrigin && manifestOrigin !== firstOrigin) {
+          // Find the trailer for this manifest
+          const trailer = trailers.find(
+            (t: EquipmentTrailer) => t.unitNumber.toLowerCase() === loadsheet.trailerNumber?.toLowerCase()
+          );
+
+          if (trailer) {
+            // Check if the trailer's effective location matches the manifest's origin
+            const trailerLocationCode = trailer.effectiveTerminal?.code?.toUpperCase() ||
+              trailer.currentTerminal?.code?.toUpperCase() ||
+              trailer.lastArrivalTerminal?.code?.toUpperCase();
+
+            if (!trailerLocationCode || trailerLocationCode !== manifestOrigin) {
+              toast.error(
+                `${loadsheet.manifestNumber} cannot be dispatched with ${selectedLoadsheets[0].manifestNumber} from ${firstOrigin} until it is arrived at ${manifestOrigin}`,
+                { duration: 6000 }
+              );
+              return;
+            }
+          }
+        }
+      }
+    }
+
     setShowConfirmModal(true);
   };
 

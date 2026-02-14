@@ -196,6 +196,8 @@ export const LoadsTab: React.FC<LoadsTabProps> = ({ loading: externalLoading = f
   const [editDoorNumber, setEditDoorNumber] = useState('');
   const [editScheduledDepartDate, setEditScheduledDepartDate] = useState('');
   const [editTargetDispatchTime, setEditTargetDispatchTime] = useState('');
+  const [editContractPowerDriverName, setEditContractPowerDriverName] = useState('');
+  const [editContractPowerCarrierName, setEditContractPowerCarrierName] = useState('');
 
   // Fetch drivers
   const { data: driversData } = useQuery({
@@ -361,6 +363,8 @@ export const LoadsTab: React.FC<LoadsTabProps> = ({ loading: externalLoading = f
     setEditDoorNumber(loadItem.door || '');
     setEditScheduledDepartDate(loadItem.scheduledDepartDate || '');
     setEditTargetDispatchTime(loadItem.scheduledDeparture || '');
+    setEditContractPowerDriverName(loadItem.contractPowerDriverName || '');
+    setEditContractPowerCarrierName(loadItem.contractPowerCarrierName || '');
     setIsEditModalOpen(true);
   };
 
@@ -382,7 +386,9 @@ export const LoadsTab: React.FC<LoadsTabProps> = ({ loading: externalLoading = f
         doNotLoadPlacardableHazmat: editDoNotLoadHazmat,
         doorNumber: editDoorNumber || undefined,
         scheduledDepartDate: editScheduledDepartDate || undefined,
-        targetDispatchTime: editTargetDispatchTime || undefined
+        targetDispatchTime: editTargetDispatchTime || undefined,
+        contractPowerDriverName: editContractPowerDriverName || undefined,
+        contractPowerCarrierName: editContractPowerCarrierName || undefined
       });
       toast.success('Loadsheet updated successfully');
       setIsEditModalOpen(false);
@@ -528,6 +534,7 @@ export const LoadsTab: React.FC<LoadsTabProps> = ({ loading: externalLoading = f
       header: 'Trailer',
       accessor: 'trailerNumber' as keyof LoadItem,
       sortable: true,
+      width: 'w-36',
       cell: (load: LoadItem) => (
         <div>
           <div className="font-medium text-gray-900 dark:text-gray-100">{load.trailerNumber}</div>
@@ -539,12 +546,14 @@ export const LoadsTab: React.FC<LoadsTabProps> = ({ loading: externalLoading = f
       header: 'Door',
       accessor: 'door' as keyof LoadItem,
       sortable: true,
+      width: 'w-20',
       cell: (load: LoadItem) => <span className="text-gray-600 dark:text-gray-300">{load.door || '-'}</span>
     },
     {
       header: 'Manifest',
       accessor: 'manifestNumber' as keyof LoadItem,
       sortable: true,
+      width: 'w-44',
       cell: (load: LoadItem) => (
         <button
           type="button"
@@ -559,44 +568,50 @@ export const LoadsTab: React.FC<LoadsTabProps> = ({ loading: externalLoading = f
       header: 'Linehaul',
       accessor: 'linehaulName' as keyof LoadItem,
       sortable: true,
+      width: 'w-48',
       cell: (load: LoadItem) => <span className="text-gray-900 dark:text-gray-100">{load.linehaulName}</span>
     },
     {
-      header: 'Capacity',
+      header: 'Cap',
       accessor: 'trailerCapacity' as keyof LoadItem,
       sortable: true,
+      width: 'w-40',
       cell: (load: LoadItem) => (
-        <div className="min-w-[100px]">
+        <div className="min-w-[80px]">
           <CapacityDisplay weight={load.weight} capacity={load.trailerCapacity} />
         </div>
       )
     },
     {
-      header: 'Wt (lbs)',
+      header: 'Wt',
       accessor: 'weight' as keyof LoadItem,
       sortable: true,
-      cell: (load: LoadItem) => <span className="text-gray-600 dark:text-gray-300">{load.weight.toLocaleString()}</span>
+      width: 'w-32',
+      cell: (load: LoadItem) => <span className="text-gray-600 dark:text-gray-300 text-xs">{load.weight.toLocaleString()}</span>
     },
     {
       header: 'Pcs',
       accessor: 'pieces' as keyof LoadItem,
       sortable: true,
-      cell: (load: LoadItem) => <span className="text-gray-600 dark:text-gray-300">{load.pieces}</span>
+      width: 'w-20',
+      cell: (load: LoadItem) => <span className="text-gray-600 dark:text-gray-300 text-xs">{load.pieces}</span>
     },
     {
       header: 'Status',
       accessor: 'status' as keyof LoadItem,
       sortable: true,
+      width: 'w-36',
       cell: (load: LoadItem) => (
-        <span className={`inline-flex px-2 py-0.5 rounded-full text-xs font-medium ${statusColors[load.status]}`}>
+        <span className={`inline-flex px-1.5 py-0.5 rounded-full text-xs font-medium ${statusColors[load.status]}`}>
           {load.status}
         </span>
       )
     },
     {
-      header: 'Sched. Date',
+      header: 'Sched',
       accessor: 'scheduledDepartDate' as keyof LoadItem,
       sortable: true,
+      width: 'w-36',
       cell: (load: LoadItem) => {
         if (!load.scheduledDepartDate) return <span className="text-gray-400">-</span>;
 
@@ -621,42 +636,20 @@ export const LoadsTab: React.FC<LoadsTabProps> = ({ loading: externalLoading = f
           ? 'text-red-600 dark:text-red-400 font-medium'
           : 'text-gray-600 dark:text-gray-300';
 
-        return (
-          <span className={`text-sm ${textColorClass}`}>
-            {month}/{day}
-          </span>
-        );
-      }
-    },
-    {
-      header: 'Sched. Time',
-      accessor: 'scheduledDeparture' as keyof LoadItem,
-      sortable: true,
-      cell: (load: LoadItem) => {
-        if (!load.scheduledDeparture) return <span className="text-gray-400">-</span>;
-
-        // Check if overdue (date/time has passed and not DISPATCHED)
-        let isOverdue = false;
-        if (load.status !== 'DISPATCHED' && load.scheduledDepartDate) {
-          const now = new Date();
-          const scheduledDate = new Date(load.scheduledDepartDate + 'T00:00:00');
+        // Combine date and time
+        let timeStr = '';
+        if (load.scheduledDeparture) {
           const [hours, minutes] = load.scheduledDeparture.split(':').map(Number);
-          scheduledDate.setHours(hours, minutes, 0, 0);
-          isOverdue = now > scheduledDate;
+          if (!isNaN(hours) && !isNaN(minutes)) {
+            const period = hours >= 12 ? 'P' : 'A';
+            const displayHours = hours % 12 || 12;
+            timeStr = ` ${displayHours}:${minutes.toString().padStart(2, '0')}${period}`;
+          }
         }
 
-        const [hours, minutes] = load.scheduledDeparture.split(':').map(Number);
-        if (isNaN(hours) || isNaN(minutes)) return <span className="text-gray-400">-</span>;
-
-        const period = hours >= 12 ? 'PM' : 'AM';
-        const displayHours = hours % 12 || 12;
-        const textColorClass = isOverdue
-          ? 'text-red-600 dark:text-red-400 font-medium'
-          : 'text-gray-600 dark:text-gray-300';
-
         return (
-          <span className={`text-sm ${textColorClass}`}>
-            {displayHours}:{minutes.toString().padStart(2, '0')} {period}
+          <span className={`text-xs ${textColorClass}`}>
+            {month}/{day}{timeStr}
           </span>
         );
       }
@@ -665,6 +658,7 @@ export const LoadsTab: React.FC<LoadsTabProps> = ({ loading: externalLoading = f
       header: 'Planned Driver',
       accessor: 'id' as keyof LoadItem,
       sortable: false,
+      width: 'w-[420px]',
       cell: (load: LoadItem) => (
         <div className="flex items-center gap-2">
           {/* Show contract power status if requested/booked */}
@@ -689,7 +683,7 @@ export const LoadsTab: React.FC<LoadsTabProps> = ({ loading: externalLoading = f
               <select
                 value={planningData[load.id]?.plannedDriverId || ''}
                 onChange={(e) => updatePlanningData(load.id, 'plannedDriverId', e.target.value ? parseInt(e.target.value) : undefined)}
-                className="w-24 text-xs rounded border-gray-300 dark:border-gray-600 dark:bg-gray-700 dark:text-gray-100 py-1"
+                className="flex-1 min-w-0 text-xs rounded border-gray-300 dark:border-gray-600 dark:bg-gray-700 dark:text-gray-100 py-1"
               >
                 <option value="">Select...</option>
                 {drivers
@@ -704,11 +698,11 @@ export const LoadsTab: React.FC<LoadsTabProps> = ({ loading: externalLoading = f
                   setSelectedLoadItem(load);
                   setIsContractPowerModalOpen(true);
                 }}
-                className="inline-flex items-center px-2 py-1 text-xs font-medium text-indigo-700 bg-indigo-100 rounded hover:bg-indigo-200 dark:bg-indigo-900 dark:text-indigo-200 dark:hover:bg-indigo-800"
+                className="inline-flex items-center px-2 py-1 text-xs font-medium text-indigo-700 bg-indigo-100 rounded hover:bg-indigo-200 dark:bg-indigo-900 dark:text-indigo-200 dark:hover:bg-indigo-800 whitespace-nowrap flex-shrink-0"
                 title="Request Contract Power"
               >
                 <Truck className="w-3 h-3 mr-1" />
-                Request
+                Request Contract Power
               </button>
             </>
           )}
@@ -1183,6 +1177,42 @@ export const LoadsTab: React.FC<LoadsTabProps> = ({ loading: externalLoading = f
               className="w-full px-3 py-2 border border-gray-300 dark:border-gray-600 rounded-lg bg-white dark:bg-gray-700 text-gray-900 dark:text-white focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
             />
           </div>
+
+          {/* Contract Power Driver/Carrier - only show if booked */}
+          {selectedLoadItem?.contractPowerStatus === 'BOOKED' && (
+            <div className="p-4 bg-green-50 dark:bg-green-900/20 border border-green-200 dark:border-green-800 rounded-lg space-y-3">
+              <div className="flex items-center gap-2 mb-2">
+                <Truck className="w-4 h-4 text-green-600 dark:text-green-400" />
+                <span className="text-sm font-medium text-green-800 dark:text-green-200">
+                  Contract Power Assignment
+                </span>
+              </div>
+              <div>
+                <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">
+                  Driver Name
+                </label>
+                <input
+                  type="text"
+                  value={editContractPowerDriverName}
+                  onChange={(e) => setEditContractPowerDriverName(e.target.value)}
+                  className="w-full px-3 py-2 border border-gray-300 dark:border-gray-600 rounded-lg bg-white dark:bg-gray-700 text-gray-900 dark:text-white focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
+                  placeholder="Enter driver name"
+                />
+              </div>
+              <div>
+                <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">
+                  Carrier Name
+                </label>
+                <input
+                  type="text"
+                  value={editContractPowerCarrierName}
+                  onChange={(e) => setEditContractPowerCarrierName(e.target.value)}
+                  className="w-full px-3 py-2 border border-gray-300 dark:border-gray-600 rounded-lg bg-white dark:bg-gray-700 text-gray-900 dark:text-white focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
+                  placeholder="Enter carrier name"
+                />
+              </div>
+            </div>
+          )}
 
           {/* Hazmat Checkbox */}
           <div className="p-4 bg-yellow-50 dark:bg-yellow-900/20 border border-yellow-200 dark:border-yellow-800 rounded-lg">

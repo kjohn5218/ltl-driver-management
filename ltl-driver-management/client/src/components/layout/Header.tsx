@@ -1,8 +1,9 @@
-import React from 'react';
+import React, { useState } from 'react';
 import { useAuth } from '../../contexts/AuthContext';
 import { useTheme } from '../../contexts/ThemeContext';
-import { Menu, LogOut, Sun, Moon } from 'lucide-react';
+import { Menu, LogOut, Sun, Moon, Settings } from 'lucide-react';
 import { useNavigate } from 'react-router-dom';
+import { UserSettingsModal } from '../UserSettingsModal';
 
 interface HeaderProps {
   onMenuClick: () => void;
@@ -12,6 +13,7 @@ export const Header: React.FC<HeaderProps> = ({ onMenuClick }) => {
   const { user, logout } = useAuth();
   const { toggleTheme, isDark } = useTheme();
   const navigate = useNavigate();
+  const [isSettingsOpen, setIsSettingsOpen] = useState(false);
 
   const handleLogout = () => {
     logout();
@@ -42,7 +44,20 @@ export const Header: React.FC<HeaderProps> = ({ onMenuClick }) => {
           <div className="flex items-center space-x-4">
             <div className="flex items-center text-sm text-white">
               <span className="font-medium">{user?.name}</span>
+              {user?.homeLocation && (
+                <span className="ml-2 text-xs text-white/70">
+                  ({user.homeLocation.code})
+                </span>
+              )}
             </div>
+
+            <button
+              onClick={() => setIsSettingsOpen(true)}
+              className="p-2 rounded-md text-white/80 hover:text-white hover:bg-blue-500 focus:outline-none focus:ring-2 focus:ring-white/50 transition-colors"
+              title="User Settings"
+            >
+              <Settings className="h-5 w-5" />
+            </button>
 
             <button
               onClick={toggleTheme}
@@ -63,6 +78,11 @@ export const Header: React.FC<HeaderProps> = ({ onMenuClick }) => {
           </div>
         </div>
       </header>
+
+      <UserSettingsModal
+        isOpen={isSettingsOpen}
+        onClose={() => setIsSettingsOpen(false)}
+      />
     </>
   );
 };

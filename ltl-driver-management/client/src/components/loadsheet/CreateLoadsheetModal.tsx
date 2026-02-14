@@ -203,11 +203,17 @@ export const CreateLoadsheetModal: React.FC<CreateLoadsheetModalProps> = ({
     }
   };
 
+  // Helper to get today's date in local timezone as YYYY-MM-DD
+  const getLocalDateString = () => {
+    const today = new Date();
+    return `${today.getFullYear()}-${String(today.getMonth() + 1).padStart(2, '0')}-${String(today.getDate()).padStart(2, '0')}`;
+  };
+
   // Form state
   const [trailerLength, setTrailerLength] = useState<number | undefined>(undefined);
   const [pintleHook, setPintleHook] = useState<boolean>(false);
   const [targetDispatchTime, setTargetDispatchTime] = useState<string>('');
-  const [scheduledDepartDate, setScheduledDepartDate] = useState<string>(new Date().toISOString().split('T')[0]);
+  const [scheduledDepartDate, setScheduledDepartDate] = useState<string>(getLocalDateString());
   const [doNotLoadPlacardableHazmat, setDoNotLoadPlacardableHazmat] = useState(false);
   const [doorNumber, setDoorNumber] = useState<string>('');
   const [trailerOutOfService, setTrailerOutOfService] = useState<boolean>(false);
@@ -227,7 +233,7 @@ export const CreateLoadsheetModal: React.FC<CreateLoadsheetModalProps> = ({
     setTrailerLength(undefined);
     setPintleHook(false);
     setTargetDispatchTime('');
-    setScheduledDepartDate(new Date().toISOString().split('T')[0]);
+    setScheduledDepartDate(getLocalDateString());
     setDoNotLoadPlacardableHazmat(false);
     setDoorNumber('');
     setCreatedLoadsheet(null);
@@ -238,6 +244,10 @@ export const CreateLoadsheetModal: React.FC<CreateLoadsheetModalProps> = ({
   };
 
   const handleClose = () => {
+    // Notify parent if a loadsheet was created (for list refresh, etc.)
+    if (createdLoadsheet) {
+      onSuccess();
+    }
     resetForm();
     onClose();
   };
@@ -304,13 +314,65 @@ export const CreateLoadsheetModal: React.FC<CreateLoadsheetModalProps> = ({
     }
   };
 
+  // Helper to format date as YYYY-MM-DD
+  const formatDateString = (date: Date): string => {
+    return `${date.getFullYear()}-${String(date.getMonth() + 1).padStart(2, '0')}-${String(date.getDate()).padStart(2, '0')}`;
+  };
+
+  // Helper to get the next Monday from a given date
+  const getNextMonday = (date: Date): Date => {
+    const result = new Date(date);
+    const dayOfWeek = result.getDay();
+    const daysUntilMonday = dayOfWeek === 0 ? 1 : 8 - dayOfWeek;
+    result.setDate(result.getDate() + daysUntilMonday);
+    return result;
+  };
+
   // Auto-populate target dispatch time when linehaul profile is selected
+  // Also adjust scheduled depart date if departure time has passed
   const handleProfileSelect = (profile: LinehaulProfile | null) => {
     setSelectedProfile(profile);
     if (profile && profile.standardDepartureTime) {
       setTargetDispatchTime(profile.standardDepartureTime);
+
+      // Check if the departure time has passed for today
+      const now = new Date();
+      const [hours, minutes] = profile.standardDepartureTime.split(':').map(Number);
+
+      if (!isNaN(hours) && !isNaN(minutes)) {
+        const departureToday = new Date();
+        departureToday.setHours(hours, minutes, 0, 0);
+
+        // If departure time has passed, calculate next departure date
+        if (now > departureToday) {
+          // Start with tomorrow
+          const nextDay = new Date(now);
+          nextDay.setDate(nextDay.getDate() + 1);
+          nextDay.setHours(hours, minutes, 0, 0);
+
+          // Calculate Saturday 6:00 AM cutoff for this week
+          const saturday6am = new Date(now);
+          const currentDay = saturday6am.getDay();
+          const daysUntilSaturday = currentDay === 6 ? 0 : (6 - currentDay + 7) % 7;
+          saturday6am.setDate(saturday6am.getDate() + daysUntilSaturday);
+          saturday6am.setHours(6, 0, 0, 0);
+
+          // If next departure would be after Saturday 6:00 AM, use Monday
+          if (nextDay >= saturday6am) {
+            const monday = getNextMonday(now);
+            setScheduledDepartDate(formatDateString(monday));
+          } else {
+            setScheduledDepartDate(formatDateString(nextDay));
+          }
+        } else {
+          // Departure time hasn't passed, use today
+          setScheduledDepartDate(getLocalDateString());
+        }
+      }
     } else {
       setTargetDispatchTime('');
+      // Reset to today if no profile or no departure time
+      setScheduledDepartDate(getLocalDateString());
     }
   };
 
@@ -379,7 +441,6 @@ export const CreateLoadsheetModal: React.FC<CreateLoadsheetModalProps> = ({
       toast.success(`Loadsheet ${created.manifestNumber} created successfully`);
       setCreatedLoadsheet(created);
       setIsReprint(false);
-      onSuccess();
     } catch (error: any) {
       toast.error(error.response?.data?.message || 'Failed to create loadsheet');
     } finally {

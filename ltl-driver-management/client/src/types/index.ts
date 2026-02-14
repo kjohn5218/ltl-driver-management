@@ -5,11 +5,21 @@ export type InvoiceStatus = 'PENDING' | 'SENT' | 'PAID' | 'OVERDUE' | 'CANCELLED
 export type RateType = 'MILE' | 'MILE_FSC' | 'FLAT_RATE';
 export type BookingType = 'POWER_ONLY' | 'POWER_AND_TRAILER';
 
+export interface UserHomeLocation {
+  id: number;
+  code: string;
+  name?: string;
+  city?: string;
+  state?: string;
+}
+
 export interface User {
   id: number;
   email: string;
   name: string;
   role: UserRole;
+  homeLocationId?: number | null;
+  homeLocation?: UserHomeLocation | null;
   createdAt: string;
   updatedAt: string;
 }
@@ -496,6 +506,8 @@ export interface EquipmentTrailer {
   updatedAt: string;
   currentTerminal?: Terminal;
   lastArrivalTerminal?: Terminal;
+  effectiveTerminal?: Terminal;
+  locationSource?: 'yard_sync' | 'trip_arrival' | 'manual' | null;
   _count?: {
     primaryTrips: number;
     secondaryTrips: number;
@@ -1185,6 +1197,10 @@ export interface CreateLoadsheetRequest {
   hazmatItems?: Omit<LoadsheetHazmatItem, 'id' | 'loadsheetId' | 'createdAt'>[];
   dispatchEntries?: Omit<LoadsheetDispatchEntry, 'id' | 'loadsheetId' | 'createdAt'>[];
   freightPlacements?: Omit<LoadsheetFreightPlacement, 'id' | 'loadsheetId' | 'createdAt'>[];
+  // Contract power fields (for updates from bookings)
+  contractPowerStatus?: 'REQUESTED' | 'BOOKED';
+  contractPowerCarrierName?: string;
+  contractPowerDriverName?: string;
 }
 
 // Duplicate loadsheet check

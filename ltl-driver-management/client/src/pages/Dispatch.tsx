@@ -63,7 +63,13 @@ export const Dispatch: React.FC = () => {
   const [loading, setLoading] = useState(true);
 
   // Global location filter state - shared across all tabs
-  const [selectedLocations, setSelectedLocations] = useState<number[]>([]);
+  // Initialize with user's home location if set
+  const [selectedLocations, setSelectedLocations] = useState<number[]>(() => {
+    if (user?.homeLocationId) {
+      return [user.homeLocationId];
+    }
+    return [];
+  });
 
   // Tab state - read from URL params
   const tabFromUrl = searchParams.get('tab') as DispatchTab | null;

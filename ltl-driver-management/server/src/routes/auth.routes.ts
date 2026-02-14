@@ -1,6 +1,6 @@
 import { Router } from 'express';
 import { body } from 'express-validator';
-import { register, login, getProfile } from '../controllers/auth.controller';
+import { register, login, getProfile, updateProfile } from '../controllers/auth.controller';
 import { authenticate } from '../middleware/auth.middleware';
 import { validateRequest } from '../middleware/validation.middleware';
 
@@ -32,5 +32,16 @@ router.post(
 
 // Get current user profile
 router.get('/profile', authenticate, getProfile);
+
+// Update current user profile
+router.put(
+  '/profile',
+  authenticate,
+  [
+    body('homeLocationId').optional().isInt().withMessage('Home location ID must be an integer')
+  ],
+  validateRequest,
+  updateProfile
+);
 
 export default router;

@@ -1,9 +1,10 @@
-import React, { useState, useMemo, useEffect } from 'react';
+import React, { useState, useMemo, useEffect, useRef } from 'react';
 import { useNavigate, useSearchParams } from 'react-router-dom';
 import { useQuery, useQueryClient, useMutation } from '@tanstack/react-query';
 import { api, sendRateConfirmationEmail } from '../services/api';
-import { Booking } from '../types';
-import { Plus, Search, Edit, Eye, Calendar, MapPin, User, DollarSign, X, ChevronUp, ChevronDown, Trash2, FileText, CheckCircle, Clock, Send, Truck, Upload } from 'lucide-react';
+import { payRulesService, DriverWithRate } from '../services/payRulesService';
+import { Booking, RateCard } from '../types';
+import { Plus, Search, Edit, Eye, Calendar, MapPin, User, DollarSign, X, ChevronUp, ChevronDown, Trash2, FileText, CheckCircle, Clock, Send, Truck, Upload, Loader2 } from 'lucide-react';
 import { format, isAfter, isBefore, isSameDay, parseISO } from 'date-fns';
 import { RateConfirmationModal } from '../components/RateConfirmation';
 import { BookingLineItems } from '../components/BookingLineItems';
@@ -764,15 +765,23 @@ const BookingViewModal: React.FC<BookingViewModalProps> = ({ booking, onClose, g
   const queryClient = useQueryClient();
   const [isEditMode, setIsEditMode] = useState(false);
   const [isSubmitting, setIsSubmitting] = useState(false);
-  
+
   // State for managing leg manifest numbers in notes-based multi-leg bookings
   const [legManifestNumbers, setLegManifestNumbers] = useState<Record<number, string>>({});
-  
+
   // State for document management
   const [uploadingDocument, setUploadingDocument] = useState(false);
   const [selectedFile, setSelectedFile] = useState<File | null>(null);
   const [documentType, setDocumentType] = useState('');
   const [deletingDocumentId, setDeletingDocumentId] = useState<number | null>(null);
+
+  // Driver search state
+  const [driverSearch, setDriverSearch] = useState('');
+  const [selectedDriver, setSelectedDriver] = useState<DriverWithRate | null>(null);
+  const [driverDropdownOpen, setDriverDropdownOpen] = useState(false);
+  const [applicableRateCard, setApplicableRateCard] = useState<RateCard | null>(null);
+  const [originalRates, setOriginalRates] = useState<{ rate: number; baseRate: number; fscRate: number } | null>(null);
+  const driverDropdownRef = useRef<HTMLDivElement>(null);
   
   // Fetch complete booking details with child bookings
   const { data: fullBookingData } = useQuery({
@@ -862,6 +871,122 @@ const BookingViewModal: React.FC<BookingViewModalProps> = ({ booking, onClose, g
     enabled: isEditMode
   });
 
+  // Fetch drivers for selected carrier
+  const { data: driversData, isLoading: driversLoading } = useQuery({
+    queryKey: ['drivers-with-rates', formData.carrierId],
+    queryFn: async () => {
+      if (!formData.carrierId) return { drivers: [] };
+      const response = await payRulesService.getDriversWithRates({
+        carrierId: Number(formData.carrierId),
+        limit: 500
+      });
+      return response;
+    },
+    enabled: isEditMode && !!formData.carrierId
+  });
+
+  // Close driver dropdown on outside click
+  useEffect(() => {
+    const handleClickOutside = (e: MouseEvent) => {
+      if (driverDropdownRef.current && !driverDropdownRef.current.contains(e.target as Node)) {
+        setDriverDropdownOpen(false);
+      }
+    };
+    document.addEventListener('mousedown', handleClickOutside);
+    return () => document.removeEventListener('mousedown', handleClickOutside);
+  }, []);
+
+  // Filter drivers based on search
+  const filteredDrivers = useMemo(() => {
+    const drivers = driversData?.drivers || [];
+    if (!driverSearch.trim()) return drivers;
+    const search = driverSearch.toLowerCase();
+    return drivers.filter((d: DriverWithRate) =>
+      d.name?.toLowerCase().includes(search) ||
+      d.number?.toLowerCase().includes(search) ||
+      d.phoneNumber?.toLowerCase().includes(search)
+    );
+  }, [driversData?.drivers, driverSearch]);
+
+  // Lookup applicable rate when driver or carrier changes
+  const lookupApplicableRate = async (driverId?: number, carrierId?: number) => {
+    try {
+      // Get route info for O/D lookup
+      const route = bookingToDisplay.route;
+      const originTerminalId = route?.originTerminalId;
+      const destinationTerminalId = route?.destinationTerminalId;
+
+      const rate = await payRulesService.getApplicableRate({
+        driverId,
+        carrierId,
+        originTerminalId,
+        destinationTerminalId
+      });
+
+      if (rate) {
+        setApplicableRateCard(rate);
+        // Populate rate fields from the rate card
+        const newRate = Number(rate.rateAmount) || 0;
+        setFormData(prev => ({
+          ...prev,
+          rate: newRate,
+          baseRate: newRate,
+          fscRate: Number(rate.fuelSurcharge) || 0
+        }));
+      }
+    } catch (error) {
+      // No applicable rate found - that's OK, user can enter manually
+      console.log('No applicable rate found');
+      setApplicableRateCard(null);
+    }
+  };
+
+  // Handle driver selection
+  const handleDriverSelect = (driver: DriverWithRate) => {
+    setSelectedDriver(driver);
+    setFormData(prev => ({
+      ...prev,
+      driverName: driver.name,
+      phoneNumber: driver.phoneNumber || prev.phoneNumber
+    }));
+    setDriverSearch(driver.name);
+    setDriverDropdownOpen(false);
+
+    // Store original rates before lookup
+    if (!originalRates) {
+      setOriginalRates({
+        rate: formData.rate,
+        baseRate: formData.baseRate,
+        fscRate: formData.fscRate
+      });
+    }
+
+    // Lookup applicable rate for this driver
+    lookupApplicableRate(driver.id, Number(formData.carrierId));
+  };
+
+  // Handle carrier change - reset driver and lookup carrier rate
+  const handleCarrierChange = (carrierId: string) => {
+    setFormData(prev => ({ ...prev, carrierId }));
+    setSelectedDriver(null);
+    setDriverSearch('');
+    setApplicableRateCard(null);
+
+    // Store original rates before lookup
+    if (!originalRates && carrierId) {
+      setOriginalRates({
+        rate: formData.rate,
+        baseRate: formData.baseRate,
+        fscRate: formData.fscRate
+      });
+    }
+
+    // Lookup carrier rate if carrier selected
+    if (carrierId) {
+      lookupApplicableRate(undefined, Number(carrierId));
+    }
+  };
+
   // Memoized distance lookup cache
   const distanceCache = useMemo(() => new Map<string, number>(), []);
 
@@ -927,7 +1052,7 @@ const BookingViewModal: React.FC<BookingViewModalProps> = ({ booking, onClose, g
 
   const handleSave = async () => {
     setIsSubmitting(true);
-    
+
     try {
       const payload = {
         carrierId: formData.carrierId || null,
@@ -947,20 +1072,80 @@ const BookingViewModal: React.FC<BookingViewModalProps> = ({ booking, onClose, g
         routeId: formData.routeId || null,
         manifestNumber: formData.manifestNumber.trim() || null
       };
-      
+
       console.log('Sending payload:', payload);
       console.log('Manifest number being sent:', payload.manifestNumber);
-      
+
       const response = await api.put(`/bookings/${bookingToDisplay.id}`, payload);
       console.log('Update response:', response.data);
-      
+
+      // Check if rates were changed and we need to create/update a pay rule
+      const rateChanged = originalRates && (
+        Number(formData.rate) !== originalRates.rate ||
+        Number(formData.baseRate) !== originalRates.baseRate ||
+        Number(formData.fscRate) !== originalRates.fscRate
+      );
+
+      const rateMatchesApplicable = applicableRateCard &&
+        Number(formData.rate) === Number(applicableRateCard.rateAmount) &&
+        Number(formData.fscRate) === Number(applicableRateCard.fuelSurcharge || 0);
+
+      // If rate changed and doesn't match applicable rate, create/update pay rule
+      if (rateChanged && !rateMatchesApplicable && (selectedDriver || formData.carrierId)) {
+        try {
+          const route = bookingToDisplay.route;
+          const rateCardData = {
+            rateType: selectedDriver ? 'DRIVER' as const : 'CARRIER' as const,
+            entityId: selectedDriver ? selectedDriver.id : Number(formData.carrierId),
+            originTerminalId: route?.originTerminalId || undefined,
+            destinationTerminalId: route?.destinationTerminalId || undefined,
+            rateMethod: 'FLAT_RATE' as const,
+            rateAmount: Number(formData.rate),
+            fuelSurcharge: Number(formData.fscRate) || undefined,
+            effectiveDate: new Date().toISOString().split('T')[0],
+            active: true,
+            notes: `Created from booking #${bookingToDisplay.id}`
+          };
+
+          // Check if we should update existing rate card or create new one
+          if (applicableRateCard && (
+            (selectedDriver && applicableRateCard.rateType === 'DRIVER' && applicableRateCard.entityId === selectedDriver.id) ||
+            (!selectedDriver && applicableRateCard.rateType === 'CARRIER' && applicableRateCard.entityId === Number(formData.carrierId))
+          )) {
+            // Update existing rate card
+            await payRulesService.updateRateCard(applicableRateCard.id, {
+              rateAmount: Number(formData.rate),
+              fuelSurcharge: Number(formData.fscRate) || null
+            });
+            console.log('Updated existing pay rule');
+          } else {
+            // Create new rate card
+            await payRulesService.createRateCard(rateCardData);
+            console.log('Created new pay rule');
+          }
+
+          // Invalidate rate cards cache
+          queryClient.invalidateQueries({ queryKey: ['rate-cards'] });
+          queryClient.invalidateQueries({ queryKey: ['drivers-with-rates'] });
+        } catch (rateError) {
+          console.error('Failed to create/update pay rule:', rateError);
+          // Don't fail the booking save if pay rule creation fails
+        }
+      }
+
       // Update the bookings cache
       queryClient.invalidateQueries({ queryKey: ['bookings'] });
       queryClient.invalidateQueries({ queryKey: ['booking', bookingToDisplay.id] });
-      
+
+      // Reset state
+      setOriginalRates(null);
+      setApplicableRateCard(null);
+      setSelectedDriver(null);
+      setDriverSearch('');
+
       // Exit edit mode
       setIsEditMode(false);
-      
+
       alert('Booking updated successfully');
     } catch (error: any) {
       console.error('Update failed:', error);
@@ -1150,7 +1335,7 @@ const BookingViewModal: React.FC<BookingViewModalProps> = ({ booking, onClose, g
 
   return (
     <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50">
-      <div className="bg-white rounded-lg p-6 w-full max-w-2xl max-h-[90vh] overflow-y-auto">
+      <div className="bg-white rounded-lg p-6 w-full max-w-5xl max-h-[90vh] overflow-y-auto">
         <div className="flex justify-between items-center mb-6">
           <h2 className="text-xl font-bold text-gray-900">Booking Details #{bookingToDisplay.id}</h2>
           <div className="flex items-center gap-2">
@@ -1173,21 +1358,25 @@ const BookingViewModal: React.FC<BookingViewModalProps> = ({ booking, onClose, g
         </div>
         
         <div className="space-y-4">
-          <div className="grid grid-cols-2 gap-4">
+          {/* Row 1: Carrier, Status, Type, Booking Date */}
+          <div className="grid grid-cols-4 gap-4">
             <div>
               <label className="block text-sm font-medium text-gray-700 mb-1">Carrier</label>
               {isEditMode ? (
                 <select
                   value={formData.carrierId}
-                  onChange={(e) => setFormData({...formData, carrierId: e.target.value})}
+                  onChange={(e) => handleCarrierChange(e.target.value)}
                   className="w-full p-2 border rounded focus:ring-blue-500 focus:border-blue-500"
                 >
                   <option value="">Select Carrier</option>
-                  {carriersData?.carriers?.map((carrier: any) => (
-                    <option key={carrier.id} value={carrier.id}>
-                      {carrier.name}
-                    </option>
-                  ))}
+                  {carriersData?.carriers
+                    ?.slice()
+                    .sort((a: any, b: any) => (a.name || '').localeCompare(b.name || ''))
+                    .map((carrier: any) => (
+                      <option key={carrier.id} value={carrier.id}>
+                        {carrier.name}
+                      </option>
+                    ))}
                 </select>
               ) : (
                 <p className="text-sm text-gray-900">{bookingToDisplay.carrier?.name || 'N/A'}</p>
@@ -1209,28 +1398,110 @@ const BookingViewModal: React.FC<BookingViewModalProps> = ({ booking, onClose, g
                 </select>
               ) : (
                 <span className={`inline-flex px-2 py-1 rounded-full text-xs font-medium ${getStatusBadge(bookingToDisplay.status)}`}>
-                  {bookingToDisplay.status === 'PENDING' ? 'Pending (Unbooked)' : 
+                  {bookingToDisplay.status === 'PENDING' ? 'Pending (Unbooked)' :
                    bookingToDisplay.status === 'CONFIRMED' ? 'Confirmed (Booked)' :
                    bookingToDisplay.status === 'IN_PROGRESS' ? 'In Progress' :
                    bookingToDisplay.status === 'COMPLETED' ? 'Completed' :
-                   bookingToDisplay.status === 'CANCELLED' ? 'Cancelled' : 
+                   bookingToDisplay.status === 'CANCELLED' ? 'Cancelled' :
                    bookingToDisplay.status.replace('_', ' ')}
                 </span>
               )}
             </div>
+            <div>
+              <label className="block text-sm font-medium text-gray-700 mb-1">Type</label>
+              {isEditMode ? (
+                <select
+                  value={formData.type}
+                  onChange={(e) => setFormData({...formData, type: e.target.value})}
+                  className="w-full p-2 border rounded focus:ring-blue-500 focus:border-blue-500"
+                >
+                  <option value="POWER_ONLY">Power Only</option>
+                  <option value="POWER_AND_TRAILER">Power and Trailer</option>
+                </select>
+              ) : (
+                <p className="text-sm text-gray-900">
+                  {bookingToDisplay.type === 'POWER_ONLY' ? 'Power Only' : 'Power and Trailer'}
+                </p>
+              )}
+            </div>
+            <div>
+              <label className="block text-sm font-medium text-gray-700 mb-1">Booking Date</label>
+              {isEditMode ? (
+                <input
+                  type="date"
+                  value={formData.bookingDate}
+                  onChange={(e) => setFormData({...formData, bookingDate: e.target.value})}
+                  className="w-full p-2 border rounded focus:ring-blue-500 focus:border-blue-500"
+                />
+              ) : (
+                <p className="text-sm text-gray-900">
+                  {bookingToDisplay.bookingDate ? new Date(bookingToDisplay.bookingDate).toLocaleDateString() : 'N/A'}
+                </p>
+              )}
+            </div>
           </div>
-          
-          <div className="grid grid-cols-2 gap-4">
+
+          {/* Row 2: Driver Name, Phone, Carrier Email, Report Time */}
+          <div className="grid grid-cols-4 gap-4">
             <div>
               <label className="block text-sm font-medium text-gray-700 mb-1">Driver Name</label>
               {isEditMode ? (
-                <input
-                  type="text"
-                  value={formData.driverName}
-                  onChange={(e) => setFormData({...formData, driverName: e.target.value})}
-                  className="w-full p-2 border rounded focus:ring-blue-500 focus:border-blue-500"
-                  placeholder="Enter driver name"
-                />
+                <div ref={driverDropdownRef} className="relative">
+                  <div className="relative">
+                    <input
+                      type="text"
+                      value={driverSearch || formData.driverName}
+                      onChange={(e) => {
+                        setDriverSearch(e.target.value);
+                        setFormData({ ...formData, driverName: e.target.value });
+                        setSelectedDriver(null);
+                        setDriverDropdownOpen(true);
+                      }}
+                      onFocus={() => formData.carrierId && setDriverDropdownOpen(true)}
+                      className="w-full p-2 border rounded focus:ring-blue-500 focus:border-blue-500"
+                      placeholder={formData.carrierId ? "Search or enter driver name" : "Select carrier first"}
+                    />
+                    {driversLoading && (
+                      <Loader2 className="absolute right-2 top-1/2 -translate-y-1/2 w-4 h-4 animate-spin text-gray-400" />
+                    )}
+                  </div>
+                  {/* Driver dropdown */}
+                  {driverDropdownOpen && formData.carrierId && (
+                    <div className="absolute z-50 w-full mt-1 bg-white border border-gray-300 rounded-md shadow-lg max-h-48 overflow-y-auto">
+                      {filteredDrivers.length === 0 ? (
+                        <div className="px-3 py-2 text-sm text-gray-500">
+                          {driversLoading ? 'Loading...' : 'No drivers found - manual entry allowed'}
+                        </div>
+                      ) : (
+                        filteredDrivers.map((driver: DriverWithRate) => (
+                          <button
+                            key={driver.id}
+                            type="button"
+                            onClick={() => handleDriverSelect(driver)}
+                            className="w-full px-3 py-2 text-left hover:bg-blue-50 border-b border-gray-100 last:border-0"
+                          >
+                            <div className="font-medium text-sm text-gray-900">{driver.name}</div>
+                            <div className="text-xs text-gray-500 flex gap-2">
+                              {driver.number && <span>#{driver.number}</span>}
+                              {driver.phoneNumber && <span>{driver.phoneNumber}</span>}
+                              {driver.rateCard && (
+                                <span className="text-green-600">Has rate: ${driver.rateCard.rateAmount}</span>
+                              )}
+                            </div>
+                          </button>
+                        ))
+                      )}
+                    </div>
+                  )}
+                  {applicableRateCard && (
+                    <div className="mt-1 text-xs text-green-600">
+                      Rate applied: ${applicableRateCard.rateAmount}
+                      {applicableRateCard.rateType === 'DRIVER' && ' (Driver)'}
+                      {applicableRateCard.rateType === 'CARRIER' && ' (Carrier)'}
+                      {applicableRateCard.rateType === 'OD_PAIR' && ' (O/D)'}
+                    </div>
+                  )}
+                </div>
               ) : (
                 <p className="text-sm text-gray-900">{bookingToDisplay.driverName || 'N/A'}</p>
               )}
@@ -1249,9 +1520,6 @@ const BookingViewModal: React.FC<BookingViewModalProps> = ({ booking, onClose, g
                 <p className="text-sm text-gray-900">{bookingToDisplay.phoneNumber || 'N/A'}</p>
               )}
             </div>
-          </div>
-
-          <div className="grid grid-cols-2 gap-4">
             <div>
               <label className="block text-sm font-medium text-gray-700 mb-1">Carrier Email</label>
               {isEditMode ? (
@@ -1281,26 +1549,10 @@ const BookingViewModal: React.FC<BookingViewModalProps> = ({ booking, onClose, g
               )}
             </div>
           </div>
-          
-          <div className="grid grid-cols-2 gap-4">
-            <div>
-              <label className="block text-sm font-medium text-gray-700 mb-1">Type</label>
-              {isEditMode ? (
-                <select
-                  value={formData.type}
-                  onChange={(e) => setFormData({...formData, type: e.target.value})}
-                  className="w-full p-2 border rounded focus:ring-blue-500 focus:border-blue-500"
-                >
-                  <option value="POWER_ONLY">Power Only</option>
-                  <option value="POWER_AND_TRAILER">Power and Trailer</option>
-                </select>
-              ) : (
-                <p className="text-sm text-gray-900">
-                  {bookingToDisplay.type === 'POWER_ONLY' ? 'Power Only' : 'Power and Trailer'}
-                </p>
-              )}
-            </div>
-            {(isEditMode ? formData.type === 'POWER_AND_TRAILER' : bookingToDisplay.type === 'POWER_AND_TRAILER') && (
+
+          {/* Trailer Length - only show if Power and Trailer type */}
+          {(isEditMode ? formData.type === 'POWER_AND_TRAILER' : bookingToDisplay.type === 'POWER_AND_TRAILER') && (
+            <div className="grid grid-cols-4 gap-4">
               <div>
                 <label className="block text-sm font-medium text-gray-700 mb-1">Trailer Length</label>
                 {isEditMode ? (
@@ -1315,25 +1567,8 @@ const BookingViewModal: React.FC<BookingViewModalProps> = ({ booking, onClose, g
                   <p className="text-sm text-gray-900">{bookingToDisplay.trailerLength} feet</p>
                 )}
               </div>
-            )}
-          </div>
-
-          {/* Booking Date */}
-          <div>
-            <label className="block text-sm font-medium text-gray-700 mb-1">Booking Date</label>
-            {isEditMode ? (
-              <input
-                type="date"
-                value={formData.bookingDate}
-                onChange={(e) => setFormData({...formData, bookingDate: e.target.value})}
-                className="w-full p-2 border rounded focus:ring-blue-500 focus:border-blue-500"
-              />
-            ) : (
-              <p className="text-sm text-gray-900">
-                {bookingToDisplay.bookingDate ? new Date(bookingToDisplay.bookingDate).toLocaleDateString() : 'N/A'}
-              </p>
-            )}
-          </div>
+            </div>
+          )}
           
           {/* Route Information - Multi-leg vs Single-leg display */}
           <div>

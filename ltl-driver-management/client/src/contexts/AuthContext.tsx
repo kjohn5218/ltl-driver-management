@@ -2,12 +2,17 @@ import React, { createContext, useState, useContext, useEffect, ReactNode } from
 import { User, LoginCredentials, RegisterData, AuthResponse } from '../types';
 import { api } from '../services/api';
 
+interface UpdateProfileData {
+  homeLocationId?: number | null;
+}
+
 interface AuthContextType {
   user: User | null;
   loading: boolean;
   login: (credentials: LoginCredentials) => Promise<void>;
   register: (data: RegisterData) => Promise<void>;
   logout: () => void;
+  updateProfile: (data: UpdateProfileData) => Promise<void>;
   isAuthenticated: boolean;
 }
 
@@ -72,12 +77,25 @@ export const AuthProvider: React.FC<AuthProviderProps> = ({ children }) => {
     setUser(null);
   };
 
+  const updateProfile = async (data: UpdateProfileData) => {
+    try {
+      const { data: updatedUser } = await api.put<User>('/auth/profile', data);
+
+      localStorage.setItem('user', JSON.stringify(updatedUser));
+      setUser(updatedUser);
+    } catch (error) {
+      console.error('Update profile error:', error);
+      throw error;
+    }
+  };
+
   const value = {
     user,
     loading,
     login,
     register,
     logout,
+    updateProfile,
     isAuthenticated: !!user
   };
 

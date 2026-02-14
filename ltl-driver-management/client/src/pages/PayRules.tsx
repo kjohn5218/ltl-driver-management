@@ -84,11 +84,14 @@ export const PayRules: React.FC = () => {
   const [profiles, setProfiles] = useState<LinehaulProfile[]>([]);
   const [drivers, setDrivers] = useState<CarrierDriver[]>([]);
   const [carriers, setCarriers] = useState<Carrier[]>([]);
+  // Track the current edit driver/carrier if not in main list
+  const [editDriver, setEditDriver] = useState<{ id: number; name: string; number?: string } | null>(null);
+  const [editCarrier, setEditCarrier] = useState<{ id: number; name: string } | null>(null);
   const [loading, setLoading] = useState(true);
 
   // Filter states
   const [searchTerm, setSearchTerm] = useState('');
-  const [typeFilter, setTypeFilter] = useState<RateCardType | ''>('');
+  const [typeFilter, setTypeFilter] = useState<RateCardType | ''>('DRIVER');
   const [methodFilter, setMethodFilter] = useState<RateMethod | 'LINEHAUL_PROFILE' | 'ORIGIN_DESTINATION' | ''>('');
   const [activeFilter, setActiveFilter] = useState<boolean | ''>('');
 
@@ -250,6 +253,8 @@ export const PayRules: React.FC = () => {
   const openCreateModal = () => {
     setModalMode('create');
     setSelectedRateCard(null);
+    setEditDriver(null);
+    setEditCarrier(null);
     setRateFormData({
       rateType: 'CARRIER',
       rateMethod: 'PER_MILE',
@@ -263,6 +268,16 @@ export const PayRules: React.FC = () => {
     setModalMode('edit');
     setSelectedRateCard(rateCard);
 
+    // Debug: Log the rate card data
+    console.log('Opening edit modal for rate card:', {
+      id: rateCard.id,
+      rateType: rateCard.rateType,
+      entityId: rateCard.entityId,
+      driver: rateCard.driver,
+      notes: rateCard.notes,
+      driversCount: drivers.length
+    });
+
     // Try to find entityId from rate card or match from available data
     let entityId: number | undefined = undefined;
 
@@ -271,6 +286,7 @@ export const PayRules: React.FC = () => {
       // 1. First try entityId if it exists and matches a driver in our list
       if (rateCard.entityId) {
         const driverExists = drivers.find(d => d.id === rateCard.entityId);
+        console.log('Step 1 - entityId check:', { entityId: rateCard.entityId, found: !!driverExists });
         if (driverExists) {
           entityId = rateCard.entityId;
         }
@@ -279,16 +295,30 @@ export const PayRules: React.FC = () => {
       // 2. If not found, try driver.id from enriched data (if it's a valid ID > 0)
       if (!entityId && rateCard.driver?.id && rateCard.driver.id > 0) {
         const driverExists = drivers.find(d => d.id === rateCard.driver!.id);
+        console.log('Step 2 - driver.id check:', { driverId: rateCard.driver.id, found: !!driverExists });
         if (driverExists) {
           entityId = rateCard.driver.id;
         }
       }
 
-      // 3. If still not found, try to match by driver name from enriched data
+      // 3. If still not found, try to match by driver name from enriched data (fuzzy match)
       if (!entityId && rateCard.driver?.name) {
-        const matchedDriver = drivers.find(d =>
-          d.name?.toLowerCase() === rateCard.driver!.name.toLowerCase()
-        );
+        const driverName = rateCard.driver.name.toLowerCase().trim();
+        console.log('Step 3 - driver.name check:', { driverName, driversCount: drivers.length });
+        // Try exact match first
+        let matchedDriver = drivers.find(d => d.name?.toLowerCase().trim() === driverName);
+        // Try partial match if no exact match
+        if (!matchedDriver) {
+          matchedDriver = drivers.find(d =>
+            d.name?.toLowerCase().includes(driverName) ||
+            driverName.includes(d.name?.toLowerCase() || '')
+          );
+        }
+        // Try matching by driver number if available
+        if (!matchedDriver && rateCard.driver.number) {
+          matchedDriver = drivers.find(d => d.number === rateCard.driver!.number);
+        }
+        console.log('Step 3 result:', { matchedDriver: matchedDriver?.name, matchedId: matchedDriver?.id });
         if (matchedDriver) {
           entityId = matchedDriver.id;
         }
@@ -297,17 +327,40 @@ export const PayRules: React.FC = () => {
       // 4. Finally, try to match from notes
       if (!entityId) {
         const notesInfo = parseNotesInfo(rateCard.notes);
+        console.log('Step 4 - notes check:', { notesInfo, notes: rateCard.notes });
         if (notesInfo.driverName) {
-          const matchedDriver = drivers.find(d =>
-            d.name?.toLowerCase() === notesInfo.driverName?.toLowerCase() ||
-            d.name?.toLowerCase().includes(notesInfo.driverName?.toLowerCase() || '') ||
-            notesInfo.driverName?.toLowerCase().includes(d.name?.toLowerCase() || '')
-          );
+          const driverName = notesInfo.driverName.toLowerCase().trim();
+          // Try exact match first
+          let matchedDriver = drivers.find(d => d.name?.toLowerCase().trim() === driverName);
+          // Try partial match if no exact match
+          if (!matchedDriver) {
+            matchedDriver = drivers.find(d =>
+              d.name?.toLowerCase().includes(driverName) ||
+              driverName.includes(d.name?.toLowerCase() || '')
+            );
+          }
+          console.log('Step 4 result:', { matchedDriver: matchedDriver?.name, matchedId: matchedDriver?.id });
           if (matchedDriver) {
             entityId = matchedDriver.id;
           }
         }
       }
+
+      // If still no match but we have driver info from the rate card, use it directly
+      if (!entityId && rateCard.driver?.id && rateCard.driver.id > 0) {
+        console.log('Using driver from rate card directly:', rateCard.driver);
+        entityId = rateCard.driver.id;
+        // Store the driver info so we can show it in the dropdown
+        setEditDriver({
+          id: rateCard.driver.id,
+          name: rateCard.driver.name,
+          number: rateCard.driver.number
+        });
+      } else {
+        setEditDriver(null);
+      }
+    } else {
+      setEditDriver(null);
     }
 
     if (rateCard.rateType === 'CARRIER') {
@@ -328,11 +381,18 @@ export const PayRules: React.FC = () => {
         }
       }
 
-      // 3. If still not found, try to match by carrier name from enriched data
+      // 3. If still not found, try to match by carrier name from enriched data (fuzzy match)
       if (!entityId && rateCard.carrier?.name) {
-        const matchedCarrier = carriers.find(c =>
-          c.name?.toLowerCase() === rateCard.carrier!.name.toLowerCase()
-        );
+        const carrierName = rateCard.carrier.name.toLowerCase().trim();
+        // Try exact match first
+        let matchedCarrier = carriers.find(c => c.name?.toLowerCase().trim() === carrierName);
+        // Try partial match if no exact match
+        if (!matchedCarrier) {
+          matchedCarrier = carriers.find(c =>
+            c.name?.toLowerCase().includes(carrierName) ||
+            carrierName.includes(c.name?.toLowerCase() || '')
+          );
+        }
         if (matchedCarrier) {
           entityId = matchedCarrier.id;
         }
@@ -342,16 +402,35 @@ export const PayRules: React.FC = () => {
       if (!entityId) {
         const notesInfo = parseNotesInfo(rateCard.notes);
         if (notesInfo.employer) {
-          const matchedCarrier = carriers.find(c =>
-            c.name?.toLowerCase() === notesInfo.employer?.toLowerCase() ||
-            c.name?.toLowerCase().includes(notesInfo.employer?.toLowerCase() || '') ||
-            notesInfo.employer?.toLowerCase().includes(c.name?.toLowerCase() || '')
-          );
+          const employerName = notesInfo.employer.toLowerCase().trim();
+          // Try exact match first
+          let matchedCarrier = carriers.find(c => c.name?.toLowerCase().trim() === employerName);
+          // Try partial match if no exact match
+          if (!matchedCarrier) {
+            matchedCarrier = carriers.find(c =>
+              c.name?.toLowerCase().includes(employerName) ||
+              employerName.includes(c.name?.toLowerCase() || '')
+            );
+          }
           if (matchedCarrier) {
             entityId = matchedCarrier.id;
           }
         }
       }
+
+      // If still no match but we have carrier info from the rate card, use it directly
+      if (!entityId && rateCard.carrier?.id && rateCard.carrier.id > 0) {
+        console.log('Using carrier from rate card directly:', rateCard.carrier);
+        entityId = rateCard.carrier.id;
+        setEditCarrier({
+          id: rateCard.carrier.id,
+          name: rateCard.carrier.name
+        });
+      } else {
+        setEditCarrier(null);
+      }
+    } else {
+      setEditCarrier(null);
     }
 
     // Determine rate method - check if it's actually LINEHAUL_PROFILE or ORIGIN_DESTINATION based on linked data
@@ -361,6 +440,8 @@ export const PayRules: React.FC = () => {
     } else if (rateCard.originTerminalId && rateCard.destinationTerminalId && rateMethod === 'PER_MILE') {
       rateMethod = 'ORIGIN_DESTINATION' as RateMethod;
     }
+
+    console.log('Final entityId resolved:', entityId);
 
     setRateFormData({
       rateType: rateCard.rateType,
@@ -1121,24 +1202,36 @@ export const PayRules: React.FC = () => {
               </label>
               {rateFormData.rateType === 'DRIVER' ? (
                 <select
-                  value={rateFormData.entityId || ''}
+                  value={rateFormData.entityId?.toString() || ''}
                   onChange={(e) => setRateFormData({ ...rateFormData, entityId: parseInt(e.target.value) || undefined })}
                   className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-indigo-500"
                 >
                   <option value="">Select driver...</option>
+                  {/* Include editDriver if it exists and isn't in the main list */}
+                  {editDriver && !drivers.find(d => d.id === editDriver.id) && (
+                    <option key={editDriver.id} value={editDriver.id.toString()}>
+                      {editDriver.name} {editDriver.number ? `(#${editDriver.number})` : ''} (current)
+                    </option>
+                  )}
                   {[...drivers].sort((a, b) => (a.name || '').localeCompare(b.name || '')).map(d => (
-                    <option key={d.id} value={d.id}>{d.name} {d.number ? `(#${d.number})` : ''}</option>
+                    <option key={d.id} value={d.id.toString()}>{d.name} {d.number ? `(#${d.number})` : ''}</option>
                   ))}
                 </select>
               ) : (
                 <select
-                  value={rateFormData.entityId || ''}
+                  value={rateFormData.entityId?.toString() || ''}
                   onChange={(e) => setRateFormData({ ...rateFormData, entityId: parseInt(e.target.value) || undefined })}
                   className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-indigo-500"
                 >
                   <option value="">Select carrier...</option>
+                  {/* Include editCarrier if it exists and isn't in the main list */}
+                  {editCarrier && !carriers.find(c => c.id === editCarrier.id) && (
+                    <option key={editCarrier.id} value={editCarrier.id.toString()}>
+                      {editCarrier.name} (current)
+                    </option>
+                  )}
                   {[...carriers].sort((a, b) => (a.name || '').localeCompare(b.name || '')).map(c => (
-                    <option key={c.id} value={c.id}>{c.name}</option>
+                    <option key={c.id} value={c.id.toString()}>{c.name}</option>
                   ))}
                 </select>
               )}
