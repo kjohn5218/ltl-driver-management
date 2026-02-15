@@ -254,7 +254,27 @@ export const getTripById = async (req: Request, res: Response): Promise<void> =>
         delays: {
           orderBy: { reportedAt: 'desc' }
         },
-        tripPay: true
+        tripPay: true,
+        loadsheets: {
+          select: {
+            id: true,
+            manifestNumber: true,
+            linehaulName: true,
+            originTerminalCode: true,
+            destinationTerminalCode: true,
+            weight: true,
+            pieces: true,
+            trailerNumber: true,
+            suggestedTrailerLength: true,
+            targetDispatchTime: true,
+            scheduledDepartDate: true,
+            doorNumber: true,
+            pintleHookRequired: true,
+            status: true,
+            linehaulTripId: true,
+            capacity: true
+          }
+        }
       }
     });
 
@@ -292,6 +312,20 @@ export const getTripByNumber = async (req: Request, res: Response): Promise<void
         },
         trailer: {
           select: { id: true, unitNumber: true }
+        },
+        loadsheets: {
+          select: {
+            id: true,
+            manifestNumber: true,
+            linehaulName: true,
+            originTerminalCode: true,
+            destinationTerminalCode: true,
+            weight: true,
+            pieces: true,
+            trailerNumber: true,
+            status: true,
+            linehaulTripId: true
+          }
         }
       }
     });
