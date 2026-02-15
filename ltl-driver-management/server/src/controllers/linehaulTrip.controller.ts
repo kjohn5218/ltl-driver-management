@@ -468,7 +468,7 @@ export const updateTrip = async (req: Request, res: Response): Promise<void> => 
 
     // Use transaction if we need to update loadsheets
     const trip = await prisma.$transaction(async (tx) => {
-      // If arriving/completing, release loadsheets for next leg
+      // If arriving/completing, update loadsheets for next leg
       if (isArrivingOrCompleting) {
         // Get the trip's destination terminal code
         const tripWithProfile = await tx.linehaulTrip.findUnique({
@@ -483,18 +483,23 @@ export const updateTrip = async (req: Request, res: Response): Promise<void> => 
         });
 
         const destinationCode = tripWithProfile?.linehaulProfile?.destinationTerminal?.code;
+        const today = new Date().toISOString().split('T')[0]; // YYYY-MM-DD format
 
-        // Update loadsheets: clear trip assignment, update origin to current location, reset status
+        // Update loadsheets: keep trip assignment for continuing loads, update origin to current location
+        // OPEN status loadsheets keep linehaulTripId so they show on Inbound tab and Continuing Trips section
         await tx.loadsheet.updateMany({
           where: { linehaulTripId: tripId },
           data: {
-            linehaulTripId: null,
+            // Keep linehaulTripId so loadsheets show in Inbound tab and Continuing Trips section
             // Update origin to where the freight now is (the arrival terminal)
             ...(destinationCode && { originTerminalCode: destinationCode }),
             // Clear destination since it's no longer assigned to a specific leg
             destinationTerminalCode: null,
             // Reset status to OPEN so loadsheet is available for next leg pickup
-            status: 'OPEN'
+            status: 'OPEN',
+            // Update dates so they appear in date-filtered queries
+            loadDate: new Date(),
+            scheduledDepartDate: today
           }
         });
       }
