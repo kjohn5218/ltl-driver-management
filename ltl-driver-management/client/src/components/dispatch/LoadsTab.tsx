@@ -313,19 +313,26 @@ export const LoadsTab: React.FC<LoadsTabProps> = ({ loading: externalLoading = f
         continuingLoadsheets = results.flat();
       }
 
-      // For each arrived trip, find its loadsheets
+      // For each arrived trip, find its loadsheets from the full loadsheet data
       const tripsWithLoadsheets = arrivedTrips.map(trip => {
         const arrivalCode = trip.linehaulProfile?.destinationTerminal?.code;
 
-        // First check if trip already has loadsheets via the relationship (new arrivals)
-        let tripLoadsheets = trip.loadsheets || [];
+        // Always get full loadsheet data from continuingLoadsheets
+        // Match by either linehaulTripId (new arrivals) or originTerminalCode (old arrivals)
+        let tripLoadsheets: Loadsheet[] = [];
 
-        // If no loadsheets found via relationship, find them by originTerminalCode
-        // matching the arrival location (for trips arrived before the code change)
-        if (tripLoadsheets.length === 0 && arrivalCode) {
-          tripLoadsheets = continuingLoadsheets.filter(ls =>
-            ls.originTerminalCode?.toUpperCase() === arrivalCode.toUpperCase()
-          );
+        if (arrivalCode) {
+          tripLoadsheets = continuingLoadsheets.filter(ls => {
+            // Match by trip ID if loadsheet is still linked
+            if (ls.linehaulTripId === trip.id) {
+              return true;
+            }
+            // Or match by origin terminal code (for loadsheets that were unlinked)
+            if (ls.originTerminalCode?.toUpperCase() === arrivalCode.toUpperCase()) {
+              return true;
+            }
+            return false;
+          });
         }
 
         return {
