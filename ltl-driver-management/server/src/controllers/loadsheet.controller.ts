@@ -32,16 +32,23 @@ export const getLoadsheets = async (req: Request, res: Response): Promise<void> 
       ];
     }
 
-    // Default to showing only OPEN and LOADING loadsheets unless specific status requested
-    if (status) {
-      where.status = status as LoadsheetStatus;
-    } else {
-      // Only show loadsheets that are available for loading (OPEN or LOADING)
-      where.status = { in: ['OPEN', 'LOADING'] };
-    }
-
     if (linehaulTripId) {
-      where.linehaulTripId = parseInt(linehaulTripId as string, 10);
+      // When querying by linehaulTripId, return all loadsheets for that trip regardless of status
+      const parsedTripId = parseInt(linehaulTripId as string, 10);
+      where.linehaulTripId = parsedTripId;
+      console.log(`[Loadsheet Query] Fetching loadsheets for linehaulTripId: ${parsedTripId}`);
+      // Only apply status filter if explicitly requested
+      if (status) {
+        where.status = status as LoadsheetStatus;
+      }
+    } else {
+      // Default to showing only OPEN and LOADING loadsheets unless specific status requested
+      if (status) {
+        where.status = status as LoadsheetStatus;
+      } else {
+        // Only show loadsheets that are available for loading (OPEN or LOADING)
+        where.status = { in: ['OPEN', 'LOADING'] };
+      }
     }
 
     // Filter by origin terminal - support both ID and code
@@ -84,6 +91,12 @@ export const getLoadsheets = async (req: Request, res: Response): Promise<void> 
         }
       }
     });
+
+    // Log results when querying by trip ID
+    if (linehaulTripId) {
+      console.log(`[Loadsheet Query] Found ${loadsheets.length} loadsheets for tripId ${linehaulTripId}:`,
+        loadsheets.map(ls => ({ id: ls.id, manifest: ls.manifestNumber, linehaulTripId: ls.linehaulTripId })));
+    }
 
     // If filtering by location, exclude loadsheets where the location is the final destination
     // (final destination means freight can only be unloaded, not loaded - belongs on Inbound tab)
@@ -478,6 +491,11 @@ export const updateLoadsheet = async (req: Request, res: Response): Promise<void
           console.log(`Terminal ID ${originTerminalId} not found in database, using code only: ${terminalCode}`);
         }
       }
+    }
+
+    // Log linehaulTripId updates
+    if (linehaulTripId !== undefined) {
+      console.log(`[Loadsheet Update] Setting linehaulTripId=${linehaulTripId} for loadsheet ${loadsheetId}`);
     }
 
     // Update in transaction to handle related data
