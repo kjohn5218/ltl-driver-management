@@ -1552,7 +1552,7 @@ export const arriveTrip = async (req: Request, res: Response): Promise<void> => 
 
         // Update loadsheet based on remaining freight:
         // - OPEN: Physical terminal with remaining freight (available for next leg)
-        // - UNLOADED: No freight remains (all unloaded at this terminal)
+        // - UNLOADED: No freight remains (empty trailer - can still continue to next leg if needed)
         let newStatus: 'OPEN' | 'UNLOADED';
         if (remainingPieces > 0 && isPhysicalTerminal) {
           newStatus = 'OPEN';
@@ -1567,7 +1567,7 @@ export const arriveTrip = async (req: Request, res: Response): Promise<void> => 
           where: { id: loadsheet.id },
           data: {
             // Keep linehaulTripId for all loadsheets so they display on Inbound tab
-            // Both OPEN (continuing) and UNLOADED loadsheets stay linked for historical display
+            // Both OPEN and UNLOADED (empty) loadsheets stay linked - they can still continue to next leg
             linehaulTripId: tripId,
             ...(destinationCode && { originTerminalCode: destinationCode }),
             destinationTerminalCode: null,

@@ -332,19 +332,20 @@ export const LoadsTab: React.FC<LoadsTabProps> = ({ loading: externalLoading = f
         continuingLoadsheets = results.flat();
       }
 
-      // For each arrived trip, find its OPEN loadsheets (continuing freight only)
-      // UNLOADED/terminated loadsheets should not appear as they won't continue
+      // For each arrived trip, find loadsheets that can continue (not TERMINATED)
+      // TERMINATED loadsheets are explicitly stopped by user and won't continue
+      // UNLOADED loadsheets (empty trailers) can still continue if they have more legs
       const tripsWithLoadsheets = arrivedTrips.map(trip => {
-        // Get OPEN loadsheets linked to this specific trip
+        // Get non-TERMINATED loadsheets linked to this specific trip
         const tripLoadsheets = continuingLoadsheets.filter(ls =>
-          ls.linehaulTripId === trip.id && ls.status === 'OPEN'
+          ls.linehaulTripId === trip.id && ls.status !== 'TERMINATED'
         );
 
-        // Also include OPEN loadsheets from the trip include if not in continuingLoadsheets
+        // Also include non-TERMINATED loadsheets from the trip include if not in continuingLoadsheets
         const includedLoadsheets = (trip.loadsheets || []) as Loadsheet[];
         for (const ls of includedLoadsheets) {
-          // Only include OPEN status (not UNLOADED/terminated)
-          if (ls.status === 'OPEN' && !tripLoadsheets.some(tls => tls.id === ls.id)) {
+          // Include any status except TERMINATED (OPEN, UNLOADED can continue)
+          if (ls.status !== 'TERMINATED' && !tripLoadsheets.some(tls => tls.id === ls.id)) {
             tripLoadsheets.push(ls);
           }
         }
@@ -355,7 +356,7 @@ export const LoadsTab: React.FC<LoadsTabProps> = ({ loading: externalLoading = f
         };
       });
 
-      // Only return trips that have OPEN loadsheets (continuing freight)
+      // Only return trips that have non-TERMINATED loadsheets (continuing freight)
       return tripsWithLoadsheets.filter(trip => trip.loadsheets && trip.loadsheets.length > 0);
     }
   });
@@ -509,13 +510,13 @@ export const LoadsTab: React.FC<LoadsTabProps> = ({ loading: externalLoading = f
     }
   };
 
-  // Handle terminate (for continuing loads - marks as UNLOADED instead of deleting)
+  // Handle terminate (for continuing loads - marks as TERMINATED to stop further dispatch)
   const handleTerminate = async () => {
     if (!selectedLoadItem) return;
     try {
       setTerminating(true);
       await loadsheetService.updateLoadsheet(selectedLoadItem.id, {
-        status: 'UNLOADED',
+        status: 'TERMINATED',
         pieces: 0,
         weight: 0,
         capacity: '0%'

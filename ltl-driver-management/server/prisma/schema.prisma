@@ -1362,6 +1362,7 @@ enum LoadsheetStatus {
   CLOSED      // Load assignment completed on scanner - ready to dispatch
   DISPATCHED
   UNLOADED    // All freight has been unloaded at destination
+  TERMINATED  // Explicitly terminated by user - will not continue to further legs
 }
 
 enum LoadType {

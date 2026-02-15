@@ -1027,7 +1027,7 @@ export interface ManifestsResponse {
 // ==================== LOADSHEET MODULE ====================
 
 // Loadsheet Enums
-export type LoadsheetStatus = 'DRAFT' | 'OPEN' | 'LOADING' | 'CLOSED' | 'DISPATCHED' | 'UNLOADED';
+export type LoadsheetStatus = 'DRAFT' | 'OPEN' | 'LOADING' | 'CLOSED' | 'DISPATCHED' | 'UNLOADED' | 'TERMINATED';
 export type LoadType = 'PURE' | 'MIX';
 export type ConditionStatus = 'OK' | 'REPAIR';
 export type HazmatPlacardType = 'CORROSIVE' | 'FLAMMABLE' | 'OTHER' | 'DANGEROUS' | 'OXIDIZER';
