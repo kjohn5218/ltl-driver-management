@@ -1554,9 +1554,9 @@ export const arriveTrip = async (req: Request, res: Response): Promise<void> => 
         await tx.loadsheet.update({
           where: { id: loadsheet.id },
           data: {
-            // Keep linehaulTripId for continuing loads (OPEN status) so they show in Continuing Trips section
-            // Clear it only for UNLOADED loads
-            linehaulTripId: newStatus === 'OPEN' ? tripId : null,
+            // Keep linehaulTripId for all loadsheets so they display on Inbound tab
+            // Both OPEN (continuing) and UNLOADED loadsheets stay linked for historical display
+            linehaulTripId: tripId,
             ...(destinationCode && { originTerminalCode: destinationCode }),
             destinationTerminalCode: null,
             status: newStatus,
