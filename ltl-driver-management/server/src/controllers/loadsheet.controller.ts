@@ -87,54 +87,61 @@ export const getLoadsheets = async (req: Request, res: Response): Promise<void> 
 
     // If filtering by location, exclude loadsheets where the location is the final destination
     // (final destination means freight can only be unloaded, not loaded - belongs on Inbound tab)
-    // EXCEPTION: Loadsheets linked to an ARRIVED trip are continuing loads and should be shown
+    // EXCEPTIONS:
+    // 1. If status is explicitly set to OPEN, these are continuing loads and should be shown
+    // 2. Loadsheets linked to an ARRIVED trip are continuing loads and should be shown
     if (originTerminalCode && loadsheets.length > 0) {
+      // If specifically querying for OPEN status, don't filter by final destination
+      // OPEN loadsheets have freight that needs to continue, regardless of location
+      const isQueryingOpenStatus = status === 'OPEN';
 
-      // Get unique linehaul names from the loadsheets
-      const linehaulNames = [...new Set(loadsheets.map(ls => ls.linehaulName))];
+      if (!isQueryingOpenStatus) {
+        // Get unique linehaul names from the loadsheets
+        const linehaulNames = [...new Set(loadsheets.map(ls => ls.linehaulName))];
 
-      // For each linehaul name, find the final destination
-      const finalDestinations = new Map<string, string>();
+        // For each linehaul name, find the final destination
+        const finalDestinations = new Map<string, string>();
 
-      for (const linehaulName of linehaulNames) {
-        // Find the last leg (highest legOrder) for this profile
-        const lastLeg = await prisma.route.findFirst({
-          where: {
-            name: linehaulName,
-            active: true
-          },
-          orderBy: { legOrder: 'desc' },
-          select: { destination: true }
-        });
+        for (const linehaulName of linehaulNames) {
+          // Find the last leg (highest legOrder) for this profile
+          const lastLeg = await prisma.route.findFirst({
+            where: {
+              name: linehaulName,
+              active: true
+            },
+            orderBy: { legOrder: 'desc' },
+            select: { destination: true }
+          });
 
-        if (lastLeg?.destination) {
-          finalDestinations.set(linehaulName, lastLeg.destination.toUpperCase());
+          if (lastLeg?.destination) {
+            finalDestinations.set(linehaulName, lastLeg.destination.toUpperCase());
+          }
         }
-      }
 
-      // Get IDs of loadsheets linked to ARRIVED trips (these are continuing loads)
-      const continuingLoadsheetIds = new Set(
-        loadsheets
-          .filter(ls => ls.linehaulTripId && ls.linehaulTrip?.status === 'ARRIVED')
-          .map(ls => ls.id)
-      );
+        // Get IDs of loadsheets linked to ARRIVED trips (these are continuing loads)
+        const continuingLoadsheetIds = new Set(
+          loadsheets
+            .filter(ls => ls.linehaulTripId && ls.linehaulTrip?.status === 'ARRIVED')
+            .map(ls => ls.id)
+        );
 
-      // Filter out loadsheets where the current location is the final destination
-      // These should appear on the Inbound tab, not the Loads page
-      // EXCEPTION: Always include loadsheets linked to ARRIVED trips (continuing loads)
-      loadsheets = loadsheets.filter(ls => {
-        // Always include continuing loads (linked to ARRIVED trip)
-        if (continuingLoadsheetIds.has(ls.id)) {
+        // Filter out loadsheets where the current location is the final destination
+        // These should appear on the Inbound tab, not the Loads page
+        // EXCEPTION: Always include loadsheets linked to ARRIVED trips (continuing loads)
+        loadsheets = loadsheets.filter(ls => {
+          // Always include continuing loads (linked to ARRIVED trip)
+          if (continuingLoadsheetIds.has(ls.id)) {
+            return true;
+          }
+
+          const finalDest = finalDestinations.get(ls.linehaulName);
+          // If the current origin is the final destination, don't show on loads page
+          if (finalDest && ls.originTerminalCode?.toUpperCase() === finalDest) {
+            return false;
+          }
           return true;
-        }
-
-        const finalDest = finalDestinations.get(ls.linehaulName);
-        // If the current origin is the final destination, don't show on loads page
-        if (finalDest && ls.originTerminalCode?.toUpperCase() === finalDest) {
-          return false;
-        }
-        return true;
-      });
+        });
+      }
     }
 
     // Get total count (need to apply same filtering logic for accurate count)

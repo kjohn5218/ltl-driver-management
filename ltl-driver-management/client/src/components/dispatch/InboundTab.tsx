@@ -1,7 +1,6 @@
 import React, { useState, useEffect, useMemo } from 'react';
 import { useQuery, useQueryClient } from '@tanstack/react-query';
 import { linehaulTripService, EtaResult, VehicleLocationResult } from '../../services/linehaulTripService';
-import { loadsheetService } from '../../services/loadsheetService';
 import { locationService } from '../../services/locationService';
 import { LinehaulTrip, Loadsheet, TripStatus } from '../../types';
 import { TripStatusBadge } from './TripStatusBadge';
@@ -143,17 +142,7 @@ export const InboundTab: React.FC<InboundTabProps> = ({ selectedLocations = [] }
     console.error('Error fetching inbound trips:', error);
   }
 
-  // Fetch all dispatched loadsheets to match with trips
-  const { data: loadsheetsData } = useQuery({
-    queryKey: ['all-loadsheets-inbound'],
-    queryFn: async () => {
-      const response = await loadsheetService.getLoadsheets({ status: 'DISPATCHED', limit: 100 });
-      return response.loadsheets;
-    }
-  });
-
   const trips = tripsData?.trips || [];
-  const loadsheets = loadsheetsData || [];
 
   // Fetch ETAs for all trips
   useEffect(() => {
@@ -173,9 +162,10 @@ export const InboundTab: React.FC<InboundTabProps> = ({ selectedLocations = [] }
   }, [trips]);
 
   // Build inbound trip rows with their loadsheets and ETAs
+  // Loadsheets come directly from the trip include, no separate query needed
   const inboundRows: InboundTripRow[] = trips.map(trip => {
-    // Find loadsheets associated with this trip
-    const tripLoadsheets = loadsheets.filter(ls => ls.linehaulTripId === trip.id);
+    // Use loadsheets from the trip (already included in the query)
+    const tripLoadsheets = (trip.loadsheets || []) as Loadsheet[];
     const eta = tripEtas[trip.id];
     return { trip, loadsheets: tripLoadsheets, eta };
   });
@@ -192,12 +182,20 @@ export const InboundTab: React.FC<InboundTabProps> = ({ selectedLocations = [] }
       // Apply location filter (matches destination for inbound)
       if (selectedLocations.length > 0) {
         // Try multiple sources for destination
-        const tripDestinationId = row.trip.linehaulProfile?.destinationTerminalId;
+        // First try the direct destinationTerminalId from profile
+        const tripDestinationId = row.trip.linehaulProfile?.destinationTerminalId ||
+          (row.trip.linehaulProfile as any)?.destinationTerminal?.id;
 
         // Also check loadsheet destination terminal code and map to location ID
         const loadsheetDestCode = row.loadsheets?.[0]?.destinationTerminalCode;
         const loadsheetDestId = loadsheetDestCode
-          ? locations.find(l => l.code === loadsheetDestCode)?.id
+          ? locations.find(l => l.code?.toUpperCase() === loadsheetDestCode.toUpperCase())?.id
+          : undefined;
+
+        // Also check destination terminal code from profile
+        const profileDestCode = (row.trip.linehaulProfile as any)?.destinationTerminal?.code;
+        const profileDestId = profileDestCode
+          ? locations.find(l => l.code?.toUpperCase() === profileDestCode.toUpperCase())?.id
           : undefined;
 
         // Also try parsing from linehaulName (e.g., "FAR-BIS" -> destination is "BIS")
@@ -209,7 +207,7 @@ export const InboundTab: React.FC<InboundTabProps> = ({ selectedLocations = [] }
             : linehaulName.replace(/\d+$/, '').match(/.{1,3}/g);
           if (parts && parts.length >= 2) {
             const destCode = parts[parts.length - 1].replace(/\d+$/, '');
-            parsedDestId = locations.find(l => l.code === destCode)?.id;
+            parsedDestId = locations.find(l => l.code?.toUpperCase() === destCode.toUpperCase())?.id;
           }
         }
 
@@ -217,6 +215,7 @@ export const InboundTab: React.FC<InboundTabProps> = ({ selectedLocations = [] }
         const matchesDestination =
           (tripDestinationId && selectedLocations.includes(tripDestinationId)) ||
           (loadsheetDestId && selectedLocations.includes(loadsheetDestId)) ||
+          (profileDestId && selectedLocations.includes(profileDestId)) ||
           (parsedDestId && selectedLocations.includes(parsedDestId));
 
         if (!matchesDestination) return false;

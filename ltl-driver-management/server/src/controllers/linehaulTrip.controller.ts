@@ -137,11 +137,13 @@ export const getTrips = async (req: Request, res: Response): Promise<void> => {
               transitTimeMinutes: true,
               standardArrivalTime: true,
               headhaul: true,
+              originTerminalId: true,
+              destinationTerminalId: true,
               originTerminal: {
-                select: { code: true, name: true }
+                select: { id: true, code: true, name: true }
               },
               destinationTerminal: {
-                select: { code: true, name: true }
+                select: { id: true, code: true, name: true }
               }
             }
           },

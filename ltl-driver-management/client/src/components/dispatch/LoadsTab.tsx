@@ -283,11 +283,30 @@ export const LoadsTab: React.FC<LoadsTabProps> = ({ loading: externalLoading = f
 
       let arrivedTrips = tripsResponse.trips;
 
-      // Filter to trips that arrived at one of the selected origins
+      // Filter to trips that arrived at one of the selected origins (arrival location)
       if (selectedLocations.length > 0) {
         arrivedTrips = arrivedTrips.filter(trip => {
-          const destinationId = trip.linehaulProfile?.destinationTerminalId;
-          return destinationId && selectedLocations.includes(destinationId);
+          // Try multiple sources for the arrival location (destination of the trip)
+          const destinationId = trip.linehaulProfile?.destinationTerminalId ||
+            (trip.linehaulProfile as any)?.destinationTerminal?.id;
+
+          // If we have a direct ID match, use it
+          if (destinationId && selectedLocations.includes(destinationId)) {
+            return true;
+          }
+
+          // Fall back to matching destination terminal code to location code
+          const destCode = (trip.linehaulProfile as any)?.destinationTerminal?.code;
+          if (destCode) {
+            const matchingLocationIds = locations
+              .filter(l => l.code?.toUpperCase() === destCode.toUpperCase())
+              .map(l => l.id);
+            if (matchingLocationIds.some(id => selectedLocations.includes(id))) {
+              return true;
+            }
+          }
+
+          return false;
         });
       }
 
