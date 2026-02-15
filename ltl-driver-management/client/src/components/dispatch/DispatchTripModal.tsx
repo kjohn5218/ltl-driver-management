@@ -240,6 +240,49 @@ export const DispatchTripModal: React.FC<DispatchTripModalProps> = ({
     return null;
   }, [profiles, routes]);
 
+  // Find the next destination for a loadsheet based on its current origin and route
+  const findNextDestination = useCallback((linehaulName: string, currentOrigin: string | null): string | null => {
+    if (!linehaulName || !currentOrigin || profiles.length === 0) return null;
+
+    const upperOrigin = currentOrigin.toUpperCase();
+
+    // First, try to find a profile where origin matches current location
+    // This handles the case where loadsheet is at an intermediate stop
+    const profileFromOrigin = profiles.find(p => {
+      const profileOrigin = p.originTerminal?.code?.toUpperCase();
+      return profileOrigin === upperOrigin;
+    });
+
+    if (profileFromOrigin?.destinationTerminal?.code) {
+      // Verify this destination is part of the original route
+      const destCode = profileFromOrigin.destinationTerminal.code.toUpperCase();
+      if (linehaulName.toUpperCase().includes(destCode)) {
+        return profileFromOrigin.destinationTerminal.code;
+      }
+    }
+
+    // Try to find a profile specifically for this origin that's part of the same route family
+    // (profile name starts with same pattern, e.g., MSPFARBIL1 -> MSPFARBIL2)
+    const routeBase = linehaulName.replace(/\d+$/, ''); // Remove trailing number
+    const matchingProfile = profiles.find(p => {
+      const profileOrigin = p.originTerminal?.code?.toUpperCase();
+      const profileName = p.name?.toUpperCase() || '';
+      return profileOrigin === upperOrigin && profileName.startsWith(routeBase.toUpperCase());
+    });
+
+    if (matchingProfile?.destinationTerminal?.code) {
+      return matchingProfile.destinationTerminal.code;
+    }
+
+    // Fallback: look up the route to find terminal sequence
+    const route = routes.find(r => r.name === linehaulName);
+    if (route?.destination) {
+      return route.destination;
+    }
+
+    return null;
+  }, [profiles, routes]);
+
   // Calculate origin and destination from selected loadsheets
   const { originCode, destCode, hasManifest } = useMemo(() => {
     const selectedLoadsheets = manifestEntries
@@ -256,7 +299,9 @@ export const DispatchTripModal: React.FC<DispatchTripModalProps> = ({
     const parsedOrigin = firstLoadsheet.originTerminalCode || null;
     let parsedDest = lastLoadsheet.destinationTerminalCode || null;
 
+    // If no destination set, try to find it
     if (!parsedDest && profiles.length > 0) {
+      // First try the original profile lookup
       const lastProfile = findProfileByLinehaulName(
         lastLoadsheet.linehaulName,
         lastLoadsheet.originTerminalCode
@@ -266,6 +311,14 @@ export const DispatchTripModal: React.FC<DispatchTripModalProps> = ({
       } else if (lastProfile?.destination) {
         parsedDest = lastProfile.destination;
       }
+
+      // If still no destination, try finding next destination based on current origin
+      if (!parsedDest) {
+        parsedDest = findNextDestination(
+          lastLoadsheet.linehaulName,
+          lastLoadsheet.originTerminalCode
+        );
+      }
     }
 
     return {
@@ -273,7 +326,7 @@ export const DispatchTripModal: React.FC<DispatchTripModalProps> = ({
       destCode: parsedDest,
       hasManifest: true
     };
-  }, [manifestEntries, profiles, findProfileByLinehaulName]);
+  }, [manifestEntries, profiles, findProfileByLinehaulName, findNextDestination]);
 
   // Get already selected loadsheet IDs to filter dropdown
   const selectedLoadsheetIds = useMemo(() => {
