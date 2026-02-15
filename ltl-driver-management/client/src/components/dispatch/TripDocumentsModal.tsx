@@ -180,6 +180,13 @@ export const TripDocumentsModal: React.FC<TripDocumentsModalProps> = ({
   const documents = data?.documents || [];
   const hasGeneratedDocs = documents.some(d => d.status === 'GENERATED');
 
+  // Auto-generate documents when modal opens and no documents exist
+  useEffect(() => {
+    if (isOpen && !isLoading && !error && documents.length === 0 && !generateMutation.isPending && !generateMutation.isSuccess) {
+      generateMutation.mutate();
+    }
+  }, [isOpen, isLoading, error, documents.length, generateMutation.isPending, generateMutation.isSuccess]);
+
   return (
     <Modal isOpen={isOpen} onClose={onClose} title={`Trip Documents${tripNumber ? ` - ${tripNumber}` : ''}`}>
       <div className="space-y-4">
@@ -285,25 +292,11 @@ export const TripDocumentsModal: React.FC<TripDocumentsModalProps> = ({
           </div>
         )}
 
-        {/* No documents state */}
+        {/* No documents state - auto-generating */}
         {!isLoading && !error && documents.length === 0 && (
-          <div className="text-center py-8">
-            <FileText className="h-12 w-12 mx-auto text-gray-400" />
-            <p className="mt-2 text-gray-600 dark:text-gray-400">
-              No documents have been generated yet.
-            </p>
-            <button
-              onClick={() => generateMutation.mutate()}
-              disabled={generateMutation.isPending}
-              className="mt-4 inline-flex items-center gap-2 px-4 py-2 bg-indigo-600 text-white rounded-lg hover:bg-indigo-700 disabled:opacity-50"
-            >
-              {generateMutation.isPending ? (
-                <Loader2 className="h-4 w-4 animate-spin" />
-              ) : (
-                <RefreshCw className="h-4 w-4" />
-              )}
-              Generate Documents
-            </button>
+          <div className="flex items-center justify-center py-8">
+            <Loader2 className="h-8 w-8 animate-spin text-indigo-600" />
+            <span className="ml-2 text-gray-600 dark:text-gray-400">Generating documents...</span>
           </div>
         )}
 
