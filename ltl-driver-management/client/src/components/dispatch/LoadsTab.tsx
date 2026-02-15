@@ -683,6 +683,17 @@ export const LoadsTab: React.FC<LoadsTabProps> = ({ loading: externalLoading = f
       cell: (load: LoadItem) => <span className="text-gray-900 dark:text-gray-100">{load.linehaulName}</span>
     },
     {
+      header: 'Location',
+      accessor: 'originTerminalCode' as keyof LoadItem,
+      sortable: true,
+      cell: (load: LoadItem) => (
+        <div className="flex items-center">
+          <MapPin className="h-3 w-3 text-gray-400 mr-1" />
+          <span className="text-gray-900 dark:text-gray-100">{load.originTerminalCode}</span>
+        </div>
+      )
+    },
+    {
       header: 'Cap',
       accessor: 'trailerCapacity' as keyof LoadItem,
       sortable: true,
@@ -974,6 +985,7 @@ export const LoadsTab: React.FC<LoadsTabProps> = ({ loading: externalLoading = f
                   <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 dark:text-gray-300 uppercase tracking-wider">Door</th>
                   <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 dark:text-gray-300 uppercase tracking-wider">Manifest</th>
                   <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 dark:text-gray-300 uppercase tracking-wider">Linehaul</th>
+                  <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 dark:text-gray-300 uppercase tracking-wider">Location</th>
                   <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 dark:text-gray-300 uppercase tracking-wider">Cap</th>
                   <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 dark:text-gray-300 uppercase tracking-wider">Wt</th>
                   <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 dark:text-gray-300 uppercase tracking-wider">Pcs</th>
@@ -1055,6 +1067,12 @@ export const LoadsTab: React.FC<LoadsTabProps> = ({ loading: externalLoading = f
                         </td>
                         <td className="px-4 py-3 whitespace-nowrap text-gray-900 dark:text-gray-100">
                           {loadItem.linehaulName}
+                        </td>
+                        <td className="px-4 py-3 whitespace-nowrap">
+                          <div className="flex items-center">
+                            <MapPin className="h-3 w-3 text-gray-400 mr-1" />
+                            <span className="text-gray-900 dark:text-gray-100">{loadItem.originTerminalCode}</span>
+                          </div>
                         </td>
                         <td className="px-4 py-3 whitespace-nowrap">
                           <div className="min-w-[80px]">

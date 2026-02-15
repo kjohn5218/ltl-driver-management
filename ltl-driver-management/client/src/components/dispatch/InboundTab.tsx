@@ -31,7 +31,7 @@ import {
 import { format, parseISO, addDays } from 'date-fns';
 
 type SortDirection = 'asc' | 'desc' | null;
-type SortColumn = 'tripNumber' | 'driver' | 'powerUnit' | 'trailer' | 'manifests' | 'linehaul' | 'leg' | 'pieces' | 'weight' | 'schedArrival' | 'eta' | 'actualArrival' | 'status';
+type SortColumn = 'tripNumber' | 'driver' | 'powerUnit' | 'trailer' | 'manifests' | 'linehaul' | 'leg' | 'location' | 'pieces' | 'weight' | 'schedArrival' | 'eta' | 'actualArrival' | 'status';
 
 interface SortConfig {
   column: SortColumn | null;
@@ -493,6 +493,11 @@ export const InboundTab: React.FC<InboundTabProps> = ({ selectedLocations = [] }
           const bLeg = getLinehaulInfo(b).leg;
           return direction * aLeg.localeCompare(bLeg);
 
+        case 'location':
+          const aLocation = getLinehaulInfo(a).destination;
+          const bLocation = getLinehaulInfo(b).destination;
+          return direction * aLocation.localeCompare(bLocation);
+
         case 'pieces':
           const aPieces = getTotalPieces(a) || 0;
           const bPieces = getTotalPieces(b) || 0;
@@ -701,6 +706,7 @@ export const InboundTab: React.FC<InboundTabProps> = ({ selectedLocations = [] }
                   <SortableHeader column="manifests" label="Manifests" sortConfig={sortConfig} onSort={handleSort} />
                   <SortableHeader column="linehaul" label="Linehaul" sortConfig={sortConfig} onSort={handleSort} />
                   <SortableHeader column="leg" label="Leg" sortConfig={sortConfig} onSort={handleSort} />
+                  <SortableHeader column="location" label="Location" sortConfig={sortConfig} onSort={handleSort} icon={<MapPin className="h-3 w-3" />} />
                   <SortableHeader column="pieces" label="Pieces" sortConfig={sortConfig} onSort={handleSort} align="right" icon={<Package className="h-3 w-3" />} />
                   <SortableHeader column="weight" label="Weight" sortConfig={sortConfig} onSort={handleSort} align="right" icon={<Scale className="h-3 w-3" />} />
                   <SortableHeader column="schedArrival" label="Sched Arrival" sortConfig={sortConfig} onSort={handleSort} />
@@ -808,6 +814,12 @@ export const InboundTab: React.FC<InboundTabProps> = ({ selectedLocations = [] }
                           ) : (
                             <span className="font-medium">{linehaulInfo.leg}</span>
                           )}
+                        </div>
+                      </td>
+                      <td className="px-4 py-3 whitespace-nowrap">
+                        <div className="flex items-center">
+                          <MapPin className="h-3 w-3 text-gray-400 mr-1" />
+                          <span className="text-gray-900 dark:text-gray-100">{linehaulInfo.destination}</span>
                         </div>
                       </td>
                       <td className="px-4 py-3 whitespace-nowrap text-right text-gray-900 dark:text-gray-100">

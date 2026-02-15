@@ -30,7 +30,7 @@ import {
 } from 'lucide-react';
 
 type SortDirection = 'asc' | 'desc' | null;
-type SortColumn = 'tripNumber' | 'driver' | 'powerUnit' | 'trailer' | 'manifests' | 'linehaul' | 'leg' | 'pieces' | 'weight' | 'lf' | 'schedDepart' | 'dispatched' | 'status';
+type SortColumn = 'tripNumber' | 'driver' | 'powerUnit' | 'trailer' | 'manifests' | 'linehaul' | 'leg' | 'location' | 'pieces' | 'weight' | 'lf' | 'schedDepart' | 'dispatched' | 'status';
 
 interface SortConfig {
   column: SortColumn | null;
@@ -389,6 +389,11 @@ export const OutboundTab: React.FC<OutboundTabProps> = ({ selectedLocations = []
           const bLeg = getLinehaulInfo(b).leg;
           return direction * aLeg.localeCompare(bLeg);
 
+        case 'location':
+          const aLocation = getLinehaulInfo(a).origin;
+          const bLocation = getLinehaulInfo(b).origin;
+          return direction * aLocation.localeCompare(bLocation);
+
         case 'pieces':
           const aPieces = getTotalPieces(a) || 0;
           const bPieces = getTotalPieces(b) || 0;
@@ -743,6 +748,7 @@ export const OutboundTab: React.FC<OutboundTabProps> = ({ selectedLocations = []
                   <SortableHeader column="manifests" label="Manifests" sortConfig={sortConfig} onSort={handleSort} />
                   <SortableHeader column="linehaul" label="Linehaul" sortConfig={sortConfig} onSort={handleSort} />
                   <SortableHeader column="leg" label="Leg" sortConfig={sortConfig} onSort={handleSort} />
+                  <SortableHeader column="location" label="Location" sortConfig={sortConfig} onSort={handleSort} icon={<MapPin className="h-3 w-3" />} />
                   <SortableHeader column="pieces" label="Pieces" sortConfig={sortConfig} onSort={handleSort} align="right" icon={<Package className="h-3 w-3" />} />
                   <SortableHeader column="weight" label="Weight" sortConfig={sortConfig} onSort={handleSort} align="right" icon={<Scale className="h-3 w-3" />} />
                   <SortableHeader column="lf" label="LF %" sortConfig={sortConfig} onSort={handleSort} align="right" icon={<Percent className="h-3 w-3" />} />
@@ -836,6 +842,12 @@ export const OutboundTab: React.FC<OutboundTabProps> = ({ selectedLocations = []
                           ) : (
                             <span className="font-medium">{linehaulInfo.leg}</span>
                           )}
+                        </div>
+                      </td>
+                      <td className="px-4 py-3 whitespace-nowrap">
+                        <div className="flex items-center">
+                          <MapPin className="h-3 w-3 text-gray-400 mr-1" />
+                          <span className="text-gray-900 dark:text-gray-100">{linehaulInfo.origin}</span>
                         </div>
                       </td>
                       <td className="px-4 py-3 whitespace-nowrap text-right text-gray-900 dark:text-gray-100">
