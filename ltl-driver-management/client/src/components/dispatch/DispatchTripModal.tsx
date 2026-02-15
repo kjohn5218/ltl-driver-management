@@ -242,57 +242,67 @@ export const DispatchTripModal: React.FC<DispatchTripModalProps> = ({
 
   // Find the next destination for a loadsheet based on its current origin and route
   const findNextDestination = useCallback((linehaulName: string, currentOrigin: string | null): string | null => {
-    if (!linehaulName || !currentOrigin || profiles.length === 0) return null;
+    if (!linehaulName || !currentOrigin) return null;
 
     const upperOrigin = currentOrigin.toUpperCase();
     const upperLinehaulName = linehaulName.toUpperCase();
     const routeBase = linehaulName.replace(/\d+$/, '').toUpperCase(); // Remove trailing number (e.g., MSPFARBIL1 -> MSPFARBIL)
 
-    // FIRST: Try to find a profile from the same route family with matching origin
-    // This is the most accurate match (e.g., MSPFARBIL2 for loadsheet with MSPFARBIL1 linehaulName)
-    const sameRouteProfile = profiles.find(p => {
-      const profileOrigin = p.originTerminal?.code?.toUpperCase();
-      const profileName = (p.name || '').toUpperCase().replace(/\d+$/, ''); // Remove trailing number
-      return profileOrigin === upperOrigin && profileName === routeBase;
-    });
-
-    if (sameRouteProfile?.destinationTerminal?.code) {
-      return sameRouteProfile.destinationTerminal.code;
+    // FIRST: Check the routes table for exact match with current origin
+    // This is most reliable as it directly maps route name + origin to destination
+    const routeWithOrigin = routes.find(r =>
+      r.name === linehaulName &&
+      r.origin?.toUpperCase() === upperOrigin
+    );
+    if (routeWithOrigin?.destination) {
+      return routeWithOrigin.destination;
     }
 
-    // SECOND: Try to find a profile where origin matches and profile name starts with route base
-    const similarRouteProfile = profiles.find(p => {
-      const profileOrigin = p.originTerminal?.code?.toUpperCase();
-      const profileName = (p.name || '').toUpperCase();
-      return profileOrigin === upperOrigin && profileName.startsWith(routeBase);
-    });
-
-    if (similarRouteProfile?.destinationTerminal?.code) {
-      return similarRouteProfile.destinationTerminal.code;
-    }
-
-    // THIRD: Find any profile with matching origin where destination is in the route name
-    // but comes AFTER the current origin in the route name
-    const originIndex = upperLinehaulName.indexOf(upperOrigin);
-    if (originIndex >= 0) {
-      const afterOrigin = upperLinehaulName.substring(originIndex + upperOrigin.length);
-
-      const profileWithDestInRoute = profiles.find(p => {
+    // SECOND: Try to find a profile from the same route family with matching origin
+    // This handles cases like MSPFARBIL2 for loadsheet with MSPFARBIL1 linehaulName
+    if (profiles.length > 0) {
+      const sameRouteProfile = profiles.find(p => {
         const profileOrigin = p.originTerminal?.code?.toUpperCase();
-        const destCode = p.destinationTerminal?.code?.toUpperCase();
-        // Origin must match AND destination must appear AFTER current origin in route name
-        return profileOrigin === upperOrigin && destCode && afterOrigin.includes(destCode);
+        const profileName = (p.name || '').toUpperCase().replace(/\d+$/, ''); // Remove trailing number
+        return profileOrigin === upperOrigin && profileName === routeBase;
       });
 
-      if (profileWithDestInRoute?.destinationTerminal?.code) {
-        return profileWithDestInRoute.destinationTerminal.code;
+      if (sameRouteProfile?.destinationTerminal?.code) {
+        return sameRouteProfile.destinationTerminal.code;
+      }
+
+      // THIRD: Try to find a profile where origin matches and profile name starts with route base
+      const similarRouteProfile = profiles.find(p => {
+        const profileOrigin = p.originTerminal?.code?.toUpperCase();
+        const profileName = (p.name || '').toUpperCase();
+        return profileOrigin === upperOrigin && profileName.startsWith(routeBase);
+      });
+
+      if (similarRouteProfile?.destinationTerminal?.code) {
+        return similarRouteProfile.destinationTerminal.code;
+      }
+
+      // FOURTH: Find any profile with matching origin where destination is in the route name
+      const originIndex = upperLinehaulName.indexOf(upperOrigin);
+      if (originIndex >= 0) {
+        const afterOrigin = upperLinehaulName.substring(originIndex + upperOrigin.length);
+
+        const profileWithDestInRoute = profiles.find(p => {
+          const profileOrigin = p.originTerminal?.code?.toUpperCase();
+          const destCode = p.destinationTerminal?.code?.toUpperCase();
+          return profileOrigin === upperOrigin && destCode && afterOrigin.includes(destCode);
+        });
+
+        if (profileWithDestInRoute?.destinationTerminal?.code) {
+          return profileWithDestInRoute.destinationTerminal.code;
+        }
       }
     }
 
-    // FOURTH: Fallback - look up the route to find final destination
-    const route = routes.find(r => r.name === linehaulName);
-    if (route?.destination) {
-      return route.destination;
+    // FIFTH: Fallback - look up any route with this name to find final destination
+    const anyRoute = routes.find(r => r.name === linehaulName);
+    if (anyRoute?.destination) {
+      return anyRoute.destination;
     }
 
     return null;
