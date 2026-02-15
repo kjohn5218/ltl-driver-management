@@ -1522,8 +1522,20 @@ export const arriveTrip = async (req: Request, res: Response): Promise<void> => 
         });
 
         // Calculate remaining pieces and weight after unloading
-        const remainingPieces = (totalItems._sum.pieces || 0) - (unloadedItems._sum.pieces || 0);
-        const remainingWeight = (totalItems._sum.weight || 0) - (unloadedItems._sum.weight || 0);
+        // If no freight items exist, fall back to the loadsheet's own pieces/weight
+        const totalPieces = totalItems._sum.pieces || 0;
+        const totalWeight = totalItems._sum.weight || 0;
+        const unloadedPieces = unloadedItems._sum.pieces || 0;
+        const unloadedWeight = unloadedItems._sum.weight || 0;
+
+        // If no freight items tracked, use loadsheet's existing pieces/weight as "remaining"
+        // This ensures loadsheets without detailed freight tracking still continue properly
+        const remainingPieces = totalPieces > 0
+          ? totalPieces - unloadedPieces
+          : (loadsheet.pieces || 0);
+        const remainingWeight = totalWeight > 0
+          ? totalWeight - unloadedWeight
+          : (loadsheet.weight || 0);
 
         // Determine capacity percentage based on remaining weight
         // Assuming max trailer capacity is around 45,000 lbs
