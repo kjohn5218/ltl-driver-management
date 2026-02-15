@@ -180,43 +180,24 @@ export const InboundTab: React.FC<InboundTabProps> = ({ selectedLocations = [] }
       }
 
       // Apply location filter (matches destination for inbound)
+      // For inbound trips, the destination is where the trip is going TO (or arrived at)
       if (selectedLocations.length > 0) {
-        // Try multiple sources for destination
-        // First try the direct destinationTerminalId from profile
+        // Use the trip profile's destination - this is the authoritative source
         const tripDestinationId = row.trip.linehaulProfile?.destinationTerminalId ||
           (row.trip.linehaulProfile as any)?.destinationTerminal?.id;
 
-        // Also check loadsheet destination terminal code and map to location ID
-        const loadsheetDestCode = row.loadsheets?.[0]?.destinationTerminalCode;
-        const loadsheetDestId = loadsheetDestCode
-          ? locations.find(l => l.code?.toUpperCase() === loadsheetDestCode.toUpperCase())?.id
-          : undefined;
-
-        // Also check destination terminal code from profile
+        // Also check destination terminal code from profile and map to ID
         const profileDestCode = (row.trip.linehaulProfile as any)?.destinationTerminal?.code;
         const profileDestId = profileDestCode
           ? locations.find(l => l.code?.toUpperCase() === profileDestCode.toUpperCase())?.id
           : undefined;
 
-        // Also try parsing from linehaulName (e.g., "FAR-BIS" -> destination is "BIS")
-        const linehaulName = row.trip.linehaulName || row.loadsheets?.[0]?.linehaulName;
-        let parsedDestId: number | undefined;
-        if (linehaulName) {
-          const parts = linehaulName.includes('-')
-            ? linehaulName.split('-')
-            : linehaulName.replace(/\d+$/, '').match(/.{1,3}/g);
-          if (parts && parts.length >= 2) {
-            const destCode = parts[parts.length - 1].replace(/\d+$/, '');
-            parsedDestId = locations.find(l => l.code?.toUpperCase() === destCode.toUpperCase())?.id;
-          }
-        }
-
-        // Match if any destination source matches selected locations
+        // Match only if the trip's actual destination matches selected locations
+        // Don't use loadsheet destination or parsed linehaulName - those may represent
+        // the next leg or final destination of a multi-leg route, not this trip's destination
         const matchesDestination =
           (tripDestinationId && selectedLocations.includes(tripDestinationId)) ||
-          (loadsheetDestId && selectedLocations.includes(loadsheetDestId)) ||
-          (profileDestId && selectedLocations.includes(profileDestId)) ||
-          (parsedDestId && selectedLocations.includes(parsedDestId));
+          (profileDestId && selectedLocations.includes(profileDestId));
 
         if (!matchesDestination) return false;
       }
