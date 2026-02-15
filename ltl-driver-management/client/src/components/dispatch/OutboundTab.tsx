@@ -196,48 +196,66 @@ export const OutboundTab: React.FC<OutboundTabProps> = ({ selectedLocations = []
     return match ? match[1] : timeStr;
   };
 
-  // Get scheduled departure time from loadsheet or trip (returns HH:mm format)
-  const getSchedDepart = (row: OutboundTripRow): string | null => {
+  // Get scheduled departure date and time from loadsheet or trip
+  const getSchedDepart = (row: OutboundTripRow): { date: string | null; time: string | null } => {
     // First check loadsheets for target dispatch time (stored as "HH:MM" or "HH:MM:SS" string)
     if (row.loadsheets.length > 0) {
       const firstLoadsheet = row.loadsheets[0];
       if (firstLoadsheet.targetDispatchTime) {
-        // Format to remove seconds if present
-        return formatTimeForDisplay(firstLoadsheet.targetDispatchTime);
+        // Get date from loadsheet's scheduledDepartDate or dispatch date
+        const dateStr = firstLoadsheet.scheduledDepartDate
+          ? format(new Date(firstLoadsheet.scheduledDepartDate), 'MM/dd')
+          : row.trip.dispatchDate
+            ? format(new Date(row.trip.dispatchDate), 'MM/dd')
+            : null;
+        return {
+          date: dateStr,
+          time: formatTimeForDisplay(firstLoadsheet.targetDispatchTime)
+        };
       }
     }
     // Fall back to trip's planned departure (stored as ISO datetime)
     if (row.trip.plannedDeparture) {
       try {
-        // plannedDeparture is stored as a full datetime, extract time portion
+        // plannedDeparture is stored as a full datetime, extract date and time portions
         const plannedDate = typeof row.trip.plannedDeparture === 'string'
           ? parseISO(row.trip.plannedDeparture)
           : new Date(row.trip.plannedDeparture);
-        return format(plannedDate, 'HH:mm');
+        return {
+          date: format(plannedDate, 'MM/dd'),
+          time: format(plannedDate, 'HH:mm')
+        };
       } catch {
-        return null;
+        return { date: null, time: null };
       }
     }
-    return null;
+    return { date: null, time: null };
   };
 
-  // Get dispatch time (returns HH:mm format)
-  const getDispatchTime = (row: OutboundTripRow): string | null => {
+  // Get dispatch date and time
+  const getDispatchTime = (row: OutboundTripRow): { date: string | null; time: string | null } => {
     if (row.trip.actualDeparture) {
       try {
         const actualDate = typeof row.trip.actualDeparture === 'string'
           ? parseISO(row.trip.actualDeparture)
           : new Date(row.trip.actualDeparture);
-        return format(actualDate, 'HH:mm');
+        return {
+          date: format(actualDate, 'MM/dd'),
+          time: format(actualDate, 'HH:mm')
+        };
       } catch {
-        return null;
+        return { date: null, time: null };
       }
     }
     // If no actual departure, use created time as proxy
     try {
-      return format(parseISO(row.trip.createdAt), 'HH:mm');
+      const createdDate = parseISO(row.trip.createdAt);
+      return {
+        date: format(createdDate, 'MM/dd'),
+        time: format(createdDate, 'HH:mm')
+      };
     } catch {
-      return null;
+      return { date: null, time: null };
     }
   };
 
@@ -246,11 +264,11 @@ export const OutboundTab: React.FC<OutboundTabProps> = ({ selectedLocations = []
     const schedDepart = getSchedDepart(row);
     const dispatchTime = getDispatchTime(row);
 
-    if (!schedDepart || !dispatchTime) return false;
+    if (!schedDepart.time || !dispatchTime.time) return false;
 
     // Parse both times to minutes for comparison
-    const schedMinutes = parseTimeToMinutes(schedDepart);
-    const dispatchMinutes = parseTimeToMinutes(dispatchTime);
+    const schedMinutes = parseTimeToMinutes(schedDepart.time);
+    const dispatchMinutes = parseTimeToMinutes(dispatchTime.time);
 
     if (schedMinutes === null || dispatchMinutes === null) return false;
 
@@ -387,13 +405,13 @@ export const OutboundTab: React.FC<OutboundTabProps> = ({ selectedLocations = []
           return direction * (aLf - bLf);
 
         case 'schedDepart':
-          const aSchedMinutes = parseTimeToMinutes(getSchedDepart(a) || '') || 0;
-          const bSchedMinutes = parseTimeToMinutes(getSchedDepart(b) || '') || 0;
+          const aSchedMinutes = parseTimeToMinutes(getSchedDepart(a).time || '') || 0;
+          const bSchedMinutes = parseTimeToMinutes(getSchedDepart(b).time || '') || 0;
           return direction * (aSchedMinutes - bSchedMinutes);
 
         case 'dispatched':
-          const aDispatchMinutes = parseTimeToMinutes(getDispatchTime(a) || '') || 0;
-          const bDispatchMinutes = parseTimeToMinutes(getDispatchTime(b) || '') || 0;
+          const aDispatchMinutes = parseTimeToMinutes(getDispatchTime(a).time || '') || 0;
+          const bDispatchMinutes = parseTimeToMinutes(getDispatchTime(b).time || '') || 0;
           return direction * (aDispatchMinutes - bDispatchMinutes);
 
         case 'status':
@@ -837,13 +855,29 @@ export const OutboundTab: React.FC<OutboundTabProps> = ({ selectedLocations = []
                         })()}
                       </td>
                       <td className="px-4 py-3 whitespace-nowrap text-gray-600 dark:text-gray-400">
-                        {schedDepart || '-'}
+                        {schedDepart.date && schedDepart.time ? (
+                          <div className="flex flex-col">
+                            <span className="text-xs text-gray-500">{schedDepart.date}</span>
+                            <span>{schedDepart.time}</span>
+                          </div>
+                        ) : schedDepart.time ? (
+                          schedDepart.time
+                        ) : (
+                          '-'
+                        )}
                       </td>
                       <td className="px-4 py-3 whitespace-nowrap">
                         <div className="flex items-center">
-                          <span className="text-gray-600 dark:text-gray-400">
-                            {dispatchTime || '-'}
-                          </span>
+                          {dispatchTime.date && dispatchTime.time ? (
+                            <div className="flex flex-col">
+                              <span className="text-xs text-gray-500">{dispatchTime.date}</span>
+                              <span className="text-gray-600 dark:text-gray-400">{dispatchTime.time}</span>
+                            </div>
+                          ) : dispatchTime.time ? (
+                            <span className="text-gray-600 dark:text-gray-400">{dispatchTime.time}</span>
+                          ) : (
+                            <span className="text-gray-600 dark:text-gray-400">-</span>
+                          )}
                           {tripIsLate && !hasLateReason && (
                             <button
                               onClick={() => handleLateClick(row)}
@@ -900,8 +934,8 @@ export const OutboundTab: React.FC<OutboundTabProps> = ({ selectedLocations = []
           }}
           trip={selectedLateTrip.trip}
           loadsheets={selectedLateTrip.loadsheets}
-          schedDepartTime={getSchedDepart(selectedLateTrip)}
-          dispatchTime={getDispatchTime(selectedLateTrip)}
+          schedDepartTime={getSchedDepart(selectedLateTrip).time}
+          dispatchTime={getDispatchTime(selectedLateTrip).time}
         />
       )}
 

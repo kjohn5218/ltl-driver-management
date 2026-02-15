@@ -741,21 +741,20 @@ export const LoadsTab: React.FC<LoadsTabProps> = ({ loading: externalLoading = f
           ? 'text-red-600 dark:text-red-400 font-medium'
           : 'text-gray-600 dark:text-gray-300';
 
-        // Combine date and time
+        // Format time if available
         let timeStr = '';
         if (load.scheduledDeparture) {
           const [hours, minutes] = load.scheduledDeparture.split(':').map(Number);
           if (!isNaN(hours) && !isNaN(minutes)) {
-            const period = hours >= 12 ? 'P' : 'A';
-            const displayHours = hours % 12 || 12;
-            timeStr = ` ${displayHours}:${minutes.toString().padStart(2, '0')}${period}`;
+            timeStr = `${hours.toString().padStart(2, '0')}:${minutes.toString().padStart(2, '0')}`;
           }
         }
 
         return (
-          <span className={`text-xs ${textColorClass}`}>
-            {month}/{day}{timeStr}
-          </span>
+          <div className={`flex flex-col ${textColorClass}`}>
+            <span className="text-xs text-gray-500">{month}/{day}</span>
+            <span className="text-xs">{timeStr || '-'}</span>
+          </div>
         );
       }
     },
@@ -1017,19 +1016,17 @@ export const LoadsTab: React.FC<LoadsTabProps> = ({ loading: externalLoading = f
                     }
 
                     // Format scheduled date/time
-                    let schedDisplay = '-';
+                    let schedDateDisplay = '-';
+                    let schedTimeDisplay = '-';
                     if (loadItem.scheduledDepartDate) {
                       const [, month, day] = loadItem.scheduledDepartDate.split('-');
-                      let timeStr = '';
+                      schedDateDisplay = `${month}/${day}`;
                       if (loadItem.scheduledDeparture) {
                         const [hours, minutes] = loadItem.scheduledDeparture.split(':').map(Number);
                         if (!isNaN(hours) && !isNaN(minutes)) {
-                          const period = hours >= 12 ? 'P' : 'A';
-                          const displayHours = hours % 12 || 12;
-                          timeStr = ` ${displayHours}:${minutes.toString().padStart(2, '0')}${period}`;
+                          schedTimeDisplay = `${hours.toString().padStart(2, '0')}:${minutes.toString().padStart(2, '0')}`;
                         }
                       }
-                      schedDisplay = `${month}/${day}${timeStr}`;
                     }
 
                     return (
@@ -1075,9 +1072,10 @@ export const LoadsTab: React.FC<LoadsTabProps> = ({ loading: externalLoading = f
                           </span>
                         </td>
                         <td className="px-4 py-3 whitespace-nowrap">
-                          <span className={`text-xs ${isOverdue ? 'text-red-600 dark:text-red-400 font-medium' : 'text-gray-600 dark:text-gray-300'}`}>
-                            {schedDisplay}
-                          </span>
+                          <div className={`flex flex-col ${isOverdue ? 'text-red-600 dark:text-red-400 font-medium' : 'text-gray-600 dark:text-gray-300'}`}>
+                            <span className="text-xs text-gray-500">{schedDateDisplay}</span>
+                            <span className="text-xs">{schedTimeDisplay}</span>
+                          </div>
                         </td>
                         <td className="px-4 py-3 whitespace-nowrap">
                           <div className="flex items-center gap-2">
