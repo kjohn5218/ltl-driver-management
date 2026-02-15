@@ -148,17 +148,22 @@ const statusColors: Record<string, string> = {
 
 // Progress bar component
 const CapacityDisplay: React.FC<{ weight: number; capacity: number }> = ({ weight, capacity }) => {
-  const percentage = capacity > 0 ? Math.min(100, Math.round((weight / capacity) * 100)) : 0;
-  const barColor = percentage >= 80 ? 'bg-green-500' : percentage >= 50 ? 'bg-blue-500' : 'bg-gray-400';
+  const rawPercentage = capacity > 0 ? Math.round((weight / capacity) * 100) : 0;
+  const displayPercentage = Math.min(100, rawPercentage);
+  const isOverCapacity = weight > capacity;
+
+  // Red if over capacity, green if >= 80%, blue if >= 50%, gray otherwise
+  const barColor = isOverCapacity ? 'bg-red-500' : rawPercentage >= 80 ? 'bg-green-500' : rawPercentage >= 50 ? 'bg-blue-500' : 'bg-gray-400';
+  const textColor = isOverCapacity ? 'text-red-600 dark:text-red-400 font-medium' : 'text-gray-500 dark:text-gray-400';
 
   return (
     <div className="w-full">
-      <div className="flex items-center justify-between text-xs text-gray-500 dark:text-gray-400">
-        <span>{percentage}%</span>
+      <div className={`flex items-center justify-between text-xs ${textColor}`}>
+        <span>{rawPercentage}%</span>
         <span>{capacity.toLocaleString()}</span>
       </div>
       <div className="w-full bg-gray-200 dark:bg-gray-700 rounded-full h-1.5 mt-0.5">
-        <div className={`h-1.5 rounded-full ${barColor}`} style={{ width: `${percentage}%` }} />
+        <div className={`h-1.5 rounded-full ${barColor}`} style={{ width: `${displayPercentage}%` }} />
       </div>
     </div>
   );
@@ -260,16 +265,17 @@ export const LoadsTab: React.FC<LoadsTabProps> = ({ loading: externalLoading = f
     }
   });
 
-  // Fetch continuing trips (arrived and will continue)
+  // Fetch continuing trips (arrived and will continue) with their loadsheets
   const { data: continuingTripsData, refetch: refetchContinuingTrips } = useQuery({
     queryKey: ['continuing-trips-for-loads-tab', selectedLocations],
     queryFn: async () => {
-      const response = await linehaulTripService.getTrips({
+      // Fetch arrived trips
+      const tripsResponse = await linehaulTripService.getTrips({
         status: 'ARRIVED',
         limit: 100
       });
 
-      let arrivedTrips = response.trips;
+      let arrivedTrips = tripsResponse.trips;
 
       // Filter to trips that arrived at one of the selected origins
       if (selectedLocations.length > 0) {
@@ -279,7 +285,51 @@ export const LoadsTab: React.FC<LoadsTabProps> = ({ loading: externalLoading = f
         });
       }
 
-      return arrivedTrips;
+      // Get unique arrival terminal codes
+      const arrivalCodes = [...new Set(
+        arrivedTrips
+          .map(trip => trip.linehaulProfile?.destinationTerminal?.code)
+          .filter(Boolean)
+      )] as string[];
+
+      // Fetch all OPEN loadsheets at the arrival locations (no date filter)
+      // This ensures we get continuing loads regardless of when they were created
+      let continuingLoadsheets: Loadsheet[] = [];
+      if (arrivalCodes.length > 0) {
+        const loadsheetPromises = arrivalCodes.map(code =>
+          loadsheetService.getLoadsheets({
+            originTerminalCode: code,
+            status: 'OPEN',
+            limit: 100
+          }).then(res => res.loadsheets)
+        );
+        const results = await Promise.all(loadsheetPromises);
+        continuingLoadsheets = results.flat();
+      }
+
+      // For each arrived trip, find its loadsheets
+      const tripsWithLoadsheets = arrivedTrips.map(trip => {
+        const arrivalCode = trip.linehaulProfile?.destinationTerminal?.code;
+
+        // First check if trip already has loadsheets via the relationship (new arrivals)
+        let tripLoadsheets = trip.loadsheets || [];
+
+        // If no loadsheets found via relationship, find them by originTerminalCode
+        // matching the arrival location (for trips arrived before the code change)
+        if (tripLoadsheets.length === 0 && arrivalCode) {
+          tripLoadsheets = continuingLoadsheets.filter(ls =>
+            ls.originTerminalCode?.toUpperCase() === arrivalCode.toUpperCase()
+          );
+        }
+
+        return {
+          ...trip,
+          loadsheets: tripLoadsheets
+        };
+      });
+
+      // Only return trips that have loadsheets (continuing freight)
+      return tripsWithLoadsheets.filter(trip => trip.loadsheets && trip.loadsheets.length > 0);
     }
   });
   const continuingTrips = continuingTripsData || [];
@@ -534,7 +584,6 @@ export const LoadsTab: React.FC<LoadsTabProps> = ({ loading: externalLoading = f
       header: 'Trailer',
       accessor: 'trailerNumber' as keyof LoadItem,
       sortable: true,
-      width: 'w-36',
       cell: (load: LoadItem) => (
         <div>
           <div className="font-medium text-gray-900 dark:text-gray-100">{load.trailerNumber}</div>
@@ -546,14 +595,12 @@ export const LoadsTab: React.FC<LoadsTabProps> = ({ loading: externalLoading = f
       header: 'Door',
       accessor: 'door' as keyof LoadItem,
       sortable: true,
-      width: 'w-20',
       cell: (load: LoadItem) => <span className="text-gray-600 dark:text-gray-300">{load.door || '-'}</span>
     },
     {
       header: 'Manifest',
       accessor: 'manifestNumber' as keyof LoadItem,
       sortable: true,
-      width: 'w-44',
       cell: (load: LoadItem) => (
         <button
           type="button"
@@ -568,14 +615,12 @@ export const LoadsTab: React.FC<LoadsTabProps> = ({ loading: externalLoading = f
       header: 'Linehaul',
       accessor: 'linehaulName' as keyof LoadItem,
       sortable: true,
-      width: 'w-48',
       cell: (load: LoadItem) => <span className="text-gray-900 dark:text-gray-100">{load.linehaulName}</span>
     },
     {
       header: 'Cap',
       accessor: 'trailerCapacity' as keyof LoadItem,
       sortable: true,
-      width: 'w-40',
       cell: (load: LoadItem) => (
         <div className="min-w-[80px]">
           <CapacityDisplay weight={load.weight} capacity={load.trailerCapacity} />
@@ -586,21 +631,18 @@ export const LoadsTab: React.FC<LoadsTabProps> = ({ loading: externalLoading = f
       header: 'Wt',
       accessor: 'weight' as keyof LoadItem,
       sortable: true,
-      width: 'w-32',
       cell: (load: LoadItem) => <span className="text-gray-600 dark:text-gray-300 text-xs">{load.weight.toLocaleString()}</span>
     },
     {
       header: 'Pcs',
       accessor: 'pieces' as keyof LoadItem,
       sortable: true,
-      width: 'w-20',
       cell: (load: LoadItem) => <span className="text-gray-600 dark:text-gray-300 text-xs">{load.pieces}</span>
     },
     {
       header: 'Status',
       accessor: 'status' as keyof LoadItem,
       sortable: true,
-      width: 'w-36',
       cell: (load: LoadItem) => (
         <span className={`inline-flex px-1.5 py-0.5 rounded-full text-xs font-medium ${statusColors[load.status]}`}>
           {load.status}
@@ -611,7 +653,6 @@ export const LoadsTab: React.FC<LoadsTabProps> = ({ loading: externalLoading = f
       header: 'Sched',
       accessor: 'scheduledDepartDate' as keyof LoadItem,
       sortable: true,
-      width: 'w-36',
       cell: (load: LoadItem) => {
         if (!load.scheduledDepartDate) return <span className="text-gray-400">-</span>;
 
@@ -862,14 +903,12 @@ export const LoadsTab: React.FC<LoadsTabProps> = ({ loading: externalLoading = f
                   <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 dark:text-gray-300 uppercase tracking-wider">Door</th>
                   <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 dark:text-gray-300 uppercase tracking-wider">Manifest</th>
                   <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 dark:text-gray-300 uppercase tracking-wider">Linehaul</th>
-                  <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 dark:text-gray-300 uppercase tracking-wider">Capacity</th>
-                  <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 dark:text-gray-300 uppercase tracking-wider">Wt (lbs)</th>
+                  <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 dark:text-gray-300 uppercase tracking-wider">Cap</th>
+                  <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 dark:text-gray-300 uppercase tracking-wider">Wt</th>
                   <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 dark:text-gray-300 uppercase tracking-wider">Pcs</th>
                   <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 dark:text-gray-300 uppercase tracking-wider">Status</th>
-                  <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 dark:text-gray-300 uppercase tracking-wider">Arrived At</th>
-                  <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 dark:text-gray-300 uppercase tracking-wider">Sched. Date</th>
-                  <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 dark:text-gray-300 uppercase tracking-wider">Sched. Time</th>
-                  <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 dark:text-gray-300 uppercase tracking-wider">Planned Driver</th>
+                  <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 dark:text-gray-300 uppercase tracking-wider">Sched</th>
+                  <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 dark:text-gray-300 uppercase tracking-wider w-[420px]">Planned Driver</th>
                   <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 dark:text-gray-300 uppercase tracking-wider">Actions</th>
                 </tr>
               </thead>
@@ -881,7 +920,7 @@ export const LoadsTab: React.FC<LoadsTabProps> = ({ loading: externalLoading = f
                     // Show a placeholder row if no loadsheets
                     return [(
                       <tr key={trip.id} className="hover:bg-amber-50 dark:hover:bg-amber-900/10">
-                        <td className="px-4 py-3 text-gray-500" colSpan={13}>
+                        <td className="px-4 py-3 text-gray-500" colSpan={11}>
                           Trip {trip.tripNumber} - No loadsheets
                         </td>
                       </tr>
@@ -889,7 +928,38 @@ export const LoadsTab: React.FC<LoadsTabProps> = ({ loading: externalLoading = f
                   }
                   return tripLoadsheets.map((loadsheet: Loadsheet) => {
                     const loadItem = loadsheetToLoadItem(loadsheet, 0);
-                    const arrivedAt = trip.linehaulProfile?.destinationTerminal?.code || '-';
+
+                    // Check if overdue (date/time has passed and not DISPATCHED)
+                    let isOverdue = false;
+                    if (loadItem.status !== 'DISPATCHED' && loadItem.scheduledDepartDate) {
+                      const now = new Date();
+                      const scheduledDate = new Date(loadItem.scheduledDepartDate + 'T00:00:00');
+
+                      if (loadItem.scheduledDeparture) {
+                        const [hours, minutes] = loadItem.scheduledDeparture.split(':').map(Number);
+                        scheduledDate.setHours(hours, minutes, 0, 0);
+                      } else {
+                        scheduledDate.setHours(23, 59, 59, 999);
+                      }
+
+                      isOverdue = now > scheduledDate;
+                    }
+
+                    // Format scheduled date/time
+                    let schedDisplay = '-';
+                    if (loadItem.scheduledDepartDate) {
+                      const [, month, day] = loadItem.scheduledDepartDate.split('-');
+                      let timeStr = '';
+                      if (loadItem.scheduledDeparture) {
+                        const [hours, minutes] = loadItem.scheduledDeparture.split(':').map(Number);
+                        if (!isNaN(hours) && !isNaN(minutes)) {
+                          const period = hours >= 12 ? 'P' : 'A';
+                          const displayHours = hours % 12 || 12;
+                          timeStr = ` ${displayHours}:${minutes.toString().padStart(2, '0')}${period}`;
+                        }
+                      }
+                      schedDisplay = `${month}/${day}${timeStr}`;
+                    }
 
                     return (
                       <tr key={`${trip.id}-${loadsheet.id}`} className="hover:bg-amber-50 dark:hover:bg-amber-900/10">
@@ -918,66 +988,74 @@ export const LoadsTab: React.FC<LoadsTabProps> = ({ loading: externalLoading = f
                           {loadItem.linehaulName}
                         </td>
                         <td className="px-4 py-3 whitespace-nowrap">
-                          <div className="min-w-[100px]">
+                          <div className="min-w-[80px]">
                             <CapacityDisplay weight={loadItem.weight} capacity={loadItem.trailerCapacity} />
                           </div>
                         </td>
-                        <td className="px-4 py-3 whitespace-nowrap text-gray-600 dark:text-gray-300">
+                        <td className="px-4 py-3 whitespace-nowrap text-gray-600 dark:text-gray-300 text-xs">
                           {loadItem.weight.toLocaleString()}
                         </td>
-                        <td className="px-4 py-3 whitespace-nowrap text-gray-600 dark:text-gray-300">
+                        <td className="px-4 py-3 whitespace-nowrap text-gray-600 dark:text-gray-300 text-xs">
                           {loadItem.pieces}
                         </td>
                         <td className="px-4 py-3 whitespace-nowrap">
-                          <span className={`inline-flex px-2 py-0.5 rounded-full text-xs font-medium ${statusColors[loadItem.status]}`}>
+                          <span className={`inline-flex px-1.5 py-0.5 rounded-full text-xs font-medium ${statusColors[loadItem.status]}`}>
                             {loadItem.status}
                           </span>
                         </td>
                         <td className="px-4 py-3 whitespace-nowrap">
-                          <span className="inline-flex items-center px-2 py-1 rounded-full text-xs font-medium bg-amber-100 dark:bg-amber-900 text-amber-800 dark:text-amber-200">
-                            {arrivedAt}
+                          <span className={`text-xs ${isOverdue ? 'text-red-600 dark:text-red-400 font-medium' : 'text-gray-600 dark:text-gray-300'}`}>
+                            {schedDisplay}
                           </span>
                         </td>
                         <td className="px-4 py-3 whitespace-nowrap">
-                          {loadItem.scheduledDepartDate ? (
-                            <span className="text-sm text-gray-600 dark:text-gray-300">
-                              {loadItem.scheduledDepartDate.split('-').slice(1).join('/')}
-                            </span>
-                          ) : <span className="text-gray-400">-</span>}
-                        </td>
-                        <td className="px-4 py-3 whitespace-nowrap">
-                          {loadItem.scheduledDeparture ? (
-                            <span className="text-sm text-gray-600 dark:text-gray-300">
-                              {(() => {
-                                const [hours, minutes] = loadItem.scheduledDeparture.split(':').map(Number);
-                                if (isNaN(hours) || isNaN(minutes)) return '-';
-                                const period = hours >= 12 ? 'PM' : 'AM';
-                                const displayHours = hours % 12 || 12;
-                                return `${displayHours}:${minutes.toString().padStart(2, '0')} ${period}`;
-                              })()}
-                            </span>
-                          ) : <span className="text-gray-400">-</span>}
-                        </td>
-                        <td className="px-4 py-3 whitespace-nowrap">
-                          <select
-                            value={continuingTripData[trip.id]?.plannedDriverId || ''}
-                            onChange={(e) => updateContinuingTripData(
-                              trip.id,
-                              'plannedDriverId',
-                              e.target.value ? parseInt(e.target.value) : undefined
+                          <div className="flex items-center gap-2">
+                            {/* Show contract power status if requested/booked */}
+                            {loadItem.contractPowerStatus === 'BOOKED' ? (
+                              <div className="flex flex-col">
+                                <span className="text-xs font-medium text-green-700 dark:text-green-400">
+                                  {loadItem.contractPowerDriverName || 'TBD'}
+                                </span>
+                                {loadItem.contractPowerCarrierName && (
+                                  <span className="text-xs text-gray-500 dark:text-gray-400">
+                                    {loadItem.contractPowerCarrierName}
+                                  </span>
+                                )}
+                              </div>
+                            ) : loadItem.contractPowerStatus === 'REQUESTED' ? (
+                              <span className="inline-flex items-center px-2 py-0.5 rounded text-xs font-medium bg-yellow-100 text-yellow-800 dark:bg-yellow-900 dark:text-yellow-200">
+                                <Truck className="w-3 h-3 mr-1" />
+                                Requested
+                              </span>
+                            ) : (
+                              <>
+                                <select
+                                  value={planningData[loadItem.id]?.plannedDriverId || ''}
+                                  onChange={(e) => updatePlanningData(loadItem.id, 'plannedDriverId', e.target.value ? parseInt(e.target.value) : undefined)}
+                                  className="flex-1 min-w-0 text-xs rounded border-gray-300 dark:border-gray-600 dark:bg-gray-700 dark:text-gray-100 py-1"
+                                >
+                                  <option value="">Select...</option>
+                                  {drivers
+                                    .filter(d => d.active && (!planningData[loadItem.id]?.plannedCarrierId || d.carrierId === planningData[loadItem.id]?.plannedCarrierId))
+                                    .sort((a, b) => a.name.localeCompare(b.name))
+                                    .map((driver) => (
+                                      <option key={driver.id} value={driver.id}>{driver.name}{driver.number ? ` (${driver.number})` : ''}</option>
+                                    ))}
+                                </select>
+                                <button
+                                  onClick={() => {
+                                    setSelectedLoadItem(loadItem);
+                                    setIsContractPowerModalOpen(true);
+                                  }}
+                                  className="inline-flex items-center px-2 py-1 text-xs font-medium text-indigo-700 bg-indigo-100 rounded hover:bg-indigo-200 dark:bg-indigo-900 dark:text-indigo-200 dark:hover:bg-indigo-800 whitespace-nowrap flex-shrink-0"
+                                  title="Request Contract Power"
+                                >
+                                  <Truck className="w-3 h-3 mr-1" />
+                                  Request Contract Power
+                                </button>
+                              </>
                             )}
-                            className="w-28 text-xs rounded border-gray-300 dark:border-gray-600 dark:bg-gray-700 dark:text-gray-100 py-1"
-                          >
-                            <option value="">Select...</option>
-                            {drivers
-                              .filter(d => d.active && (!continuingTripData[trip.id]?.plannedCarrierId || d.carrierId === continuingTripData[trip.id]?.plannedCarrierId))
-                              .sort((a, b) => a.name.localeCompare(b.name))
-                              .map((driver) => (
-                                <option key={driver.id} value={driver.id}>
-                                  {driver.name}{driver.number ? ` (${driver.number})` : ''}
-                                </option>
-                              ))}
-                          </select>
+                          </div>
                         </td>
                         <td className="px-4 py-3 whitespace-nowrap">
                           <div className="flex items-center gap-1">

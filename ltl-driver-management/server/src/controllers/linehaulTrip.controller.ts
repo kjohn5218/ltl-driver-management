@@ -643,7 +643,7 @@ export const updateTripStatus = async (req: Request, res: Response): Promise<voi
         });
       }
 
-      // When trip arrives or completes, release loadsheets for next leg
+      // When trip arrives or completes, update loadsheets for next leg
       // Update their origin to the arrival terminal so they're available for pickup there
       if (status === 'ARRIVED' || status === 'COMPLETED') {
         // Get the trip's destination terminal code
@@ -659,18 +659,23 @@ export const updateTripStatus = async (req: Request, res: Response): Promise<voi
         });
 
         const destinationCode = tripWithProfile?.linehaulProfile?.destinationTerminal?.code;
+        const today = new Date().toISOString().split('T')[0]; // YYYY-MM-DD format
 
-        // Update loadsheets: clear trip assignment, update origin to current location, reset status
+        // Update loadsheets: keep trip assignment for continuing loads, update origin to current location
+        // Note: For full freight calculation and OPEN vs UNLOADED determination, use the arriveTrip endpoint
         await tx.loadsheet.updateMany({
           where: { linehaulTripId: tripId },
           data: {
-            linehaulTripId: null,
+            // Keep linehaulTripId so loadsheets show in Continuing Trips section
             // Update origin to where the freight now is (the arrival terminal)
             ...(destinationCode && { originTerminalCode: destinationCode }),
             // Clear destination since it's no longer assigned to a specific leg
             destinationTerminalCode: null,
             // Reset status to OPEN so loadsheet is available for next leg pickup
-            status: 'OPEN'
+            status: 'OPEN',
+            // Update loadDate and scheduledDepartDate so they appear in date-filtered queries
+            loadDate: new Date(),
+            scheduledDepartDate: today
           }
         });
       }
@@ -699,8 +704,8 @@ export const updateTripStatus = async (req: Request, res: Response): Promise<voi
       });
     });
 
-    // Generate trip documents when dispatched (async, non-blocking)
-    if (status === 'DISPATCHED') {
+    // Generate trip documents when dispatched or in transit (async, non-blocking)
+    if (status === 'DISPATCHED' || status === 'IN_TRANSIT') {
       tripDocumentService.generateAllDocuments(tripId)
         .then(() => {
           console.log(`Trip documents generated for trip ${tripId}`);
@@ -1536,16 +1541,26 @@ export const arriveTrip = async (req: Request, res: Response): Promise<void> => 
           newStatus = 'UNLOADED';
         }
 
+        // Get current date for continuing loadsheets
+        const today = new Date().toISOString().split('T')[0]; // YYYY-MM-DD format
+
         await tx.loadsheet.update({
           where: { id: loadsheet.id },
           data: {
-            linehaulTripId: null,
+            // Keep linehaulTripId for continuing loads (OPEN status) so they show in Continuing Trips section
+            // Clear it only for UNLOADED loads
+            linehaulTripId: newStatus === 'OPEN' ? tripId : null,
             ...(destinationCode && { originTerminalCode: destinationCode }),
             destinationTerminalCode: null,
             status: newStatus,
             pieces: remainingPieces > 0 ? remainingPieces : 0,
             weight: remainingWeight > 0 ? remainingWeight : 0,
-            capacity: capacityPercent
+            capacity: capacityPercent,
+            // Update loadDate and scheduledDepartDate for continuing loads so they appear in date-filtered queries
+            ...(newStatus === 'OPEN' && {
+              loadDate: new Date(),
+              scheduledDepartDate: today
+            })
           }
         });
       }

@@ -32,7 +32,7 @@ import {
 import { format, parseISO, addDays } from 'date-fns';
 
 type SortDirection = 'asc' | 'desc' | null;
-type SortColumn = 'tripNumber' | 'driver' | 'powerUnit' | 'trailer' | 'manifests' | 'linehaul' | 'leg' | 'pieces' | 'weight' | 'schedArrival' | 'eta' | 'status';
+type SortColumn = 'tripNumber' | 'driver' | 'powerUnit' | 'trailer' | 'manifests' | 'linehaul' | 'leg' | 'pieces' | 'weight' | 'schedArrival' | 'eta' | 'actualArrival' | 'status';
 
 interface SortConfig {
   column: SortColumn | null;
@@ -429,6 +429,24 @@ export const InboundTab: React.FC<InboundTabProps> = ({ selectedLocations = [] }
     return { date: null, time: null };
   };
 
+  // Get actual arrival time (for ARRIVED trips)
+  const getActualArrival = (row: InboundTripRow): { date: string | null; time: string | null } => {
+    if (row.trip.actualArrival) {
+      try {
+        const arrivalDate = typeof row.trip.actualArrival === 'string'
+          ? parseISO(row.trip.actualArrival)
+          : new Date(row.trip.actualArrival);
+        return {
+          date: format(arrivalDate, 'MM/dd'),
+          time: format(arrivalDate, 'HH:mm')
+        };
+      } catch {
+        return { date: null, time: null };
+      }
+    }
+    return { date: null, time: null };
+  };
+
   // Format ETA for display
   const formatEta = (row: InboundTripRow): { date: string | null; time: string | null; source: string } => {
     const eta = row.eta;
@@ -518,6 +536,13 @@ export const InboundTab: React.FC<InboundTabProps> = ({ selectedLocations = [] }
           const aEtaMinutes = parseTimeToMinutes(aEta.time || '') || 0;
           const bEtaMinutes = parseTimeToMinutes(bEta.time || '') || 0;
           return direction * (aEtaMinutes - bEtaMinutes);
+
+        case 'actualArrival':
+          const aActualArrival = getActualArrival(a);
+          const bActualArrival = getActualArrival(b);
+          const aActualMinutes = parseTimeToMinutes(aActualArrival.time || '') || 0;
+          const bActualMinutes = parseTimeToMinutes(bActualArrival.time || '') || 0;
+          return direction * (aActualMinutes - bActualMinutes);
 
         case 'status':
           return direction * (a.trip.status || '').localeCompare(b.trip.status || '');
@@ -700,6 +725,7 @@ export const InboundTab: React.FC<InboundTabProps> = ({ selectedLocations = [] }
                   <SortableHeader column="weight" label="Weight" sortConfig={sortConfig} onSort={handleSort} align="right" icon={<Scale className="h-3 w-3" />} />
                   <SortableHeader column="schedArrival" label="Sched Arrival" sortConfig={sortConfig} onSort={handleSort} />
                   <SortableHeader column="eta" label="ETA" sortConfig={sortConfig} onSort={handleSort} icon={<Clock className="h-3 w-3" />} />
+                  <SortableHeader column="actualArrival" label="Arrived" sortConfig={sortConfig} onSort={handleSort} icon={<CheckCircle className="h-3 w-3" />} />
                   <SortableHeader column="status" label="Status" sortConfig={sortConfig} onSort={handleSort} />
                   <th className="px-4 py-3 text-center text-xs font-medium text-gray-500 dark:text-gray-400 uppercase tracking-wider">
                     Actions
@@ -713,6 +739,7 @@ export const InboundTab: React.FC<InboundTabProps> = ({ selectedLocations = [] }
                   const totalWeight = getTotalWeight(row);
                   const schedArrival = getSchedArrival(row);
                   const eta = formatEta(row);
+                  const actualArrival = getActualArrival(row);
                   const ownop = isOwnop(row);
 
                   return (
@@ -840,6 +867,18 @@ export const InboundTab: React.FC<InboundTabProps> = ({ selectedLocations = [] }
                                 (Est)
                               </span>
                             )}
+                          </div>
+                        ) : (
+                          <span className="text-gray-400">-</span>
+                        )}
+                      </td>
+                      <td className="px-4 py-3 whitespace-nowrap">
+                        {(row.trip.status === 'ARRIVED' || row.trip.status === 'UNLOADING') && actualArrival.time ? (
+                          <div className="flex flex-col">
+                            <span className="text-xs text-gray-500">{actualArrival.date}</span>
+                            <span className="text-green-600 dark:text-green-400 font-medium">
+                              {actualArrival.time}
+                            </span>
                           </div>
                         ) : (
                           <span className="text-gray-400">-</span>
