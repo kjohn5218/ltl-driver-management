@@ -27,9 +27,12 @@ import {
   Printer,
   Plus,
   AlertTriangle,
-  Truck
+  Truck,
+  XCircle,
+  Play
 } from 'lucide-react';
 import { RequestContractPowerModal } from './RequestContractPowerModal';
+import { DispatchTripModal } from './DispatchTripModal';
 
 // Load item type combining loadsheet data with additional load/unload info
 export interface LoadItem {
@@ -187,10 +190,13 @@ export const LoadsTab: React.FC<LoadsTabProps> = ({ loading: externalLoading = f
   const [isShipmentsModalOpen, setIsShipmentsModalOpen] = useState(false);
   const [isEditModalOpen, setIsEditModalOpen] = useState(false);
   const [isDeleteModalOpen, setIsDeleteModalOpen] = useState(false);
+  const [isTerminateModalOpen, setIsTerminateModalOpen] = useState(false);
   const [isCreateModalOpen, setIsCreateModalOpen] = useState(false);
   const [isContractPowerModalOpen, setIsContractPowerModalOpen] = useState(false);
+  const [isDispatchModalOpen, setIsDispatchModalOpen] = useState(false);
   const [selectedLoadItem, setSelectedLoadItem] = useState<LoadItem | null>(null);
   const [deleting, setDeleting] = useState(false);
+  const [terminating, setTerminating] = useState(false);
   const [saving, setSaving] = useState(false);
 
   // Edit modal form state
@@ -465,6 +471,29 @@ export const LoadsTab: React.FC<LoadsTabProps> = ({ loading: externalLoading = f
       toast.error(error.response?.data?.message || 'Failed to delete loadsheet');
     } finally {
       setDeleting(false);
+    }
+  };
+
+  // Handle terminate (for continuing loads - marks as UNLOADED instead of deleting)
+  const handleTerminate = async () => {
+    if (!selectedLoadItem) return;
+    try {
+      setTerminating(true);
+      await loadsheetService.updateLoadsheet(selectedLoadItem.id, {
+        status: 'UNLOADED',
+        pieces: 0,
+        weight: 0,
+        capacity: '0%'
+      });
+      toast.success('Loadsheet terminated - will not continue');
+      setIsTerminateModalOpen(false);
+      setSelectedLoadItem(null);
+      refetch();
+      refetchContinuingTrips();
+    } catch (error: any) {
+      toast.error(error.response?.data?.message || 'Failed to terminate loadsheet');
+    } finally {
+      setTerminating(false);
     }
   };
 
@@ -755,27 +784,27 @@ export const LoadsTab: React.FC<LoadsTabProps> = ({ loading: externalLoading = f
       accessor: 'loadsheetId' as keyof LoadItem,
       sortable: false,
       cell: (load: LoadItem) => (
-        <div className="flex items-center gap-1">
+        <div className="flex items-center gap-1.5">
           <button
             onClick={() => openEditModal(load)}
-            className="p-1 text-gray-500 hover:text-blue-600 hover:bg-blue-50 dark:hover:bg-blue-900/30 rounded transition-colors"
+            className="p-1.5 text-blue-600 bg-blue-50 hover:bg-blue-100 dark:bg-blue-900/30 dark:text-blue-400 dark:hover:bg-blue-900/50 rounded transition-colors"
             title="Edit"
           >
-            <Edit className="w-3.5 h-3.5" />
+            <Edit className="w-4 h-4" />
           </button>
           <button
             onClick={() => handlePrint(load)}
-            className="p-1 text-gray-500 hover:text-purple-600 hover:bg-purple-50 dark:hover:bg-purple-900/30 rounded transition-colors"
+            className="p-1.5 text-purple-600 bg-purple-50 hover:bg-purple-100 dark:bg-purple-900/30 dark:text-purple-400 dark:hover:bg-purple-900/50 rounded transition-colors"
             title="Print"
           >
-            <Printer className="w-3.5 h-3.5" />
+            <Printer className="w-4 h-4" />
           </button>
           <button
             onClick={() => handleDownload(load)}
-            className="p-1 text-gray-500 hover:text-green-600 hover:bg-green-50 dark:hover:bg-green-900/30 rounded transition-colors"
+            className="p-1.5 text-green-600 bg-green-50 hover:bg-green-100 dark:bg-green-900/30 dark:text-green-400 dark:hover:bg-green-900/50 rounded transition-colors"
             title="Download PDF"
           >
-            <Download className="w-3.5 h-3.5" />
+            <Download className="w-4 h-4" />
           </button>
           {load.status === 'OPEN' && (
             <button
@@ -783,10 +812,10 @@ export const LoadsTab: React.FC<LoadsTabProps> = ({ loading: externalLoading = f
                 setSelectedLoadItem(load);
                 setIsDeleteModalOpen(true);
               }}
-              className="p-1 text-gray-500 hover:text-red-600 hover:bg-red-50 dark:hover:bg-red-900/30 rounded transition-colors"
+              className="p-1.5 text-red-600 bg-red-50 hover:bg-red-100 dark:bg-red-900/30 dark:text-red-400 dark:hover:bg-red-900/50 rounded transition-colors"
               title="Delete"
             >
-              <Trash2 className="w-3.5 h-3.5" />
+              <Trash2 className="w-4 h-4" />
             </button>
           )}
         </div>
@@ -812,6 +841,13 @@ export const LoadsTab: React.FC<LoadsTabProps> = ({ loading: externalLoading = f
             >
               <Plus className="w-3 h-3 mr-1" />
               New Loadsheet
+            </button>
+            <button
+              onClick={() => setIsDispatchModalOpen(true)}
+              className="inline-flex items-center px-3 py-1.5 bg-green-600 text-white rounded hover:bg-green-700 transition-colors"
+            >
+              <Play className="w-3 h-3 mr-1" />
+              Dispatch Trip
             </button>
             <button
               onClick={() => refetch()}
@@ -1058,38 +1094,38 @@ export const LoadsTab: React.FC<LoadsTabProps> = ({ loading: externalLoading = f
                           </div>
                         </td>
                         <td className="px-4 py-3 whitespace-nowrap">
-                          <div className="flex items-center gap-1">
+                          <div className="flex items-center gap-1.5">
                             <button
                               onClick={() => openEditModal(loadItem)}
-                              className="p-1 text-gray-500 hover:text-blue-600 hover:bg-blue-50 dark:hover:bg-blue-900/30 rounded transition-colors"
+                              className="p-1.5 text-blue-600 bg-blue-50 hover:bg-blue-100 dark:bg-blue-900/30 dark:text-blue-400 dark:hover:bg-blue-900/50 rounded transition-colors"
                               title="Edit"
                             >
-                              <Edit className="w-3.5 h-3.5" />
+                              <Edit className="w-4 h-4" />
                             </button>
                             <button
                               onClick={() => handlePrint(loadItem)}
-                              className="p-1 text-gray-500 hover:text-purple-600 hover:bg-purple-50 dark:hover:bg-purple-900/30 rounded transition-colors"
+                              className="p-1.5 text-purple-600 bg-purple-50 hover:bg-purple-100 dark:bg-purple-900/30 dark:text-purple-400 dark:hover:bg-purple-900/50 rounded transition-colors"
                               title="Print"
                             >
-                              <Printer className="w-3.5 h-3.5" />
+                              <Printer className="w-4 h-4" />
                             </button>
                             <button
                               onClick={() => handleDownload(loadItem)}
-                              className="p-1 text-gray-500 hover:text-green-600 hover:bg-green-50 dark:hover:bg-green-900/30 rounded transition-colors"
+                              className="p-1.5 text-green-600 bg-green-50 hover:bg-green-100 dark:bg-green-900/30 dark:text-green-400 dark:hover:bg-green-900/50 rounded transition-colors"
                               title="Download PDF"
                             >
-                              <Download className="w-3.5 h-3.5" />
+                              <Download className="w-4 h-4" />
                             </button>
                             {loadItem.status === 'OPEN' && (
                               <button
                                 onClick={() => {
                                   setSelectedLoadItem(loadItem);
-                                  setIsDeleteModalOpen(true);
+                                  setIsTerminateModalOpen(true);
                                 }}
-                                className="p-1 text-gray-500 hover:text-red-600 hover:bg-red-50 dark:hover:bg-red-900/30 rounded transition-colors"
-                                title="Delete"
+                                className="p-1.5 text-orange-600 bg-orange-50 hover:bg-orange-100 dark:bg-orange-900/30 dark:text-orange-400 dark:hover:bg-orange-900/50 rounded transition-colors"
+                                title="Terminate - Stop continuing"
                               >
-                                <Trash2 className="w-3.5 h-3.5" />
+                                <XCircle className="w-4 h-4" />
                               </button>
                             )}
                           </div>
@@ -1129,6 +1165,29 @@ export const LoadsTab: React.FC<LoadsTabProps> = ({ loading: externalLoading = f
             <span className="font-semibold">{selectedLoadItem?.manifestNumber}</span>?
             This action cannot be undone.
           </p>
+
+          {/* Warning if freight is still onboard */}
+          {selectedLoadItem && (selectedLoadItem.pieces > 0 || selectedLoadItem.weight > 0) && (
+            <div className="p-4 bg-amber-50 dark:bg-amber-900/20 border border-amber-200 dark:border-amber-800 rounded-lg">
+              <div className="flex items-start gap-3">
+                <AlertTriangle className="w-5 h-5 text-amber-600 dark:text-amber-500 mt-0.5 flex-shrink-0" />
+                <div>
+                  <p className="text-sm font-medium text-amber-800 dark:text-amber-200">
+                    Freight Still Onboard
+                  </p>
+                  <p className="text-sm text-amber-700 dark:text-amber-300 mt-1">
+                    This loadsheet indicates {selectedLoadItem.pieces.toLocaleString()} pieces
+                    ({selectedLoadItem.weight.toLocaleString()} lbs) are still loaded.
+                    All freight must be removed or scans transferred before deleting.
+                  </p>
+                  <p className="text-sm text-amber-700 dark:text-amber-300 mt-2 font-medium">
+                    Are you sure you want to proceed?
+                  </p>
+                </div>
+              </div>
+            </div>
+          )}
+
           <div className="flex justify-end gap-3">
             <button
               onClick={() => {
@@ -1145,6 +1204,72 @@ export const LoadsTab: React.FC<LoadsTabProps> = ({ loading: externalLoading = f
               className="px-4 py-2 bg-red-600 text-white rounded-lg hover:bg-red-700 disabled:opacity-50 transition-colors"
             >
               {deleting ? 'Deleting...' : 'Delete'}
+            </button>
+          </div>
+        </div>
+      </Modal>
+
+      {/* Terminate Confirmation Modal (for continuing loads) */}
+      <Modal
+        isOpen={isTerminateModalOpen}
+        onClose={() => {
+          setIsTerminateModalOpen(false);
+          setSelectedLoadItem(null);
+        }}
+        title="Terminate Continuing Load"
+      >
+        <div className="space-y-4">
+          <p className="text-gray-600 dark:text-gray-300">
+            Are you sure you want to terminate loadsheet{' '}
+            <span className="font-semibold">{selectedLoadItem?.manifestNumber}</span>?
+          </p>
+
+          <div className="p-4 bg-blue-50 dark:bg-blue-900/20 border border-blue-200 dark:border-blue-800 rounded-lg">
+            <p className="text-sm text-blue-800 dark:text-blue-200">
+              This will mark the loadsheet as <span className="font-semibold">UNLOADED</span> and
+              prevent it from continuing to the next destination. The loadsheet record will be
+              preserved for historical purposes.
+            </p>
+          </div>
+
+          {/* Warning if freight is still onboard */}
+          {selectedLoadItem && (selectedLoadItem.pieces > 0 || selectedLoadItem.weight > 0) && (
+            <div className="p-4 bg-amber-50 dark:bg-amber-900/20 border border-amber-200 dark:border-amber-800 rounded-lg">
+              <div className="flex items-start gap-3">
+                <AlertTriangle className="w-5 h-5 text-amber-600 dark:text-amber-500 mt-0.5 flex-shrink-0" />
+                <div>
+                  <p className="text-sm font-medium text-amber-800 dark:text-amber-200">
+                    Freight Still Onboard
+                  </p>
+                  <p className="text-sm text-amber-700 dark:text-amber-300 mt-1">
+                    This loadsheet indicates {selectedLoadItem.pieces.toLocaleString()} pieces
+                    ({selectedLoadItem.weight.toLocaleString()} lbs) are still loaded.
+                    All freight should be removed or scans transferred before terminating.
+                  </p>
+                  <p className="text-sm text-amber-700 dark:text-amber-300 mt-2 font-medium">
+                    Terminating will reset the freight count to zero. Are you sure?
+                  </p>
+                </div>
+              </div>
+            </div>
+          )}
+
+          <div className="flex justify-end gap-3">
+            <button
+              onClick={() => {
+                setIsTerminateModalOpen(false);
+                setSelectedLoadItem(null);
+              }}
+              className="px-4 py-2 text-gray-700 dark:text-gray-300 bg-gray-100 dark:bg-gray-700 rounded-lg hover:bg-gray-200 dark:hover:bg-gray-600 transition-colors"
+            >
+              Cancel
+            </button>
+            <button
+              onClick={handleTerminate}
+              disabled={terminating}
+              className="px-4 py-2 bg-orange-600 text-white rounded-lg hover:bg-orange-700 disabled:opacity-50 transition-colors"
+            >
+              {terminating ? 'Terminating...' : 'Terminate'}
             </button>
           </div>
         </div>
@@ -1353,6 +1478,17 @@ export const LoadsTab: React.FC<LoadsTabProps> = ({ loading: externalLoading = f
         }}
         loadItem={selectedLoadItem}
         onSuccess={() => refetch()}
+      />
+
+      {/* Dispatch Trip Modal */}
+      <DispatchTripModal
+        isOpen={isDispatchModalOpen}
+        onClose={() => setIsDispatchModalOpen(false)}
+        onSuccess={() => {
+          setIsDispatchModalOpen(false);
+          refetch();
+          refetchContinuingTrips();
+        }}
       />
     </div>
   );

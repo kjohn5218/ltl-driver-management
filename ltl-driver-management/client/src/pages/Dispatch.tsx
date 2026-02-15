@@ -447,17 +447,6 @@ export const Dispatch: React.FC = () => {
                 Loads
               </button>
               <button
-                onClick={() => handleTabChange('outbound')}
-                className={`flex items-center px-6 py-3 text-sm font-medium rounded-t-lg transition-all ${
-                  activeTab === 'outbound'
-                    ? 'bg-green-100 text-green-700 border-b-2 border-green-500'
-                    : 'bg-green-50 text-green-600 hover:bg-green-100 border-b-2 border-transparent'
-                }`}
-              >
-                <LogOut className="w-4 h-4 mr-2" />
-                Outbound
-              </button>
-              <button
                 onClick={() => handleTabChange('inbound')}
                 className={`flex items-center px-6 py-3 text-sm font-medium rounded-t-lg transition-all ${
                   activeTab === 'inbound'
@@ -467,6 +456,17 @@ export const Dispatch: React.FC = () => {
               >
                 <LogIn className="w-4 h-4 mr-2" />
                 Inbound
+              </button>
+              <button
+                onClick={() => handleTabChange('outbound')}
+                className={`flex items-center px-6 py-3 text-sm font-medium rounded-t-lg transition-all ${
+                  activeTab === 'outbound'
+                    ? 'bg-green-100 text-green-700 border-b-2 border-green-500'
+                    : 'bg-green-50 text-green-600 hover:bg-green-100 border-b-2 border-transparent'
+                }`}
+              >
+                <LogOut className="w-4 h-4 mr-2" />
+                Outbound
               </button>
               <button
                 onClick={() => handleTabChange('drivers')}
@@ -508,12 +508,12 @@ export const Dispatch: React.FC = () => {
         <LoadsTab onOpenCreateModal={() => setIsCreateLoadsheetModalOpen(true)} selectedLocations={selectedLocations} />
       </div>
 
-      <div className={activeTab === 'outbound' ? '' : 'hidden'}>
-        <OutboundTab selectedLocations={selectedLocations} />
-      </div>
-
       <div className={activeTab === 'inbound' ? '' : 'hidden'}>
         <InboundTab selectedLocations={selectedLocations} />
+      </div>
+
+      <div className={activeTab === 'outbound' ? '' : 'hidden'}>
+        <OutboundTab selectedLocations={selectedLocations} />
       </div>
 
       <div className={activeTab === 'drivers' ? '' : 'hidden'}>
