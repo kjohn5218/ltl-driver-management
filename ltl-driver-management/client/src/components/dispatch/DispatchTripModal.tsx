@@ -325,24 +325,25 @@ export const DispatchTripModal: React.FC<DispatchTripModalProps> = ({
     let parsedDest = lastLoadsheet.destinationTerminalCode || null;
 
     // If no destination set, try to find it
-    if (!parsedDest && profiles.length > 0) {
-      // First try the original profile lookup
-      const lastProfile = findProfileByLinehaulName(
+    if (!parsedDest) {
+      // FIRST: Try direct route lookup - most reliable for continuing loads
+      // This checks routes table for exact match of route name + current origin
+      parsedDest = findNextDestination(
         lastLoadsheet.linehaulName,
         lastLoadsheet.originTerminalCode
       );
-      if (lastProfile?.destinationTerminal?.code) {
-        parsedDest = lastProfile.destinationTerminal.code;
-      } else if (lastProfile?.destination) {
-        parsedDest = lastProfile.destination;
-      }
 
-      // If still no destination, try finding next destination based on current origin
-      if (!parsedDest) {
-        parsedDest = findNextDestination(
+      // SECOND: Fall back to profile lookup if route lookup failed
+      if (!parsedDest && profiles.length > 0) {
+        const lastProfile = findProfileByLinehaulName(
           lastLoadsheet.linehaulName,
           lastLoadsheet.originTerminalCode
         );
+        if (lastProfile?.destinationTerminal?.code) {
+          parsedDest = lastProfile.destinationTerminal.code;
+        } else if (lastProfile?.destination) {
+          parsedDest = lastProfile.destination;
+        }
       }
     }
 
