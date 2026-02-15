@@ -1493,7 +1493,7 @@ export const arriveTrip = async (req: Request, res: Response): Promise<void> => 
       // Get loadsheets assigned to this trip
       const loadsheets = await tx.loadsheet.findMany({
         where: { linehaulTripId: tripId },
-        select: { id: true, manifestNumber: true }
+        select: { id: true, manifestNumber: true, pieces: true, weight: true }
       });
 
       // For each loadsheet, recalculate capacity based on freight not yet unloaded at this terminal
