@@ -332,18 +332,19 @@ export const LoadsTab: React.FC<LoadsTabProps> = ({ loading: externalLoading = f
         continuingLoadsheets = results.flat();
       }
 
-      // For each arrived trip, find its loadsheets
-      // Only match by linehaulTripId - loadsheets stay linked to trips after arrival
+      // For each arrived trip, find its OPEN loadsheets (continuing freight only)
+      // UNLOADED/terminated loadsheets should not appear as they won't continue
       const tripsWithLoadsheets = arrivedTrips.map(trip => {
-        // Get loadsheets linked to this specific trip
-        // We use the trip's included loadsheets (already fetched with the trip)
-        // and supplement with continuingLoadsheets for full data
-        const tripLoadsheets = continuingLoadsheets.filter(ls => ls.linehaulTripId === trip.id);
+        // Get OPEN loadsheets linked to this specific trip
+        const tripLoadsheets = continuingLoadsheets.filter(ls =>
+          ls.linehaulTripId === trip.id && ls.status === 'OPEN'
+        );
 
-        // Also include loadsheets from the trip include if not in continuingLoadsheets
+        // Also include OPEN loadsheets from the trip include if not in continuingLoadsheets
         const includedLoadsheets = (trip.loadsheets || []) as Loadsheet[];
         for (const ls of includedLoadsheets) {
-          if (!tripLoadsheets.some(tls => tls.id === ls.id)) {
+          // Only include OPEN status (not UNLOADED/terminated)
+          if (ls.status === 'OPEN' && !tripLoadsheets.some(tls => tls.id === ls.id)) {
             tripLoadsheets.push(ls);
           }
         }
@@ -354,7 +355,7 @@ export const LoadsTab: React.FC<LoadsTabProps> = ({ loading: externalLoading = f
         };
       });
 
-      // Only return trips that have loadsheets (continuing freight)
+      // Only return trips that have OPEN loadsheets (continuing freight)
       return tripsWithLoadsheets.filter(trip => trip.loadsheets && trip.loadsheets.length > 0);
     }
   });
