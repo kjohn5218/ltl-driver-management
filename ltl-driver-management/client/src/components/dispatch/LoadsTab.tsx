@@ -1523,6 +1523,8 @@ export const LoadsTab: React.FC<LoadsTabProps> = ({ loading: externalLoading = f
           refetch();
           refetchContinuingTrips();
         }}
+        selectedLocations={selectedLocations}
+        locations={locations}
       />
     </div>
   );

@@ -9,13 +9,15 @@ import { loadsheetService } from '../../services/loadsheetService';
 import { driverService } from '../../services/driverService';
 import { linehaulProfileService } from '../../services/linehaulProfileService';
 import { api } from '../../services/api';
-import { Loadsheet, EquipmentTruck, EquipmentTrailer, EquipmentDolly, CarrierDriver, LinehaulProfile, Route } from '../../types';
+import { Loadsheet, EquipmentTruck, EquipmentTrailer, EquipmentDolly, CarrierDriver, LinehaulProfile, Route, Location } from '../../types';
 import { TripDocumentsModal } from './TripDocumentsModal';
 
 interface DispatchTripModalProps {
   isOpen: boolean;
   onClose: () => void;
   onSuccess?: () => void;
+  selectedLocations?: number[];
+  locations?: Location[];
 }
 
 // Interface for manifest entry with seal number and dolly (using loadsheet data)
@@ -28,7 +30,9 @@ interface ManifestEntry {
 export const DispatchTripModal: React.FC<DispatchTripModalProps> = ({
   isOpen,
   onClose,
-  onSuccess
+  onSuccess,
+  selectedLocations = [],
+  locations = []
 }) => {
   const queryClient = useQueryClient();
 
@@ -577,6 +581,26 @@ export const DispatchTripModal: React.FC<DispatchTripModalProps> = ({
   const getAvailableLoadsheets = (currentIndex: number, searchTerm: string) => {
     let filtered = loadsheets
       .filter(ls => !selectedLoadsheetIds.includes(ls.id) || manifestEntries[currentIndex]?.loadsheet?.id === ls.id);
+
+    // Filter by selected locations if any are selected
+    if (selectedLocations.length > 0) {
+      // Get selected location codes for matching
+      const selectedCodes = selectedLocations
+        .map(id => locations.find(l => l.id === id)?.code?.toUpperCase())
+        .filter(Boolean) as string[];
+
+      filtered = filtered.filter(ls => {
+        // Check if loadsheet's origin matches any selected location
+        if (ls.originTerminalId && selectedLocations.includes(ls.originTerminalId)) {
+          return true;
+        }
+        // Also check by origin terminal code
+        if (ls.originTerminalCode && selectedCodes.includes(ls.originTerminalCode.toUpperCase())) {
+          return true;
+        }
+        return false;
+      });
+    }
 
     if (searchTerm.trim()) {
       const search = searchTerm.toLowerCase();
