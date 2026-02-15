@@ -332,26 +332,20 @@ export const LoadsTab: React.FC<LoadsTabProps> = ({ loading: externalLoading = f
         continuingLoadsheets = results.flat();
       }
 
-      // For each arrived trip, find its loadsheets from the full loadsheet data
+      // For each arrived trip, find its loadsheets
+      // Only match by linehaulTripId - loadsheets stay linked to trips after arrival
       const tripsWithLoadsheets = arrivedTrips.map(trip => {
-        const arrivalCode = trip.linehaulProfile?.destinationTerminal?.code;
+        // Get loadsheets linked to this specific trip
+        // We use the trip's included loadsheets (already fetched with the trip)
+        // and supplement with continuingLoadsheets for full data
+        const tripLoadsheets = continuingLoadsheets.filter(ls => ls.linehaulTripId === trip.id);
 
-        // Always get full loadsheet data from continuingLoadsheets
-        // Match by either linehaulTripId (new arrivals) or originTerminalCode (old arrivals)
-        let tripLoadsheets: Loadsheet[] = [];
-
-        if (arrivalCode) {
-          tripLoadsheets = continuingLoadsheets.filter(ls => {
-            // Match by trip ID if loadsheet is still linked
-            if (ls.linehaulTripId === trip.id) {
-              return true;
-            }
-            // Or match by origin terminal code (for loadsheets that were unlinked)
-            if (ls.originTerminalCode?.toUpperCase() === arrivalCode.toUpperCase()) {
-              return true;
-            }
-            return false;
-          });
+        // Also include loadsheets from the trip include if not in continuingLoadsheets
+        const includedLoadsheets = (trip.loadsheets || []) as Loadsheet[];
+        for (const ls of includedLoadsheets) {
+          if (!tripLoadsheets.some(tls => tls.id === ls.id)) {
+            tripLoadsheets.push(ls);
+          }
         }
 
         return {
@@ -366,10 +360,24 @@ export const LoadsTab: React.FC<LoadsTabProps> = ({ loading: externalLoading = f
   });
   const continuingTrips = continuingTripsData || [];
 
+  // Get IDs of loadsheets shown in continuing trips section (to avoid duplication)
+  const continuingLoadsheetIds = useMemo(() => {
+    const ids = new Set<number>();
+    for (const trip of continuingTrips) {
+      for (const ls of (trip.loadsheets || [])) {
+        ids.add(ls.id);
+      }
+    }
+    return ids;
+  }, [continuingTrips]);
+
   // Convert loadsheets to LoadItems with origin filtering - show all loadsheets for planning
   const loads = useMemo(() => {
     if (!loadsheetsData) return [];
     let filtered = loadsheetsData;
+
+    // Exclude loadsheets that are shown in the "Arrived Trips Continuing" section
+    filtered = filtered.filter(ls => !continuingLoadsheetIds.has(ls.id));
 
     // Filter by selected origins
     if (selectedLocations.length > 0) {
@@ -389,7 +397,7 @@ export const LoadsTab: React.FC<LoadsTabProps> = ({ loading: externalLoading = f
     }
 
     return filtered.map((ls, index) => loadsheetToLoadItem(ls, index));
-  }, [loadsheetsData, selectedLocations, locations]);
+  }, [loadsheetsData, selectedLocations, locations, continuingLoadsheetIds]);
 
   const handleSort = (column: keyof LoadItem) => {
     if (sortBy === column) {
