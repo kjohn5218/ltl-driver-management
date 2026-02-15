@@ -245,36 +245,51 @@ export const DispatchTripModal: React.FC<DispatchTripModalProps> = ({
     if (!linehaulName || !currentOrigin || profiles.length === 0) return null;
 
     const upperOrigin = currentOrigin.toUpperCase();
+    const upperLinehaulName = linehaulName.toUpperCase();
+    const routeBase = linehaulName.replace(/\d+$/, '').toUpperCase(); // Remove trailing number (e.g., MSPFARBIL1 -> MSPFARBIL)
 
-    // First, try to find a profile where origin matches current location
-    // This handles the case where loadsheet is at an intermediate stop
-    const profileFromOrigin = profiles.find(p => {
+    // FIRST: Try to find a profile from the same route family with matching origin
+    // This is the most accurate match (e.g., MSPFARBIL2 for loadsheet with MSPFARBIL1 linehaulName)
+    const sameRouteProfile = profiles.find(p => {
       const profileOrigin = p.originTerminal?.code?.toUpperCase();
-      return profileOrigin === upperOrigin;
+      const profileName = (p.name || '').toUpperCase().replace(/\d+$/, ''); // Remove trailing number
+      return profileOrigin === upperOrigin && profileName === routeBase;
     });
 
-    if (profileFromOrigin?.destinationTerminal?.code) {
-      // Verify this destination is part of the original route
-      const destCode = profileFromOrigin.destinationTerminal.code.toUpperCase();
-      if (linehaulName.toUpperCase().includes(destCode)) {
-        return profileFromOrigin.destinationTerminal.code;
+    if (sameRouteProfile?.destinationTerminal?.code) {
+      return sameRouteProfile.destinationTerminal.code;
+    }
+
+    // SECOND: Try to find a profile where origin matches and profile name starts with route base
+    const similarRouteProfile = profiles.find(p => {
+      const profileOrigin = p.originTerminal?.code?.toUpperCase();
+      const profileName = (p.name || '').toUpperCase();
+      return profileOrigin === upperOrigin && profileName.startsWith(routeBase);
+    });
+
+    if (similarRouteProfile?.destinationTerminal?.code) {
+      return similarRouteProfile.destinationTerminal.code;
+    }
+
+    // THIRD: Find any profile with matching origin where destination is in the route name
+    // but comes AFTER the current origin in the route name
+    const originIndex = upperLinehaulName.indexOf(upperOrigin);
+    if (originIndex >= 0) {
+      const afterOrigin = upperLinehaulName.substring(originIndex + upperOrigin.length);
+
+      const profileWithDestInRoute = profiles.find(p => {
+        const profileOrigin = p.originTerminal?.code?.toUpperCase();
+        const destCode = p.destinationTerminal?.code?.toUpperCase();
+        // Origin must match AND destination must appear AFTER current origin in route name
+        return profileOrigin === upperOrigin && destCode && afterOrigin.includes(destCode);
+      });
+
+      if (profileWithDestInRoute?.destinationTerminal?.code) {
+        return profileWithDestInRoute.destinationTerminal.code;
       }
     }
 
-    // Try to find a profile specifically for this origin that's part of the same route family
-    // (profile name starts with same pattern, e.g., MSPFARBIL1 -> MSPFARBIL2)
-    const routeBase = linehaulName.replace(/\d+$/, ''); // Remove trailing number
-    const matchingProfile = profiles.find(p => {
-      const profileOrigin = p.originTerminal?.code?.toUpperCase();
-      const profileName = p.name?.toUpperCase() || '';
-      return profileOrigin === upperOrigin && profileName.startsWith(routeBase.toUpperCase());
-    });
-
-    if (matchingProfile?.destinationTerminal?.code) {
-      return matchingProfile.destinationTerminal.code;
-    }
-
-    // Fallback: look up the route to find terminal sequence
+    // FOURTH: Fallback - look up the route to find final destination
     const route = routes.find(r => r.name === linehaulName);
     if (route?.destination) {
       return route.destination;
