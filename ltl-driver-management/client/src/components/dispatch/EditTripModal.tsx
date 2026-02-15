@@ -154,11 +154,18 @@ export const EditTripModal: React.FC<EditTripModalProps> = ({
     enabled: isOpen
   });
 
-  // Fetch loadsheets for manifest selection (available loadsheets or those assigned to this trip)
+  // Fetch available loadsheets (OPEN/LOADING status)
   const { data: loadsheetsData } = useQuery({
-    queryKey: ['loadsheets-edit-trip', tripId],
+    queryKey: ['loadsheets-edit-trip-available'],
     queryFn: () => loadsheetService.getLoadsheets({ limit: 100 }),
     enabled: isOpen
+  });
+
+  // Fetch loadsheets assigned to this specific trip (includes DISPATCHED status)
+  const { data: tripLoadsheetsData } = useQuery({
+    queryKey: ['loadsheets-edit-trip-assigned', tripId],
+    queryFn: () => loadsheetService.getLoadsheets({ linehaulTripId: tripId, limit: 100 }),
+    enabled: isOpen && !!tripId
   });
 
   const drivers = driversData?.drivers || [];
@@ -170,17 +177,31 @@ export const EditTripModal: React.FC<EditTripModalProps> = ({
   const tripOriginCode = trip?.linehaulProfile?.originTerminal?.code;
   const tripDestCode = trip?.linehaulProfile?.destinationTerminal?.code;
 
-  // Filter loadsheets: show those assigned to this trip (matching leg) OR available (not assigned and not DISPATCHED/CLOSED)
-  const availableLoadsheets = (loadsheetsData?.loadsheets || []).filter(
+  // Combine available loadsheets with trip-assigned loadsheets
+  const allLoadsheets = React.useMemo(() => {
+    const available = loadsheetsData?.loadsheets || [];
+    const tripAssigned = tripLoadsheetsData?.loadsheets || [];
+
+    // Merge the two lists, avoiding duplicates by ID
+    const combined = [...tripAssigned];
+    const existingIds = new Set(tripAssigned.map((ls: Loadsheet) => ls.id));
+
+    for (const ls of available) {
+      if (!existingIds.has(ls.id)) {
+        combined.push(ls);
+      }
+    }
+
+    return combined;
+  }, [loadsheetsData, tripLoadsheetsData]);
+
+  // Filter loadsheets: show those assigned to this trip OR available (not assigned and not DISPATCHED/CLOSED)
+  const availableLoadsheets = allLoadsheets.filter(
     (ls: Loadsheet) => {
-      // For loadsheets assigned to this trip, filter by origin/destination to get correct leg
+      // For loadsheets assigned to this trip, always show them
+      // Don't filter by terminal codes - they may have been updated after arrival
+      // or may represent different legs in a multi-leg route
       if (ls.linehaulTripId === tripId) {
-        // If we have terminal codes, only show matching leg
-        if (tripOriginCode && tripDestCode && ls.originTerminalCode && ls.destinationTerminalCode) {
-          return ls.originTerminalCode === tripOriginCode &&
-                 ls.destinationTerminalCode === tripDestCode;
-        }
-        // Fallback: show if no terminal codes to match
         return true;
       }
       // For unassigned loadsheets, exclude DISPATCHED and CLOSED status
@@ -300,13 +321,13 @@ export const EditTripModal: React.FC<EditTripModalProps> = ({
 
   // Initialize manifest selections when loadsheets data loads
   useEffect(() => {
-    if (loadsheetsData && trip && isOpen && trailers.length > 0) {
+    if ((tripLoadsheetsData || loadsheetsData) && trip && isOpen && trailers.length > 0) {
       // Get the trip's origin and destination terminal codes from the profile
       const tripOriginCode = trip.linehaulProfile?.originTerminal?.code;
       const tripDestCode = trip.linehaulProfile?.destinationTerminal?.code;
 
-      // Get all loadsheets assigned to this trip
-      const allTripLoadsheets = (loadsheetsData.loadsheets || []).filter(
+      // Get all loadsheets assigned to this trip (prioritize tripLoadsheetsData which includes DISPATCHED loadsheets)
+      const allTripLoadsheets = (tripLoadsheetsData?.loadsheets || []).filter(
         (ls: Loadsheet) => ls.linehaulTripId === tripId
       );
 
@@ -363,7 +384,7 @@ export const EditTripModal: React.FC<EditTripModalProps> = ({
         if (trailer) setSelectedTrailer3Id(trailer.id);
       }
     }
-  }, [loadsheetsData, trip, tripId, isOpen, trailers]);
+  }, [loadsheetsData, tripLoadsheetsData, trip, tripId, isOpen, trailers]);
 
   // Reset initialization flags when modal closes
   useEffect(() => {
@@ -480,7 +501,8 @@ export const EditTripModal: React.FC<EditTripModalProps> = ({
       }
 
       // Invalidate loadsheet queries to refresh data
-      queryClient.invalidateQueries({ queryKey: ['loadsheets-edit-trip'] });
+      queryClient.invalidateQueries({ queryKey: ['loadsheets-edit-trip-available'] });
+      queryClient.invalidateQueries({ queryKey: ['loadsheets-edit-trip-assigned'] });
       queryClient.invalidateQueries({ queryKey: ['loadsheets-for-outbound'] });
 
       setSubmitSuccess(true);
