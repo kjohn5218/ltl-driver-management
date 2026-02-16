@@ -12,12 +12,14 @@ export const Locations: React.FC = () => {
   const [filters, , updateFilter] = usePersistedFilters('locations-filters', {
     searchTerm: '',
     activeFilter: 'all',
+    physicalTerminalOnly: false,
     sortColumn: 'code',
     sortDirection: 'asc' as 'asc' | 'desc',
   });
-  const { searchTerm, activeFilter, sortColumn, sortDirection } = filters;
+  const { searchTerm, activeFilter, physicalTerminalOnly, sortColumn, sortDirection } = filters;
   const setSearchTerm = (v: string) => updateFilter('searchTerm', v);
   const setActiveFilter = (v: string) => updateFilter('activeFilter', v);
+  const setPhysicalTerminalOnly = (v: boolean) => updateFilter('physicalTerminalOnly', v);
   const setSortColumn = (v: string) => updateFilter('sortColumn', v);
   const setSortDirection = (v: 'asc' | 'desc') => updateFilter('sortDirection', v);
 
@@ -27,13 +29,14 @@ export const Locations: React.FC = () => {
   const [showAddModal, setShowAddModal] = useState(false);
 
   const { data: locationsData, isLoading, error } = useQuery({
-    queryKey: ['locations', searchTerm, activeFilter],
+    queryKey: ['locations', searchTerm, activeFilter, physicalTerminalOnly],
     queryFn: async () => {
       const params = new URLSearchParams();
       if (searchTerm) params.append('search', searchTerm);
       if (activeFilter !== 'all') params.append('active', activeFilter === 'active' ? 'true' : 'false');
+      if (physicalTerminalOnly) params.append('isPhysicalTerminal', 'true');
       params.append('limit', '200');
-      
+
       const response = await api.get(`/locations?${params.toString()}`);
       return response.data;
     }
@@ -214,6 +217,17 @@ export const Locations: React.FC = () => {
                 <option value="inactive">Inactive Only</option>
               </select>
             </div>
+            <div className="flex items-center">
+              <label className="flex items-center cursor-pointer">
+                <input
+                  type="checkbox"
+                  checked={physicalTerminalOnly}
+                  onChange={(e) => setPhysicalTerminalOnly(e.target.checked)}
+                  className="h-4 w-4 text-primary-600 focus:ring-primary-500 border-gray-300 rounded"
+                />
+                <span className="ml-2 text-sm text-gray-700">Physical Terminals Only</span>
+              </label>
+            </div>
           </div>
         </div>
       </div>
@@ -369,7 +383,7 @@ export const Locations: React.FC = () => {
             <MapPin className="mx-auto h-12 w-12 text-gray-400" />
             <h3 className="mt-2 text-sm font-medium text-gray-900">No locations found</h3>
             <p className="mt-1 text-sm text-gray-500">
-              {searchTerm || activeFilter !== 'all'
+              {searchTerm || activeFilter !== 'all' || physicalTerminalOnly
                 ? 'Try adjusting your search or filter criteria.'
                 : 'Get started by adding a new location.'
               }

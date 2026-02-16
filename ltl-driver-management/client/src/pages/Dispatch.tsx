@@ -116,12 +116,14 @@ export const Dispatch: React.FC = () => {
     startDate: '',
     endDate: '',
     selectedOrigins: [] as number[],
+    physicalTerminalOnly: false,
   });
-  const { profileFilter, startDate, endDate, selectedOrigins } = filters;
+  const { profileFilter, startDate, endDate, selectedOrigins, physicalTerminalOnly } = filters;
   const setProfileFilter = (v: number | '') => updateFilter('profileFilter', v);
   const setStartDate = (v: string) => updateFilter('startDate', v);
   const setEndDate = (v: string) => updateFilter('endDate', v);
   const setSelectedOrigins = (v: number[]) => updateFilter('selectedOrigins', v);
+  const setPhysicalTerminalOnly = (v: boolean) => updateFilter('physicalTerminalOnly', v);
 
   const [currentPage, setCurrentPage] = useState(1);
   const [totalPages, setTotalPages] = useState(1);
@@ -491,14 +493,26 @@ export const Dispatch: React.FC = () => {
                 Expected
               </button>
             </nav>
-            <div className="flex items-center gap-2 pr-2">
-              <span className="text-sm text-gray-500">Location:</span>
-              <LocationMultiSelect
-                value={selectedLocations}
-                onChange={setSelectedLocations}
-                placeholder="All locations"
-                className="w-64"
-              />
+            <div className="flex items-center gap-4 pr-2">
+              <label className="flex items-center cursor-pointer">
+                <input
+                  type="checkbox"
+                  checked={physicalTerminalOnly}
+                  onChange={(e) => setPhysicalTerminalOnly(e.target.checked)}
+                  className="h-4 w-4 text-primary-600 focus:ring-primary-500 border-gray-300 rounded"
+                />
+                <span className="ml-2 text-sm text-gray-600">Physical Terminals Only</span>
+              </label>
+              <div className="flex items-center gap-2">
+                <span className="text-sm text-gray-500">Location:</span>
+                <LocationMultiSelect
+                  value={selectedLocations}
+                  onChange={setSelectedLocations}
+                  placeholder="All locations"
+                  className="w-64"
+                  physicalTerminalOnly={physicalTerminalOnly}
+                />
+              </div>
             </div>
           </div>
         </div>

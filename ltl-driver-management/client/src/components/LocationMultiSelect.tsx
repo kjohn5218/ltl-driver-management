@@ -9,6 +9,7 @@ interface LocationMultiSelectProps {
   placeholder?: string;
   className?: string;
   maxHeight?: string;
+  physicalTerminalOnly?: boolean;
 }
 
 export const LocationMultiSelect: React.FC<LocationMultiSelectProps> = ({
@@ -16,7 +17,8 @@ export const LocationMultiSelect: React.FC<LocationMultiSelectProps> = ({
   onChange,
   placeholder = "Select locations...",
   className = "",
-  maxHeight = "max-h-80"
+  maxHeight = "max-h-80",
+  physicalTerminalOnly = false
 }) => {
   // Ensure value is always an array
   const safeValue = Array.isArray(value) ? value : [];
@@ -28,12 +30,18 @@ export const LocationMultiSelect: React.FC<LocationMultiSelectProps> = ({
   const containerRef = useRef<HTMLDivElement>(null);
   const searchInputRef = useRef<HTMLInputElement>(null);
 
-  // Fetch all locations on mount
+  // Fetch all locations on mount or when physicalTerminalOnly changes
   useEffect(() => {
     const fetchLocations = async () => {
       setIsLoading(true);
       try {
-        const response = await api.get('/locations?limit=500&active=true');
+        const params = new URLSearchParams();
+        params.append('limit', '500');
+        params.append('active', 'true');
+        if (physicalTerminalOnly) {
+          params.append('isPhysicalTerminal', 'true');
+        }
+        const response = await api.get(`/locations?${params.toString()}`);
         setLocations(response.data.locations || response.data || []);
       } catch (error) {
         console.error('Failed to fetch locations:', error);
@@ -43,7 +51,7 @@ export const LocationMultiSelect: React.FC<LocationMultiSelectProps> = ({
       }
     };
     fetchLocations();
-  }, []);
+  }, [physicalTerminalOnly]);
 
   // Filter locations based on search
   const filteredLocations = useMemo(() => {
@@ -61,6 +69,17 @@ export const LocationMultiSelect: React.FC<LocationMultiSelectProps> = ({
   const selectedLocations = useMemo(() => {
     return locations.filter(loc => safeValue.includes(loc.id));
   }, [locations, safeValue]);
+
+  // Clear selections that are no longer valid when locations change (e.g., physicalTerminalOnly filter)
+  useEffect(() => {
+    if (locations.length > 0 && safeValue.length > 0) {
+      const validIds = locations.map(loc => loc.id);
+      const validSelections = safeValue.filter(id => validIds.includes(id));
+      if (validSelections.length !== safeValue.length) {
+        onChange(validSelections);
+      }
+    }
+  }, [locations]);
 
   // Close on outside click
   useEffect(() => {

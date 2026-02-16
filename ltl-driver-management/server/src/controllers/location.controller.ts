@@ -4,18 +4,23 @@ import { Prisma } from '@prisma/client';
 
 export const getLocations = async (req: Request, res: Response) => {
   try {
-    const { search, active, page = 1, limit = 50 } = req.query;
+    const { search, active, isPhysicalTerminal, page = 1, limit = 50 } = req.query;
     const pageNum = parseInt(page as string);
     const limitNum = parseInt(limit as string);
-    
+
     // Build filter
     const where: Prisma.LocationWhereInput = {};
-    
+
     // Add active filter
     if (active !== undefined) {
       where.active = active === 'true';
     }
-    
+
+    // Add physical terminal filter
+    if (isPhysicalTerminal !== undefined) {
+      where.isPhysicalTerminal = isPhysicalTerminal === 'true';
+    }
+
     // Add search filter if provided
     if (search) {
       const searchTerm = search as string;
