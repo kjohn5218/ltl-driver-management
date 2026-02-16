@@ -168,6 +168,7 @@ export interface Route {
   interlineTrailer: boolean;
   interlineCarrierId?: number;
   interlineCarrier?: InterlineCarrier;
+  linehaulProfileId?: number; // ID of corresponding LinehaulProfile for okay-to-load operations
   createdAt: string;
   updatedAt: string;
   _count?: {

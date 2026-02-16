@@ -69,8 +69,27 @@ export const getRoutes = async (req: Request, res: Response) => {
       }
     });
 
+    // Look up corresponding LinehaulProfiles to get headhaul flag and linehaulProfileId
+    const routeNames = routes.map(r => r.name);
+    const matchingProfiles = await prisma.linehaulProfile.findMany({
+      where: { name: { in: routeNames } },
+      select: { id: true, name: true, headhaul: true, trailerLoad: true }
+    });
+    const profileMap = new Map(matchingProfiles.map(p => [p.name, p]));
+
+    // Enhance routes with LinehaulProfile data
+    const enhancedRoutes = routes.map(route => {
+      const profile = profileMap.get(route.name);
+      return {
+        ...route,
+        linehaulProfileId: profile?.id || null,
+        headhaul: profile?.headhaul || false,
+        trailerLoad: profile?.trailerLoad || false
+      };
+    });
+
     return res.json({
-      routes,
+      routes: enhancedRoutes,
       pagination: {
         page: pageNum,
         limit: limitNum,

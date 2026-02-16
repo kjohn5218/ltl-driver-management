@@ -217,6 +217,9 @@ export const Routes: React.FC = () => {
               <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
                 Status
               </th>
+              <th className="px-6 py-3 text-center text-xs font-medium text-gray-500 uppercase tracking-wider">
+                Headhaul
+              </th>
               <th className="px-6 py-3 text-right text-xs font-medium text-gray-500 uppercase tracking-wider">
                 Actions
               </th>
@@ -252,12 +255,22 @@ export const Routes: React.FC = () => {
                 </td>
                 <td className="px-6 py-4 whitespace-nowrap">
                   <span className={`inline-flex px-2 py-1 rounded-full text-xs font-medium ${
-                    route.active 
-                      ? 'bg-green-100 text-green-800' 
+                    route.active
+                      ? 'bg-green-100 text-green-800'
                       : 'bg-red-100 text-red-800'
                   }`}>
                     {route.active ? 'Active' : 'Inactive'}
                   </span>
+                </td>
+                <td className="px-6 py-4 whitespace-nowrap text-center">
+                  {route.headhaul ? (
+                    <span className="inline-flex px-2 py-1 rounded-full text-xs font-medium bg-blue-100 text-blue-800">
+                      <Truck className="w-3 h-3 mr-1" />
+                      Headhaul
+                    </span>
+                  ) : (
+                    <span className="text-gray-400 text-xs">-</span>
+                  )}
                 </td>
                 <td className="px-6 py-4 whitespace-nowrap text-right text-sm font-medium">
                   <div className="flex items-center gap-2 justify-end">
@@ -487,10 +500,10 @@ const RouteEditModal: React.FC<RouteEditModalProps> = ({ route, onClose, onSave 
     frequency: route.frequency || '',
     departureTime: route.departureTime || '',
     arrivalTime: route.arrivalTime || '',
-    headhaul: (route as any).headhaul || false,
-    trailerLoad: (route as any).trailerLoad || false,
-    interlineTrailer: (route as any).interlineTrailer || false,
-    interlineCarrierId: (route as any).interlineCarrierId?.toString() || ''
+    headhaul: route.headhaul || false,
+    trailerLoad: route.trailerLoad || false,
+    interlineTrailer: route.interlineTrailer || false,
+    interlineCarrierId: route.interlineCarrierId?.toString() || ''
   });
 
   // Interline carriers for dropdown
@@ -519,18 +532,21 @@ const RouteEditModal: React.FC<RouteEditModalProps> = ({ route, onClose, onSave 
     queryFn: () => locationService.getTerminalLocations()
   });
 
+  // Use linehaulProfileId for okay-to-load/dispatch operations (linked to LinehaulProfile table)
+  const linehaulProfileId = route.linehaulProfileId;
+
   // Fetch existing okay-to-load terminals
   const { data: okayToLoadData } = useQuery({
-    queryKey: ['okay-to-load', route.id],
-    queryFn: () => linehaulProfileService.getOkayToLoadTerminals(route.id),
-    enabled: !!route.id
+    queryKey: ['okay-to-load', linehaulProfileId],
+    queryFn: () => linehaulProfileService.getOkayToLoadTerminals(linehaulProfileId!),
+    enabled: !!linehaulProfileId
   });
 
   // Fetch existing okay-to-dispatch terminals
   const { data: okayToDispatchData } = useQuery({
-    queryKey: ['okay-to-dispatch', route.id],
-    queryFn: () => linehaulProfileService.getOkayToDispatchTerminals(route.id),
-    enabled: !!route.id
+    queryKey: ['okay-to-dispatch', linehaulProfileId],
+    queryFn: () => linehaulProfileService.getOkayToDispatchTerminals(linehaulProfileId!),
+    enabled: !!linehaulProfileId
   });
 
   // Initialize okay-to-load IDs from fetched data
@@ -730,15 +746,17 @@ const RouteEditModal: React.FC<RouteEditModalProps> = ({ route, onClose, onSave 
 
       const response = await api.put(`/routes/${route.id}`, payload);
 
-      // Save okay-to-load and okay-to-dispatch terminals
-      try {
-        await Promise.all([
-          linehaulProfileService.updateOkayToLoadTerminals(route.id, okayToLoadIds),
-          linehaulProfileService.updateOkayToDispatchTerminals(route.id, okayToDispatchIds)
-        ]);
-      } catch (terminalError) {
-        console.error('Error saving terminal selections:', terminalError);
-        toast.error('Route saved but terminal selections may not have been updated');
+      // Save okay-to-load and okay-to-dispatch terminals (using linehaulProfileId)
+      if (linehaulProfileId) {
+        try {
+          await Promise.all([
+            linehaulProfileService.updateOkayToLoadTerminals(linehaulProfileId, okayToLoadIds),
+            linehaulProfileService.updateOkayToDispatchTerminals(linehaulProfileId, okayToDispatchIds)
+          ]);
+        } catch (terminalError) {
+          console.error('Error saving terminal selections:', terminalError);
+          toast.error('Route saved but terminal selections may not have been updated');
+        }
       }
 
       onSave(response.data);
@@ -1221,10 +1239,10 @@ const AddRouteModal: React.FC<AddRouteModalProps> = ({ onClose, onSave, copyFrom
     frequency: copyFromRoute?.frequency || '',
     departureTime: copyFromRoute?.departureTime || '',
     arrivalTime: copyFromRoute?.arrivalTime || '',
-    headhaul: (copyFromRoute as any)?.headhaul || false,
-    trailerLoad: (copyFromRoute as any)?.trailerLoad || false,
-    interlineTrailer: (copyFromRoute as any)?.interlineTrailer || false,
-    interlineCarrierId: (copyFromRoute as any)?.interlineCarrierId?.toString() || ''
+    headhaul: copyFromRoute?.headhaul || false,
+    trailerLoad: copyFromRoute?.trailerLoad || false,
+    interlineTrailer: copyFromRoute?.interlineTrailer || false,
+    interlineCarrierId: copyFromRoute?.interlineCarrierId?.toString() || ''
   });
 
   const [isSubmitting, setIsSubmitting] = useState(false);
@@ -1334,9 +1352,10 @@ const AddRouteModal: React.FC<AddRouteModalProps> = ({ onClose, onSave, copyFrom
       frequency: route.frequency || '',
       departureTime: route.departureTime || '',
       arrivalTime: route.arrivalTime || '',
-      headhaul: (route as any).headhaul || false,
-      interlineTrailer: (route as any).interlineTrailer || false,
-      interlineCarrierId: (route as any).interlineCarrierId?.toString() || ''
+      headhaul: route.headhaul || false,
+      trailerLoad: route.trailerLoad || false,
+      interlineTrailer: route.interlineTrailer || false,
+      interlineCarrierId: route.interlineCarrierId?.toString() || ''
     });
     setShowRouteSelector(false);
     setRouteSearchInput('');
