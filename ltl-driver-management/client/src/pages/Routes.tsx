@@ -2,7 +2,7 @@ import React, { useState, useEffect, useMemo } from 'react';
 import { useQuery, useQueryClient } from '@tanstack/react-query';
 import { api } from '../services/api';
 import { Route, Terminal, InterlineCarrier } from '../types';
-import { Plus, Search, Edit, Eye, Trash2, MapPin, Clock, DollarSign, Filter, X, Calculator, Copy, ChevronDown, ChevronUp, Truck } from 'lucide-react';
+import { Plus, Search, Edit, Eye, Trash2, MapPin, Clock, DollarSign, Filter, X, Calculator, Copy, ChevronDown, ChevronUp, Truck, ArrowUpDown, ArrowUp, ArrowDown } from 'lucide-react';
 import { calculateRoute, calculateArrivalTime, formatRunTime, hasAddressInfo } from '../utils/routeCalculations';
 import { LocationWithTooltip, RouteDetails } from '../components/LocationDisplay';
 import { LocationSelect } from '../components/LocationSelect';
@@ -24,11 +24,25 @@ export const Routes: React.FC = () => {
     searchTerm: '',
     originFilter: '',
     activeFilter: 'all',
+    sortColumn: 'name' as string,
+    sortDirection: 'asc' as 'asc' | 'desc',
   });
-  const { searchTerm, originFilter, activeFilter } = filters;
+  const { searchTerm, originFilter, activeFilter, sortColumn, sortDirection } = filters;
   const setSearchTerm = (v: string) => updateFilter('searchTerm', v);
   const setOriginFilter = (v: string) => updateFilter('originFilter', v);
   const setActiveFilter = (v: string) => updateFilter('activeFilter', v);
+  const setSortColumn = (v: string) => updateFilter('sortColumn', v);
+  const setSortDirection = (v: 'asc' | 'desc') => updateFilter('sortDirection', v);
+
+  // Handle column header click for sorting
+  const handleSort = (column: string) => {
+    if (sortColumn === column) {
+      setSortDirection(sortDirection === 'asc' ? 'desc' : 'asc');
+    } else {
+      setSortColumn(column);
+      setSortDirection('asc');
+    }
+  };
 
   const [viewingRoute, setViewingRoute] = useState<Route | null>(null);
   const [editingRoute, setEditingRoute] = useState<Route | null>(null);
@@ -70,22 +84,68 @@ export const Routes: React.FC = () => {
     );
   }
 
-  const filteredRoutes = routes?.filter(route => {
-    const matchesSearch = route.name.toLowerCase().includes(searchTerm.toLowerCase()) ||
-      route.origin.toLowerCase().includes(searchTerm.toLowerCase()) ||
-      route.destination.toLowerCase().includes(searchTerm.toLowerCase());
-    
-    const matchesOrigin = originFilter === '' || route.origin === originFilter;
-    
-    const matchesActive = activeFilter === 'all' || 
-      (activeFilter === 'active' && route.active) ||
-      (activeFilter === 'inactive' && !route.active);
-    
-    return matchesSearch && matchesOrigin && matchesActive;
-  }) || [];
+  const filteredRoutes = useMemo(() => {
+    const filtered = routes?.filter((route: Route) => {
+      const matchesSearch = route.name.toLowerCase().includes(searchTerm.toLowerCase()) ||
+        route.origin.toLowerCase().includes(searchTerm.toLowerCase()) ||
+        route.destination.toLowerCase().includes(searchTerm.toLowerCase());
+
+      const matchesOrigin = originFilter === '' || route.origin === originFilter;
+
+      const matchesActive = activeFilter === 'all' ||
+        (activeFilter === 'active' && route.active) ||
+        (activeFilter === 'inactive' && !route.active);
+
+      return matchesSearch && matchesOrigin && matchesActive;
+    }) || [];
+
+    // Sort the filtered routes
+    return filtered.sort((a: Route, b: Route) => {
+      let aVal: string | number | boolean;
+      let bVal: string | number | boolean;
+
+      switch (sortColumn) {
+        case 'name':
+          aVal = a.name.toLowerCase();
+          bVal = b.name.toLowerCase();
+          break;
+        case 'origin':
+          aVal = a.origin.toLowerCase();
+          bVal = b.origin.toLowerCase();
+          break;
+        case 'destination':
+          aVal = a.destination.toLowerCase();
+          bVal = b.destination.toLowerCase();
+          break;
+        case 'distance':
+          aVal = Number(a.distance) || 0;
+          bVal = Number(b.distance) || 0;
+          break;
+        case 'status':
+          aVal = a.active ? 1 : 0;
+          bVal = b.active ? 1 : 0;
+          break;
+        case 'headhaul':
+          aVal = a.headhaul ? 1 : 0;
+          bVal = b.headhaul ? 1 : 0;
+          break;
+        case 'schedule':
+          aVal = a.departureTime || '';
+          bVal = b.departureTime || '';
+          break;
+        default:
+          aVal = a.name.toLowerCase();
+          bVal = b.name.toLowerCase();
+      }
+
+      if (aVal < bVal) return sortDirection === 'asc' ? -1 : 1;
+      if (aVal > bVal) return sortDirection === 'asc' ? 1 : -1;
+      return 0;
+    });
+  }, [routes, searchTerm, originFilter, activeFilter, sortColumn, sortDirection]);
 
   // Get unique origins for filter
-  const uniqueOrigins = [...new Set(routes.map(route => route.origin))].sort();
+  const uniqueOrigins = [...new Set(routes.map((route: Route) => route.origin))].sort();
 
   const handleViewRoute = (route: Route) => {
     setViewingRoute(route);
@@ -202,23 +262,83 @@ export const Routes: React.FC = () => {
         <table className="w-full divide-y divide-gray-200">
           <thead className="bg-gray-50">
             <tr>
-              <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
-                Linehaul Name
+              <th
+                className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider cursor-pointer hover:bg-gray-100 select-none"
+                onClick={() => handleSort('name')}
+              >
+                <div className="flex items-center gap-1">
+                  Linehaul Name
+                  {sortColumn === 'name' ? (
+                    sortDirection === 'asc' ? <ArrowUp className="w-3 h-3" /> : <ArrowDown className="w-3 h-3" />
+                  ) : (
+                    <ArrowUpDown className="w-3 h-3 text-gray-300" />
+                  )}
+                </div>
               </th>
-              <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
-                Origin → Destination
+              <th
+                className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider cursor-pointer hover:bg-gray-100 select-none"
+                onClick={() => handleSort('origin')}
+              >
+                <div className="flex items-center gap-1">
+                  Origin → Dest
+                  {sortColumn === 'origin' ? (
+                    sortDirection === 'asc' ? <ArrowUp className="w-3 h-3" /> : <ArrowDown className="w-3 h-3" />
+                  ) : (
+                    <ArrowUpDown className="w-3 h-3 text-gray-300" />
+                  )}
+                </div>
               </th>
-              <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
-                Miles
+              <th
+                className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider cursor-pointer hover:bg-gray-100 select-none"
+                onClick={() => handleSort('distance')}
+              >
+                <div className="flex items-center gap-1">
+                  Miles
+                  {sortColumn === 'distance' ? (
+                    sortDirection === 'asc' ? <ArrowUp className="w-3 h-3" /> : <ArrowDown className="w-3 h-3" />
+                  ) : (
+                    <ArrowUpDown className="w-3 h-3 text-gray-300" />
+                  )}
+                </div>
               </th>
-              <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
-                Schedule
+              <th
+                className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider cursor-pointer hover:bg-gray-100 select-none"
+                onClick={() => handleSort('schedule')}
+              >
+                <div className="flex items-center gap-1">
+                  Schedule
+                  {sortColumn === 'schedule' ? (
+                    sortDirection === 'asc' ? <ArrowUp className="w-3 h-3" /> : <ArrowDown className="w-3 h-3" />
+                  ) : (
+                    <ArrowUpDown className="w-3 h-3 text-gray-300" />
+                  )}
+                </div>
               </th>
-              <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
-                Status
+              <th
+                className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider cursor-pointer hover:bg-gray-100 select-none"
+                onClick={() => handleSort('status')}
+              >
+                <div className="flex items-center gap-1">
+                  Status
+                  {sortColumn === 'status' ? (
+                    sortDirection === 'asc' ? <ArrowUp className="w-3 h-3" /> : <ArrowDown className="w-3 h-3" />
+                  ) : (
+                    <ArrowUpDown className="w-3 h-3 text-gray-300" />
+                  )}
+                </div>
               </th>
-              <th className="px-6 py-3 text-center text-xs font-medium text-gray-500 uppercase tracking-wider">
-                Headhaul
+              <th
+                className="px-6 py-3 text-center text-xs font-medium text-gray-500 uppercase tracking-wider cursor-pointer hover:bg-gray-100 select-none"
+                onClick={() => handleSort('headhaul')}
+              >
+                <div className="flex items-center justify-center gap-1">
+                  Headhaul
+                  {sortColumn === 'headhaul' ? (
+                    sortDirection === 'asc' ? <ArrowUp className="w-3 h-3" /> : <ArrowDown className="w-3 h-3" />
+                  ) : (
+                    <ArrowUpDown className="w-3 h-3 text-gray-300" />
+                  )}
+                </div>
               </th>
               <th className="px-6 py-3 text-right text-xs font-medium text-gray-500 uppercase tracking-wider">
                 Actions
@@ -375,77 +495,184 @@ interface RouteViewModalProps {
 }
 
 const RouteViewModal: React.FC<RouteViewModalProps> = ({ route, onClose }) => {
+  const linehaulProfileId = route.linehaulProfileId;
+
+  // Fetch okay-to-load terminals
+  const { data: okayToLoadData } = useQuery({
+    queryKey: ['okay-to-load-view', linehaulProfileId],
+    queryFn: () => linehaulProfileService.getOkayToLoadTerminals(linehaulProfileId!),
+    enabled: !!linehaulProfileId
+  });
+
+  // Fetch okay-to-dispatch terminals
+  const { data: okayToDispatchData } = useQuery({
+    queryKey: ['okay-to-dispatch-view', linehaulProfileId],
+    queryFn: () => linehaulProfileService.getOkayToDispatchTerminals(linehaulProfileId!),
+    enabled: !!linehaulProfileId
+  });
+
   return (
     <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50 p-4">
       <div className="bg-white rounded-lg p-6 w-full max-w-4xl max-h-[90vh] overflow-y-auto">
         <div className="flex justify-between items-center mb-6">
-          <h2 className="text-xl font-bold text-gray-900">Linehaul Profile Details #{route.id}</h2>
-          <button 
+          <div>
+            <h2 className="text-xl font-bold text-gray-900">{route.name}</h2>
+            <p className="text-sm text-gray-500">Linehaul Profile #{route.id}</p>
+          </div>
+          <button
             onClick={onClose}
             className="text-gray-400 hover:text-gray-600"
           >
             <X className="w-5 h-5" />
           </button>
         </div>
-        
-        <div className="space-y-4">
-          <RouteDetails 
-            route={route} 
-            showDistance={false} 
-            compact={false} 
-          />
-          
-          <div className="grid grid-cols-3 gap-4">
-            <div>
-              <label className="block text-sm font-medium text-gray-700 mb-1">Distance</label>
-              <p className="text-sm text-gray-900">{route.distance} miles</p>
+
+        <div className="space-y-6">
+          {/* Route Overview */}
+          <div className="bg-gray-50 rounded-lg p-4">
+            <RouteDetails
+              route={route}
+              showDistance={false}
+              compact={false}
+            />
+          </div>
+
+          {/* Key Metrics */}
+          <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
+            <div className="bg-white border rounded-lg p-3">
+              <label className="block text-xs font-medium text-gray-500 uppercase">Distance</label>
+              <p className="text-lg font-semibold text-gray-900">{route.distance} mi</p>
             </div>
-            {route.runTime && (
-              <div>
-                <label className="block text-sm font-medium text-gray-700 mb-1">Run Time</label>
-                <p className="text-sm text-gray-900">{formatRunTime(route.runTime)}</p>
-              </div>
-            )}
-            <div>
-              <label className="block text-sm font-medium text-gray-700 mb-1">Status</label>
+            <div className="bg-white border rounded-lg p-3">
+              <label className="block text-xs font-medium text-gray-500 uppercase">Run Time</label>
+              <p className="text-lg font-semibold text-gray-900">
+                {route.runTime ? formatRunTime(route.runTime) : '-'}
+              </p>
+            </div>
+            <div className="bg-white border rounded-lg p-3">
+              <label className="block text-xs font-medium text-gray-500 uppercase">Status</label>
               <span className={`inline-flex px-2 py-1 rounded-full text-xs font-medium ${
-                route.active 
-                  ? 'bg-green-100 text-green-800' 
+                route.active
+                  ? 'bg-green-100 text-green-800'
                   : 'bg-red-100 text-red-800'
               }`}>
                 {route.active ? 'Active' : 'Inactive'}
               </span>
             </div>
+            <div className="bg-white border rounded-lg p-3">
+              <label className="block text-xs font-medium text-gray-500 uppercase">Standard Rate</label>
+              <p className="text-lg font-semibold text-gray-900">
+                {route.standardRate ? `$${route.standardRate}` : '-'}
+              </p>
+            </div>
           </div>
 
-          {route.standardRate && (
-            <div>
-              <label className="block text-sm font-medium text-gray-700 mb-1">Standard Rate</label>
-              <p className="text-sm text-gray-900 font-medium">${route.standardRate}</p>
-            </div>
-          )}
-
-          {route.frequency && (
-            <div>
-              <label className="block text-sm font-medium text-gray-700 mb-1">Frequency</label>
-              <p className="text-sm text-gray-900">{route.frequency}</p>
-            </div>
-          )}
-          
-          {(route.departureTime || route.arrivalTime) && (
-            <div>
-              <label className="block text-sm font-medium text-gray-700 mb-1">Schedule</label>
-              <div className="text-sm text-gray-900">
+          {/* Schedule & Frequency */}
+          {(route.departureTime || route.arrivalTime || route.frequency) && (
+            <div className="border rounded-lg p-4">
+              <h3 className="text-sm font-semibold text-gray-900 mb-3">Schedule</h3>
+              <div className="grid grid-cols-3 gap-4">
                 {route.departureTime && (
-                  <p><strong>Departure:</strong> {route.departureTime}</p>
+                  <div>
+                    <label className="block text-xs text-gray-500">Departure</label>
+                    <p className="text-sm font-medium text-gray-900">{route.departureTime}</p>
+                  </div>
                 )}
                 {route.arrivalTime && (
-                  <p><strong>Arrival:</strong> {route.arrivalTime}</p>
+                  <div>
+                    <label className="block text-xs text-gray-500">Arrival</label>
+                    <p className="text-sm font-medium text-gray-900">{route.arrivalTime}</p>
+                  </div>
+                )}
+                {route.frequency && (
+                  <div>
+                    <label className="block text-xs text-gray-500">Frequency</label>
+                    <p className="text-sm font-medium text-gray-900">{route.frequency}</p>
+                  </div>
                 )}
               </div>
             </div>
           )}
-          
+
+          {/* Flags Section */}
+          <div className="border rounded-lg p-4">
+            <h3 className="text-sm font-semibold text-gray-900 mb-3">Profile Flags</h3>
+            <div className="flex flex-wrap gap-2">
+              {route.headhaul && (
+                <span className="inline-flex items-center px-3 py-1 rounded-full text-xs font-medium bg-blue-100 text-blue-800">
+                  <Truck className="w-3 h-3 mr-1" />
+                  Headhaul
+                </span>
+              )}
+              {route.trailerLoad && (
+                <span className="inline-flex items-center px-3 py-1 rounded-full text-xs font-medium bg-purple-100 text-purple-800">
+                  Trailer Load
+                </span>
+              )}
+              {route.interlineTrailer && (
+                <span className="inline-flex items-center px-3 py-1 rounded-full text-xs font-medium bg-orange-100 text-orange-800">
+                  Interline Trailer
+                </span>
+              )}
+              {!route.headhaul && !route.trailerLoad && !route.interlineTrailer && (
+                <span className="text-sm text-gray-400">No special flags</span>
+              )}
+            </div>
+            {route.interlineTrailer && route.interlineCarrier && (
+              <div className="mt-3 pt-3 border-t">
+                <label className="block text-xs text-gray-500">Interline Carrier</label>
+                <p className="text-sm font-medium text-gray-900">
+                  {route.interlineCarrier.code} - {route.interlineCarrier.name}
+                </p>
+              </div>
+            )}
+          </div>
+
+          {/* Okay to Load */}
+          <div className="border rounded-lg p-4">
+            <h3 className="text-sm font-semibold text-gray-900 mb-3">
+              Okay to Load Terminals
+              <span className="ml-2 text-xs font-normal text-gray-500">
+                ({okayToLoadData?.okayToLoadTerminals?.length || 0} terminals)
+              </span>
+            </h3>
+            {okayToLoadData?.okayToLoadTerminals && okayToLoadData.okayToLoadTerminals.length > 0 ? (
+              <div className="flex flex-wrap gap-2">
+                {okayToLoadData.okayToLoadTerminals.map((terminal: Terminal) => (
+                  <span key={terminal.id} className="inline-flex items-center px-2 py-1 rounded text-xs bg-green-50 text-green-700 border border-green-200">
+                    {terminal.code}
+                    {terminal.name && <span className="ml-1 text-green-500">({terminal.name})</span>}
+                  </span>
+                ))}
+              </div>
+            ) : (
+              <p className="text-sm text-gray-400">No okay-to-load terminals configured</p>
+            )}
+          </div>
+
+          {/* Okay to Dispatch */}
+          <div className="border rounded-lg p-4">
+            <h3 className="text-sm font-semibold text-gray-900 mb-3">
+              Okay to Dispatch Terminals
+              <span className="ml-2 text-xs font-normal text-gray-500">
+                ({okayToDispatchData?.okayToDispatchTerminals?.length || 0} terminals)
+              </span>
+            </h3>
+            {okayToDispatchData?.okayToDispatchTerminals && okayToDispatchData.okayToDispatchTerminals.length > 0 ? (
+              <div className="flex flex-wrap gap-2">
+                {okayToDispatchData.okayToDispatchTerminals.map((terminal: Terminal) => (
+                  <span key={terminal.id} className="inline-flex items-center px-2 py-1 rounded text-xs bg-blue-50 text-blue-700 border border-blue-200">
+                    {terminal.code}
+                    {terminal.name && <span className="ml-1 text-blue-500">({terminal.name})</span>}
+                  </span>
+                ))}
+              </div>
+            ) : (
+              <p className="text-sm text-gray-400">No okay-to-dispatch terminals configured</p>
+            )}
+          </div>
+
+          {/* Timestamps */}
           <div className="grid grid-cols-2 gap-4 text-xs text-gray-500 pt-4 border-t">
             <div>
               <label className="block font-medium mb-1">Created</label>
@@ -457,9 +684,9 @@ const RouteViewModal: React.FC<RouteViewModalProps> = ({ route, onClose }) => {
             </div>
           </div>
         </div>
-        
+
         <div className="flex justify-end mt-6 pt-4 border-t">
-          <button 
+          <button
             onClick={onClose}
             className="px-4 py-2 bg-gray-500 text-white rounded hover:bg-gray-600"
           >
