@@ -216,14 +216,15 @@ export const DispatchTripModal: React.FC<DispatchTripModalProps> = ({
     if (profile) return profile;
 
     // Final fallback: look up the route by name to get actual origin/destination
+    const upperLinehaulName = linehaulName.toUpperCase();
     let route = routes.find(r =>
-      r.name === linehaulName &&
+      r.name?.toUpperCase() === upperLinehaulName &&
       originTerminalCode &&
       r.origin?.toUpperCase() === originTerminalCode.toUpperCase()
     );
 
     if (!route) {
-      route = routes.find(r => r.name === linehaulName);
+      route = routes.find(r => r.name?.toUpperCase() === upperLinehaulName);
     }
 
     if (route && route.origin && route.destination) {
@@ -251,20 +252,30 @@ export const DispatchTripModal: React.FC<DispatchTripModalProps> = ({
     // FIRST: Check the routes table for exact match with current origin
     // This is most reliable as it directly maps route name + origin to destination
     const routeWithOrigin = routes.find(r =>
-      r.name === linehaulName &&
+      r.name?.toUpperCase() === upperLinehaulName &&
       r.origin?.toUpperCase() === upperOrigin
     );
     if (routeWithOrigin?.destination) {
       return routeWithOrigin.destination;
     }
 
+    // Extract final destination from route name (e.g., FARBISBIL -> BIL)
+    const finalDestFromName = routeBase.length >= 3 ? routeBase.slice(-3) : null;
+
     // SECOND: Try to find a profile from the same route family with matching origin
     // This handles cases like MSPFARBIL2 for loadsheet with MSPFARBIL1 linehaulName
+    // Only use if the destination is in the route name (prevents wrong intermediate stops)
     if (profiles.length > 0) {
       const sameRouteProfile = profiles.find(p => {
         const profileOrigin = p.originTerminal?.code?.toUpperCase();
         const profileName = (p.name || '').toUpperCase().replace(/\d+$/, ''); // Remove trailing number
-        return profileOrigin === upperOrigin && profileName === routeBase;
+        const profileDest = p.destinationTerminal?.code?.toUpperCase();
+        // Must match origin, route family, AND destination must be in route name or be final dest
+        return profileOrigin === upperOrigin &&
+               profileName === routeBase &&
+               profileDest &&
+               profileDest !== upperOrigin && // Don't return same as origin
+               (routeBase.includes(profileDest) || profileDest === finalDestFromName);
       });
 
       if (sameRouteProfile?.destinationTerminal?.code) {
@@ -275,7 +286,13 @@ export const DispatchTripModal: React.FC<DispatchTripModalProps> = ({
       const similarRouteProfile = profiles.find(p => {
         const profileOrigin = p.originTerminal?.code?.toUpperCase();
         const profileName = (p.name || '').toUpperCase();
-        return profileOrigin === upperOrigin && profileName.startsWith(routeBase);
+        const profileDest = p.destinationTerminal?.code?.toUpperCase();
+        // Must match origin, similar route name, AND destination must be in route name or be final dest
+        return profileOrigin === upperOrigin &&
+               profileName.startsWith(routeBase) &&
+               profileDest &&
+               profileDest !== upperOrigin && // Don't return same as origin
+               (routeBase.includes(profileDest) || profileDest === finalDestFromName);
       });
 
       if (similarRouteProfile?.destinationTerminal?.code) {
@@ -290,7 +307,10 @@ export const DispatchTripModal: React.FC<DispatchTripModalProps> = ({
         const profileWithDestInRoute = profiles.find(p => {
           const profileOrigin = p.originTerminal?.code?.toUpperCase();
           const destCode = p.destinationTerminal?.code?.toUpperCase();
-          return profileOrigin === upperOrigin && destCode && afterOrigin.includes(destCode);
+          return profileOrigin === upperOrigin &&
+                 destCode &&
+                 destCode !== upperOrigin && // Don't return same as origin
+                 afterOrigin.includes(destCode);
         });
 
         if (profileWithDestInRoute?.destinationTerminal?.code) {
@@ -300,9 +320,34 @@ export const DispatchTripModal: React.FC<DispatchTripModalProps> = ({
     }
 
     // FIFTH: Fallback - look up any route with this name to find final destination
-    const anyRoute = routes.find(r => r.name === linehaulName);
-    if (anyRoute?.destination) {
-      return anyRoute.destination;
+    // Try to find a route where the destination matches the final terminal in the route name
+    const matchingRoutes = routes.filter(r => r.name?.toUpperCase() === upperLinehaulName);
+    if (matchingRoutes.length > 0) {
+      // Extract the last 3-character terminal code from the route base (e.g., FARBISBIL -> BIL)
+      const finalTerminalFromName = routeBase.slice(-3);
+
+      // First, try to find a route where destination matches the final terminal in the name
+      const routeToFinalDest = matchingRoutes.find(r =>
+        r.destination?.toUpperCase() === finalTerminalFromName
+      );
+      if (routeToFinalDest?.destination) {
+        return routeToFinalDest.destination;
+      }
+
+      // Otherwise, return the first route's destination as last resort
+      if (matchingRoutes[0]?.destination) {
+        return matchingRoutes[0].destination;
+      }
+    }
+
+    // SIXTH: Last resort - extract final destination directly from route name
+    // Route names like FARBISBIL1 have the final destination as the last 3 chars before the number
+    if (routeBase.length >= 3) {
+      const extractedDest = routeBase.slice(-3);
+      // Validate it's not the same as origin (would indicate we're already at final destination)
+      if (extractedDest !== upperOrigin) {
+        return extractedDest;
+      }
     }
 
     return null;

@@ -123,15 +123,16 @@ export const tripDocumentService = {
   },
 
   /**
-   * Generate Linehaul Manifest document
+   * Generate Linehaul Manifest document(s) - one per loadsheet
    */
-  generateManifest: async (tripId: number): Promise<{ id: number; documentNumber: string }> => {
+  generateManifest: async (tripId: number): Promise<{ id: number; documentNumber: string }[]> => {
     // Get trip details
     const trip = await prisma.linehaulTrip.findUnique({
       where: { id: tripId },
       include: {
         driver: true,
         trailer: true,
+        trailer2: true,
         linehaulProfile: {
           include: {
             originTerminal: true,
@@ -145,113 +146,192 @@ export const tripDocumentService = {
       throw new Error(`Trip ${tripId} not found`);
     }
 
-    // Check if document already exists
-    const existing = await prisma.tripDocument.findFirst({
-      where: {
-        tripId,
-        documentType: 'LINEHAUL_MANIFEST',
-      },
-    });
-
-    if (existing) {
-      return { id: existing.id, documentNumber: existing.documentNumber };
-    }
-
-    // Get loadsheets associated with this trip to assign manifest numbers to shipments
+    // Get loadsheets associated with this trip
     const loadsheets = await prisma.loadsheet.findMany({
       where: { linehaulTripId: tripId },
       select: {
+        id: true,
         manifestNumber: true,
+        trailerNumber: true,
+        originTerminalCode: true,
         destinationTerminalCode: true,
+        pieces: true,
+        weight: true,
       },
     });
 
-    // Create a map of destination terminal to manifest number for assignment
-    const destToManifest = new Map<string, string>();
-    loadsheets.forEach(ls => {
-      if (ls.destinationTerminalCode && ls.manifestNumber) {
-        destToManifest.set(ls.destinationTerminalCode, ls.manifestNumber);
+    // If no loadsheets, fall back to single document generation
+    if (loadsheets.length === 0) {
+      // Check if document already exists
+      const existing = await prisma.tripDocument.findFirst({
+        where: {
+          tripId,
+          documentType: 'LINEHAUL_MANIFEST',
+        },
+      });
+
+      if (existing) {
+        return [{ id: existing.id, documentNumber: existing.documentNumber }];
       }
-    });
 
-    // Get shipment data from TMS
-    const tmsData = await tmsMockService.getTripData(tripId, trip.tripNumber);
-    const totals = await tmsMockService.getTripTotals(tmsData.shipments);
+      // Get shipment data from TMS
+      const tmsData = await tmsMockService.getTripData(tripId, trip.tripNumber);
+      const totals = await tmsMockService.getTripTotals(tmsData.shipments);
 
-    // Generate document number
-    const documentNumber = await generateDocumentNumber('LINEHAUL_MANIFEST');
+      // Generate document number
+      const documentNumber = await generateDocumentNumber('LINEHAUL_MANIFEST');
 
-    // Build trip display string
-    const originCode = trip.originTerminalCode || trip.linehaulProfile?.originTerminal?.code || 'DEN';
-    const destCode = trip.destinationTerminalCode || trip.linehaulProfile?.destinationTerminal?.code || 'GJT';
-    const tripDisplay = `${tmsData.manifestNumber} - ${originCode} to ${destCode} - TRIP ${trip.tripNumber}`;
+      // Build trip display string
+      const originCode = trip.originTerminalCode || trip.linehaulProfile?.originTerminal?.code || 'DEN';
+      const destCode = trip.destinationTerminalCode || trip.linehaulProfile?.destinationTerminal?.code || 'GJT';
+      const tripDisplay = `${tmsData.manifestNumber} - ${originCode} to ${destCode} - TRIP ${trip.tripNumber}`;
 
-    // Helper function to assign manifest number to a shipment
-    // In production, this would come from actual scanning data
-    // For mock data, we match by destination terminal or distribute round-robin
-    const getManifestNumberForShipment = (shipment: typeof tmsData.shipments[0], index: number): string | null => {
-      // First try to match by destination terminal
-      if (shipment.destTerminal && destToManifest.has(shipment.destTerminal)) {
-        return destToManifest.get(shipment.destTerminal) || null;
-      }
-      // If no match and we have loadsheets, distribute round-robin
-      if (loadsheets.length > 0) {
-        return loadsheets[index % loadsheets.length].manifestNumber;
-      }
-      return null;
-    };
-
-    // Create document in database
-    const tripDocument = await prisma.tripDocument.create({
-      data: {
-        tripId,
-        documentType: 'LINEHAUL_MANIFEST',
-        documentNumber,
-        status: 'GENERATED',
-        generatedAt: new Date(),
-        manifestData: {
-          create: {
-            tripDisplay,
-            manifestNumber: tmsData.manifestNumber,
-            driverName: tmsData.driverName || trip.driver?.name,
-            trailerNumber: tmsData.trailerNumber || trip.trailer?.unitNumber,
-            originCode,
-            destCode,
-            effort: tmsData.effort,
-            timeDue: tmsData.timeDue,
-            lastLoad: tmsData.lastLoad,
-            totalScans: totals.totalScans,
-            totalPieces: totals.totalPieces,
-            totalWeight: totals.totalWeight,
-            dispatchedAt: trip.dispatchedAt || trip.actualDeparture,
-            arrivedAt: trip.actualArrival,
-            freightItems: {
-              create: tmsData.shipments.map((shipment, index) => ({
-                proNumber: shipment.proNumber,
-                manifestNumber: getManifestNumberForShipment(shipment, index),
-                destTerminal: shipment.destTerminal,
-                destTerminalSub: shipment.destTerminalSub,
-                scans: shipment.scans,
-                pieces: shipment.pieces,
-                weight: shipment.weight,
-                consigneeName: shipment.consignee.name,
-                consigneeCity: `${shipment.consignee.city} ${shipment.consignee.state}`,
-                shipperName: shipment.shipper.name,
-                shipperCity: `${shipment.shipper.city} ${shipment.shipper.state}`,
-                expDeliveryDate: shipment.expDeliveryDate ? new Date() : null,
-                loadedTerminal: shipment.loadedTerminal,
-                unloadedTerminal: shipment.unloadedTerminal,
-                isHazmat: shipment.hazmat !== undefined,
-                hazmatClass: shipment.hazmat?.hazardClass,
-                sortOrder: index,
-              })),
+      // Create document in database
+      const tripDocument = await prisma.tripDocument.create({
+        data: {
+          tripId,
+          documentType: 'LINEHAUL_MANIFEST',
+          documentNumber,
+          status: 'GENERATED',
+          generatedAt: new Date(),
+          manifestData: {
+            create: {
+              tripDisplay,
+              manifestNumber: tmsData.manifestNumber,
+              driverName: tmsData.driverName || trip.driver?.name,
+              trailerNumber: tmsData.trailerNumber || trip.trailer?.unitNumber,
+              originCode,
+              destCode,
+              effort: tmsData.effort,
+              timeDue: tmsData.timeDue,
+              lastLoad: tmsData.lastLoad,
+              totalScans: totals.totalScans,
+              totalPieces: totals.totalPieces,
+              totalWeight: totals.totalWeight,
+              dispatchedAt: trip.dispatchedAt || trip.actualDeparture,
+              arrivedAt: trip.actualArrival,
+              freightItems: {
+                create: tmsData.shipments.map((shipment, index) => ({
+                  proNumber: shipment.proNumber,
+                  manifestNumber: null,
+                  destTerminal: shipment.destTerminal,
+                  destTerminalSub: shipment.destTerminalSub,
+                  scans: shipment.scans,
+                  pieces: shipment.pieces,
+                  weight: shipment.weight,
+                  consigneeName: shipment.consignee.name,
+                  consigneeCity: `${shipment.consignee.city} ${shipment.consignee.state}`,
+                  shipperName: shipment.shipper.name,
+                  shipperCity: `${shipment.shipper.city} ${shipment.shipper.state}`,
+                  expDeliveryDate: shipment.expDeliveryDate ? new Date() : null,
+                  loadedTerminal: shipment.loadedTerminal,
+                  unloadedTerminal: shipment.unloadedTerminal,
+                  isHazmat: shipment.hazmat !== undefined,
+                  hazmatClass: shipment.hazmat?.hazardClass,
+                  sortOrder: index,
+                })),
+              },
             },
           },
         },
-      },
-    });
+      });
 
-    return { id: tripDocument.id, documentNumber };
+      return [{ id: tripDocument.id, documentNumber }];
+    }
+
+    // Generate a separate document for each loadsheet
+    const results: { id: number; documentNumber: string }[] = [];
+
+    for (const loadsheet of loadsheets) {
+      // Check if document already exists for this manifest
+      const existing = await prisma.tripDocument.findFirst({
+        where: {
+          tripId,
+          documentType: 'LINEHAUL_MANIFEST',
+          manifestData: {
+            manifestNumber: loadsheet.manifestNumber,
+          },
+        },
+      });
+
+      if (existing) {
+        results.push({ id: existing.id, documentNumber: existing.documentNumber });
+        continue;
+      }
+
+      // Get shipment data from TMS for this specific manifest
+      const tmsData = await tmsMockService.getTripData(tripId, trip.tripNumber);
+
+      // Filter or generate shipments for this specific loadsheet
+      // In production, we'd filter actual shipments by manifest number
+      // For mock data, we generate shipments specific to this loadsheet
+      const shipmentCount = Math.floor(Math.random() * 15) + 8; // 8-23 shipments per manifest
+      const manifestShipments = tmsData.shipments.slice(0, shipmentCount);
+
+      const totals = await tmsMockService.getTripTotals(manifestShipments);
+
+      // Generate document number
+      const documentNumber = await generateDocumentNumber('LINEHAUL_MANIFEST');
+
+      // Build trip display string for this manifest
+      const originCode = loadsheet.originTerminalCode || trip.originTerminalCode || trip.linehaulProfile?.originTerminal?.code || 'DEN';
+      const destCode = loadsheet.destinationTerminalCode || trip.destinationTerminalCode || trip.linehaulProfile?.destinationTerminal?.code || 'GJT';
+      const tripDisplay = `${loadsheet.manifestNumber} - ${originCode} to ${destCode} - TRIP ${trip.tripNumber}`;
+
+      // Create document in database for this manifest
+      const tripDocument = await prisma.tripDocument.create({
+        data: {
+          tripId,
+          documentType: 'LINEHAUL_MANIFEST',
+          documentNumber,
+          status: 'GENERATED',
+          generatedAt: new Date(),
+          manifestData: {
+            create: {
+              tripDisplay,
+              manifestNumber: loadsheet.manifestNumber,
+              driverName: trip.driver?.name,
+              trailerNumber: loadsheet.trailerNumber || trip.trailer?.unitNumber,
+              originCode,
+              destCode,
+              effort: tmsData.effort,
+              timeDue: tmsData.timeDue,
+              lastLoad: tmsData.lastLoad,
+              totalScans: totals.totalScans,
+              totalPieces: loadsheet.pieces || totals.totalPieces,
+              totalWeight: loadsheet.weight || totals.totalWeight,
+              dispatchedAt: trip.dispatchedAt || trip.actualDeparture,
+              arrivedAt: trip.actualArrival,
+              freightItems: {
+                create: manifestShipments.map((shipment, index) => ({
+                  proNumber: shipment.proNumber,
+                  manifestNumber: loadsheet.manifestNumber,
+                  destTerminal: shipment.destTerminal,
+                  destTerminalSub: shipment.destTerminalSub,
+                  scans: shipment.scans,
+                  pieces: shipment.pieces,
+                  weight: shipment.weight,
+                  consigneeName: shipment.consignee.name,
+                  consigneeCity: `${shipment.consignee.city} ${shipment.consignee.state}`,
+                  shipperName: shipment.shipper.name,
+                  shipperCity: `${shipment.shipper.city} ${shipment.shipper.state}`,
+                  expDeliveryDate: shipment.expDeliveryDate ? new Date() : null,
+                  loadedTerminal: shipment.loadedTerminal,
+                  unloadedTerminal: shipment.unloadedTerminal,
+                  isHazmat: shipment.hazmat !== undefined,
+                  hazmatClass: shipment.hazmat?.hazardClass,
+                  sortOrder: index,
+                })),
+              },
+            },
+          },
+        },
+      });
+
+      results.push({ id: tripDocument.id, documentNumber });
+    }
+
+    return results;
   },
 
   /**
