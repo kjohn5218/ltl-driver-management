@@ -74,6 +74,10 @@ export const Locations: React.FC = () => {
         aValue = a.isPhysicalTerminal;
         bValue = b.isPhysicalTerminal;
         break;
+      case 'isVirtualTerminal':
+        aValue = a.isVirtualTerminal;
+        bValue = b.isVirtualTerminal;
+        break;
       case 'cityState':
         aValue = `${a.city || ''}, ${a.state || ''}`;
         bValue = `${b.city || ''}, ${b.state || ''}`;
@@ -286,6 +290,16 @@ export const Locations: React.FC = () => {
                 <th
                   scope="col"
                   className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider cursor-pointer hover:bg-gray-100"
+                  onClick={() => handleSort('isVirtualTerminal')}
+                >
+                  <div className="flex items-center space-x-1">
+                    <span>Virtual Terminal</span>
+                    <SortIcon column="isVirtualTerminal" />
+                  </div>
+                </th>
+                <th
+                  scope="col"
+                  className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider cursor-pointer hover:bg-gray-100"
                   onClick={() => handleSort('cityState')}
                 >
                   <div className="flex items-center space-x-1">
@@ -329,6 +343,15 @@ export const Locations: React.FC = () => {
                   <td className="px-6 py-4 whitespace-nowrap">
                     {location.isPhysicalTerminal ? (
                       <span className="inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium bg-blue-100 text-blue-800">
+                        Yes
+                      </span>
+                    ) : (
+                      <span className="text-sm text-gray-400">No</span>
+                    )}
+                  </td>
+                  <td className="px-6 py-4 whitespace-nowrap">
+                    {location.isVirtualTerminal ? (
+                      <span className="inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium bg-purple-100 text-purple-800">
                         Yes
                       </span>
                     ) : (

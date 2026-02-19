@@ -3,8 +3,7 @@ import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { Plus, Trash2, Edit, Eye, EyeOff, Printer, X, Save } from 'lucide-react';
 import toast from 'react-hot-toast';
 import { linehaulLaneService, LinehaulLane, LinehaulLaneLocation, LinehaulLaneStep } from '../services/linehaulLaneService';
-import { locationService } from '../services/locationService';
-import { Location } from '../types';
+import { locationService, TerminalLocation } from '../services/locationService';
 
 interface RoutingStepFormData {
   sequence: number;
@@ -51,10 +50,10 @@ export const LinehaulLanes: React.FC = () => {
     queryFn: () => linehaulLaneService.getOriginLocations()
   });
 
-  // Fetch all locations for dropdowns
-  const { data: allLocations } = useQuery({
-    queryKey: ['locations-list'],
-    queryFn: () => locationService.getLocationsList()
+  // Fetch terminal locations (physical and virtual) for dropdowns
+  const { data: terminalLocations } = useQuery({
+    queryKey: ['terminal-locations'],
+    queryFn: () => locationService.getTerminalLocations()
   });
 
   const lanes = lanesData?.lanes || [];
@@ -287,7 +286,7 @@ export const LinehaulLanes: React.FC = () => {
       {(showAddModal || editingLane) && (
         <LaneModal
           lane={editingLane}
-          locations={allLocations || []}
+          locations={terminalLocations || []}
           onSave={(data) => {
             if (editingLane) {
               updateMutation.mutate({ id: editingLane.id, data });
@@ -341,7 +340,7 @@ export const LinehaulLanes: React.FC = () => {
 // Lane Modal Component
 interface LaneModalProps {
   lane: LinehaulLane | null;
-  locations: Location[];
+  locations: TerminalLocation[];
   onSave: (data: any) => void;
   onClose: () => void;
   isLoading: boolean;
