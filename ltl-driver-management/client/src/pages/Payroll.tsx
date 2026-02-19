@@ -252,6 +252,10 @@ export const Payroll: React.FC = () => {
         return `${item.origin || ''}-${item.destination || ''}`.toLowerCase();
       case 'miles':
         return item.totalMiles || item.cutPayMiles || 0;
+      case 'workHours':
+        return item.workHours || 0;
+      case 'stopHours':
+        return item.stopHours || 0;
       case 'equipment':
         return item.trailerConfig || '';
       case 'basePay':
@@ -381,6 +385,24 @@ export const Payroll: React.FC = () => {
       )
     },
     {
+      header: 'Terminal',
+      accessor: 'terminalCode' as keyof PayrollLineItem,
+      cell: (item: PayrollLineItem) => (
+        <span className="text-sm text-gray-600 dark:text-gray-400">
+          {item.terminalCode || '-'}
+        </span>
+      )
+    },
+    {
+      header: 'Employer',
+      accessor: 'employer' as keyof PayrollLineItem,
+      cell: (item: PayrollLineItem) => (
+        <span className="text-sm text-gray-600 dark:text-gray-400">
+          {item.employer || '-'}
+        </span>
+      )
+    },
+    {
       header: <SortableHeader label="Date" sortKey="date" />,
       accessor: 'date' as keyof PayrollLineItem,
       cell: (item: PayrollLineItem) => (
@@ -388,6 +410,20 @@ export const Payroll: React.FC = () => {
           {new Date(item.date).toLocaleDateString()}
         </span>
       )
+    },
+    {
+      header: 'Linehaul',
+      accessor: 'linehaulCode1' as keyof PayrollLineItem,
+      cell: (item: PayrollLineItem) => {
+        if (item.source !== 'TRIP_PAY') return <span className="text-gray-400">-</span>;
+        const codes = [item.linehaulCode1, item.linehaulCode2, item.linehaulCode3].filter(Boolean);
+        if (codes.length === 0) return <span className="text-gray-400">-</span>;
+        return (
+          <div className="text-sm text-gray-900 dark:text-gray-100">
+            {codes.join(' / ')}
+          </div>
+        );
+      }
     },
     {
       header: <SortableHeader label="Route" sortKey="route" />,
@@ -430,6 +466,36 @@ export const Payroll: React.FC = () => {
                 : '-'
               }
             </span>
+          )}
+        </div>
+      )
+    },
+    {
+      header: <SortableHeader label="Work Hrs" sortKey="workHours" />,
+      accessor: 'workHours' as keyof PayrollLineItem,
+      cell: (item: PayrollLineItem) => (
+        <div className="text-sm text-right">
+          {item.workHours ? (
+            <span className="text-gray-900 dark:text-gray-100">
+              {item.workHours.toFixed(1)}h
+            </span>
+          ) : (
+            <span className="text-gray-400">-</span>
+          )}
+        </div>
+      )
+    },
+    {
+      header: <SortableHeader label="Stop Hrs" sortKey="stopHours" />,
+      accessor: 'stopHours' as keyof PayrollLineItem,
+      cell: (item: PayrollLineItem) => (
+        <div className="text-sm text-right">
+          {item.stopHours ? (
+            <span className="text-gray-900 dark:text-gray-100">
+              {item.stopHours.toFixed(1)}h
+            </span>
+          ) : (
+            <span className="text-gray-400">-</span>
           )}
         </div>
       )
@@ -560,12 +626,72 @@ export const Payroll: React.FC = () => {
       }
     },
     {
-      header: <SortableHeader label="Total" sortKey="totalGrossPay" />,
+      header: 'Equip Cost',
+      accessor: 'equipmentCost' as keyof PayrollLineItem,
+      cell: (item: PayrollLineItem) => (
+        <div className="text-sm text-right">
+          {item.equipmentCost ? (
+            <span className="text-gray-600 dark:text-gray-400">
+              {formatCurrency(item.equipmentCost)}
+            </span>
+          ) : (
+            <span className="text-gray-400">-</span>
+          )}
+        </div>
+      )
+    },
+    {
+      header: 'Fuel Cost',
+      accessor: 'fuelCost' as keyof PayrollLineItem,
+      cell: (item: PayrollLineItem) => (
+        <div className="text-sm text-right">
+          {item.fuelCost ? (
+            <span className="text-gray-600 dark:text-gray-400">
+              {formatCurrency(item.fuelCost)}
+            </span>
+          ) : (
+            <span className="text-gray-400">-</span>
+          )}
+        </div>
+      )
+    },
+    {
+      header: <SortableHeader label="Labor" sortKey="totalGrossPay" />,
       accessor: 'totalGrossPay' as keyof PayrollLineItem,
       cell: (item: PayrollLineItem) => (
         <span className="font-medium text-green-600 dark:text-green-400">
           {formatCurrency(item.totalGrossPay)}
         </span>
+      )
+    },
+    {
+      header: 'Total Cost',
+      accessor: 'totalCost' as keyof PayrollLineItem,
+      cell: (item: PayrollLineItem) => (
+        <div className="text-sm text-right">
+          {item.totalCost ? (
+            <span className="font-medium text-gray-900 dark:text-gray-100">
+              {formatCurrency(item.totalCost)}
+            </span>
+          ) : (
+            <span className="text-gray-400">-</span>
+          )}
+        </div>
+      )
+    },
+    {
+      header: 'Sleeper',
+      accessor: 'isSleeper' as keyof PayrollLineItem,
+      cell: (item: PayrollLineItem) => (
+        <div className="text-center">
+          {item.isSleeper ? (
+            <span className="inline-flex items-center px-2 py-0.5 rounded text-xs font-medium bg-indigo-100 text-indigo-800 dark:bg-indigo-900/50 dark:text-indigo-300">
+              Yes
+            </span>
+          ) : (
+            <span className="text-gray-400">-</span>
+          )}
+        </div>
       )
     },
     {
@@ -580,6 +706,50 @@ export const Payroll: React.FC = () => {
           />
         );
       }
+    },
+    {
+      header: 'Approved',
+      accessor: 'approvedAt' as keyof PayrollLineItem,
+      cell: (item: PayrollLineItem) => (
+        <div className="text-xs">
+          {item.approvedAt ? (
+            <>
+              <div className="text-gray-900 dark:text-gray-100">
+                {new Date(item.approvedAt).toLocaleDateString()}
+              </div>
+              {item.approvedBy && (
+                <div className="text-gray-500 dark:text-gray-400">
+                  {item.approvedBy}
+                </div>
+              )}
+            </>
+          ) : (
+            <span className="text-gray-400">-</span>
+          )}
+        </div>
+      )
+    },
+    {
+      header: 'Exported',
+      accessor: 'exportedAt' as keyof PayrollLineItem,
+      cell: (item: PayrollLineItem) => (
+        <div className="text-xs">
+          {item.exportedAt ? (
+            <>
+              <div className="text-gray-900 dark:text-gray-100">
+                {new Date(item.exportedAt).toLocaleDateString()}
+              </div>
+              {item.exportedBy && (
+                <div className="text-gray-500 dark:text-gray-400">
+                  {item.exportedBy}
+                </div>
+              )}
+            </>
+          ) : (
+            <span className="text-gray-400">-</span>
+          )}
+        </div>
+      )
     },
     ...(canManagePayroll
       ? [

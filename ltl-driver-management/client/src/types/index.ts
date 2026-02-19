@@ -1343,25 +1343,42 @@ export interface PayrollLineItem {
   driverName: string;
   driverNumber?: string;
   workdayEmployeeId?: string;
+  terminalCode?: string;
   date: string;
+  dispatchTime?: string;
+  arrivalTime?: string;
   origin?: string;
   destination?: string;
   tripNumber?: string;
+  linehaulCode1?: string;
+  linehaulCode2?: string;
+  linehaulCode3?: string;
   totalMiles?: number;
+  workHours?: number;
+  stopHours?: number;
   basePay: number;
   mileagePay: number;
   dropAndHookPay: number;
   chainUpPay: number;
   waitTimePay: number;
   otherAccessorialPay: number;
-  // Accessorial counts from driver trip report (for auditing)
+  // Accessorial counts
   dropAndHookCount?: number;
   chainUpCount?: number;
   waitTimeMinutes?: number;
   waitTimeReason?: string;
+  // Cost breakdown
+  equipmentCost?: number;
+  fuelCost?: number;
+  laborCost?: number;
+  totalCost?: number;
   bonusPay: number;
   deductions: number;
   totalGrossPay: number;
+  // Additional fields
+  isSleeper?: boolean;
+  employer?: string;
+  isCutPay?: boolean;
   cutPayType?: string;
   cutPayHours?: number;
   cutPayMiles?: number;
@@ -1369,6 +1386,13 @@ export interface PayrollLineItem {
   rateApplied?: number;
   reason?: string;
   status: string;
+  // Approval tracking
+  approvedAt?: string;
+  approvedBy?: string;
+  // Export tracking
+  exportedAt?: string;
+  exportedBy?: string;
+  isExported?: boolean;
   notes?: string;
 }
 
@@ -1415,6 +1439,7 @@ export interface PayrollExportOptions {
   startDate?: string;
   endDate?: string;
   onlyApproved?: boolean;
+  markAsExported?: boolean;  // Mark items as exported after download
 }
 
 // ==================== EXPECTED SHIPMENTS MODULE ====================

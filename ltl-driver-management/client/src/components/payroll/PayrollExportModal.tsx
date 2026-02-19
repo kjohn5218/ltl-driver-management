@@ -19,6 +19,7 @@ export const PayrollExportModal: React.FC<PayrollExportModalProps> = ({
   const [startDate, setStartDate] = useState('');
   const [endDate, setEndDate] = useState('');
   const [onlyApproved, setOnlyApproved] = useState(true);
+  const [markAsExported, setMarkAsExported] = useState(true);
   const [exporting, setExporting] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
@@ -29,7 +30,8 @@ export const PayrollExportModal: React.FC<PayrollExportModalProps> = ({
       await onExport({
         startDate: startDate || undefined,
         endDate: endDate || undefined,
-        onlyApproved
+        onlyApproved,
+        markAsExported
       });
       onClose();
     } catch (err: any) {
@@ -107,21 +109,39 @@ export const PayrollExportModal: React.FC<PayrollExportModalProps> = ({
         </div>
 
         {/* Export Options */}
-        <div>
-          <label className="flex items-center">
-            <input
-              type="checkbox"
-              checked={onlyApproved}
-              onChange={(e) => setOnlyApproved(e.target.checked)}
-              className="h-4 w-4 rounded border-gray-300 text-indigo-600 focus:ring-indigo-500"
-            />
-            <span className="ml-2 text-sm text-gray-700 dark:text-gray-300">
-              Only export approved items
-            </span>
-          </label>
-          <p className="mt-1 text-xs text-gray-500 dark:text-gray-400 ml-6">
-            Recommended to avoid exporting unreviewed pay items
-          </p>
+        <div className="space-y-3">
+          <div>
+            <label className="flex items-center">
+              <input
+                type="checkbox"
+                checked={onlyApproved}
+                onChange={(e) => setOnlyApproved(e.target.checked)}
+                className="h-4 w-4 rounded border-gray-300 text-indigo-600 focus:ring-indigo-500"
+              />
+              <span className="ml-2 text-sm text-gray-700 dark:text-gray-300">
+                Only export approved items
+              </span>
+            </label>
+            <p className="mt-1 text-xs text-gray-500 dark:text-gray-400 ml-6">
+              Recommended to avoid exporting unreviewed pay items
+            </p>
+          </div>
+          <div>
+            <label className="flex items-center">
+              <input
+                type="checkbox"
+                checked={markAsExported}
+                onChange={(e) => setMarkAsExported(e.target.checked)}
+                className="h-4 w-4 rounded border-gray-300 text-indigo-600 focus:ring-indigo-500"
+              />
+              <span className="ml-2 text-sm text-gray-700 dark:text-gray-300">
+                Mark items as exported
+              </span>
+            </label>
+            <p className="mt-1 text-xs text-gray-500 dark:text-gray-400 ml-6">
+              Records exported date/time for tracking in the Payroll table
+            </p>
+          </div>
         </div>
 
         {/* Summary Preview */}

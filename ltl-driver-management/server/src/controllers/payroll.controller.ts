@@ -940,10 +940,24 @@ export const getUnifiedPayrollItems = async (req: Request, res: Response): Promi
         orderBy: { date: 'desc' },
         include: {
           driver: {
-            select: { id: true, name: true, number: true, workdayEmployeeId: true, locationId: true }
+            select: {
+              id: true,
+              name: true,
+              number: true,
+              workdayEmployeeId: true,
+              locationId: true,
+              location: {
+                select: { code: true }
+              }
+            }
           },
           trip: {
             select: {
+              dispatchDate: true,
+              actualArrival: true,
+              linehaulProfile: {
+                select: { profileCode: true }
+              },
               driverTripReport: {
                 select: {
                   dropAndHook: true,
@@ -953,6 +967,12 @@ export const getUnifiedPayrollItems = async (req: Request, res: Response): Promi
                 }
               }
             }
+          },
+          approver: {
+            select: { id: true, name: true }
+          },
+          exporter: {
+            select: { id: true, name: true }
           }
         }
       }),
@@ -978,31 +998,55 @@ export const getUnifiedPayrollItems = async (req: Request, res: Response): Promi
         driverName: item.driverName || item.driver?.name || 'Unknown',
         driverNumber: item.driverNumber || item.driver?.number,
         workdayEmployeeId: item.workdayEmployeeId || item.driver?.workdayEmployeeId,
+        terminalCode: item.terminalCode || item.driver?.location?.code,
         date: item.date.toISOString().split('T')[0],
+        dispatchTime: item.dispatchTime?.toISOString() || item.trip?.dispatchDate?.toISOString(),
+        arrivalTime: item.arrivalTime?.toISOString() || item.trip?.actualArrival?.toISOString(),
         origin: item.origin,
         destination: item.destination,
         tripNumber: item.tripNumber,
+        linehaulCode1: item.linehaulCode1 || item.trip?.linehaulProfile?.profileCode,
+        linehaulCode2: item.linehaulCode2,
+        linehaulCode3: item.linehaulCode3,
         totalMiles: item.totalMiles ? Number(item.totalMiles) : undefined,
+        workHours: item.workHours ? Number(item.workHours) : undefined,
+        stopHours: item.stopHours ? Number(item.stopHours) : undefined,
         basePay: Number(item.basePay),
         mileagePay: Number(item.mileagePay),
         dropAndHookPay: Number(item.dropAndHookPay),
         chainUpPay: Number(item.chainUpPay),
         waitTimePay: Number(item.waitTimePay),
         otherAccessorialPay: Number(item.otherAccessorialPay),
-        // Accessorial counts from driver trip report
-        dropAndHookCount: tripReport?.dropAndHook ?? undefined,
-        chainUpCount: tripReport?.chainUpCycles ?? undefined,
+        // Accessorial counts
+        dropAndHookCount: item.dropHookCount ?? tripReport?.dropAndHook ?? undefined,
+        chainUpCount: item.chainUpCount ?? tripReport?.chainUpCycles ?? undefined,
         waitTimeMinutes: tripReport?.waitTimeMinutes ?? undefined,
         waitTimeReason: tripReport?.waitTimeReason ?? undefined,
+        // Cost fields
+        equipmentCost: item.equipmentCost ? Number(item.equipmentCost) : undefined,
+        fuelCost: item.fuelCost ? Number(item.fuelCost) : undefined,
+        laborCost: Number(item.totalGrossPay),
+        totalCost: item.totalCost ? Number(item.totalCost) : Number(item.totalGrossPay),
         bonusPay: Number(item.bonusPay),
         deductions: Number(item.deductions),
         totalGrossPay: Number(item.totalGrossPay),
+        // Additional fields
+        isSleeper: item.isSleeper,
+        employer: item.employer,
+        isCutPay: item.isCutPay || item.sourceType === 'CUT_PAY',
         cutPayType: item.cutPayType,
         cutPayHours: item.cutPayHours ? Number(item.cutPayHours) : undefined,
         cutPayMiles: item.cutPayMiles ? Number(item.cutPayMiles) : undefined,
         trailerConfig: item.trailerConfig,
         rateApplied: item.rateApplied ? Number(item.rateApplied) : undefined,
         status: item.status,
+        // Approval tracking
+        approvedAt: item.approvedAt?.toISOString(),
+        approvedBy: item.approver?.name,
+        // Export tracking
+        exportedAt: item.exportedAt?.toISOString(),
+        exportedBy: item.exporter?.name,
+        isExported: !!item.exportedAt,
         notes: item.notes
       };
     });
@@ -1209,7 +1253,8 @@ export const bulkApprovePayrollItems = async (req: Request, res: Response): Prom
 // Export payroll to XLS format for Workday
 export const exportPayrollToXls = async (req: Request, res: Response): Promise<void> => {
   try {
-    const { startDate, endDate, onlyApproved = true } = req.body;
+    const { startDate, endDate, onlyApproved = true, markAsExported = false } = req.body;
+    const userId = (req as any).user?.id;
 
     // Build where clause for PayrollLineItem
     const where: Prisma.PayrollLineItemWhereInput = {};
@@ -1228,6 +1273,20 @@ export const exportPayrollToXls = async (req: Request, res: Response): Promise<v
       where,
       orderBy: { date: 'asc' }
     });
+
+    // If marking as exported, update the records
+    if (markAsExported && payrollItems.length > 0 && userId) {
+      const exportTime = new Date();
+      await prisma.payrollLineItem.updateMany({
+        where: {
+          id: { in: payrollItems.map(item => item.id) }
+        },
+        data: {
+          exportedAt: exportTime,
+          exportedBy: userId
+        }
+      });
+    }
 
     // Fetch Workday paycodes
     const paycodes = await prisma.workdayPaycode.findMany({
