@@ -6,7 +6,7 @@ import { Calendar, Truck, MapPin, AlertCircle, X, Plus, Search, Loader2 } from '
 import { format, eachDayOfInterval, parseISO } from 'date-fns';
 import { LocationSelect } from '../components/LocationSelect';
 import { useAuth } from '../contexts/AuthContext';
-import { Location, CarrierDriver, RateCard } from '../types';
+import { Location, CarrierDriver, RateCard, Carrier } from '../types';
 import { driverService } from '../services/driverService';
 import { payRulesService } from '../services/payRulesService';
 import { toast } from 'react-hot-toast';
@@ -707,8 +707,7 @@ export const NewBookingSimplified: React.FC<NewBookingSimplifiedProps> = () => {
         const newDriver = await driverService.createDriver({
           carrierId: parseInt(carrierId),
           name: driverName,
-          phoneNumber: phoneNumber || undefined,
-          active: true
+          phoneNumber: phoneNumber || undefined
         });
         // Update available drivers list
         setAvailableDrivers(prev => [...prev, newDriver]);
@@ -1045,7 +1044,7 @@ export const NewBookingSimplified: React.FC<NewBookingSimplifiedProps> = () => {
                     >
                       <div className="font-medium">{driver.name}</div>
                       <div className="text-xs text-gray-500">
-                        {driver.number ? `#${driver.number}` : ''} • {carriers.find(c => c.id === driver.carrierId)?.name || 'Unknown Carrier'}
+                        {driver.number ? `#${driver.number}` : ''} • {carriers.find((c: Carrier) => c.id === driver.carrierId)?.name || 'Unknown Carrier'}
                       </div>
                     </button>
                   ))}
@@ -1123,7 +1122,7 @@ export const NewBookingSimplified: React.FC<NewBookingSimplifiedProps> = () => {
                   selectedDriverId && !useManualDriverEntry ? 'bg-gray-50' : ''
                 }`}
                 placeholder={selectedDriverId && !useManualDriverEntry ? "Auto-filled from driver" : "Search by phone or enter manually"}
-                readOnly={selectedDriverId && !useManualDriverEntry}
+                readOnly={!!selectedDriverId && !useManualDriverEntry}
               />
               {!useManualDriverEntry && !selectedDriverId && showPhoneDropdown && filteredDriversByPhone.length > 0 && (
                 <div className="absolute z-10 w-full mt-1 bg-white border border-gray-300 rounded-md shadow-lg max-h-60 overflow-y-auto">
@@ -1141,7 +1140,7 @@ export const NewBookingSimplified: React.FC<NewBookingSimplifiedProps> = () => {
                     >
                       <div className="font-medium">{driver.name}</div>
                       <div className="text-xs text-gray-500">
-                        {driver.phoneNumber} • {carriers.find(c => c.id === driver.carrierId)?.name || 'Unknown Carrier'}
+                        {driver.phoneNumber} • {carriers.find((c: Carrier) => c.id === driver.carrierId)?.name || 'Unknown Carrier'}
                       </div>
                     </button>
                   ))}

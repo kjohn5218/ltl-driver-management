@@ -3,7 +3,7 @@ import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { locationService, TerminalLocation } from '../../services/locationService';
 import { linehaulTripService } from '../../services/linehaulTripService';
 import { loadsheetService } from '../../services/loadsheetService';
-import { lateDepartureReasonService, LateReasonType, LATE_REASON_LABELS } from '../../services/lateDepartureReasonService';
+import { lateDepartureReasonService, LateReasonType } from '../../services/lateDepartureReasonService';
 import { tmsDispositionService } from '../../services/tmsDispositionService';
 import { LinehaulTrip, Loadsheet } from '../../types';
 import { getNextBusinessDayFormatted } from '../../utils/dateUtils';

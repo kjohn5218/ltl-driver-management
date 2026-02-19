@@ -1,8 +1,8 @@
 import React, { useState, useMemo } from 'react';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
-import { Plus, Trash2, Edit, Eye, EyeOff, Printer, X, Save } from 'lucide-react';
+import { Plus, Trash2, Edit, Printer, X, Save } from 'lucide-react';
 import toast from 'react-hot-toast';
-import { linehaulLaneService, LinehaulLane, LinehaulLaneLocation, LinehaulLaneStep } from '../services/linehaulLaneService';
+import { linehaulLaneService, LinehaulLane, LinehaulLaneLocation } from '../services/linehaulLaneService';
 import { locationService, TerminalLocation } from '../services/locationService';
 
 interface RoutingStepFormData {

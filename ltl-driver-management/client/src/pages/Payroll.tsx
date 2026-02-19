@@ -125,7 +125,7 @@ export const Payroll: React.FC = () => {
       setItems(response.items);
       setSummary(response.summary);
       setTotalPages(response.pagination.totalPages);
-    } catch (error) {
+    } catch {
       toast.error('Failed to fetch payroll items');
     } finally {
       setLoading(false);
@@ -854,7 +854,7 @@ export const Payroll: React.FC = () => {
             {/* Approval Filter */}
             <select
               value={filters.statuses?.length === 1 && filters.statuses[0] === 'APPROVED' ? 'approved' :
-                     filters.statuses?.length > 0 && !filters.statuses.includes('APPROVED') ? 'unapproved' : ''}
+                     (filters.statuses?.length ?? 0) > 0 && !filters.statuses?.includes('APPROVED') ? 'unapproved' : ''}
               onChange={(e) => {
                 if (e.target.value === 'approved') {
                   handleFilterChange('statuses', ['APPROVED']);

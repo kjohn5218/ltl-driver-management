@@ -14,13 +14,12 @@ import { equipmentService } from '../../services/equipmentService';
 import { driverService } from '../../services/driverService';
 import { carrierService } from '../../services/carrierService';
 import { locationService } from '../../services/locationService';
-import { Loadsheet, CarrierDriver, Carrier, LinehaulTrip, LoadsheetStatus, EquipmentTrailer, LinehaulProfile } from '../../types';
+import { Loadsheet, LoadsheetStatus } from '../../types';
 import { toast } from 'react-hot-toast';
 import {
   MapPin,
   RefreshCw,
   ArrowRight,
-  User,
   Edit,
   Trash2,
   Download,
@@ -83,7 +82,7 @@ interface PlanningData {
 }
 
 // Convert loadsheet to LoadItem - preserves actual loadsheet status for planning
-const loadsheetToLoadItem = (loadsheet: Loadsheet, index: number): LoadItem => {
+const loadsheetToLoadItem = (loadsheet: Loadsheet, _index: number): LoadItem => {
   // Parse linehaul name to get origin and destination (e.g., "ATL-MEM" -> origin: ATL, dest: MEM)
   const parts = loadsheet.linehaulName?.split('-') || [];
   // Prioritize actual originTerminalCode from loadsheet, fall back to parsing from linehaul name
@@ -184,7 +183,7 @@ export const LoadsTab: React.FC<LoadsTabProps> = ({ loading: externalLoading = f
 
   // Planning-related state
   const [planningData, setPlanningData] = useState<Record<number, PlanningData>>({});
-  const [continuingTripData, setContinuingTripData] = useState<Record<number, PlanningData>>({});
+  const [_continuingTripData, _setContinuingTripData] = useState<Record<number, PlanningData>>({});
   const [startDate, setStartDate] = useState(today);
   const [endDate, setEndDate] = useState(tomorrow);
 
@@ -232,7 +231,7 @@ export const LoadsTab: React.FC<LoadsTabProps> = ({ loading: externalLoading = f
       return response.carriers;
     }
   });
-  const carriers = carriersData || [];
+  const _carriers = carriersData || [];
 
   // Fetch trailers for edit modal
   const { data: trailersData } = useQuery({
@@ -488,8 +487,8 @@ export const LoadsTab: React.FC<LoadsTabProps> = ({ loading: externalLoading = f
   };
 
   // Update planning data for continuing trips
-  const updateContinuingTripData = (tripId: number, field: keyof PlanningData, value: number | undefined) => {
-    setContinuingTripData(prev => ({
+  const _updateContinuingTripData = (tripId: number, field: keyof PlanningData, value: number | undefined) => {
+    _setContinuingTripData(prev => ({
       ...prev,
       [tripId]: {
         ...prev[tripId],
@@ -807,7 +806,7 @@ export const LoadsTab: React.FC<LoadsTabProps> = ({ loading: externalLoading = f
           isOverdue = now > scheduledDate;
         }
 
-        const [year, month, day] = load.scheduledDepartDate.split('-');
+        const [_year, month, day] = load.scheduledDepartDate.split('-');
         const textColorClass = isOverdue
           ? 'text-red-600 dark:text-red-400 font-medium'
           : 'text-gray-600 dark:text-gray-300';

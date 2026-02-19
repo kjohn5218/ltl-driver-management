@@ -89,11 +89,6 @@ export const DuplicateLoadsheetModal: React.FC<DuplicateLoadsheetModalProps> = (
     }
   };
 
-  const handleSelectAndReprint = (loadsheet: DuplicateLoadsheet) => {
-    setSelectedLoadsheet(loadsheet);
-    onReprintSelected(loadsheet);
-  };
-
   const formatLoadDate = (dateString: string) => {
     try {
       return format(new Date(dateString), 'MM/dd/yyyy');

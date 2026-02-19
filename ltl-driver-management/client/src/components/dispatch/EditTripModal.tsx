@@ -8,15 +8,13 @@ import { LinehaulTrip, TripStatus, CarrierDriver, EquipmentTruck, EquipmentTrail
 import {
   X,
   Truck,
-  User,
   Calendar,
   Clock,
   MapPin,
   FileText,
   CheckCircle,
   Search,
-  Save,
-  Package
+  Save
 } from 'lucide-react';
 import { format, parseISO } from 'date-fns';
 
@@ -102,11 +100,8 @@ export const EditTripModal: React.FC<EditTripModalProps> = ({
   // Dropdown state
   const [driverDropdownOpen, setDriverDropdownOpen] = useState(false);
   const [truckDropdownOpen, setTruckDropdownOpen] = useState(false);
-  const [trailerDropdownOpen, setTrailerDropdownOpen] = useState(false);
   const [dollyDropdownOpen, setDollyDropdownOpen] = useState(false);
-  const [trailer2DropdownOpen, setTrailer2DropdownOpen] = useState(false);
   const [dolly2DropdownOpen, setDolly2DropdownOpen] = useState(false);
-  const [trailer3DropdownOpen, setTrailer3DropdownOpen] = useState(false);
   const [manifest1DropdownOpen, setManifest1DropdownOpen] = useState(false);
   const [manifest2DropdownOpen, setManifest2DropdownOpen] = useState(false);
   const [manifest3DropdownOpen, setManifest3DropdownOpen] = useState(false);
@@ -173,9 +168,8 @@ export const EditTripModal: React.FC<EditTripModalProps> = ({
   const trailers = trailersData?.trailers || [];
   const dollies = dolliesData?.dollies || [];
 
-  // Get trip's origin/destination terminal codes for filtering
+  // Get trip's origin terminal code for filtering
   const tripOriginCode = trip?.linehaulProfile?.originTerminal?.code;
-  const tripDestCode = trip?.linehaulProfile?.destinationTerminal?.code;
 
   // Combine available loadsheets with trip-assigned loadsheets
   const allLoadsheets = React.useMemo(() => {
@@ -217,20 +211,10 @@ export const EditTripModal: React.FC<EditTripModalProps> = ({
     }
   );
 
-  // Helper to strip manifest numbers from notes (they get appended during dispatch)
-  const stripManifestsFromNotes = (notesText: string | null | undefined): string => {
+  // Helper to clean up notes - no longer strips dispatch/arrival notes, just trims
+  const cleanNotes = (notesText: string | null | undefined): string => {
     if (!notesText) return '';
-    // Remove lines containing manifest-related info (case insensitive)
-    // Patterns: "Manifests: ...", "Dispatched with manifests: ..."
-    return notesText
-      .split('\n')
-      .filter(line => {
-        const lower = line.trim().toLowerCase();
-        return !lower.startsWith('manifests:') &&
-               !lower.startsWith('dispatched with manifest');
-      })
-      .join('\n')
-      .trim();
+    return notesText.trim();
   };
 
   // Parse datetime to date and time parts
@@ -277,7 +261,7 @@ export const EditTripModal: React.FC<EditTripModalProps> = ({
       setActualArrivalTime(actualArr.time);
 
       setActualMileage(trip.actualMileage?.toString() || '');
-      setNotes(stripManifestsFromNotes(trip.notes));
+      setNotes(cleanNotes(trip.notes));
 
       // Initialize origin/destination from trip profile (will be overridden by loadsheet data if available)
       setDisplayOrigin(trip.linehaulProfile?.originTerminal?.name || trip.linehaulProfile?.origin || '');
@@ -488,7 +472,7 @@ export const EditTripModal: React.FC<EditTripModalProps> = ({
       // Unassign loadsheets that are no longer selected
       for (const ls of previouslyAssignedLoadsheets) {
         if (!selectedManifestIds.includes(ls.id)) {
-          await loadsheetService.updateLoadsheet(ls.id, { linehaulTripId: null });
+          await loadsheetService.updateLoadsheet(ls.id, { linehaulTripId: undefined });
         }
       }
 
@@ -539,16 +523,6 @@ export const EditTripModal: React.FC<EditTripModalProps> = ({
       .slice(0, 15);
   };
 
-  const getFilteredTrailers = (search: string, excludeIds: (number | null)[]) => {
-    return trailers
-      .filter((t: EquipmentTrailer) => !excludeIds.includes(t.id))
-      .filter((t: EquipmentTrailer) => {
-        if (!search.trim()) return true;
-        return t.unitNumber?.toLowerCase().includes(search.toLowerCase());
-      })
-      .slice(0, 15);
-  };
-
   const getFilteredDollies = (search: string, excludeIds: (number | null)[]) => {
     return dollies
       .filter((d: EquipmentDolly) => !excludeIds.includes(d.id))
@@ -590,34 +564,16 @@ export const EditTripModal: React.FC<EditTripModalProps> = ({
     setTruckDropdownOpen(false);
   };
 
-  const handleTrailerSelect = (trailer: EquipmentTrailer) => {
-    setSelectedTrailerId(trailer.id);
-    setTrailerSearch(trailer.unitNumber);
-    setTrailerDropdownOpen(false);
-  };
-
   const handleDollySelect = (dolly: EquipmentDolly) => {
     setSelectedDollyId(dolly.id);
     setDollySearch(dolly.unitNumber);
     setDollyDropdownOpen(false);
   };
 
-  const handleTrailer2Select = (trailer: EquipmentTrailer) => {
-    setSelectedTrailer2Id(trailer.id);
-    setTrailer2Search(trailer.unitNumber);
-    setTrailer2DropdownOpen(false);
-  };
-
   const handleDolly2Select = (dolly: EquipmentDolly) => {
     setSelectedDolly2Id(dolly.id);
     setDolly2Search(dolly.unitNumber);
     setDolly2DropdownOpen(false);
-  };
-
-  const handleTrailer3Select = (trailer: EquipmentTrailer) => {
-    setSelectedTrailer3Id(trailer.id);
-    setTrailer3Search(trailer.unitNumber);
-    setTrailer3DropdownOpen(false);
   };
 
   // Manifest selection handlers - also update the corresponding trailer
@@ -662,29 +618,14 @@ export const EditTripModal: React.FC<EditTripModalProps> = ({
     setTruckSearch('');
   };
 
-  const clearTrailer = () => {
-    setSelectedTrailerId(null);
-    setTrailerSearch('');
-  };
-
   const clearDolly = () => {
     setSelectedDollyId(null);
     setDollySearch('');
   };
 
-  const clearTrailer2 = () => {
-    setSelectedTrailer2Id(null);
-    setTrailer2Search('');
-  };
-
   const clearDolly2 = () => {
     setSelectedDolly2Id(null);
     setDolly2Search('');
-  };
-
-  const clearTrailer3 = () => {
-    setSelectedTrailer3Id(null);
-    setTrailer3Search('');
   };
 
   // Manifest clear handlers - clear manifest but keep trailer (trailer only changes when new manifest is selected)
@@ -1162,7 +1103,7 @@ export const EditTripModal: React.FC<EditTripModalProps> = ({
                   </div>
                 </div>
 
-                {/* Mileage and Notes */}
+                {/* Mileage */}
                 <div className="grid grid-cols-3 gap-4">
                   <div>
                     <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">
@@ -1176,21 +1117,24 @@ export const EditTripModal: React.FC<EditTripModalProps> = ({
                       className="w-full px-3 py-2 border border-gray-300 dark:border-gray-600 rounded-md bg-white dark:bg-gray-700 text-gray-900 dark:text-gray-100 focus:ring-2 focus:ring-primary-500 text-sm"
                     />
                   </div>
-                  <div className="col-span-2">
-                    <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">
-                      <div className="flex items-center">
-                        <FileText className="w-4 h-4 mr-1" />
-                        Notes
-                      </div>
-                    </label>
-                    <textarea
-                      value={notes}
-                      onChange={(e) => setNotes(e.target.value)}
-                      placeholder="Trip notes..."
-                      rows={2}
-                      className="w-full px-3 py-2 border border-gray-300 dark:border-gray-600 rounded-md bg-white dark:bg-gray-700 text-gray-900 dark:text-gray-100 focus:ring-2 focus:ring-primary-500 text-sm resize-none"
-                    />
-                  </div>
+                </div>
+
+                {/* Notes - full width for better visibility */}
+                <div>
+                  <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">
+                    <div className="flex items-center">
+                      <FileText className="w-4 h-4 mr-1" />
+                      Notes
+                      <span className="text-xs text-gray-400 ml-2">(includes dispatch and arrival notes)</span>
+                    </div>
+                  </label>
+                  <textarea
+                    value={notes}
+                    onChange={(e) => setNotes(e.target.value)}
+                    placeholder="Trip notes..."
+                    rows={5}
+                    className="w-full px-3 py-2 border border-gray-300 dark:border-gray-600 rounded-md bg-white dark:bg-gray-700 text-gray-900 dark:text-gray-100 focus:ring-2 focus:ring-primary-500 text-sm resize-y"
+                  />
                 </div>
 
                 {/* Footer */}

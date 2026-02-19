@@ -139,7 +139,7 @@ export const Carriers: React.FC = () => {
   }) || [];
 
   // Get unique states for filter
-  const uniqueStates: string[] = [...new Set(carriers.filter((c: Carrier) => c.state).map((c: Carrier) => c.state as string))].sort();
+  const uniqueStates: string[] = [...new Set(carriers.filter((c: Carrier) => c.state).map((c: Carrier) => c.state as string))] as string[];
 
   if (isLoading) {
     return (

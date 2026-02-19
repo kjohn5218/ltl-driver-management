@@ -2,7 +2,7 @@ import React, { useState, useEffect, useMemo } from 'react';
 import { useQuery, useQueryClient } from '@tanstack/react-query';
 import { api } from '../services/api';
 import { Route, Terminal, InterlineCarrier } from '../types';
-import { Plus, Search, Edit, Eye, Trash2, MapPin, Clock, DollarSign, Filter, X, Calculator, Copy, ChevronDown, ChevronUp, Truck, ArrowUpDown, ArrowUp, ArrowDown } from 'lucide-react';
+import { Plus, Search, Edit, Eye, Trash2, MapPin, Clock, X, Calculator, Copy, Truck, ArrowUpDown, ArrowUp, ArrowDown } from 'lucide-react';
 import { calculateRoute, calculateArrivalTime, formatRunTime, hasAddressInfo } from '../utils/routeCalculations';
 import { LocationWithTooltip, RouteDetails } from '../components/LocationDisplay';
 import { LocationSelect } from '../components/LocationSelect';
@@ -145,7 +145,7 @@ export const Routes: React.FC = () => {
   }, [routes, searchTerm, originFilter, activeFilter, sortColumn, sortDirection]);
 
   // Get unique origins for filter
-  const uniqueOrigins = [...new Set(routes.map((route: Route) => route.origin))].sort();
+  const uniqueOrigins: string[] = ([...new Set(routes.map((route: Route) => route.origin))] as string[]).sort();
 
   const handleViewRoute = (route: Route) => {
     setViewingRoute(route);
@@ -346,7 +346,7 @@ export const Routes: React.FC = () => {
             </tr>
           </thead>
           <tbody className="bg-white divide-y divide-gray-200">
-            {filteredRoutes.map((route) => (
+            {filteredRoutes.map((route: Route) => (
               <tr key={route.id} className="hover:bg-gray-50">
                 <td className="px-6 py-4 whitespace-nowrap">
                   <div className="text-sm font-medium text-gray-900">{route.name}</div>
@@ -715,11 +715,17 @@ const RouteEditModal: React.FC<RouteEditModalProps> = ({ route, onClose, onSave 
     originState: route.originState || '',
     originZipCode: route.originZipCode || '',
     originContact: route.originContact || '',
+    originTimeZone: route.originTimeZone || '',
+    originLatitude: route.originLatitude?.toString() || '',
+    originLongitude: route.originLongitude?.toString() || '',
     destinationAddress: route.destinationAddress || '',
     destinationCity: route.destinationCity || '',
     destinationState: route.destinationState || '',
     destinationZipCode: route.destinationZipCode || '',
     destinationContact: route.destinationContact || '',
+    destinationTimeZone: route.destinationTimeZone || '',
+    destinationLatitude: route.destinationLatitude?.toString() || '',
+    destinationLongitude: route.destinationLongitude?.toString() || '',
     distance: route.distance.toString(),
     runTime: route.runTime?.toString() || '',
     active: route.active,

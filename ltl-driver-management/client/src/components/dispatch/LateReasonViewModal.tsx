@@ -1,6 +1,6 @@
 import React from 'react';
 import { useQuery } from '@tanstack/react-query';
-import { lateDepartureReasonService, LATE_REASON_LABELS, LateDepartureReason } from '../../services/lateDepartureReasonService';
+import { lateDepartureReasonService, LATE_REASON_LABELS } from '../../services/lateDepartureReasonService';
 import {
   X,
   AlertTriangle,

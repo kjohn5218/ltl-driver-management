@@ -167,7 +167,7 @@ export const Bookings: React.FC = () => {
       // Documents filter
       let matchesDocuments = true;
       if (documentsFilter === 'with_documents') {
-        matchesDocuments = booking.documents && booking.documents.length > 0;
+        matchesDocuments = !!(booking.documents && booking.documents.length > 0);
       } else if (documentsFilter === 'without_documents') {
         matchesDocuments = !booking.documents || booking.documents.length === 0;
       }

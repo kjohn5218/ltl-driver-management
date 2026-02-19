@@ -2,7 +2,7 @@ import React, { Fragment } from 'react';
 import { Dialog, Transition } from '@headlessui/react';
 import { useQuery } from '@tanstack/react-query';
 import { Loadsheet } from '../../types';
-import { loadsheetService, LoadsheetShipmentsResponse } from '../../services/loadsheetService';
+import { loadsheetService } from '../../services/loadsheetService';
 import {
   X,
   Package,

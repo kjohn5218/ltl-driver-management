@@ -94,7 +94,7 @@ export const RateCards: React.FC = () => {
     effectiveDate: new Date().toISOString().split('T')[0],
     expirationDate: '',
     equipmentType: '',
-    priority: '5',
+    priority: false,
     notes: '',
     active: true
   });
@@ -160,7 +160,7 @@ export const RateCards: React.FC = () => {
       });
       setRateCards(response.rateCards);
       setTotalPages(response.pagination.totalPages);
-    } catch (error) {
+    } catch {
       toast.error('Failed to fetch rate cards');
     } finally {
       setLoading(false);
@@ -181,7 +181,7 @@ export const RateCards: React.FC = () => {
       effectiveDate: new Date().toISOString().split('T')[0],
       expirationDate: '',
       equipmentType: '',
-      priority: '5',
+      priority: false,
       notes: '',
       active: true
     });
@@ -202,7 +202,7 @@ export const RateCards: React.FC = () => {
         effectiveDate: formData.effectiveDate,
         expirationDate: formData.expirationDate || undefined,
         equipmentType: formData.equipmentType || undefined,
-        priority: parseInt(formData.priority),
+        priority: formData.priority,
         notes: formData.notes || undefined,
         active: formData.active
       });
@@ -226,7 +226,7 @@ export const RateCards: React.FC = () => {
         effectiveDate: formData.effectiveDate || undefined,
         expirationDate: formData.expirationDate || undefined,
         equipmentType: formData.equipmentType || undefined,
-        priority: parseInt(formData.priority),
+        priority: formData.priority,
         notes: formData.notes || undefined,
         active: formData.active
       });
@@ -265,7 +265,7 @@ export const RateCards: React.FC = () => {
       effectiveDate: rateCard.effectiveDate ? new Date(rateCard.effectiveDate).toISOString().split('T')[0] : '',
       expirationDate: rateCard.expirationDate ? new Date(rateCard.expirationDate).toISOString().split('T')[0] : '',
       equipmentType: rateCard.equipmentType || '',
-      priority: rateCard.priority?.toString() || '5',
+      priority: rateCard.priority ?? false,
       notes: rateCard.notes || '',
       active: rateCard.active
     });
@@ -356,7 +356,9 @@ export const RateCards: React.FC = () => {
       header: 'Priority',
       accessor: 'priority' as keyof RateCard,
       cell: (rateCard: RateCard) => (
-        <span className="text-gray-600">{rateCard.priority}</span>
+        <span className={`inline-flex px-2 py-1 rounded-full text-xs font-medium ${rateCard.priority ? 'bg-yellow-100 text-yellow-800' : 'text-gray-400'}`}>
+          {rateCard.priority ? 'High' : '-'}
+        </span>
       )
     },
     {
@@ -576,17 +578,17 @@ export const RateCards: React.FC = () => {
       </div>
 
       <div className="grid grid-cols-2 gap-4">
-        <div>
-          <label className="block text-sm font-medium text-gray-700">Priority (1-10)</label>
+        <div className="flex items-center pt-6">
           <input
-            type="number"
-            min="1"
-            max="10"
-            value={formData.priority}
-            onChange={(e) => setFormData({ ...formData, priority: e.target.value })}
-            className="mt-1 block w-full rounded-md border-gray-300 shadow-sm focus:border-indigo-500 focus:ring-indigo-500 sm:text-sm"
+            type="checkbox"
+            id="priority"
+            checked={formData.priority}
+            onChange={(e) => setFormData({ ...formData, priority: e.target.checked })}
+            className="h-4 w-4 rounded border-gray-300 text-yellow-600 focus:ring-yellow-500"
           />
-          <p className="mt-1 text-xs text-gray-500">Higher priority rates are applied first</p>
+          <label htmlFor="priority" className="ml-2 block text-sm text-gray-900">
+            High Priority
+          </label>
         </div>
 
         <div className="flex items-center pt-6">

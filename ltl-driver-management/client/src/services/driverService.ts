@@ -1,4 +1,5 @@
 import { api } from './api';
+import { AxiosError } from 'axios';
 import { CarrierDriver } from '../types';
 
 interface DriversResponse {
@@ -67,12 +68,16 @@ export const driverService = {
       const response = await api.get(`/drivers?${params.toString()}`);
       console.log('getAllDrivers: Response received:', response.data);
       return response.data.drivers;
-    } catch (error) {
+    } catch (error: unknown) {
       console.error('getAllDrivers: Full error:', error);
-      console.error('getAllDrivers: Error response data:', JSON.stringify(error.response?.data, null, 2));
-      console.error('getAllDrivers: Error status:', error.response?.status);
-      console.error('getAllDrivers: Error message:', error.message);
-      console.error('getAllDrivers: Request URL:', error.config?.url);
+      if (error instanceof AxiosError) {
+        console.error('getAllDrivers: Error response data:', JSON.stringify(error.response?.data, null, 2));
+        console.error('getAllDrivers: Error status:', error.response?.status);
+        console.error('getAllDrivers: Error message:', error.message);
+        console.error('getAllDrivers: Request URL:', error.config?.url);
+      } else if (error instanceof Error) {
+        console.error('getAllDrivers: Error message:', error.message);
+      }
       throw error;
     }
   },

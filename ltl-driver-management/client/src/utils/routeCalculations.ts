@@ -131,15 +131,38 @@ const calculateHaversineDistance = (lat1: number, lon1: number, lat2: number, lo
   const R = 3959; // Earth's radius in miles
   const dLat = (lat2 - lat1) * (Math.PI / 180);
   const dLon = (lon2 - lon1) * (Math.PI / 180);
-  
+
   const a = Math.sin(dLat / 2) * Math.sin(dLat / 2) +
     Math.cos(lat1 * (Math.PI / 180)) * Math.cos(lat2 * (Math.PI / 180)) *
     Math.sin(dLon / 2) * Math.sin(dLon / 2);
-  
+
   const c = 2 * Math.atan2(Math.sqrt(a), Math.sqrt(1 - a));
-  
+
   // Apply a factor to approximate driving distance (typically 1.2-1.5x straight line)
   return R * c * 1.3;
+};
+
+// Calculate route directly from GPS coordinates (no geocoding needed)
+export const calculateRouteFromCoordinates = (
+  originLat: number,
+  originLon: number,
+  destLat: number,
+  destLon: number
+): RouteCalculationResult => {
+  try {
+    const distance = calculateHaversineDistance(originLat, originLon, destLat, destLon);
+
+    // Estimate driving time for trucks (average 45 mph including stops)
+    const estimatedDuration = Math.round((distance / 45) * 60); // minutes
+
+    return {
+      distance: Math.round(distance * 10) / 10, // round to 1 decimal
+      duration: estimatedDuration
+    };
+  } catch (error) {
+    console.error('GPS route calculation error:', error);
+    return { error: 'Failed to calculate route from coordinates' };
+  }
 };
 
 // Calculate arrival time from departure time and run time

@@ -13,18 +13,20 @@ interface Carrier {
   name: string;
   email: string;
   phone: string;
-  dotNumber: string | null;
-  mcNumber: string | null;
+  dotNumber?: string | null;
+  mcNumber?: string | null;
   status: string;
+  safetyRating?: string | null;
   // MCP fields
   mcpMonitored: boolean;
-  mcpLastSync: string | null;
+  mcpLastSync?: string | null;
   mcpPacketCompleted: boolean;
-  mcpPacketCompletedAt: string | null;
-  mcpInsuranceExpiration: string | null;
-  mcpAuthorityStatus: string | null;
-  mcpSafetyRating: string | null;
-  mcpRiskScore: number | null;
+  mcpPacketCompletedAt?: string | null;
+  mcpPacketStatus?: string | null;
+  mcpInsuranceExpiration?: string | null;
+  mcpAuthorityStatus?: string | null;
+  mcpSafetyRating?: string | null;
+  mcpRiskScore?: number | null;
 }
 
 interface CarrierDetailExampleProps {

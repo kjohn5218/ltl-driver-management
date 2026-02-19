@@ -117,11 +117,12 @@ export const OutboundTab: React.FC<OutboundTabProps> = ({ selectedLocations = []
   });
   const locations = locationsData || [];
 
-  // Fetch dispatched and in-transit trips (trips that departed today)
+  // Fetch dispatched, in-transit, and arrived trips (trips that departed in date range)
+  // Arrived trips stay on outbound tab for information and late dispositioning purposes
   const { data: tripsData, isLoading, refetch: refetchTrips } = useQuery({
     queryKey: ['outbound-trips', startDate, endDate],
     queryFn: () => linehaulTripService.getTrips({
-      statuses: ['DISPATCHED', 'IN_TRANSIT'] as TripStatus[],
+      statuses: ['DISPATCHED', 'IN_TRANSIT', 'ARRIVED'] as TripStatus[],
       startDate: startDate || undefined,
       endDate: endDate || undefined,
       limit: 500

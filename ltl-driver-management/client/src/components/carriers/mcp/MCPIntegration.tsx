@@ -5,17 +5,18 @@ import { MCPActions } from './MCPActions';
 interface MCPIntegrationProps {
   carrier: {
     id: number;
-    dotNumber: string | null;
-    mcNumber: string | null;
+    dotNumber?: string | null;
+    mcNumber?: string | null;
     mcpMonitored: boolean;
-    mcpLastSync: string | null;
+    mcpLastSync?: string | null;
     mcpPacketCompleted: boolean;
-    mcpPacketCompletedAt: string | null;
-    mcpPacketStatus: string | null;
-    mcpInsuranceExpiration: string | null;
-    mcpAuthorityStatus: string | null;
-    mcpSafetyRating: string | null;
-    mcpRiskScore: number | null;
+    mcpPacketCompletedAt?: string | null;
+    mcpPacketStatus?: string | null;
+    mcpInsuranceExpiration?: string | null;
+    mcpAuthorityStatus?: string | null;
+    mcpSafetyRating?: string | null;
+    mcpRiskScore?: number | null;
+    safetyRating?: string | null;
   };
   onUpdate: () => void;
   showActions?: boolean;

@@ -182,22 +182,36 @@ export const InboundTab: React.FC<InboundTabProps> = ({ selectedLocations = [] }
       // Apply location filter (matches destination for inbound)
       // For inbound trips, the destination is where the trip is going TO (or arrived at)
       if (selectedLocations.length > 0) {
-        // Use the trip profile's destination - this is the authoritative source
-        const tripDestinationId = row.trip.linehaulProfile?.destinationTerminalId ||
-          (row.trip.linehaulProfile as any)?.destinationTerminal?.id;
-
-        // Also check destination terminal code from profile and map to ID
-        const profileDestCode = (row.trip.linehaulProfile as any)?.destinationTerminal?.code;
-        const profileDestId = profileDestCode
-          ? locations.find(l => l.code?.toUpperCase() === profileDestCode.toUpperCase())?.id
+        // First check for trip's destinationTerminalCode override (alternate destination)
+        const tripDestOverrideCode = (row.trip as any).destinationTerminalCode;
+        const tripDestOverrideId = tripDestOverrideCode
+          ? locations.find(l => l.code?.toUpperCase() === tripDestOverrideCode.toUpperCase())?.id
           : undefined;
 
-        // Match only if the trip's actual destination matches selected locations
-        // Don't use loadsheet destination or parsed linehaulName - those may represent
-        // the next leg or final destination of a multi-leg route, not this trip's destination
-        const matchesDestination =
-          (tripDestinationId && selectedLocations.includes(tripDestinationId)) ||
-          (profileDestId && selectedLocations.includes(profileDestId));
+        // If trip has a destination override, use that; otherwise use profile destination
+        let matchesDestination = false;
+
+        if (tripDestOverrideId) {
+          // Trip has an alternate destination - use that for filtering
+          matchesDestination = selectedLocations.includes(tripDestOverrideId);
+        } else {
+          // Use the trip profile's destination - this is the authoritative source
+          const tripDestinationId = row.trip.linehaulProfile?.destinationTerminalId ||
+            (row.trip.linehaulProfile as any)?.destinationTerminal?.id;
+
+          // Also check destination terminal code from profile and map to ID
+          const profileDestCode = (row.trip.linehaulProfile as any)?.destinationTerminal?.code;
+          const profileDestId = profileDestCode
+            ? locations.find(l => l.code?.toUpperCase() === profileDestCode.toUpperCase())?.id
+            : undefined;
+
+          // Match only if the trip's actual destination matches selected locations
+          // Don't use loadsheet destination or parsed linehaulName - those may represent
+          // the next leg or final destination of a multi-leg route, not this trip's destination
+          matchesDestination =
+            (tripDestinationId && selectedLocations.includes(tripDestinationId)) ||
+            (profileDestId && selectedLocations.includes(profileDestId));
+        }
 
         if (!matchesDestination) return false;
       }
@@ -287,16 +301,46 @@ export const InboundTab: React.FC<InboundTabProps> = ({ selectedLocations = [] }
   };
 
   // Get linehaul info from trip or loadsheets
-  const getLinehaulInfo = (row: InboundTripRow): { origin: string; destination: string; linehaulName: string; leg: string } => {
+  const getLinehaulInfo = (row: InboundTripRow): { origin: string; destination: string; linehaulName: string; leg: string; isAlternate?: boolean } => {
     // First try trip-level linehaulName (from API transformation)
     const linehaulName = row.trip.linehaulName || row.loadsheets?.[0]?.linehaulName || '-';
     const parsed = parseLeg(linehaulName);
+
+    // Get the trip's ORIGINAL origin from the profile (not the loadsheet which gets updated on arrival)
+    const tripProfileOrigin = row.trip.linehaulProfile?.originTerminal?.code;
+
+    // Check for trip's destinationTerminalCode override (alternate destination)
+    const tripDestOverride = (row.trip as any).destinationTerminalCode;
+    if (tripDestOverride) {
+      // Use profile origin first, then fall back to parsed origin
+      const origin = tripProfileOrigin || parsed.origin;
+      return {
+        origin,
+        destination: tripDestOverride,
+        linehaulName,
+        leg: `${origin}-${tripDestOverride}`,
+        isAlternate: true
+      };
+    }
+
+    // For normal trips, use profile origin and destination
+    if (tripProfileOrigin) {
+      const profileDest = row.trip.linehaulProfile?.destinationTerminal?.code;
+      if (profileDest) {
+        return {
+          origin: tripProfileOrigin,
+          destination: profileDest,
+          linehaulName,
+          leg: `${tripProfileOrigin}-${profileDest}`
+        };
+      }
+    }
 
     // If parsing didn't get destination, try loadsheet's destinationTerminalCode
     if (parsed.destination === '-' && row.loadsheets && row.loadsheets.length > 0) {
       const firstLoadsheet = row.loadsheets[0];
       if (firstLoadsheet.destinationTerminalCode) {
-        const origin = firstLoadsheet.originTerminalCode || parsed.origin;
+        const origin = tripProfileOrigin || firstLoadsheet.originTerminalCode || parsed.origin;
         const destination = firstLoadsheet.destinationTerminalCode;
         return {
           origin,
@@ -387,24 +431,6 @@ export const InboundTab: React.FC<InboundTabProps> = ({ selectedLocations = [] }
         date: dateStr,
         time: formatTimeForDisplay(row.trip.linehaulProfile.standardArrivalTime)
       };
-    }
-    return { date: null, time: null };
-  };
-
-  // Get dispatched time
-  const getDispatchedTime = (row: InboundTripRow): { date: string | null; time: string | null } => {
-    if (row.trip.actualDeparture) {
-      try {
-        const actualDate = typeof row.trip.actualDeparture === 'string'
-          ? parseISO(row.trip.actualDeparture)
-          : new Date(row.trip.actualDeparture);
-        return {
-          date: format(actualDate, 'MM/dd'),
-          time: format(actualDate, 'HH:mm')
-        };
-      } catch {
-        return { date: null, time: null };
-      }
     }
     return { date: null, time: null };
   };

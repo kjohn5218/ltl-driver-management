@@ -1,7 +1,7 @@
 import React, { useState } from 'react';
 import { Modal } from '../common/Modal';
 import { PayrollExportOptions, PayrollSummary } from '../../types';
-import { Download, FileSpreadsheet, Calendar, CheckCircle, AlertCircle } from 'lucide-react';
+import { Download, FileSpreadsheet, Calendar, AlertCircle } from 'lucide-react';
 
 interface PayrollExportModalProps {
   isOpen: boolean;
@@ -41,7 +41,7 @@ export const PayrollExportModal: React.FC<PayrollExportModalProps> = ({
     }
   };
 
-  const formatCurrency = (amount: number) => {
+  const _formatCurrency = (amount: number) => {
     return new Intl.NumberFormat('en-US', { style: 'currency', currency: 'USD' }).format(amount);
   };
 

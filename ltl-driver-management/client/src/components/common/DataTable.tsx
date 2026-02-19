@@ -4,7 +4,7 @@ import { Loader2, ArrowUp, ArrowDown, ArrowUpDown } from 'lucide-react';
 export type SortDirection = 'asc' | 'desc' | null;
 
 interface Column<T> {
-  header: string;
+  header: string | React.ReactNode;
   accessor: keyof T;
   cell?: (item: T) => React.ReactNode;
   sortable?: boolean;

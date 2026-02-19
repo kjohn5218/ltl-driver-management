@@ -60,7 +60,7 @@ export const RateConfirmation: React.FC<RateConfirmationProps> = ({ booking, shi
         key.toLowerCase().includes('arrival') || 
         key.toLowerCase().includes('time')
       );
-      console.log('Time-related fields in booking:', timeFields, timeFields.map(field => ({ field, value: booking[field] })));
+      console.log('Time-related fields in booking:', timeFields, timeFields.map(field => ({ field, value: (booking as unknown as Record<string, unknown>)[field] })));
       
       // Look for leg-specific fields
       const legFields = Object.keys(booking).filter(key => 
@@ -68,15 +68,15 @@ export const RateConfirmation: React.FC<RateConfirmationProps> = ({ booking, shi
         key.toLowerCase().includes('2') ||
         key.toLowerCase().includes('second')
       );
-      console.log('Leg-related fields in booking:', legFields, legFields.map(field => ({ field, value: booking[field] })));
+      console.log('Leg-related fields in booking:', legFields, legFields.map(field => ({ field, value: (booking as unknown as Record<string, unknown>)[field] })));
       
       // Look for fields that might contain arrays or JSON data with individual leg times
       const allFields = Object.keys(booking);
       const possibleArrayFields = allFields.filter(key => {
-        const value = booking[key];
+        const value = (booking as unknown as Record<string, unknown>)[key];
         return Array.isArray(value) || (typeof value === 'string' && (value.includes('[') || value.includes('{')));
       });
-      console.log('Possible array/JSON fields:', possibleArrayFields, possibleArrayFields.map(field => ({ field, value: booking[field] })));
+      console.log('Possible array/JSON fields:', possibleArrayFields, possibleArrayFields.map(field => ({ field, value: (booking as unknown as Record<string, unknown>)[field] })));
       
       // Collect all location codes from booking
       if (booking.origin) {
@@ -265,7 +265,7 @@ export const RateConfirmation: React.FC<RateConfirmationProps> = ({ booking, shi
               
               // Convert back to HH:MM format, handling day overflow
               let leg2Hours = Math.floor(leg2DepMinutes / 60);
-              let leg2Mins = leg2DepMinutes % 60;
+              const leg2Mins = leg2DepMinutes % 60;
               
               // If time goes past 24:00, wrap to next day
               if (leg2Hours >= 24) {
@@ -397,7 +397,7 @@ export const RateConfirmation: React.FC<RateConfirmationProps> = ({ booking, shi
                 const time = (booking.childBookings && booking.childBookings.length > 0) 
                   ? (booking.childBookings[0].departureTime || '21:00')
                   : (booking.route?.departureTime || booking.departureTime || '21:00');
-                console.log('Carrier TIME field using:', time, 'from childBookings:', booking.childBookings?.length > 0 ? 'yes' : 'no');
+                console.log('Carrier TIME field using:', time, 'from childBookings:', (booking.childBookings?.length ?? 0) > 0 ? 'yes' : 'no');
                 return time;
               })()
             }</td>
@@ -487,11 +487,10 @@ export const RateConfirmation: React.FC<RateConfirmationProps> = ({ booking, shi
                     </div>
                   </div>
                   <div className="text-xs"><span className="font-bold">Location:</span> {childBooking.route?.origin || childBooking.origin}</div>
-                  {console.log(`Leg ${childBooking.legNumber} origin:`, childBooking.route?.origin || childBooking.origin, 'Location data:', getLocationData(childBooking.route?.origin || childBooking.origin))}
                   <div className="text-xs"><span className="font-bold">Address:</span> {getLocationData(childBooking.route?.origin || childBooking.origin)?.address || childBooking.originAddress || childBooking.route?.originAddress || ''}</div>
                   <div className="text-xs"><span className="font-bold">City, State Zip:</span> {getLocationData(childBooking.route?.origin || childBooking.origin)?.city || childBooking.originCity || childBooking.route?.originCity || ''}, {getLocationData(childBooking.route?.origin || childBooking.origin)?.state || childBooking.originState || childBooking.route?.originState || ''} {getLocationData(childBooking.route?.origin || childBooking.origin)?.zipCode || childBooking.originZipCode || childBooking.route?.originZipCode || ''}</div>
-                  <div className="text-xs"><span className="font-bold">Phone:</span> {childBooking.originPhone || getLocationData(childBooking.route?.origin || childBooking.origin)?.phone || ''} <span className="font-bold">Contact:</span> {childBooking.originContact || childBooking.route?.originContact || getLocationData(childBooking.route?.origin || childBooking.origin)?.contact || ''}</div>
-                  <div className="text-xs"><span className="font-bold">Hours:</span> {childBooking.originHours || getLocationData(childBooking.route?.origin || childBooking.origin)?.hours || ''}</div>
+                  <div className="text-xs"><span className="font-bold">Phone:</span> {getLocationData(childBooking.route?.origin || childBooking.origin)?.phone || ''} <span className="font-bold">Contact:</span> {childBooking.originContact || childBooking.route?.originContact || getLocationData(childBooking.route?.origin || childBooking.origin)?.contact || ''}</div>
+                  <div className="text-xs"><span className="font-bold">Hours:</span> {getLocationData(childBooking.route?.origin || childBooking.origin)?.hours || ''}</div>
                   {getLocationData(childBooking.route?.origin || childBooking.origin)?.notes && (
                     <div className="text-xs"><span className="font-bold">Notes:</span> {getLocationData(childBooking.route?.origin || childBooking.origin)?.notes}</div>
                   )}
@@ -508,11 +507,10 @@ export const RateConfirmation: React.FC<RateConfirmationProps> = ({ booking, shi
                     </div>
                   </div>
                   <div className="text-xs"><span className="font-bold">Location:</span> {childBooking.route?.destination || childBooking.destination}</div>
-                  {console.log(`Leg ${childBooking.legNumber} destination:`, childBooking.route?.destination || childBooking.destination, 'Location data:', getLocationData(childBooking.route?.destination || childBooking.destination))}
                   <div className="text-xs"><span className="font-bold">Address:</span> {getLocationData(childBooking.route?.destination || childBooking.destination)?.address || childBooking.destinationAddress || childBooking.route?.destinationAddress || ''}</div>
                   <div className="text-xs"><span className="font-bold">City, State Zip:</span> {getLocationData(childBooking.route?.destination || childBooking.destination)?.city || childBooking.destinationCity || childBooking.route?.destinationCity || ''}, {getLocationData(childBooking.route?.destination || childBooking.destination)?.state || childBooking.destinationState || childBooking.route?.destinationState || ''} {getLocationData(childBooking.route?.destination || childBooking.destination)?.zipCode || childBooking.destinationZipCode || childBooking.route?.destinationZipCode || ''}</div>
-                  <div className="text-xs"><span className="font-bold">Phone:</span> {childBooking.destinationPhone || getLocationData(childBooking.route?.destination || childBooking.destination)?.phone || ''} <span className="font-bold">Contact:</span> {childBooking.destinationContact || childBooking.route?.destinationContact || getLocationData(childBooking.route?.destination || childBooking.destination)?.contact || ''}</div>
-                  <div className="text-xs"><span className="font-bold">Hours:</span> {childBooking.destinationHours || getLocationData(childBooking.route?.destination || childBooking.destination)?.hours || ''}</div>
+                  <div className="text-xs"><span className="font-bold">Phone:</span> {getLocationData(childBooking.route?.destination || childBooking.destination)?.phone || ''} <span className="font-bold">Contact:</span> {childBooking.destinationContact || childBooking.route?.destinationContact || getLocationData(childBooking.route?.destination || childBooking.destination)?.contact || ''}</div>
+                  <div className="text-xs"><span className="font-bold">Hours:</span> {getLocationData(childBooking.route?.destination || childBooking.destination)?.hours || ''}</div>
                   {getLocationData(childBooking.route?.destination || childBooking.destination)?.notes && (
                     <div className="text-xs"><span className="font-bold">Notes:</span> {getLocationData(childBooking.route?.destination || childBooking.destination)?.notes}</div>
                   )}
@@ -538,8 +536,8 @@ export const RateConfirmation: React.FC<RateConfirmationProps> = ({ booking, shi
                   <div className="text-xs"><span className="font-bold">Location:</span> {leg.origin}</div>
                   <div className="text-xs"><span className="font-bold">Address:</span> {getLocationData(leg.origin)?.address || booking.originAddress || booking.route?.originAddress || ''}</div>
                   <div className="text-xs"><span className="font-bold">City, State Zip:</span> {getLocationData(leg.origin)?.city || booking.originCity || booking.route?.originCity || ''}, {getLocationData(leg.origin)?.state || booking.originState || booking.route?.originState || ''} {getLocationData(leg.origin)?.zipCode || booking.originZipCode || booking.route?.originZipCode || ''}</div>
-                  <div className="text-xs"><span className="font-bold">Phone:</span> {booking.originPhone || getLocationData(leg.origin)?.phone || ''} <span className="font-bold">Contact:</span> {booking.originContact || booking.route?.originContact || getLocationData(leg.origin)?.contact || ''}</div>
-                  <div className="text-xs"><span className="font-bold">Hours:</span> {booking.originHours || getLocationData(leg.origin)?.hours || ''}</div>
+                  <div className="text-xs"><span className="font-bold">Phone:</span> {getLocationData(leg.origin)?.phone || ''} <span className="font-bold">Contact:</span> {booking.originContact || booking.route?.originContact || getLocationData(leg.origin)?.contact || ''}</div>
+                  <div className="text-xs"><span className="font-bold">Hours:</span> {getLocationData(leg.origin)?.hours || ''}</div>
                   {getLocationData(leg.origin)?.notes && (
                     <div className="text-xs"><span className="font-bold">Notes:</span> {getLocationData(leg.origin)?.notes}</div>
                   )}
@@ -558,8 +556,8 @@ export const RateConfirmation: React.FC<RateConfirmationProps> = ({ booking, shi
                   <div className="text-xs"><span className="font-bold">Location:</span> {leg.destination}</div>
                   <div className="text-xs"><span className="font-bold">Address:</span> {getLocationData(leg.destination)?.address || booking.destinationAddress || booking.route?.destinationAddress || ''}</div>
                   <div className="text-xs"><span className="font-bold">City, State Zip:</span> {getLocationData(leg.destination)?.city || booking.destinationCity || booking.route?.destinationCity || ''}, {getLocationData(leg.destination)?.state || booking.destinationState || booking.route?.destinationState || ''} {getLocationData(leg.destination)?.zipCode || booking.destinationZipCode || booking.route?.destinationZipCode || ''}</div>
-                  <div className="text-xs"><span className="font-bold">Phone:</span> {booking.destinationPhone || getLocationData(leg.destination)?.phone || ''} <span className="font-bold">Contact:</span> {booking.destinationContact || booking.route?.destinationContact || getLocationData(leg.destination)?.contact || ''}</div>
-                  <div className="text-xs"><span className="font-bold">Hours:</span> {booking.destinationHours || getLocationData(leg.destination)?.hours || ''}</div>
+                  <div className="text-xs"><span className="font-bold">Phone:</span> {getLocationData(leg.destination)?.phone || ''} <span className="font-bold">Contact:</span> {booking.destinationContact || booking.route?.destinationContact || getLocationData(leg.destination)?.contact || ''}</div>
+                  <div className="text-xs"><span className="font-bold">Hours:</span> {getLocationData(leg.destination)?.hours || ''}</div>
                   {getLocationData(leg.destination)?.notes && (
                     <div className="text-xs"><span className="font-bold">Notes:</span> {getLocationData(leg.destination)?.notes}</div>
                   )}
@@ -584,8 +582,8 @@ export const RateConfirmation: React.FC<RateConfirmationProps> = ({ booking, shi
                 <div className="text-xs"><span className="font-bold">Name:</span> {getLocationData(booking.origin || booking.route?.origin)?.name || booking.route?.origin || booking.origin || 'Unknown Location'}</div>
                 <div className="text-xs"><span className="font-bold">Address:</span> {booking.originAddress || booking.route?.originAddress || getLocationData(booking.origin || booking.route?.origin)?.address || ''}</div>
                 <div className="text-xs"><span className="font-bold">City, State Zip:</span> {booking.originCity || booking.route?.originCity || getLocationData(booking.origin || booking.route?.origin)?.city || ''}, {booking.originState || booking.route?.originState || getLocationData(booking.origin || booking.route?.origin)?.state || ''} {booking.originZipCode || booking.route?.originZipCode || getLocationData(booking.origin || booking.route?.origin)?.zipCode || ''}</div>
-                <div className="text-xs"><span className="font-bold">Phone:</span> {booking.originPhone || getLocationData(booking.origin || booking.route?.origin)?.phone || ''} <span className="font-bold">Contact:</span> {booking.originContact || booking.route?.originContact || getLocationData(booking.origin || booking.route?.origin)?.contact || ''}</div>
-                <div className="text-xs"><span className="font-bold">Hours:</span> {booking.originHours || getLocationData(booking.origin || booking.route?.origin)?.hours || ''}</div>
+                <div className="text-xs"><span className="font-bold">Phone:</span> {getLocationData(booking.origin || booking.route?.origin)?.phone || ''} <span className="font-bold">Contact:</span> {booking.originContact || booking.route?.originContact || getLocationData(booking.origin || booking.route?.origin)?.contact || ''}</div>
+                <div className="text-xs"><span className="font-bold">Hours:</span> {getLocationData(booking.origin || booking.route?.origin)?.hours || ''}</div>
                 {getLocationData(booking.origin || booking.route?.origin)?.notes && (
                   <div className="text-xs"><span className="font-bold">Notes:</span> {getLocationData(booking.origin || booking.route?.origin)?.notes}</div>
                 )}
@@ -604,8 +602,8 @@ export const RateConfirmation: React.FC<RateConfirmationProps> = ({ booking, shi
                 <div className="text-xs"><span className="font-bold">Name:</span> {getLocationData(booking.destination || booking.route?.destination)?.name || booking.route?.destination || booking.destination || 'Unknown Location'}</div>
                 <div className="text-xs"><span className="font-bold">Address:</span> {booking.destinationAddress || booking.route?.destinationAddress || getLocationData(booking.destination || booking.route?.destination)?.address || ''}</div>
                 <div className="text-xs"><span className="font-bold">City, State Zip:</span> {booking.destinationCity || booking.route?.destinationCity || getLocationData(booking.destination || booking.route?.destination)?.city || ''}, {booking.destinationState || booking.route?.destinationState || getLocationData(booking.destination || booking.route?.destination)?.state || ''} {booking.destinationZipCode || booking.route?.destinationZipCode || getLocationData(booking.destination || booking.route?.destination)?.zipCode || ''}</div>
-                <div className="text-xs"><span className="font-bold">Phone:</span> {booking.destinationPhone || getLocationData(booking.destination || booking.route?.destination)?.phone || ''} <span className="font-bold">Contact:</span> {booking.destinationContact || booking.route?.destinationContact || getLocationData(booking.destination || booking.route?.destination)?.contact || ''}</div>
-                <div className="text-xs"><span className="font-bold">Hours:</span> {booking.destinationHours || getLocationData(booking.destination || booking.route?.destination)?.hours || ''}</div>
+                <div className="text-xs"><span className="font-bold">Phone:</span> {getLocationData(booking.destination || booking.route?.destination)?.phone || ''} <span className="font-bold">Contact:</span> {booking.destinationContact || booking.route?.destinationContact || getLocationData(booking.destination || booking.route?.destination)?.contact || ''}</div>
+                <div className="text-xs"><span className="font-bold">Hours:</span> {getLocationData(booking.destination || booking.route?.destination)?.hours || ''}</div>
                 {getLocationData(booking.destination || booking.route?.destination)?.notes && (
                   <div className="text-xs"><span className="font-bold">Notes:</span> {getLocationData(booking.destination || booking.route?.destination)?.notes}</div>
                 )}

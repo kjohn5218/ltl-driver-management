@@ -1,5 +1,6 @@
 import React, { useState, useEffect, useMemo, useRef, Fragment } from 'react';
 import { Dialog, Transition } from '@headlessui/react';
+import { useQueryClient } from '@tanstack/react-query';
 import { loadsheetService } from '../../services/loadsheetService';
 import { terminalService } from '../../services/terminalService';
 import { equipmentService } from '../../services/equipmentService';
@@ -157,6 +158,7 @@ export const CreateLoadsheetModal: React.FC<CreateLoadsheetModalProps> = ({
   onClose,
   onSuccess
 }) => {
+  const queryClient = useQueryClient();
   const [saving, setSaving] = useState(false);
   const [createdLoadsheet, setCreatedLoadsheet] = useState<Loadsheet | null>(null);
   const [isReprint, setIsReprint] = useState(false);
@@ -441,6 +443,8 @@ export const CreateLoadsheetModal: React.FC<CreateLoadsheetModalProps> = ({
       toast.success(`Loadsheet ${created.manifestNumber} created successfully`);
       setCreatedLoadsheet(created);
       setIsReprint(false);
+      // Invalidate loadsheet queries so Loads tab refreshes immediately
+      queryClient.invalidateQueries({ queryKey: ['loadsheets-for-loads-tab'] });
     } catch (error: any) {
       toast.error(error.response?.data?.message || 'Failed to create loadsheet');
     } finally {

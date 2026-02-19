@@ -6,8 +6,8 @@ import axios from 'axios';
 interface MCPActionsProps {
   carrier: {
     id: number;
-    dotNumber: string | null;
-    mcNumber: string | null;
+    dotNumber?: string | null;
+    mcNumber?: string | null;
     mcpMonitored: boolean;
   };
   onUpdate: () => void;

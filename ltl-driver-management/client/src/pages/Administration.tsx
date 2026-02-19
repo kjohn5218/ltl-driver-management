@@ -1,7 +1,7 @@
 import React, { useState } from 'react';
 import { useQuery, useQueryClient, useMutation } from '@tanstack/react-query';
 import { api } from '../services/api';
-import { User } from '../types';
+import { User, UserRole } from '../types';
 import { useAuth } from '../contexts/AuthContext';
 import { Plus, Search, Edit, Trash2, X, Shield, User as UserIcon, AlertCircle, CheckCircle, Briefcase } from 'lucide-react';
 
@@ -27,12 +27,12 @@ export const Administration: React.FC = () => {
 
   const users = usersData?.users || [];
 
-  const filteredUsers = users?.filter(user => {
+  const filteredUsers = users?.filter((user: User) => {
     const matchesSearch = user.name.toLowerCase().includes(searchTerm.toLowerCase()) ||
       user.email.toLowerCase().includes(searchTerm.toLowerCase());
-    
+
     const matchesRole = roleFilter === '' || user.role === roleFilter;
-    
+
     return matchesSearch && matchesRole;
   }) || [];
 
@@ -110,7 +110,7 @@ export const Administration: React.FC = () => {
 
       {/* Users Grid */}
       <div className="grid grid-cols-1 sm:grid-cols-2 xl:grid-cols-3 gap-4 lg:gap-6">
-        {filteredUsers.map((user) => (
+        {filteredUsers.map((user: User) => (
           <div key={user.id} className="bg-white rounded-lg shadow-md border border-gray-200 p-6">
             <div className="flex justify-between items-start mb-4">
               <div className="flex items-center">
@@ -600,7 +600,7 @@ const EditUserModal: React.FC<EditUserModalProps> = ({ user, onClose, onSave, is
             ) : (
               <select
                 value={formData.role}
-                onChange={(e) => setFormData({ ...formData, role: e.target.value })}
+                onChange={(e) => setFormData({ ...formData, role: e.target.value as UserRole })}
                 className="w-full px-3 py-2 border border-gray-300 rounded-md focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
               >
                 <option value="DISPATCHER">Dispatcher</option>

@@ -126,7 +126,7 @@ export const PayRules: React.FC = () => {
     rateMethod: 'FLAT_RATE'
   });
 
-  const isAdmin = user?.role === 'ADMIN' || user?.role === 'PAYROLL_ADMIN' || user?.role === 'DISPATCHER';
+  const isAdmin = user?.role === 'ADMIN' || (user?.role as string) === 'PAYROLL_ADMIN' || user?.role === 'DISPATCHER';
 
   useEffect(() => {
     fetchReferenceData();
@@ -1257,7 +1257,7 @@ export const PayRules: React.FC = () => {
           </div>
 
           {/* Linehaul Profile Selection (when rate method is Linehaul Profile) */}
-          {rateFormData.rateMethod === 'LINEHAUL_PROFILE' && (
+          {(rateFormData.rateMethod as string) === 'LINEHAUL_PROFILE' && (
             <div>
               <label className="block text-sm font-medium text-gray-700 mb-1">Linehaul Profile</label>
               <select
@@ -1274,7 +1274,7 @@ export const PayRules: React.FC = () => {
           )}
 
           {/* Origin/Destination Selection (when rate method is Origin/Destination) */}
-          {rateFormData.rateMethod === 'ORIGIN_DESTINATION' && (
+          {(rateFormData.rateMethod as string) === 'ORIGIN_DESTINATION' && (
             <div className="grid grid-cols-2 gap-4">
               <div>
                 <label className="block text-sm font-medium text-gray-700 mb-1">Origin Terminal</label>

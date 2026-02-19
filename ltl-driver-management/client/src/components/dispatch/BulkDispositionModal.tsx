@@ -12,8 +12,7 @@ import {
   FileText,
   CheckCircle,
   Calendar,
-  Truck,
-  XCircle
+  Truck
 } from 'lucide-react';
 
 // Late reason options

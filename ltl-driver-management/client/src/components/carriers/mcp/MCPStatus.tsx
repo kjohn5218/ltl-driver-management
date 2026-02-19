@@ -2,10 +2,23 @@ import React, { useState } from 'react';
 import { Shield, AlertCircle, CheckCircle, XCircle, Clock, FileText, RefreshCw, ExternalLink } from 'lucide-react';
 import { format } from 'date-fns';
 import { carrierService } from '../../../services/carrierService';
-import { Carrier } from '../../../types';
 
 interface MCPStatusProps {
-  carrier: Pick<Carrier, 'id' | 'dotNumber' | 'mcNumber' | 'mcpMonitored' | 'mcpLastSync' | 'mcpPacketCompleted' | 'mcpPacketCompletedAt' | 'mcpPacketStatus' | 'mcpInsuranceExpiration' | 'mcpAuthorityStatus' | 'mcpSafetyRating' | 'mcpRiskScore' | 'safetyRating'>;
+  carrier: {
+    id: number;
+    dotNumber?: string | null;
+    mcNumber?: string | null;
+    mcpMonitored: boolean;
+    mcpLastSync?: string | null;
+    mcpPacketCompleted: boolean;
+    mcpPacketCompletedAt?: string | null;
+    mcpPacketStatus?: string | null;
+    mcpInsuranceExpiration?: string | null;
+    mcpAuthorityStatus?: string | null;
+    mcpSafetyRating?: string | null;
+    mcpRiskScore?: number | null;
+    safetyRating?: string | null;
+  };
   onUpdate?: () => void;
 }
 
@@ -16,7 +29,7 @@ export const MCPStatus: React.FC<MCPStatusProps> = ({ carrier, onUpdate }) => {
   const [notes, setNotes] = useState('');
   const [isSyncingPacketStatus, setIsSyncingPacketStatus] = useState(false);
 
-  const getStatusColor = (status: string | null) => {
+  const getStatusColor = (status: string | null | undefined) => {
     switch (status?.toUpperCase()) {
       case 'ACTIVE':
         return 'text-green-600';
@@ -29,7 +42,7 @@ export const MCPStatus: React.FC<MCPStatusProps> = ({ carrier, onUpdate }) => {
     }
   };
 
-  const getSafetyRatingBadge = (rating: string | null) => {
+  const getSafetyRatingBadge = (rating: string | null | undefined) => {
     const upperRating = rating?.toUpperCase();
     
     // Handle both MCP formats

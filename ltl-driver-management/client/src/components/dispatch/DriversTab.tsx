@@ -26,7 +26,7 @@ const formatDriverStatus = (status: string): string => {
   return status.replace(/_/g, ' ').toLowerCase().replace(/\b\w/g, l => l.toUpperCase());
 };
 
-export const DriversTab: React.FC<DriversTabProps> = ({ onDriverSelect, selectedLocations = [] }) => {
+export const DriversTab: React.FC<DriversTabProps> = ({ onDriverSelect: _onDriverSelect, selectedLocations = [] }) => {
   const [drivers, setDrivers] = useState<CarrierDriver[]>([]);
   const [carriers, setCarriers] = useState<Carrier[]>([]);
   const [loading, setLoading] = useState(true);

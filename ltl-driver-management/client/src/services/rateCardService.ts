@@ -70,7 +70,7 @@ export const rateCardService = {
     effectiveDate: string;
     expirationDate?: string;
     equipmentType?: string;
-    priority?: number;
+    priority?: boolean;
     notes?: string;
     active?: boolean;
   }): Promise<RateCard> => {

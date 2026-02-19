@@ -1,5 +1,4 @@
 import React, { useState, useEffect, useMemo } from 'react';
-import { useNavigate } from 'react-router-dom';
 import { PageHeader } from '../components/common/PageHeader';
 import { DataTable, SortDirection } from '../components/common/DataTable';
 import { TablePagination } from '../components/common/TablePagination';
@@ -14,14 +13,13 @@ import { carrierService } from '../services/carrierService';
 import { CarrierDriver, Carrier } from '../types';
 import { useAuth } from '../contexts/AuthContext';
 import { toast } from 'react-hot-toast';
-import { Plus, Edit, Trash2, Phone, Mail, Truck, Upload, MapPin, Shield, RefreshCw, Filter } from 'lucide-react';
+import { Plus, Edit, Trash2, Phone, Truck, Upload, MapPin, Shield, RefreshCw, Filter } from 'lucide-react';
 import { usePersistedState } from '../hooks/usePersistedFilters';
 
 // Available endorsement types
 const ENDORSEMENT_OPTIONS = ['hazmat', 'tanker', 'lcv', 'doubles', 'triples'];
 
 export const Drivers: React.FC = () => {
-  const navigate = useNavigate();
   const { user } = useAuth();
   const [drivers, setDrivers] = useState<CarrierDriver[]>([]);
   const [carriers, setCarriers] = useState<Carrier[]>([]);

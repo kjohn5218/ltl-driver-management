@@ -199,8 +199,8 @@ export const Reports: React.FC = () => {
             <div className="ml-3">
               <p className="text-sm font-medium text-gray-500">Cost Efficiency</p>
               <p className="text-2xl font-semibold text-gray-900">
-                ${metrics?.completedBookings > 0 
-                  ? Math.round((metrics?.totalExpenses || 0) / metrics.completedBookings).toLocaleString()
+                ${(metrics?.completedBookings ?? 0) > 0
+                  ? Math.round((metrics?.totalExpenses || 0) / (metrics?.completedBookings ?? 1)).toLocaleString()
                   : '0'}
               </p>
               <p className="text-xs text-gray-400">avg per booking</p>

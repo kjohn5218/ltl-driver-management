@@ -1,5 +1,4 @@
 import React, { useState, useEffect } from 'react';
-import { useNavigate } from 'react-router-dom';
 import { PageHeader } from '../components/common/PageHeader';
 import { DataTable, SortDirection } from '../components/common/DataTable';
 import { TablePagination } from '../components/common/TablePagination';
@@ -54,7 +53,6 @@ const getStatusVariant = (status: LoadsheetStatus): 'default' | 'success' | 'war
 };
 
 export const Loadsheets: React.FC = () => {
-  const navigate = useNavigate();
   const { user } = useAuth();
   const [loadsheets, setLoadsheets] = useState<Loadsheet[]>([]);
   const [loading, setLoading] = useState(true);
@@ -274,7 +272,7 @@ export const Loadsheets: React.FC = () => {
           try {
             iframe.contentWindow?.focus();
             iframe.contentWindow?.print();
-          } catch (e) {
+          } catch {
             // If iframe print fails (cross-origin), open in new tab
             window.open(url, '_blank');
           }
@@ -621,8 +619,6 @@ export const Loadsheets: React.FC = () => {
                 currentPage={currentPage}
                 totalPages={totalPages}
                 onPageChange={setCurrentPage}
-                totalItems={total}
-                itemsPerPage={20}
               />
             </div>
           </>

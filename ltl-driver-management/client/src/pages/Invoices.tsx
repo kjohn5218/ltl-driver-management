@@ -135,14 +135,14 @@ export const Invoices: React.FC = () => {
   // Calculate summary statistics
   const summary = useMemo(() => {
     if (!filteredInvoices) return null;
-    
+
     return {
       total: filteredInvoices.length,
-      totalAmount: filteredInvoices.reduce((sum, inv) => sum + Number(inv.amount), 0),
-      pending: filteredInvoices.filter(inv => inv.status === 'PENDING').length,
-      sentToAP: filteredInvoices.filter(inv => inv.status === 'SENT_TO_AP').length,
-      paid: filteredInvoices.filter(inv => inv.status === 'PAID').length,
-      overdue: filteredInvoices.filter(inv => inv.status === 'OVERDUE').length
+      totalAmount: filteredInvoices.reduce((sum: number, inv: Invoice) => sum + Number(inv.amount), 0),
+      pending: filteredInvoices.filter((inv: Invoice) => inv.status === 'PENDING').length,
+      sentToAP: filteredInvoices.filter((inv: Invoice) => inv.status === 'SENT_TO_AP').length,
+      paid: filteredInvoices.filter((inv: Invoice) => inv.status === 'PAID').length,
+      overdue: filteredInvoices.filter((inv: Invoice) => inv.status === 'OVERDUE').length
     };
   }, [filteredInvoices]);
 
@@ -157,7 +157,7 @@ export const Invoices: React.FC = () => {
 
   // Select all visible invoices
   const selectAll = () => {
-    const allIds = filteredInvoices.map(inv => inv.id);
+    const allIds = filteredInvoices.map((inv: Invoice) => inv.id);
     setSelectedInvoices(allIds);
   };
 
@@ -168,7 +168,7 @@ export const Invoices: React.FC = () => {
 
   // Export to Excel
   const exportToExcel = () => {
-    const data = filteredInvoices.map(invoice => ({
+    const data = filteredInvoices.map((invoice: Invoice) => ({
       'Invoice #': invoice.invoiceNumber,
       'Carrier': invoice.carrierName || invoice.booking.carrier?.name || 'N/A',
       'Contact Person': invoice.carrierContactPerson || '',

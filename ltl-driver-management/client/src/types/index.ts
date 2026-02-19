@@ -1,4 +1,4 @@
-export type UserRole = 'ADMIN' | 'DISPATCHER' | 'CARRIER' | 'MANAGER';
+export type UserRole = 'ADMIN' | 'DISPATCHER' | 'CARRIER' | 'MANAGER' | 'PAYROLL_ADMIN' | 'PAYROLL_CLERK';
 export type CarrierStatus = 'PENDING' | 'ACTIVE' | 'INACTIVE' | 'SUSPENDED' | 'NOT_ONBOARDED' | 'ONBOARDED';
 export type BookingStatus = 'PENDING' | 'CONFIRMED' | 'IN_PROGRESS' | 'COMPLETED' | 'CANCELLED';
 export type InvoiceStatus = 'PENDING' | 'SENT' | 'PAID' | 'OVERDUE' | 'CANCELLED';
@@ -349,28 +349,8 @@ export interface AuthResponse {
   token: string;
 }
 
-export interface Location {
-  id: number;
-  code: string;
-  name?: string;
-  address?: string;
-  city?: string;
-  state?: string;
-  zipCode?: string;
-  contact?: string;
-  phone?: string;
-  hours?: string;
-  timeZone?: string;
-  latitude?: number;
-  longitude?: number;
-  notes?: string;
-  active: boolean;
-  isPhysicalTerminal: boolean;
-  isVirtualTerminal: boolean;
-  isDispatchLocation: boolean;
-  createdAt: string;
-  updatedAt: string;
-}
+// Location is now an alias for Terminal - they share the same table
+export type Location = Terminal;
 
 export interface PaginatedResponse<T> {
   data: T[];
@@ -424,6 +404,7 @@ export interface Terminal {
   hours?: string;
   isPhysicalTerminal?: boolean;
   isVirtualTerminal?: boolean;
+  isDispatchLocation?: boolean;
   active: boolean;
   createdAt: string;
   updatedAt: string;
@@ -436,9 +417,6 @@ export interface Terminal {
     linehaulProfilesDestination: number;
   };
 }
-
-// Alias for Location - Terminal and Location are now the same table
-export type Location = Terminal;
 
 export interface TerminalEquipmentRequirement {
   id: number;
@@ -1045,6 +1023,7 @@ export interface Loadsheet {
   suggestedTrailerLength?: number;
   pintleHookRequired: boolean;
   targetDispatchTime?: string;
+  targetArrivalTime?: string;
   scheduledDepartDate?: string;
   linehaulName: string;
   preloadManifest?: string;

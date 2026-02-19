@@ -102,10 +102,13 @@ export const ArriveTripModal: React.FC<ArriveTripModalProps> = ({
     return !trip.truckId;
   };
 
-  const getRoute = (trip: LinehaulTrip): { origin: string; destination: string } => {
+  const getRoute = (trip: LinehaulTrip): { origin: string; destination: string; isAlternate: boolean } => {
     const origin = trip.linehaulProfile?.originTerminal?.code || '-';
-    const destination = trip.linehaulProfile?.destinationTerminal?.code || '-';
-    return { origin, destination };
+    // Use trip's destinationTerminalCode override if set, otherwise use profile destination
+    const profileDest = trip.linehaulProfile?.destinationTerminal?.code || '-';
+    const destination = trip.destinationTerminalCode || profileDest;
+    const isAlternate = !!trip.destinationTerminalCode && trip.destinationTerminalCode !== profileDest;
+    return { origin, destination, isAlternate };
   };
 
   if (!isOpen) return null;
@@ -264,7 +267,12 @@ export const ArriveTripModal: React.FC<ArriveTripModalProps> = ({
                                 <MapPin className="h-4 w-4 mr-1" />
                                 <span className="font-medium">{route.origin}</span>
                                 <ArrowRight className="h-3 w-3 mx-1" />
-                                <span className="font-medium">{route.destination}</span>
+                                <span className={`font-medium ${route.isAlternate ? 'text-amber-600 dark:text-amber-400' : ''}`}>
+                                  {route.destination}
+                                </span>
+                                {route.isAlternate && (
+                                  <span className="ml-1 text-xs text-amber-500">(Alt)</span>
+                                )}
                               </div>
                             </td>
                             <td className="px-4 py-3 text-sm text-gray-900 dark:text-gray-100">

@@ -1,6 +1,6 @@
 import React, { useState, useMemo, useCallback, useEffect } from 'react';
 import { useQuery, useQueryClient } from '@tanstack/react-query';
-import { Truck, AlertTriangle, CheckCircle, X, Search, Loader2 } from 'lucide-react';
+import { Truck, AlertTriangle, CheckCircle, X, Search, Loader2, ChevronDown } from 'lucide-react';
 import toast from 'react-hot-toast';
 import { Modal } from '../common/Modal';
 import { linehaulTripService } from '../../services/linehaulTripService';
@@ -9,7 +9,7 @@ import { loadsheetService } from '../../services/loadsheetService';
 import { driverService } from '../../services/driverService';
 import { linehaulProfileService } from '../../services/linehaulProfileService';
 import { api } from '../../services/api';
-import { Loadsheet, EquipmentTruck, EquipmentTrailer, EquipmentDolly, CarrierDriver, LinehaulProfile, Route, Location } from '../../types';
+import { Loadsheet, EquipmentTruck, EquipmentTrailer, EquipmentDolly, CarrierDriver, Route, Location, Terminal } from '../../types';
 import { TripDocumentsModal } from './TripDocumentsModal';
 
 interface DispatchTripModalProps {
@@ -61,6 +61,10 @@ export const DispatchTripModal: React.FC<DispatchTripModalProps> = ({
   // Notes
   const [notes, setNotes] = useState('');
 
+  // Alternate destination selection
+  const [selectedDestination, setSelectedDestination] = useState<Terminal | null>(null);
+  const [destinationDropdownOpen, setDestinationDropdownOpen] = useState(false);
+
   // Submission state
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [showConfirmModal, setShowConfirmModal] = useState(false);
@@ -84,6 +88,8 @@ export const DispatchTripModal: React.FC<DispatchTripModalProps> = ({
       setDollySearches(['', '', '']);
       setDollyDropdownOpen([false, false, false]);
       setNotes('');
+      setSelectedDestination(null);
+      setDestinationDropdownOpen(false);
       setIsSubmitting(false);
       setShowConfirmModal(false);
       setShowDocumentsModal(false);
@@ -147,11 +153,35 @@ export const DispatchTripModal: React.FC<DispatchTripModalProps> = ({
   const routes = routesData || [];
 
   // Fetch loadsheets (which contain manifest numbers)
+  // Includes: OPEN, LOADING loadsheets + loadsheets from ALL arrived trips (continuing freight)
   const { data: loadsheetsData, isLoading: loadsheetsLoading } = useQuery({
-    queryKey: ['loadsheets-for-dispatch'],
+    queryKey: ['loadsheets-for-dispatch', selectedLocations],
     queryFn: async () => {
-      const response = await loadsheetService.getLoadsheets({ limit: 100 });
-      return response.loadsheets;
+      // Fetch OPEN and LOADING loadsheets (default)
+      const openResponse = await loadsheetService.getLoadsheets({ limit: 100 });
+      const allLoadsheets = [...openResponse.loadsheets];
+
+      // Also fetch loadsheets from ALL arrived trips
+      // This ensures continuing freight shows up regardless of status or originTerminalCode
+      const tripsResponse = await linehaulTripService.getTrips({
+        status: 'ARRIVED',
+        limit: 100
+      });
+
+      // Include loadsheets from arrived trips
+      for (const trip of tripsResponse.trips) {
+        const tripLoadsheets = (trip.loadsheets || []) as Loadsheet[];
+        for (const ls of tripLoadsheets) {
+          // Only include loadsheets that can be dispatched (not TERMINATED, CLOSED, or already DISPATCHED)
+          if (ls.status !== 'TERMINATED' && ls.status !== 'CLOSED' && ls.status !== 'DISPATCHED') {
+            if (!allLoadsheets.some(existing => existing.id === ls.id)) {
+              allLoadsheets.push(ls);
+            }
+          }
+        }
+      }
+
+      return allLoadsheets;
     },
     enabled: isOpen
   });
@@ -181,31 +211,54 @@ export const DispatchTripModal: React.FC<DispatchTripModalProps> = ({
     if (profile) return profile;
 
     // Try matching by exact name
+    // PRIORITY 1: Exact name match WITH origin verification (for multi-leg routes)
+    // This is critical for routes like DENWAMSLC3 which have multiple profiles (DEN→WAM and WAM→SLC)
+    if (originTerminalCode) {
+      const upperOrigin = originTerminalCode.toUpperCase();
+      profile = profiles.find(p =>
+        p.name?.toUpperCase() === linehaulName.toUpperCase() &&
+        p.originTerminal?.code?.toUpperCase() === upperOrigin
+      );
+      if (profile) return profile;
+    }
+
+    // PRIORITY 2: Exact name match (only if no origin specified or no origin-matched profile found)
     profile = profiles.find(p => p.name === linehaulName);
     if (profile) return profile;
 
-    // Try case-insensitive match
+    // PRIORITY 3: Case-insensitive match with origin verification
     const lowerName = linehaulName.toLowerCase();
+    if (originTerminalCode) {
+      const upperOrigin = originTerminalCode.toUpperCase();
+      profile = profiles.find(p =>
+        (p.profileCode?.toLowerCase() === lowerName || p.name?.toLowerCase() === lowerName) &&
+        p.originTerminal?.code?.toUpperCase() === upperOrigin
+      );
+      if (profile) return profile;
+    }
+
+    // PRIORITY 4: Case-insensitive match without origin (fallback)
     profile = profiles.find(p =>
       p.profileCode?.toLowerCase() === lowerName ||
       p.name?.toLowerCase() === lowerName
     );
     if (profile) return profile;
 
-    // Smart matching: find profile where origin terminal code matches
+    // PRIORITY 5: Smart matching with origin verification
     if (originTerminalCode) {
       const upperLinehaulName = linehaulName.toUpperCase();
+      const upperOrigin = originTerminalCode.toUpperCase();
       profile = profiles.find(p => {
-        const originCode = p.originTerminal?.code?.toUpperCase();
+        const profileOrigin = p.originTerminal?.code?.toUpperCase();
         const destCode = p.destinationTerminal?.code?.toUpperCase();
-        return originCode && destCode &&
-          upperLinehaulName.startsWith(originCode) &&
+        return profileOrigin === upperOrigin && // Must match current origin!
+          destCode &&
           upperLinehaulName.includes(destCode);
       });
       if (profile) return profile;
     }
 
-    // Fallback: try to parse linehaulName and match by terminal codes
+    // PRIORITY 6: Fallback without origin check
     const upperName = linehaulName.toUpperCase();
     profile = profiles.find(p => {
       const originCode = p.originTerminal?.code?.toUpperCase();
@@ -375,7 +428,7 @@ export const DispatchTripModal: React.FC<DispatchTripModalProps> = ({
       // This checks routes table for exact match of route name + current origin
       parsedDest = findNextDestination(
         lastLoadsheet.linehaulName,
-        lastLoadsheet.originTerminalCode
+        lastLoadsheet.originTerminalCode ?? null
       );
 
       // SECOND: Fall back to profile lookup if route lookup failed
@@ -398,6 +451,156 @@ export const DispatchTripModal: React.FC<DispatchTripModalProps> = ({
       hasManifest: true
     };
   }, [manifestEntries, profiles, findProfileByLinehaulName, findNextDestination]);
+
+  // Get the matched linehaul profile for the first selected loadsheet
+  const matchedProfile = useMemo(() => {
+    const selectedLoadsheets = manifestEntries
+      .filter(entry => entry.loadsheet)
+      .map(entry => entry.loadsheet!);
+
+    if (selectedLoadsheets.length === 0 || profiles.length === 0) {
+      return null;
+    }
+
+    const firstLoadsheet = selectedLoadsheets[0];
+    return findProfileByLinehaulName(
+      firstLoadsheet.linehaulName,
+      firstLoadsheet.originTerminalCode
+    );
+  }, [manifestEntries, profiles, findProfileByLinehaulName]);
+
+  // Fetch okay-to-dispatch terminals for the matched profile
+  // Only fetch if we have a valid profile ID (not 0 from fallback routes)
+  const { data: okayToDispatchData } = useQuery({
+    queryKey: ['okay-to-dispatch', matchedProfile?.id],
+    queryFn: async () => {
+      if (!matchedProfile?.id || matchedProfile.id <= 0) return null;
+      try {
+        return await linehaulProfileService.getOkayToDispatchTerminals(matchedProfile.id);
+      } catch (error) {
+        console.warn('Failed to fetch okay-to-dispatch terminals:', error);
+        return null;
+      }
+    },
+    enabled: !!matchedProfile?.id && matchedProfile.id > 0 && isOpen,
+    retry: false,
+    staleTime: 5 * 60 * 1000 // Cache for 5 minutes
+  });
+
+  // Get available destination options (default destination + okay-to-dispatch terminals)
+  const destinationOptions = useMemo(() => {
+    const options: Terminal[] = [];
+
+    // Add the profile's default destination first
+    if (matchedProfile?.destinationTerminal) {
+      // Ensure we have at least code and id for comparison
+      const destTerminal = matchedProfile.destinationTerminal as Terminal;
+      if (destTerminal.code) {
+        options.push(destTerminal);
+      }
+    }
+
+    // Add okay-to-dispatch terminals (excluding the default destination)
+    if (okayToDispatchData?.okayToDispatchTerminals) {
+      for (const terminal of okayToDispatchData.okayToDispatchTerminals) {
+        // Don't add duplicates - compare by id if available, otherwise by code
+        const isDuplicate = options.some(opt =>
+          (opt.id && terminal.id && opt.id === terminal.id) ||
+          (opt.code && terminal.code && opt.code.toUpperCase() === terminal.code.toUpperCase())
+        );
+        if (!isDuplicate && terminal.code) {
+          options.push(terminal);
+        }
+      }
+    }
+
+    return options;
+  }, [matchedProfile, okayToDispatchData]);
+
+  // Effective destination (selected or default)
+  const effectiveDestination = useMemo(() => {
+    if (selectedDestination) {
+      return selectedDestination;
+    }
+    if (matchedProfile?.destinationTerminal) {
+      return matchedProfile.destinationTerminal;
+    }
+    return null;
+  }, [selectedDestination, matchedProfile]);
+
+  // Haversine formula to calculate distance between two GPS coordinates
+  const calculateDistance = useCallback((lat1: number, lon1: number, lat2: number, lon2: number): number => {
+    const R = 3958.8; // Earth's radius in miles
+    const dLat = (lat2 - lat1) * Math.PI / 180;
+    const dLon = (lon2 - lon1) * Math.PI / 180;
+    const a =
+      Math.sin(dLat / 2) * Math.sin(dLat / 2) +
+      Math.cos(lat1 * Math.PI / 180) * Math.cos(lat2 * Math.PI / 180) *
+      Math.sin(dLon / 2) * Math.sin(dLon / 2);
+    const c = 2 * Math.atan2(Math.sqrt(a), Math.sqrt(1 - a));
+    return R * c;
+  }, []);
+
+  // Calculate mileage and ETA based on origin and effective destination
+  const { calculatedMiles, calculatedETA, transitMinutes } = useMemo(() => {
+    const originTerminal = matchedProfile?.originTerminal;
+    const destTerminal = effectiveDestination;
+
+    // Check if we're using an alternate destination
+    const isAlternateDestination = selectedDestination &&
+      selectedDestination.code?.toUpperCase() !== matchedProfile?.destinationTerminal?.code?.toUpperCase();
+
+    // If using default destination, use profile's stored values
+    if (!isAlternateDestination && matchedProfile) {
+      const profileMiles = matchedProfile.distanceMiles;
+      const profileTransitMinutes = matchedProfile.transitTimeMinutes;
+
+      if (profileMiles || profileTransitMinutes) {
+        // Calculate ETA from now + transit time
+        let eta: Date | null = null;
+        if (profileTransitMinutes) {
+          eta = new Date();
+          eta.setMinutes(eta.getMinutes() + profileTransitMinutes);
+        }
+        return {
+          calculatedMiles: profileMiles || null,
+          calculatedETA: eta,
+          transitMinutes: profileTransitMinutes || null
+        };
+      }
+    }
+
+    // Calculate distance using GPS coordinates
+    if (originTerminal?.latitude && originTerminal?.longitude &&
+        destTerminal?.latitude && destTerminal?.longitude) {
+      const straightLineDistance = calculateDistance(
+        originTerminal.latitude,
+        originTerminal.longitude,
+        destTerminal.latitude,
+        destTerminal.longitude
+      );
+
+      // Apply a road distance factor (typically 1.2-1.4x straight line distance)
+      const roadDistanceFactor = 1.3;
+      const miles = Math.round(straightLineDistance * roadDistanceFactor);
+
+      // Calculate transit time assuming average speed of 45 mph (accounting for stops, traffic, etc.)
+      const averageSpeedMph = 45;
+      const transitMins = Math.round((miles / averageSpeedMph) * 60);
+
+      // Calculate ETA from now
+      const eta = new Date();
+      eta.setMinutes(eta.getMinutes() + transitMins);
+
+      return {
+        calculatedMiles: miles,
+        calculatedETA: eta,
+        transitMinutes: transitMins
+      };
+    }
+
+    return { calculatedMiles: null, calculatedETA: null, transitMinutes: null };
+  }, [matchedProfile, effectiveDestination, selectedDestination, calculateDistance]);
 
   // Get already selected loadsheet IDs to filter dropdown
   const selectedLoadsheetIds = useMemo(() => {
@@ -429,6 +632,11 @@ export const DispatchTripModal: React.FC<DispatchTripModalProps> = ({
     newSearches[index] = loadsheet.manifestNumber;
     setManifestSearches(newSearches);
 
+    // Reset destination selection when first manifest changes (profile may change)
+    if (index === 0) {
+      setSelectedDestination(null);
+    }
+
     if (index < 2 && newEntries.length <= index + 1) {
       newEntries.push({ loadsheet: null, sealNumber: '', dollyId: undefined });
       setManifestEntries(newEntries);
@@ -446,6 +654,11 @@ export const DispatchTripModal: React.FC<DispatchTripModalProps> = ({
     }
 
     setManifestEntries(newEntries);
+
+    // Reset destination selection when first manifest is cleared (profile changes)
+    if (index === 0) {
+      setSelectedDestination(null);
+    }
 
     const newSearches = [...manifestSearches];
     newSearches[index] = '';
@@ -644,6 +857,14 @@ export const DispatchTripModal: React.FC<DispatchTripModalProps> = ({
         }
       }
 
+      // Determine if an alternate destination was selected (compare by code, not id)
+      const isAlternateDestination = selectedDestination &&
+        selectedDestination.code?.toUpperCase() !== matchingProfile.destinationTerminal?.code?.toUpperCase();
+      const destinationCode = isAlternateDestination ? selectedDestination.code : undefined;
+
+      // Calculate planned arrival based on mileage/transit time
+      const plannedArrivalTime = calculatedETA ? calculatedETA.toISOString() : undefined;
+
       const tripData = {
         linehaulProfileId: matchingProfile.id,
         dispatchDate: new Date().toISOString(),
@@ -652,21 +873,26 @@ export const DispatchTripModal: React.FC<DispatchTripModalProps> = ({
         trailerId: trailerId,
         trailer2Id: trailer2Id,
         dollyId: manifestEntries[0]?.dollyId,
-        notes: notes + (manifestNotes ? `\nManifests: ${manifestNotes}` : '') + (isOwnerOperator ? '\nOwner Operator' : '')
+        destinationTerminalCode: destinationCode, // Override destination if alternate selected
+        plannedArrival: plannedArrivalTime, // Calculated ETA based on mileage
+        calculatedMiles: calculatedMiles, // Distance in miles
+        notes: notes + (manifestNotes ? `\nManifests: ${manifestNotes}` : '') + (isOwnerOperator ? '\nOwner Operator' : '') + (isAlternateDestination ? `\nAlternate Destination: ${destinationCode}` : '') + (calculatedMiles ? `\nDistance: ${calculatedMiles} miles` : '')
       };
 
       const createdTrip = await linehaulTripService.createTrip(tripData);
 
       await linehaulTripService.updateTripStatus(createdTrip.id, {
         status: 'IN_TRANSIT',
-        actualDeparture: new Date().toISOString(),
-        notes: `Dispatched with manifests: ${manifestNotes}`
+        actualDeparture: new Date().toISOString()
+        // Notes are already set during trip creation - don't overwrite
       });
 
       for (const loadsheet of selectedLoadsheets) {
         await loadsheetService.updateLoadsheet(loadsheet.id, {
           linehaulTripId: createdTrip.id,
-          status: 'DISPATCHED'
+          status: 'DISPATCHED',
+          // Update loadsheet destination if alternate destination was selected
+          ...(isAlternateDestination && { destinationTerminalCode: destinationCode })
         });
       }
 
@@ -677,6 +903,8 @@ export const DispatchTripModal: React.FC<DispatchTripModalProps> = ({
       queryClient.invalidateQueries({ queryKey: ['inbound-trips'] });
       queryClient.invalidateQueries({ queryKey: ['loadsheets-for-outbound'] });
       queryClient.invalidateQueries({ queryKey: ['loadsheets-for-dispatch'] });
+      queryClient.invalidateQueries({ queryKey: ['loadsheets-for-loads-tab'] });
+      queryClient.invalidateQueries({ queryKey: ['continuing-trips-for-loads-tab'] });
 
       setDispatchedTripId(createdTrip.id);
       setDispatchedTripNumber(createdTrip.tripNumber);
@@ -1000,24 +1228,138 @@ export const DispatchTripModal: React.FC<DispatchTripModalProps> = ({
 
                 {/* Origin & Destination */}
                 {hasManifest && (
-                  <div className="grid grid-cols-1 md:grid-cols-2 gap-6 bg-gray-50 dark:bg-gray-700/50 p-4 rounded-lg">
-                    <div>
-                      <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">
-                        Origin
-                      </label>
-                      <div className="px-3 py-2 border border-gray-200 dark:border-gray-600 rounded-md bg-gray-100 dark:bg-gray-800 text-gray-900 dark:text-gray-100">
-                        {originCode || '-'}
+                  <div className="bg-gray-50 dark:bg-gray-700/50 p-4 rounded-lg space-y-4">
+                    <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+                      <div>
+                        <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">
+                          Origin
+                        </label>
+                        <div className="px-3 py-2 border border-gray-200 dark:border-gray-600 rounded-md bg-gray-100 dark:bg-gray-800 text-gray-900 dark:text-gray-100">
+                          {originCode || '-'}
+                        </div>
+                      </div>
+
+                      <div>
+                        <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">
+                          Destination
+                          {destinationOptions.length > 1 && (
+                            <span className="text-xs text-gray-500 dark:text-gray-400 ml-2">
+                              ({destinationOptions.length} options)
+                            </span>
+                          )}
+                        </label>
+                      {destinationOptions.length > 1 ? (
+                        <div className="relative">
+                          <button
+                            type="button"
+                            onClick={() => setDestinationDropdownOpen(!destinationDropdownOpen)}
+                            className="w-full px-3 py-2 border border-gray-300 dark:border-gray-600 rounded-md bg-white dark:bg-gray-700 text-gray-900 dark:text-gray-100 focus:ring-2 focus:ring-primary-500 focus:border-transparent text-left flex items-center justify-between"
+                          >
+                            <span>
+                              {effectiveDestination?.code || destCode || '-'}
+                              {effectiveDestination?.name && (
+                                <span className="text-gray-500 dark:text-gray-400 ml-2 text-sm">
+                                  - {effectiveDestination.name}
+                                </span>
+                              )}
+                              {selectedDestination && selectedDestination.code?.toUpperCase() !== matchedProfile?.destinationTerminal?.code?.toUpperCase() && (
+                                <span className="text-amber-600 dark:text-amber-400 ml-2 text-xs font-medium">
+                                  (Alternate)
+                                </span>
+                              )}
+                            </span>
+                            <ChevronDown className={`h-4 w-4 text-gray-400 transition-transform ${destinationDropdownOpen ? 'rotate-180' : ''}`} />
+                          </button>
+                          {destinationDropdownOpen && (
+                            <div className="absolute z-10 w-full mt-1 bg-white dark:bg-gray-700 border border-gray-300 dark:border-gray-600 rounded-md shadow-lg max-h-60 overflow-auto">
+                              {destinationOptions.map((terminal, index) => {
+                                const isDefault = terminal.code?.toUpperCase() === matchedProfile?.destinationTerminal?.code?.toUpperCase();
+                                const isSelected = effectiveDestination?.code?.toUpperCase() === terminal.code?.toUpperCase();
+                                return (
+                                  <button
+                                    key={terminal.id || terminal.code || index}
+                                    type="button"
+                                    onClick={() => {
+                                      setSelectedDestination(isDefault ? null : terminal);
+                                      setDestinationDropdownOpen(false);
+                                    }}
+                                    className={`w-full px-4 py-2 text-left hover:bg-gray-100 dark:hover:bg-gray-600 text-gray-900 dark:text-gray-100 ${isSelected ? 'bg-primary-50 dark:bg-primary-900/30' : ''}`}
+                                  >
+                                    <span className="font-medium">{terminal.code}</span>
+                                    {terminal.name && (
+                                      <span className="text-gray-500 dark:text-gray-400 ml-2 text-sm">
+                                        - {terminal.name}
+                                      </span>
+                                    )}
+                                    {isDefault && (
+                                      <span className="text-green-600 dark:text-green-400 ml-2 text-xs">
+                                        (Default)
+                                      </span>
+                                    )}
+                                    {isSelected && (
+                                      <CheckCircle className="h-4 w-4 text-primary-500 inline ml-2" />
+                                    )}
+                                  </button>
+                                );
+                              })}
+                            </div>
+                          )}
+                        </div>
+                      ) : (
+                        <div className="px-3 py-2 border border-gray-200 dark:border-gray-600 rounded-md bg-gray-100 dark:bg-gray-800 text-gray-900 dark:text-gray-100">
+                          {effectiveDestination?.code || destCode || '-'}
+                          {effectiveDestination?.name && (
+                            <span className="text-gray-500 dark:text-gray-400 ml-2 text-sm">
+                              - {effectiveDestination.name}
+                            </span>
+                          )}
+                        </div>
+                      )}
                       </div>
                     </div>
 
-                    <div>
-                      <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">
-                        Destination
-                      </label>
-                      <div className="px-3 py-2 border border-gray-200 dark:border-gray-600 rounded-md bg-gray-100 dark:bg-gray-800 text-gray-900 dark:text-gray-100">
-                        {destCode || '-'}
+                    {/* Mileage and ETA Display */}
+                    {(calculatedMiles || calculatedETA) && (
+                      <div className="grid grid-cols-1 md:grid-cols-2 gap-6 pt-3 border-t border-gray-200 dark:border-gray-600">
+                        <div>
+                          <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">
+                            Distance
+                          </label>
+                          <div className="px-3 py-2 border border-gray-200 dark:border-gray-600 rounded-md bg-gray-100 dark:bg-gray-800 text-gray-900 dark:text-gray-100">
+                            {calculatedMiles ? `${calculatedMiles.toLocaleString()} miles` : '-'}
+                            {selectedDestination && selectedDestination.code?.toUpperCase() !== matchedProfile?.destinationTerminal?.code?.toUpperCase() && (
+                              <span className="text-amber-600 dark:text-amber-400 ml-2 text-xs font-medium">
+                                (Calculated)
+                              </span>
+                            )}
+                          </div>
+                        </div>
+                        <div>
+                          <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">
+                            Planned ETA
+                          </label>
+                          <div className="px-3 py-2 border border-gray-200 dark:border-gray-600 rounded-md bg-gray-100 dark:bg-gray-800 text-gray-900 dark:text-gray-100">
+                            {calculatedETA ? (
+                              <>
+                                {calculatedETA.toLocaleDateString('en-US', { weekday: 'short', month: 'short', day: 'numeric' })}
+                                {' '}
+                                {calculatedETA.toLocaleTimeString('en-US', { hour: 'numeric', minute: '2-digit', hour12: true })}
+                                {transitMinutes && (
+                                  <span className="text-gray-500 dark:text-gray-400 ml-2 text-xs">
+                                    ({Math.floor(transitMinutes / 60)}h {transitMinutes % 60}m)
+                                  </span>
+                                )}
+                              </>
+                            ) : '-'}
+                            {selectedDestination && selectedDestination.code?.toUpperCase() !== matchedProfile?.destinationTerminal?.code?.toUpperCase() && (
+                              <span className="text-amber-600 dark:text-amber-400 ml-2 text-xs font-medium">
+                                (Calculated)
+                              </span>
+                            )}
+                          </div>
+                        </div>
                       </div>
-                    </div>
+                    )}
                   </div>
                 )}
 
@@ -1283,10 +1625,39 @@ export const DispatchTripModal: React.FC<DispatchTripModalProps> = ({
               <div>
                 <span className="text-gray-500 dark:text-gray-400">Destination:</span>
                 <p className="font-medium text-gray-900 dark:text-gray-100">
-                  {destCode || '-'}
+                  {effectiveDestination?.code || destCode || '-'}
+                  {selectedDestination && selectedDestination.code?.toUpperCase() !== matchedProfile?.destinationTerminal?.code?.toUpperCase() && (
+                    <span className="text-amber-600 dark:text-amber-400 ml-2 text-xs font-medium">
+                      (Alternate)
+                    </span>
+                  )}
                 </p>
               </div>
             </div>
+
+            {/* Mileage and ETA in confirmation */}
+            {(calculatedMiles || calculatedETA) && (
+              <div className="grid grid-cols-2 gap-4 text-sm pt-2 border-t border-gray-200 dark:border-gray-600">
+                <div>
+                  <span className="text-gray-500 dark:text-gray-400">Distance:</span>
+                  <p className="font-medium text-gray-900 dark:text-gray-100">
+                    {calculatedMiles ? `${calculatedMiles.toLocaleString()} miles` : '-'}
+                  </p>
+                </div>
+                <div>
+                  <span className="text-gray-500 dark:text-gray-400">Planned ETA:</span>
+                  <p className="font-medium text-gray-900 dark:text-gray-100">
+                    {calculatedETA ? (
+                      <>
+                        {calculatedETA.toLocaleDateString('en-US', { weekday: 'short', month: 'short', day: 'numeric' })}
+                        {' '}
+                        {calculatedETA.toLocaleTimeString('en-US', { hour: 'numeric', minute: '2-digit', hour12: true })}
+                      </>
+                    ) : '-'}
+                  </p>
+                </div>
+              </div>
+            )}
           </div>
 
           <div className="flex justify-end space-x-3 pt-4">
