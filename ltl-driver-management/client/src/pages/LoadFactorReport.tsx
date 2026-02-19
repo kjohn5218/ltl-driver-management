@@ -138,8 +138,8 @@ export const LoadFactorReport: React.FC = () => {
       return row.loadsheets[0].originTerminalCode;
     }
 
-    // Parse from linehaulName
-    const linehaulName = row.trip.linehaulName || row.loadsheets?.[0]?.linehaulName;
+    // Parse from linehaulName (also check profile name)
+    const linehaulName = row.trip.linehaulName || row.trip.linehaulProfile?.name || row.loadsheets?.[0]?.linehaulName;
     if (linehaulName) {
       if (linehaulName.includes('-')) {
         return linehaulName.split('-')[0];

@@ -402,14 +402,18 @@ export const getLinehaulProfilesList = async (_req: Request, res: Response): Pro
         name: true,
         standardDepartureTime: true,
         standardArrivalTime: true,
+        distanceMiles: true,
+        transitTimeMinutes: true,
         headhaul: true,
         interlineTrailer: true,
         interlineCarrierId: true,
+        originTerminalId: true,
+        destinationTerminalId: true,
         originTerminal: {
-          select: { code: true, city: true, state: true }
+          select: { id: true, code: true, name: true, city: true, state: true, latitude: true, longitude: true }
         },
         destinationTerminal: {
-          select: { code: true, city: true, state: true }
+          select: { id: true, code: true, name: true, city: true, state: true, latitude: true, longitude: true }
         },
         interlineCarrier: {
           select: { id: true, code: true, name: true }
@@ -679,12 +683,12 @@ export const getOkayToDispatchTerminals = async (req: Request, res: Response): P
         profileCode: true,
         name: true,
         originTerminal: {
-          select: { id: true, code: true, name: true, city: true, state: true }
+          select: { id: true, code: true, name: true, city: true, state: true, latitude: true, longitude: true }
         },
         okayToDispatchTerminals: {
           include: {
             terminal: {
-              select: { id: true, code: true, name: true, city: true, state: true, active: true }
+              select: { id: true, code: true, name: true, city: true, state: true, active: true, latitude: true, longitude: true }
             }
           }
         }
@@ -701,7 +705,9 @@ export const getOkayToDispatchTerminals = async (req: Request, res: Response): P
       profileCode: profile.profileCode,
       profileName: profile.name,
       originTerminal: profile.originTerminal,
-      okayToDispatchTerminals: profile.okayToDispatchTerminals.map(otd => otd.terminal)
+      okayToDispatchTerminals: profile.okayToDispatchTerminals
+        .map(otd => otd.terminal)
+        .filter(terminal => terminal !== null && terminal !== undefined)
     });
   } catch (error) {
     console.error('Error fetching okay-to-dispatch terminals:', error);

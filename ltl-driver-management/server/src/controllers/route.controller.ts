@@ -70,16 +70,36 @@ export const getRoutes = async (req: Request, res: Response) => {
     });
 
     // Look up corresponding LinehaulProfiles to get headhaul flag and linehaulProfileId
+    // Match by BOTH name AND origin terminal to handle profiles with the same name but different legs
     const routeNames = routes.map(r => r.name);
     const matchingProfiles = await prisma.linehaulProfile.findMany({
       where: { name: { in: routeNames } },
-      select: { id: true, name: true, headhaul: true, trailerLoad: true }
+      select: {
+        id: true,
+        name: true,
+        headhaul: true,
+        trailerLoad: true,
+        originTerminal: { select: { code: true } }
+      }
     });
-    const profileMap = new Map(matchingProfiles.map(p => [p.name, p]));
+
+    // Create a map keyed by "name|origin" to handle duplicate profile names
+    const profileMap = new Map(matchingProfiles.map(p => [
+      `${p.name}|${p.originTerminal?.code?.toUpperCase() || ''}`,
+      p
+    ]));
 
     // Enhance routes with LinehaulProfile data
     const enhancedRoutes = routes.map(route => {
-      const profile = profileMap.get(route.name);
+      // Try to find profile by name+origin first, fall back to name only
+      const profileKey = `${route.name}|${route.origin?.toUpperCase() || ''}`;
+      let profile = profileMap.get(profileKey);
+
+      // Fallback: try to find any profile with this name (for backwards compatibility)
+      if (!profile) {
+        profile = matchingProfiles.find(p => p.name === route.name);
+      }
+
       return {
         ...route,
         linehaulProfileId: profile?.id || null,
@@ -129,7 +149,29 @@ export const getRouteById = async (req: Request, res: Response) => {
       return res.status(404).json({ message: 'Route not found' });
     }
 
-    return res.json(route);
+    // Look up corresponding LinehaulProfile by name AND origin to handle duplicate profile names
+    const matchingProfile = await prisma.linehaulProfile.findFirst({
+      where: {
+        name: route.name,
+        originTerminal: { code: route.origin }
+      },
+      select: { id: true, headhaul: true, trailerLoad: true }
+    });
+
+    // Fallback: try to find any profile with this name
+    const fallbackProfile = matchingProfile ? null : await prisma.linehaulProfile.findFirst({
+      where: { name: route.name },
+      select: { id: true, headhaul: true, trailerLoad: true }
+    });
+
+    const profile = matchingProfile || fallbackProfile;
+
+    return res.json({
+      ...route,
+      linehaulProfileId: profile?.id || null,
+      headhaul: profile?.headhaul || false,
+      trailerLoad: profile?.trailerLoad || false
+    });
   } catch (error) {
     console.error('Get route by id error:', error);
     return res.status(500).json({ message: 'Failed to fetch route' });
@@ -264,6 +306,33 @@ export const updateRoute = async (req: Request, res: Response) => {
         }
       }
     });
+
+    // Also update the corresponding LinehaulProfile if it exists
+    // This keeps the headhaul and trailerLoad flags in sync between Route and LinehaulProfile
+    if (updateData.headhaul !== undefined || updateData.trailerLoad !== undefined) {
+      // Try to find matching profile by name AND origin
+      const matchingProfile = await prisma.linehaulProfile.findFirst({
+        where: {
+          name: route.name,
+          originTerminal: { code: route.origin }
+        }
+      });
+
+      // Fallback: try to find any profile with this name
+      const profileToUpdate = matchingProfile || await prisma.linehaulProfile.findFirst({
+        where: { name: route.name }
+      });
+
+      if (profileToUpdate) {
+        await prisma.linehaulProfile.update({
+          where: { id: profileToUpdate.id },
+          data: {
+            ...(updateData.headhaul !== undefined && { headhaul: updateData.headhaul }),
+            ...(updateData.trailerLoad !== undefined && { trailerLoad: updateData.trailerLoad })
+          }
+        });
+      }
+    }
 
     return res.json(route);
   } catch (error) {

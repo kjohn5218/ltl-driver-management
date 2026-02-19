@@ -292,7 +292,7 @@ export const OutboundTab: React.FC<OutboundTabProps> = ({ selectedLocations = []
           : undefined;
 
         // Also try parsing from linehaulName (e.g., "FAR-BIS" -> origin is "FAR")
-        const linehaulName = row.trip.linehaulName || row.loadsheets?.[0]?.linehaulName;
+        const linehaulName = row.trip.linehaulName || row.trip.linehaulProfile?.name || row.loadsheets?.[0]?.linehaulName;
         let parsedOriginId: number | undefined;
         if (linehaulName) {
           const parts = linehaulName.includes('-')
@@ -469,8 +469,8 @@ export const OutboundTab: React.FC<OutboundTabProps> = ({ selectedLocations = []
 
   // Get linehaul info from trip or loadsheets
   const getLinehaulInfo = (row: OutboundTripRow): { origin: string; destination: string; linehaulName: string; leg: string } => {
-    // First try trip-level linehaulName (from API transformation)
-    const linehaulName = row.trip.linehaulName || row.loadsheets?.[0]?.linehaulName || '-';
+    // First try trip-level linehaulName, then profile name, then loadsheet linehaulName
+    const linehaulName = row.trip.linehaulName || row.trip.linehaulProfile?.name || row.loadsheets?.[0]?.linehaulName || '-';
     const parsed = parseLeg(linehaulName);
 
     // If parsing didn't get destination, try loadsheet's destinationTerminalCode

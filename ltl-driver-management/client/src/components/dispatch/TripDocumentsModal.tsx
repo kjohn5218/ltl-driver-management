@@ -5,7 +5,7 @@
  * Allows users to preview, download, and print documents.
  */
 
-import React, { useEffect, useState } from 'react';
+import React, { useEffect, useState, useRef } from 'react';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { tripDocumentService } from '../../services/tripDocumentService';
 import { TripDocument, TripDocumentType } from '../../types';
@@ -51,6 +51,16 @@ export const TripDocumentsModal: React.FC<TripDocumentsModalProps> = ({
   const [downloadingId, setDownloadingId] = useState<number | null>(null);
   const [printingId, setPrintingId] = useState<number | null>(null);
   const [printingAll, setPrintingAll] = useState(false);
+
+  // Track if we've already attempted auto-generation for this modal session
+  const hasAttemptedGeneration = useRef(false);
+
+  // Reset generation flag when modal closes
+  useEffect(() => {
+    if (!isOpen) {
+      hasAttemptedGeneration.current = false;
+    }
+  }, [isOpen]);
 
   // Fetch documents for the trip
   const { data, isLoading, error, refetch } = useQuery({
@@ -181,11 +191,13 @@ export const TripDocumentsModal: React.FC<TripDocumentsModalProps> = ({
   const hasGeneratedDocs = documents.some(d => d.status === 'GENERATED');
 
   // Auto-generate documents when modal opens and no documents exist
+  // Uses ref to prevent multiple generation attempts per modal session
   useEffect(() => {
-    if (isOpen && !isLoading && !error && documents.length === 0 && !generateMutation.isPending && !generateMutation.isSuccess) {
+    if (isOpen && !isLoading && !error && documents.length === 0 && !generateMutation.isPending && !hasAttemptedGeneration.current) {
+      hasAttemptedGeneration.current = true;
       generateMutation.mutate();
     }
-  }, [isOpen, isLoading, error, documents.length, generateMutation.isPending, generateMutation.isSuccess]);
+  }, [isOpen, isLoading, error, documents.length, generateMutation.isPending]);
 
   return (
     <Modal isOpen={isOpen} onClose={onClose} title={`Trip Documents${tripNumber ? ` - ${tripNumber}` : ''}`}>

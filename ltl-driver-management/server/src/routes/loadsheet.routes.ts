@@ -25,7 +25,7 @@ router.get(
   '/',
   [
     query('search').optional().trim(),
-    query('status').optional().isIn(['DRAFT', 'OPEN', 'LOADING', 'CLOSED', 'DISPATCHED']),
+    query('status').optional().isIn(['DRAFT', 'OPEN', 'LOADING', 'CLOSED', 'DISPATCHED', 'UNLOADED', 'TERMINATED']),
     query('linehaulTripId').optional().isInt({ min: 1 }),
     query('originTerminalId').optional().isInt({ min: 1 }),
     query('originTerminalCode').optional().trim(),

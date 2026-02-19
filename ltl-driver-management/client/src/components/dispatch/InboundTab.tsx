@@ -302,8 +302,8 @@ export const InboundTab: React.FC<InboundTabProps> = ({ selectedLocations = [] }
 
   // Get linehaul info from trip or loadsheets
   const getLinehaulInfo = (row: InboundTripRow): { origin: string; destination: string; linehaulName: string; leg: string; isAlternate?: boolean } => {
-    // First try trip-level linehaulName (from API transformation)
-    const linehaulName = row.trip.linehaulName || row.loadsheets?.[0]?.linehaulName || '-';
+    // First try trip-level linehaulName, then profile name, then loadsheet linehaulName
+    const linehaulName = row.trip.linehaulName || row.trip.linehaulProfile?.name || row.loadsheets?.[0]?.linehaulName || '-';
     const parsed = parseLeg(linehaulName);
 
     // Get the trip's ORIGINAL origin from the profile (not the loadsheet which gets updated on arrival)
