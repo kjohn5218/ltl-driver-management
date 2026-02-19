@@ -256,7 +256,8 @@ export const getTerminalLocations = async (_req: Request, res: Response) => {
         city: true,
         state: true,
         isPhysicalTerminal: true,
-        isVirtualTerminal: true
+        isVirtualTerminal: true,
+        isDispatchLocation: true
       },
       orderBy: { code: 'asc' }
     });

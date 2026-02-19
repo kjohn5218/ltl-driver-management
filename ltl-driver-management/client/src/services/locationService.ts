@@ -27,6 +27,7 @@ export interface TerminalLocation {
   state?: string;
   isPhysicalTerminal: boolean;
   isVirtualTerminal: boolean;
+  isDispatchLocation: boolean;
 }
 
 // Mileage lookup result

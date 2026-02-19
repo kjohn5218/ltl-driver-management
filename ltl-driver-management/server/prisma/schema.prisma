@@ -444,6 +444,7 @@ model Location {
   notes              String?
   isPhysicalTerminal Boolean  @default(false)
   isVirtualTerminal  Boolean  @default(false)
+  isDispatchLocation Boolean  @default(false)
 
   // Relations - User home location
   usersWithHomeLocation            User[]                        @relation("UserHomeLocation")

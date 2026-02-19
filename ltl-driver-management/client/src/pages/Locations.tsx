@@ -78,6 +78,10 @@ export const Locations: React.FC = () => {
         aValue = a.isVirtualTerminal;
         bValue = b.isVirtualTerminal;
         break;
+      case 'isDispatchLocation':
+        aValue = a.isDispatchLocation;
+        bValue = b.isDispatchLocation;
+        break;
       case 'cityState':
         aValue = `${a.city || ''}, ${a.state || ''}`;
         bValue = `${b.city || ''}, ${b.state || ''}`;
@@ -300,6 +304,16 @@ export const Locations: React.FC = () => {
                 <th
                   scope="col"
                   className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider cursor-pointer hover:bg-gray-100"
+                  onClick={() => handleSort('isDispatchLocation')}
+                >
+                  <div className="flex items-center space-x-1">
+                    <span>Dispatch Location</span>
+                    <SortIcon column="isDispatchLocation" />
+                  </div>
+                </th>
+                <th
+                  scope="col"
+                  className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider cursor-pointer hover:bg-gray-100"
                   onClick={() => handleSort('cityState')}
                 >
                   <div className="flex items-center space-x-1">
@@ -352,6 +366,15 @@ export const Locations: React.FC = () => {
                   <td className="px-6 py-4 whitespace-nowrap">
                     {location.isVirtualTerminal ? (
                       <span className="inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium bg-purple-100 text-purple-800">
+                        Yes
+                      </span>
+                    ) : (
+                      <span className="text-sm text-gray-400">No</span>
+                    )}
+                  </td>
+                  <td className="px-6 py-4 whitespace-nowrap">
+                    {location.isDispatchLocation ? (
+                      <span className="inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium bg-green-100 text-green-800">
                         Yes
                       </span>
                     ) : (
@@ -596,7 +619,8 @@ const LocationEditModal: React.FC<LocationEditModalProps> = ({ location, onClose
     notes: location?.notes || '',
     active: location?.active ?? true,
     isPhysicalTerminal: location?.isPhysicalTerminal ?? false,
-    isVirtualTerminal: location?.isVirtualTerminal ?? false
+    isVirtualTerminal: location?.isVirtualTerminal ?? false,
+    isDispatchLocation: location?.isDispatchLocation ?? false
   });
   const [isSubmitting, setIsSubmitting] = useState(false);
 
@@ -623,7 +647,8 @@ const LocationEditModal: React.FC<LocationEditModalProps> = ({ location, onClose
         notes: cleanValue(formData.notes),
         active: formData.active,
         isPhysicalTerminal: formData.isPhysicalTerminal,
-        isVirtualTerminal: formData.isVirtualTerminal
+        isVirtualTerminal: formData.isVirtualTerminal,
+        isDispatchLocation: formData.isDispatchLocation
       };
 
       const response = location
@@ -875,6 +900,18 @@ const LocationEditModal: React.FC<LocationEditModalProps> = ({ location, onClose
               />
               <label htmlFor="isVirtualTerminal" className="ml-2 block text-sm text-gray-900">
                 Virtual Terminal
+              </label>
+            </div>
+            <div className="flex items-center">
+              <input
+                type="checkbox"
+                id="isDispatchLocation"
+                checked={formData.isDispatchLocation}
+                onChange={(e) => setFormData({ ...formData, isDispatchLocation: e.target.checked })}
+                className="h-4 w-4 text-primary-600 focus:ring-primary-500 border-gray-300 rounded"
+              />
+              <label htmlFor="isDispatchLocation" className="ml-2 block text-sm text-gray-900">
+                Dispatch Location
               </label>
             </div>
           </div>

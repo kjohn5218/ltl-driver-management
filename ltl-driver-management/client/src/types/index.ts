@@ -367,6 +367,7 @@ export interface Location {
   active: boolean;
   isPhysicalTerminal: boolean;
   isVirtualTerminal: boolean;
+  isDispatchLocation: boolean;
   createdAt: string;
   updatedAt: string;
 }
@@ -612,6 +613,7 @@ export interface LinehaulTrip {
   dollyId?: number;
   dolly2Id?: number;
   actualMileage?: number;
+  destinationTerminalCode?: string; // Alternate destination override
   notes?: string;
   createdAt: string;
   updatedAt: string;
