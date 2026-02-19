@@ -1419,6 +1419,8 @@ export interface PayrollLineItemUpdate {
   chainUpCount?: number;
   waitTimeMinutes?: number;
   trailerConfig?: string;
+  workHours?: number;
+  stopHours?: number;
 }
 
 export interface PayrollExportOptions {

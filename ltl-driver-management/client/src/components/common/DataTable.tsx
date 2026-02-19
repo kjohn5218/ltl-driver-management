@@ -23,6 +23,9 @@ interface DataTableProps<T> {
   selectable?: boolean;
   selectedIds?: Set<number>;
   onSelectionChange?: (selectedIds: Set<number>) => void;
+  // Expandable rows props
+  expandedRowIds?: Set<string | number>;
+  renderExpandedRow?: (item: T) => React.ReactNode;
 }
 
 export function DataTable<T extends Record<string, any>>({
@@ -35,7 +38,9 @@ export function DataTable<T extends Record<string, any>>({
   onSort,
   selectable = false,
   selectedIds = new Set(),
-  onSelectionChange
+  onSelectionChange,
+  expandedRowIds = new Set(),
+  renderExpandedRow
 }: DataTableProps<T>) {
   const renderSortIcon = (column: Column<T>) => {
     if (!column.sortable) return null;
@@ -135,31 +140,41 @@ export function DataTable<T extends Record<string, any>>({
         </thead>
         <tbody className="bg-white dark:bg-gray-800 divide-y divide-gray-200 dark:divide-gray-700">
           {data.map((item) => {
-            const itemId = keyExtractor(item) as number;
-            const isSelected = selectedIds.has(itemId);
+            const itemId = keyExtractor(item);
+            const isSelected = selectedIds.has(itemId as number);
+            const isExpanded = expandedRowIds.has(itemId);
+            const colSpan = columns.length + (selectable ? 1 : 0);
             return (
-              <tr
-                key={itemId}
-                className={`hover:bg-gray-50 dark:hover:bg-gray-700 ${
-                  isSelected ? 'bg-primary-50 dark:bg-primary-900/20' : ''
-                }`}
-              >
-                {selectable && (
-                  <td className="px-4 py-3 w-10">
-                    <input
-                      type="checkbox"
-                      checked={isSelected}
-                      onChange={(e) => handleRowSelect(itemId, e.target.checked)}
-                      className="h-4 w-4 text-primary-600 focus:ring-primary-500 border-gray-300 rounded cursor-pointer"
-                    />
-                  </td>
+              <React.Fragment key={itemId}>
+                <tr
+                  className={`hover:bg-gray-50 dark:hover:bg-gray-700 ${
+                    isSelected ? 'bg-primary-50 dark:bg-primary-900/20' : ''
+                  } ${isExpanded ? 'bg-indigo-50/50 dark:bg-indigo-900/10' : ''}`}
+                >
+                  {selectable && (
+                    <td className="px-4 py-3 w-10">
+                      <input
+                        type="checkbox"
+                        checked={isSelected}
+                        onChange={(e) => handleRowSelect(itemId as number, e.target.checked)}
+                        className="h-4 w-4 text-primary-600 focus:ring-primary-500 border-gray-300 rounded cursor-pointer"
+                      />
+                    </td>
+                  )}
+                  {columns.map((column, index) => (
+                    <td key={index} className={`px-4 py-3 whitespace-nowrap text-sm text-gray-900 dark:text-gray-100 ${column.width || ''}`}>
+                      {column.cell ? column.cell(item) : item[column.accessor]}
+                    </td>
+                  ))}
+                </tr>
+                {isExpanded && renderExpandedRow && (
+                  <tr className="bg-indigo-50/30 dark:bg-indigo-900/20">
+                    <td colSpan={colSpan} className="px-6 py-4">
+                      {renderExpandedRow(item)}
+                    </td>
+                  </tr>
                 )}
-                {columns.map((column, index) => (
-                  <td key={index} className={`px-4 py-3 whitespace-nowrap text-sm text-gray-900 dark:text-gray-100 ${column.width || ''}`}>
-                    {column.cell ? column.cell(item) : item[column.accessor]}
-                  </td>
-                ))}
-              </tr>
+              </React.Fragment>
             );
           })}
         </tbody>

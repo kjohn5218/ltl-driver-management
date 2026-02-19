@@ -1075,8 +1075,8 @@ export const updatePayrollLineItem = async (req: Request, res: Response): Promis
   try {
     const { type, id } = req.params;
     const {
-      basePay, mileagePay, accessorialPay, bonusPay, deductions, totalPay, notes, rateApplied, status,
-      totalMiles, dropAndHookCount, chainUpCount, waitTimeMinutes, trailerConfig
+      basePay, mileagePay, bonusPay, deductions, totalPay, notes, rateApplied, status,
+      totalMiles, dropAndHookCount, chainUpCount, waitTimeMinutes, trailerConfig, workHours, stopHours
     } = req.body;
     const itemId = parseInt(id, 10);
 
@@ -1091,14 +1091,31 @@ export const updatePayrollLineItem = async (req: Request, res: Response): Promis
         return;
       }
 
+      // Calculate accessorial pay from counts (using standard rates)
+      // D&H: $25 per hook, Chain: $15 per cycle, Wait: $18 per hour
+      const newDropHookCount = dropAndHookCount !== undefined ? dropAndHookCount : (payrollItem.dropHookCount || 0);
+      const newChainUpCount = chainUpCount !== undefined ? chainUpCount : (payrollItem.chainUpCount || 0);
+      const newWaitMinutes = waitTimeMinutes !== undefined ? waitTimeMinutes : 0;
+
+      // Calculate pay from counts
+      const newDropHookPay = newDropHookCount * 25;
+      const newChainUpPay = newChainUpCount * 15;
+      const newWaitTimePay = newWaitMinutes > 0 ? (newWaitMinutes / 60) * 18 : Number(payrollItem.waitTimePay || 0);
+      const newOtherPay = Number(payrollItem.otherAccessorialPay || 0);
+
       // Calculate new total
       const newBasePay = basePay !== undefined ? basePay : Number(payrollItem.basePay);
       const newMileagePay = mileagePay !== undefined ? mileagePay : Number(payrollItem.mileagePay);
-      const totalAccessorial = Number(payrollItem.dropAndHookPay) + Number(payrollItem.chainUpPay) + Number(payrollItem.waitTimePay) + Number(payrollItem.otherAccessorialPay);
-      const newAccessorialPay = accessorialPay !== undefined ? accessorialPay : totalAccessorial;
+      const totalAccessorial = newDropHookPay + newChainUpPay + newWaitTimePay + newOtherPay;
       const newBonusPay = bonusPay !== undefined ? bonusPay : Number(payrollItem.bonusPay);
       const newDeductions = deductions !== undefined ? deductions : Number(payrollItem.deductions);
-      const newTotal = totalPay !== undefined ? totalPay : (newBasePay + newMileagePay + newAccessorialPay + newBonusPay - newDeductions);
+
+      // Labor cost = total gross pay (base + mileage + accessorials + bonus - deductions)
+      const laborCost = totalPay !== undefined ? totalPay : (newBasePay + newMileagePay + totalAccessorial + newBonusPay - newDeductions);
+
+      // Total cost = labor + fuel (if available)
+      const fuelCost = payrollItem.fuelCost ? Number(payrollItem.fuelCost) : 0;
+      const totalCost = laborCost + fuelCost;
 
       // Determine the new status - use provided status or keep existing
       const newStatus = status !== undefined ? status as PayrollLineItemStatus : payrollItem.status;
@@ -1111,14 +1128,21 @@ export const updatePayrollLineItem = async (req: Request, res: Response): Promis
           ...(mileagePay !== undefined && { mileagePay: new Prisma.Decimal(mileagePay) }),
           ...(bonusPay !== undefined && { bonusPay: new Prisma.Decimal(bonusPay) }),
           ...(deductions !== undefined && { deductions: new Prisma.Decimal(deductions) }),
-          totalGrossPay: new Prisma.Decimal(newTotal),
+          // Update accessorial pay breakdown
+          ...(dropAndHookCount !== undefined && { dropAndHookPay: new Prisma.Decimal(newDropHookPay) }),
+          ...(chainUpCount !== undefined && { chainUpPay: new Prisma.Decimal(newChainUpPay) }),
+          ...(waitTimeMinutes !== undefined && { waitTimePay: new Prisma.Decimal(newWaitTimePay) }),
+          totalGrossPay: new Prisma.Decimal(laborCost),
+          totalCost: new Prisma.Decimal(totalCost),
           ...(notes !== undefined && { notes }),
           ...(status !== undefined && { status: newStatus }),
           // Trip info fields
           ...(totalMiles !== undefined && { totalMiles: new Prisma.Decimal(totalMiles) }),
           ...(dropAndHookCount !== undefined && { dropHookCount: dropAndHookCount }),
           ...(chainUpCount !== undefined && { chainUpCount }),
-          ...(trailerConfig !== undefined && { trailerConfig })
+          ...(trailerConfig !== undefined && { trailerConfig }),
+          ...(workHours !== undefined && { workHours: new Prisma.Decimal(workHours) }),
+          ...(stopHours !== undefined && { stopHours: new Prisma.Decimal(stopHours) })
         }
       });
 
@@ -1136,15 +1160,16 @@ export const updatePayrollLineItem = async (req: Request, res: Response): Promis
       const tripPayStatus = tripPayStatusMap[newStatus] || 'REVIEWED';
 
       // Also update the source TripPay record
+      const calculatedAccessorialPay = totalAccessorial;
       await prisma.tripPay.update({
         where: { id: itemId },
         data: {
           ...(basePay !== undefined && { basePay: new Prisma.Decimal(basePay) }),
           ...(mileagePay !== undefined && { mileagePay: new Prisma.Decimal(mileagePay) }),
-          ...(accessorialPay !== undefined && { accessorialPay: new Prisma.Decimal(accessorialPay) }),
+          accessorialPay: new Prisma.Decimal(calculatedAccessorialPay),
           ...(bonusPay !== undefined && { bonusPay: new Prisma.Decimal(bonusPay) }),
           ...(deductions !== undefined && { deductions: new Prisma.Decimal(deductions) }),
-          totalGrossPay: new Prisma.Decimal(newTotal),
+          totalGrossPay: new Prisma.Decimal(laborCost),
           ...(notes !== undefined && { notes }),
           ...(status !== undefined && { status: tripPayStatus as TripPayStatus })
         }

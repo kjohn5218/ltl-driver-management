@@ -96,7 +96,12 @@ export const createPayrollLineItemFromTripPay = async (tripPayId: number): Promi
       tripNumber: tripPay.trip?.tripNumber,
       origin: tripPay.trip?.linehaulProfile?.originTerminal?.code,
       destination: tripPay.trip?.linehaulProfile?.destinationTerminal?.code,
-      totalMiles: tripPay.trip?.actualMileage ? new Prisma.Decimal(tripPay.trip.actualMileage) : null,
+      // Use actualMileage if available, otherwise fall back to linehaulProfile.distanceMiles
+      totalMiles: tripPay.trip?.actualMileage
+        ? new Prisma.Decimal(tripPay.trip.actualMileage)
+        : (tripPay.trip?.linehaulProfile?.distanceMiles
+            ? new Prisma.Decimal(tripPay.trip.linehaulProfile.distanceMiles)
+            : null),
       trailerConfig,
       dropHookCount: dropAndHook,
       chainUpCount: chainUp,
@@ -141,7 +146,11 @@ export const updatePayrollLineItemFromTripPay = async (tripPayId: number): Promi
           },
           driverTripReport: {
             select: { dropAndHook: true, chainUpCycles: true, waitTimeMinutes: true }
-          }
+          },
+          // Include trailers to recalculate trailer config
+          trailer: { select: { id: true } },
+          trailer2: { select: { id: true } },
+          trailer3: { select: { id: true } }
         }
       },
       driver: {
@@ -151,6 +160,11 @@ export const updatePayrollLineItemFromTripPay = async (tripPayId: number): Promi
   });
 
   if (!tripPay) return;
+
+  // Recalculate trailer config based on number of trailers
+  const trailerCount = [tripPay.trip?.trailer, tripPay.trip?.trailer2, tripPay.trip?.trailer3]
+    .filter(t => t !== null && t !== undefined).length;
+  const trailerConfig = trailerCount >= 3 ? 'TRIPLE' : trailerCount === 2 ? 'DOUBLE' : 'SINGLE';
 
   const report = tripPay.trip?.driverTripReport;
   const dropAndHook = report?.dropAndHook || 0;
@@ -162,6 +176,9 @@ export const updatePayrollLineItemFromTripPay = async (tripPayId: number): Promi
   const chainUpPay = chainUp > 0 ? chainUp * 15 : 0;
   const waitTimePay = waitTimeMinutes > 0 ? (waitTimeMinutes / 60) * 18 : 0;
   const otherPay = Math.max(0, totalAccessorial - dropHookPay - chainUpPay - waitTimePay);
+
+  // Use actualMileage if available, otherwise fall back to linehaulProfile.distanceMiles
+  const miles = tripPay.trip?.actualMileage || tripPay.trip?.linehaulProfile?.distanceMiles || null;
 
   const statusMap: Record<string, PayrollLineItemStatus> = {
     PENDING: 'PENDING',
@@ -181,7 +198,10 @@ export const updatePayrollLineItemFromTripPay = async (tripPayId: number): Promi
       tripNumber: tripPay.trip?.tripNumber,
       origin: tripPay.trip?.linehaulProfile?.originTerminal?.code,
       destination: tripPay.trip?.linehaulProfile?.destinationTerminal?.code,
-      totalMiles: tripPay.trip?.actualMileage ? new Prisma.Decimal(tripPay.trip.actualMileage) : null,
+      totalMiles: miles ? new Prisma.Decimal(miles) : null,
+      trailerConfig,
+      dropHookCount: dropAndHook,
+      chainUpCount: chainUp,
       basePay: tripPay.basePay || new Prisma.Decimal(0),
       mileagePay: tripPay.mileagePay || new Prisma.Decimal(0),
       dropAndHookPay: new Prisma.Decimal(dropHookPay),
@@ -578,7 +598,7 @@ export const calculateAndCreateTripPay = async (tripId: number): Promise<{ succe
 
 /**
  * Update payroll status to COMPLETE when trip arrives
- * Also updates accessorial information from driver trip report
+ * Also updates accessorial information and miles from driver trip report
  */
 export const completePayrollOnArrival = async (tripId: number): Promise<{ success: boolean; message: string }> => {
   try {
@@ -591,12 +611,28 @@ export const completePayrollOnArrival = async (tripId: number): Promise<{ succes
       return { success: false, message: 'No payroll item found for this trip' };
     }
 
-    // Get the driver trip report to update accessorial pay
-    const report = await prisma.driverTripReport.findUnique({
-      where: { tripId }
+    // Get the trip with all relevant data for updating payroll
+    const trip = await prisma.linehaulTrip.findUnique({
+      where: { id: tripId },
+      include: {
+        linehaulProfile: {
+          select: { distanceMiles: true }
+        },
+        driverTripReport: {
+          select: { dropAndHook: true, chainUpCycles: true, waitTimeMinutes: true, waitTimeReason: true }
+        },
+        trailer: { select: { id: true } },
+        trailer2: { select: { id: true } },
+        trailer3: { select: { id: true } }
+      }
     });
 
+    if (!trip) {
+      return { success: false, message: 'Trip not found' };
+    }
+
     // Calculate accessorial breakdown from driver trip report
+    const report = trip.driverTripReport;
     const dropAndHook = report?.dropAndHook || 0;
     const chainUp = report?.chainUpCycles || 0;
     const waitTimeMinutes = report?.waitTimeMinutes || 0;
@@ -606,25 +642,41 @@ export const completePayrollOnArrival = async (tripId: number): Promise<{ succes
     const chainUpPay = chainUp > 0 ? chainUp * 15 : 0;
     const waitTimePay = waitTimeMinutes > 0 ? (waitTimeMinutes / 60) * 18 : 0;
 
-    // Update PayrollLineItem to COMPLETE and add accessorial details
+    // Get miles from trip (actualMileage set during arrival, or fall back to profile)
+    const miles = trip.actualMileage || trip.linehaulProfile?.distanceMiles || null;
+
+    // Recalculate trailer config based on number of trailers
+    const trailerCount = [trip.trailer, trip.trailer2, trip.trailer3]
+      .filter(t => t !== null && t !== undefined).length;
+    const trailerConfig = trailerCount >= 3 ? 'TRIPLE' : trailerCount === 2 ? 'DOUBLE' : 'SINGLE';
+
+    // Calculate total cost (labor + fuel if available)
+    const laborCost = Number(payrollItem.basePay || 0) +
+      Number(payrollItem.mileagePay || 0) +
+      dropHookPay +
+      chainUpPay +
+      waitTimePay +
+      Number(payrollItem.otherAccessorialPay || 0) +
+      Number(payrollItem.bonusPay || 0) -
+      Number(payrollItem.deductions || 0);
+
+    const fuelCost = payrollItem.fuelCost ? Number(payrollItem.fuelCost) : 0;
+    const totalCost = laborCost + fuelCost;
+
+    // Update PayrollLineItem to COMPLETE with all arrival data
     await prisma.payrollLineItem.update({
       where: { id: payrollItem.id },
       data: {
         status: 'COMPLETE',
+        totalMiles: miles ? new Prisma.Decimal(miles) : null,
+        trailerConfig,
+        dropHookCount: dropAndHook,
+        chainUpCount: chainUp,
         dropAndHookPay: new Prisma.Decimal(dropHookPay),
         chainUpPay: new Prisma.Decimal(chainUpPay),
         waitTimePay: new Prisma.Decimal(waitTimePay),
-        // Recalculate total gross pay with accessorials
-        totalGrossPay: new Prisma.Decimal(
-          Number(payrollItem.basePay || 0) +
-          Number(payrollItem.mileagePay || 0) +
-          dropHookPay +
-          chainUpPay +
-          waitTimePay +
-          Number(payrollItem.otherAccessorialPay || 0) +
-          Number(payrollItem.bonusPay || 0) -
-          Number(payrollItem.deductions || 0)
-        )
+        totalGrossPay: new Prisma.Decimal(laborCost),
+        totalCost: new Prisma.Decimal(totalCost)
       }
     });
 
@@ -651,7 +703,7 @@ export const completePayrollOnArrival = async (tripId: number): Promise<{ succes
       });
     }
 
-    console.log(`[Payroll] Trip ${tripId} payroll marked as COMPLETE`);
+    console.log(`[Payroll] Trip ${tripId} payroll marked as COMPLETE with miles=${miles}, trailerConfig=${trailerConfig}`);
     return { success: true, message: 'Payroll status updated to COMPLETE' };
   } catch (error) {
     console.error(`[Payroll] Failed to complete payroll for trip ${tripId}:`, error);

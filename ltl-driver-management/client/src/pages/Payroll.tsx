@@ -28,7 +28,10 @@ import {
   FileSpreadsheet,
   ArrowUpDown,
   ChevronUp,
-  ChevronDown
+  ChevronDown,
+  ChevronRight,
+  Eye,
+  Save
 } from 'lucide-react';
 
 const statusConfig: Record<string, { label: string; color: string }> = {
@@ -76,6 +79,13 @@ export const Payroll: React.FC = () => {
   const [isEditModalOpen, setIsEditModalOpen] = useState(false);
   const [isExportModalOpen, setIsExportModalOpen] = useState(false);
   const [editingItem, setEditingItem] = useState<PayrollLineItem | null>(null);
+
+  // Expanded rows for viewing arrival details
+  const [expandedRows, setExpandedRows] = useState<Set<string>>(new Set());
+
+  // Inline editing state
+  const [editingCellId, setEditingCellId] = useState<string | null>(null);
+  const [editingCellValue, setEditingCellValue] = useState<string>('');
 
   const isAdmin = user?.role === 'ADMIN';
   const isPayrollAdmin = user?.role === 'PAYROLL_ADMIN';
@@ -219,6 +229,71 @@ export const Payroll: React.FC = () => {
     return new Intl.NumberFormat('en-US', { style: 'currency', currency: 'USD' }).format(amount ?? 0);
   };
 
+  // Toggle row expansion
+  const toggleRowExpansion = (id: string) => {
+    setExpandedRows(prev => {
+      const newSet = new Set(prev);
+      if (newSet.has(id)) {
+        newSet.delete(id);
+      } else {
+        newSet.add(id);
+      }
+      return newSet;
+    });
+  };
+
+  // Inline editing handlers
+  const startInlineEdit = (itemId: string, field: string, currentValue: string | number | undefined) => {
+    setEditingCellId(`${itemId}-${field}`);
+    setEditingCellValue(currentValue?.toString() || '');
+  };
+
+  const cancelInlineEdit = () => {
+    setEditingCellId(null);
+    setEditingCellValue('');
+  };
+
+  const saveInlineEdit = async (item: PayrollLineItem, field: string) => {
+    const type = item.source === 'TRIP_PAY' ? 'trip' : 'cut';
+    const value = editingCellValue.trim();
+
+    // Build update data based on field
+    const updateData: PayrollLineItemUpdate = {};
+
+    switch (field) {
+      case 'totalMiles':
+        updateData.totalMiles = value ? parseFloat(value) : undefined;
+        break;
+      case 'workHours':
+        updateData.workHours = value ? parseFloat(value) : undefined;
+        break;
+      case 'stopHours':
+        updateData.stopHours = value ? parseFloat(value) : undefined;
+        break;
+      case 'dropAndHookCount':
+        updateData.dropAndHookCount = value ? parseInt(value, 10) : 0;
+        break;
+      case 'waitTimeMinutes':
+        updateData.waitTimeMinutes = value ? parseInt(value, 10) : 0;
+        break;
+      case 'status':
+        updateData.status = value;
+        break;
+      default:
+        return;
+    }
+
+    try {
+      await payrollService.updatePayrollLineItem(type, item.sourceId, updateData);
+      toast.success('Updated successfully');
+      fetchPayrollItems();
+    } catch (error: any) {
+      toast.error(error.response?.data?.message || 'Failed to update');
+    } finally {
+      cancelInlineEdit();
+    }
+  };
+
   const handleFilterChange = (key: keyof PayrollFilters, value: any) => {
     setFilters(prev => ({ ...prev, [key]: value }));
     setCurrentPage(1);
@@ -330,15 +405,112 @@ export const Payroll: React.FC = () => {
     </button>
   );
 
+  // Editable cell component for inline editing
+  const EditableCell = ({
+    item,
+    field,
+    displayValue,
+    type = 'number',
+    suffix = ''
+  }: {
+    item: PayrollLineItem;
+    field: string;
+    displayValue: string | number | undefined;
+    type?: 'number' | 'text';
+    suffix?: string;
+  }) => {
+    const cellId = `${item.id}-${field}`;
+    const isEditing = editingCellId === cellId;
+    const isEditable = canManagePayroll && item.status !== 'APPROVED' && item.status !== 'PAID';
+
+    if (isEditing) {
+      return (
+        <div className="flex items-center gap-1">
+          <input
+            type={type}
+            value={editingCellValue}
+            onChange={(e) => setEditingCellValue(e.target.value)}
+            onKeyDown={(e) => {
+              if (e.key === 'Enter') saveInlineEdit(item, field);
+              if (e.key === 'Escape') cancelInlineEdit();
+            }}
+            autoFocus
+            className="w-16 px-1 py-0.5 text-sm border border-indigo-500 rounded focus:ring-1 focus:ring-indigo-500 dark:bg-gray-700 dark:text-white"
+          />
+          <button
+            onClick={() => saveInlineEdit(item, field)}
+            className="p-0.5 text-green-600 hover:text-green-700"
+            title="Save"
+          >
+            <Save className="w-3 h-3" />
+          </button>
+          <button
+            onClick={cancelInlineEdit}
+            className="p-0.5 text-gray-400 hover:text-gray-600"
+            title="Cancel"
+          >
+            <X className="w-3 h-3" />
+          </button>
+        </div>
+      );
+    }
+
+    if (displayValue === undefined || displayValue === null || displayValue === '') {
+      return isEditable ? (
+        <button
+          onClick={() => startInlineEdit(item.id, field, '')}
+          className="text-gray-400 hover:text-indigo-600 cursor-pointer"
+          title="Click to edit"
+        >
+          -
+        </button>
+      ) : (
+        <span className="text-gray-400">-</span>
+      );
+    }
+
+    return isEditable ? (
+      <button
+        onClick={() => startInlineEdit(item.id, field, displayValue)}
+        className="text-gray-900 dark:text-gray-100 hover:text-indigo-600 dark:hover:text-indigo-400 cursor-pointer underline-offset-2 hover:underline"
+        title="Click to edit"
+      >
+        {displayValue}{suffix}
+      </button>
+    ) : (
+      <span className="text-gray-900 dark:text-gray-100">{displayValue}{suffix}</span>
+    );
+  };
+
   // Table columns
   const columns = [
+    // Expand column for viewing arrival details
+    {
+      header: '',
+      accessor: 'id' as keyof PayrollLineItem,
+      cell: (item: PayrollLineItem) => (
+        item.source === 'TRIP_PAY' ? (
+          <button
+            onClick={() => toggleRowExpansion(item.id)}
+            className="text-gray-400 hover:text-indigo-600 dark:hover:text-indigo-400 transition-transform"
+            title="View arrival details"
+          >
+            {expandedRows.has(item.id) ? (
+              <ChevronDown className="w-4 h-4" />
+            ) : (
+              <ChevronRight className="w-4 h-4" />
+            )}
+          </button>
+        ) : null
+      )
+    },
     ...(canApprove
       ? [
           {
             header: '',
-            accessor: 'id' as keyof PayrollLineItem,
+            accessor: 'sourceId' as keyof PayrollLineItem,
             cell: (item: PayrollLineItem) =>
-              ['PENDING', 'CALCULATED', 'REVIEWED'].includes(item.status) ? (
+              ['PENDING', 'CALCULATED', 'REVIEWED', 'COMPLETE'].includes(item.status) ? (
                 <input
                   type="checkbox"
                   checked={selectedIds.includes(item.id)}
@@ -456,9 +628,12 @@ export const Payroll: React.FC = () => {
       cell: (item: PayrollLineItem) => (
         <div className="text-sm text-right">
           {item.source === 'TRIP_PAY' ? (
-            <span className="text-gray-900 dark:text-gray-100">
-              {item.totalMiles ? `${item.totalMiles.toLocaleString()} mi` : '-'}
-            </span>
+            <EditableCell
+              item={item}
+              field="totalMiles"
+              displayValue={item.totalMiles}
+              suffix=" mi"
+            />
           ) : (
             <span className="text-gray-500 dark:text-gray-400">
               {item.cutPayType === 'MILES' && item.cutPayMiles
@@ -475,13 +650,12 @@ export const Payroll: React.FC = () => {
       accessor: 'workHours' as keyof PayrollLineItem,
       cell: (item: PayrollLineItem) => (
         <div className="text-sm text-right">
-          {item.workHours ? (
-            <span className="text-gray-900 dark:text-gray-100">
-              {item.workHours.toFixed(1)}h
-            </span>
-          ) : (
-            <span className="text-gray-400">-</span>
-          )}
+          <EditableCell
+            item={item}
+            field="workHours"
+            displayValue={item.workHours?.toFixed(1)}
+            suffix="h"
+          />
         </div>
       )
     },
@@ -490,13 +664,12 @@ export const Payroll: React.FC = () => {
       accessor: 'stopHours' as keyof PayrollLineItem,
       cell: (item: PayrollLineItem) => (
         <div className="text-sm text-right">
-          {item.stopHours ? (
-            <span className="text-gray-900 dark:text-gray-100">
-              {item.stopHours.toFixed(1)}h
-            </span>
-          ) : (
-            <span className="text-gray-400">-</span>
-          )}
+          <EditableCell
+            item={item}
+            field="stopHours"
+            displayValue={item.stopHours?.toFixed(1)}
+            suffix="h"
+          />
         </div>
       )
     },
@@ -546,18 +719,19 @@ export const Payroll: React.FC = () => {
       cell: (item: PayrollLineItem) => (
         <div className="text-sm text-right">
           {item.source === 'TRIP_PAY' ? (
-            item.dropAndHookCount !== undefined && item.dropAndHookCount > 0 ? (
-              <>
-                <div className="font-medium">{item.dropAndHookCount}x</div>
+            <div>
+              <EditableCell
+                item={item}
+                field="dropAndHookCount"
+                displayValue={item.dropAndHookCount}
+                suffix="x"
+              />
+              {(item.dropAndHookCount ?? 0) > 0 && (
                 <div className="text-xs text-gray-500 dark:text-gray-400">
                   {formatCurrency(item.dropAndHookPay)}
                 </div>
-              </>
-            ) : item.dropAndHookPay > 0 ? (
-              <div className="text-xs text-gray-500">{formatCurrency(item.dropAndHookPay)}</div>
-            ) : (
-              <span className="text-gray-400">-</span>
-            )
+              )}
+            </div>
           ) : (
             <span className="text-gray-400">-</span>
           )}
@@ -601,23 +775,26 @@ export const Payroll: React.FC = () => {
         return (
           <div className="text-sm text-right">
             {item.source === 'TRIP_PAY' ? (
-              item.waitTimeMinutes !== undefined && item.waitTimeMinutes > 0 ? (
-                <>
-                  <div className="font-medium">{formatWaitTime(item.waitTimeMinutes)}</div>
-                  <div className="text-xs text-gray-500 dark:text-gray-400">
-                    {formatCurrency(item.waitTimePay)}
-                  </div>
-                  {item.waitTimeReason && (
-                    <div className="text-xs text-gray-400" title={item.waitTimeReason}>
-                      {item.waitTimeReason.replace(/_/g, ' ').toLowerCase()}
+              <div>
+                <EditableCell
+                  item={item}
+                  field="waitTimeMinutes"
+                  displayValue={item.waitTimeMinutes}
+                  suffix="m"
+                />
+                {(item.waitTimeMinutes ?? 0) > 0 && (
+                  <>
+                    <div className="text-xs text-gray-500 dark:text-gray-400">
+                      {formatCurrency(item.waitTimePay)}
                     </div>
-                  )}
-                </>
-              ) : item.waitTimePay > 0 ? (
-                <div className="text-xs text-gray-500">{formatCurrency(item.waitTimePay)}</div>
-              ) : (
-                <span className="text-gray-400">-</span>
-              )
+                    {item.waitTimeReason && (
+                      <div className="text-xs text-gray-400" title={item.waitTimeReason}>
+                        {item.waitTimeReason.replace(/_/g, ' ').toLowerCase()}
+                      </div>
+                    )}
+                  </>
+                )}
+              </div>
             ) : (
               <span className="text-gray-400">-</span>
             )}
@@ -668,8 +845,55 @@ export const Payroll: React.FC = () => {
       header: <SortableHeader label="Status" sortKey="status" />,
       accessor: 'status' as keyof PayrollLineItem,
       cell: (item: PayrollLineItem) => {
+        const cellId = `${item.id}-status`;
+        const isEditing = editingCellId === cellId;
+        const isEditable = canManagePayroll && item.status !== 'APPROVED' && item.status !== 'PAID';
         const config = statusConfig[item.status] || statusConfig.PENDING;
-        return (
+
+        if (isEditing) {
+          return (
+            <div className="flex items-center gap-1">
+              <select
+                value={editingCellValue}
+                onChange={(e) => setEditingCellValue(e.target.value)}
+                autoFocus
+                className="text-xs px-1 py-0.5 border border-indigo-500 rounded focus:ring-1 focus:ring-indigo-500 dark:bg-gray-700 dark:text-white"
+              >
+                <option value="PENDING">Pending</option>
+                <option value="COMPLETE">Complete</option>
+                <option value="CALCULATED">Calculated</option>
+                <option value="REVIEWED">Reviewed</option>
+                <option value="DISPUTED">Disputed</option>
+                <option value="CANCELLED">Cancelled</option>
+              </select>
+              <button
+                onClick={() => saveInlineEdit(item, 'status')}
+                className="p-0.5 text-green-600 hover:text-green-700"
+              >
+                <Save className="w-3 h-3" />
+              </button>
+              <button
+                onClick={cancelInlineEdit}
+                className="p-0.5 text-gray-400 hover:text-gray-600"
+              >
+                <X className="w-3 h-3" />
+              </button>
+            </div>
+          );
+        }
+
+        return isEditable ? (
+          <button
+            onClick={() => startInlineEdit(item.id, 'status', item.status)}
+            className="cursor-pointer"
+            title="Click to change status"
+          >
+            <StatusBadge
+              status={config.label}
+              variant={config.color as any}
+            />
+          </button>
+        ) : (
           <StatusBadge
             status={config.label}
             variant={config.color as any}
@@ -885,6 +1109,126 @@ export const Payroll: React.FC = () => {
           columns={columns}
           data={sortedItems}
           loading={loading}
+          keyExtractor={(item) => item.id}
+          expandedRowIds={expandedRows}
+          renderExpandedRow={(item) => (
+            <div className="grid grid-cols-2 md:grid-cols-4 gap-4 text-sm">
+              {/* Arrival Details Panel */}
+              <div className="col-span-2 md:col-span-4 mb-2">
+                <h4 className="font-medium text-gray-900 dark:text-gray-100 flex items-center gap-2">
+                  <Eye className="w-4 h-4 text-indigo-500" />
+                  Arrival Details for Trip {item.tripNumber}
+                </h4>
+              </div>
+
+              {/* Trip Info */}
+              <div className="bg-white dark:bg-gray-800 p-3 rounded-lg shadow-sm">
+                <div className="text-xs text-gray-500 dark:text-gray-400 uppercase mb-1">Route</div>
+                <div className="font-medium">{item.origin} → {item.destination}</div>
+                <div className="text-xs text-gray-500 mt-1">
+                  {item.linehaulCode1}{item.linehaulCode2 ? ` / ${item.linehaulCode2}` : ''}{item.linehaulCode3 ? ` / ${item.linehaulCode3}` : ''}
+                </div>
+              </div>
+
+              {/* Equipment */}
+              <div className="bg-white dark:bg-gray-800 p-3 rounded-lg shadow-sm">
+                <div className="text-xs text-gray-500 dark:text-gray-400 uppercase mb-1">Equipment</div>
+                <div className="font-medium">{item.trailerConfig || 'Single'}</div>
+                {item.isSleeper && <div className="text-xs text-indigo-600">Sleeper Berth</div>}
+              </div>
+
+              {/* Times */}
+              <div className="bg-white dark:bg-gray-800 p-3 rounded-lg shadow-sm">
+                <div className="text-xs text-gray-500 dark:text-gray-400 uppercase mb-1">Dispatch / Arrival</div>
+                <div className="text-xs">
+                  <span className="text-gray-600 dark:text-gray-400">Dispatch: </span>
+                  {item.dispatchTime ? new Date(item.dispatchTime).toLocaleString() : '-'}
+                </div>
+                <div className="text-xs">
+                  <span className="text-gray-600 dark:text-gray-400">Arrival: </span>
+                  {item.arrivalTime ? new Date(item.arrivalTime).toLocaleString() : '-'}
+                </div>
+              </div>
+
+              {/* Miles & Hours */}
+              <div className="bg-white dark:bg-gray-800 p-3 rounded-lg shadow-sm">
+                <div className="text-xs text-gray-500 dark:text-gray-400 uppercase mb-1">Miles & Hours</div>
+                <div className="grid grid-cols-3 gap-2 text-xs">
+                  <div>
+                    <span className="text-gray-500">Miles:</span>
+                    <div className="font-medium">{item.totalMiles?.toLocaleString() || '-'}</div>
+                  </div>
+                  <div>
+                    <span className="text-gray-500">Work:</span>
+                    <div className="font-medium">{item.workHours?.toFixed(1) || '-'}h</div>
+                  </div>
+                  <div>
+                    <span className="text-gray-500">Stop:</span>
+                    <div className="font-medium">{item.stopHours?.toFixed(1) || '-'}h</div>
+                  </div>
+                </div>
+              </div>
+
+              {/* Accessorials */}
+              <div className="bg-white dark:bg-gray-800 p-3 rounded-lg shadow-sm">
+                <div className="text-xs text-gray-500 dark:text-gray-400 uppercase mb-1">Drop & Hook</div>
+                <div className="font-medium">{item.dropAndHookCount || 0} drops</div>
+                <div className="text-xs text-gray-500">{formatCurrency(item.dropAndHookPay)}</div>
+              </div>
+
+              <div className="bg-white dark:bg-gray-800 p-3 rounded-lg shadow-sm">
+                <div className="text-xs text-gray-500 dark:text-gray-400 uppercase mb-1">Chain Up</div>
+                <div className="font-medium">{item.chainUpCount || 0} cycles</div>
+                <div className="text-xs text-gray-500">{formatCurrency(item.chainUpPay)}</div>
+              </div>
+
+              <div className="bg-white dark:bg-gray-800 p-3 rounded-lg shadow-sm">
+                <div className="text-xs text-gray-500 dark:text-gray-400 uppercase mb-1">Wait Time</div>
+                <div className="font-medium">
+                  {item.waitTimeMinutes ? `${Math.floor(item.waitTimeMinutes / 60)}h ${item.waitTimeMinutes % 60}m` : '-'}
+                </div>
+                <div className="text-xs text-gray-500">{formatCurrency(item.waitTimePay)}</div>
+                {item.waitTimeReason && (
+                  <div className="text-xs text-gray-400 mt-1">
+                    Reason: {item.waitTimeReason.replace(/_/g, ' ').toLowerCase()}
+                  </div>
+                )}
+              </div>
+
+              {/* Pay Summary */}
+              <div className="bg-white dark:bg-gray-800 p-3 rounded-lg shadow-sm">
+                <div className="text-xs text-gray-500 dark:text-gray-400 uppercase mb-1">Pay Summary</div>
+                <div className="grid grid-cols-2 gap-1 text-xs">
+                  <span className="text-gray-500">Base + Mileage:</span>
+                  <span className="text-right font-medium">{formatCurrency(item.basePay + item.mileagePay)}</span>
+                  <span className="text-gray-500">Accessorials:</span>
+                  <span className="text-right font-medium">{formatCurrency(item.dropAndHookPay + item.chainUpPay + item.waitTimePay)}</span>
+                  {item.bonusPay > 0 && (
+                    <>
+                      <span className="text-gray-500">Bonus:</span>
+                      <span className="text-right font-medium text-green-600">{formatCurrency(item.bonusPay)}</span>
+                    </>
+                  )}
+                  {item.deductions > 0 && (
+                    <>
+                      <span className="text-gray-500">Deductions:</span>
+                      <span className="text-right font-medium text-red-600">-{formatCurrency(item.deductions)}</span>
+                    </>
+                  )}
+                  <span className="text-gray-900 dark:text-gray-100 font-medium border-t pt-1 mt-1">Total Labor:</span>
+                  <span className="text-right font-bold text-green-600 border-t pt-1 mt-1">{formatCurrency(item.totalGrossPay)}</span>
+                </div>
+              </div>
+
+              {/* Notes */}
+              {item.notes && (
+                <div className="col-span-2 md:col-span-4 bg-yellow-50 dark:bg-yellow-900/20 p-3 rounded-lg">
+                  <div className="text-xs text-gray-500 dark:text-gray-400 uppercase mb-1">Notes</div>
+                  <div className="text-sm text-gray-700 dark:text-gray-300">{item.notes}</div>
+                </div>
+              )}
+            </div>
+          )}
         />
 
         {/* Pagination */}
