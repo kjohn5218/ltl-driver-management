@@ -94,22 +94,30 @@ export const ArrivalDetailsModal: React.FC<ArrivalDetailsModalProps> = ({
   // Get manifest numbers from loadsheets
   const manifestNumbers = trip.loadsheets?.map(ls => ls.manifestNumber).join(', ') || '-';
 
-  // Get trailer numbers
-  const trailerNumbers = [
+  // Get trailer numbers as array (for equipment issue selection)
+  const availableTrailers = [
     trip.trailer?.unitNumber,
     trip.trailer2?.unitNumber,
     trip.trailer3?.unitNumber
-  ].filter(Boolean).join(', ') || '-';
+  ].filter(Boolean) as string[];
 
-  // Get dolly numbers
-  const dollyNumbers = [
+  // Get dolly numbers as array (for equipment issue selection)
+  const availableDollies = [
     trip.dolly?.unitNumber,
     trip.dolly2?.unitNumber
-  ].filter(Boolean).join(', ') || '-';
+  ].filter(Boolean) as string[];
 
-  // Get route info
+  // Get trailer numbers for display
+  const trailerNumbers = availableTrailers.join(', ') || '-';
+
+  // Get dolly numbers for display
+  const dollyNumbers = availableDollies.join(', ') || '-';
+
+  // Get route info - use destinationTerminalCode override if set
   const origin = trip.linehaulProfile?.originTerminal?.code || '-';
-  const destination = trip.linehaulProfile?.destinationTerminal?.code || '-';
+  const profileDestination = trip.linehaulProfile?.destinationTerminal?.code || '-';
+  const destination = trip.destinationTerminalCode || profileDestination;
+  const isAlternateDestination = !!trip.destinationTerminalCode && trip.destinationTerminalCode !== profileDestination;
 
   // Mutation for submitting arrival
   const arrivalMutation = useMutation({
@@ -119,6 +127,9 @@ export const ArrivalDetailsModal: React.FC<ArrivalDetailsModalProps> = ({
     onSuccess: async () => {
       toast.success('Trip arrived successfully');
       queryClient.invalidateQueries({ queryKey: ['trips-in-transit'] });
+      // Invalidate loadsheet queries so Loads tab refreshes
+      queryClient.invalidateQueries({ queryKey: ['loadsheets-for-loads-tab'] });
+      queryClient.invalidateQueries({ queryKey: ['continuing-trips-for-loads-tab'] });
 
       // Check if we should show the morale rating dialog
       // Only show if: 1) NOT an OWNOP trip, 2) Driver is assigned, 3) This is the second arrival in 24 hours
@@ -256,6 +267,20 @@ export const ArrivalDetailsModal: React.FC<ArrivalDetailsModalProps> = ({
         });
     }
   }, [isOpen, origin, destination]);
+
+  // Auto-populate equipment number when equipment type changes or issue is toggled
+  useEffect(() => {
+    if (hasEquipmentIssue) {
+      const availableEquipment = equipmentType === 'TRAILER' ? availableTrailers : availableDollies;
+      if (availableEquipment.length === 1) {
+        // Auto-select if only one equipment of this type
+        setEquipmentNumber(availableEquipment[0]);
+      } else if (availableEquipment.length > 1 && !availableEquipment.includes(equipmentNumber)) {
+        // Reset if current selection is not valid for this type
+        setEquipmentNumber('');
+      }
+    }
+  }, [hasEquipmentIssue, equipmentType, availableTrailers, availableDollies]);
 
   // Handle morale rating submission
   const handleMoraleRatingSubmit = () => {
@@ -440,7 +465,13 @@ export const ArrivalDetailsModal: React.FC<ArrivalDetailsModalProps> = ({
                     <MapPin className="h-4 w-4 text-gray-400 mr-2" />
                     <span className="text-gray-500 dark:text-gray-400">Route:</span>
                     <span className="ml-2 font-medium text-gray-900 dark:text-gray-100">
-                      {origin} <ArrowRight className="inline h-3 w-3 mx-1" /> {destination}
+                      {origin} <ArrowRight className="inline h-3 w-3 mx-1" />
+                      <span className={isAlternateDestination ? 'text-amber-600 dark:text-amber-400' : ''}>
+                        {destination}
+                      </span>
+                      {isAlternateDestination && (
+                        <span className="ml-1 text-xs text-amber-500">(Alternate)</span>
+                      )}
                     </span>
                   </div>
                 </div>
@@ -658,13 +689,43 @@ export const ArrivalDetailsModal: React.FC<ArrivalDetailsModalProps> = ({
                         <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">
                           Equipment Number
                         </label>
-                        <input
-                          type="text"
-                          value={equipmentNumber}
-                          onChange={(e) => setEquipmentNumber(e.target.value)}
-                          placeholder="Enter equipment number..."
-                          className="w-full px-3 py-2 border border-gray-300 dark:border-gray-600 rounded-md bg-white dark:bg-gray-700 text-gray-900 dark:text-gray-100 focus:ring-2 focus:ring-primary-500 focus:border-transparent"
-                        />
+                        {(() => {
+                          const availableEquipment = equipmentType === 'TRAILER' ? availableTrailers : availableDollies;
+
+                          if (availableEquipment.length === 0) {
+                            return (
+                              <div className="px-3 py-2 border border-amber-300 dark:border-amber-600 rounded-md bg-amber-50 dark:bg-amber-900/30 text-amber-700 dark:text-amber-300 text-sm">
+                                No {equipmentType.toLowerCase()}s assigned to this trip
+                              </div>
+                            );
+                          }
+
+                          if (availableEquipment.length === 1) {
+                            return (
+                              <input
+                                type="text"
+                                value={equipmentNumber}
+                                readOnly
+                                className="w-full px-3 py-2 border border-gray-300 dark:border-gray-600 rounded-md bg-gray-100 dark:bg-gray-600 text-gray-900 dark:text-gray-100 cursor-not-allowed"
+                              />
+                            );
+                          }
+
+                          return (
+                            <select
+                              value={equipmentNumber}
+                              onChange={(e) => setEquipmentNumber(e.target.value)}
+                              className="w-full px-3 py-2 border border-gray-300 dark:border-gray-600 rounded-md bg-white dark:bg-gray-700 text-gray-900 dark:text-gray-100 focus:ring-2 focus:ring-primary-500 focus:border-transparent"
+                            >
+                              <option value="">Select {equipmentType.toLowerCase()}...</option>
+                              {availableEquipment.map((num) => (
+                                <option key={num} value={num}>
+                                  {num}
+                                </option>
+                              ))}
+                            </select>
+                          );
+                        })()}
                       </div>
 
                       <div>
