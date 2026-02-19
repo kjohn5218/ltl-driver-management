@@ -1148,72 +1148,86 @@ export const DispatchTripModal: React.FC<DispatchTripModalProps> = ({
                       {/* Show Seal Number and Dolly only after manifest is selected */}
                       {entry.loadsheet && (
                         <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                          {/* Converter Dolly */}
+                          {/* Converter Dolly - Only available for 1st and 2nd manifest */}
                           <div>
-                            <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">
-                              Converter Dolly {dolliesLoading ? '(loading...)' : `(${dollies.length} available)`}
+                            <label className={`block text-sm font-medium mb-1 ${index === 2 ? 'text-gray-400 dark:text-gray-500' : 'text-gray-700 dark:text-gray-300'}`}>
+                              Converter Dolly {index === 2 ? '(N/A for 3rd manifest)' : dolliesLoading ? '(loading...)' : `(${dollies.length} available)`}
                             </label>
-                            <div className="relative">
-                              <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 h-4 w-4 text-gray-400" />
-                              <input
-                                type="text"
-                                value={dollySearch}
-                                onChange={(e) => {
-                                  const newSearches = [...dollySearches];
-                                  newSearches[index] = e.target.value;
-                                  setDollySearches(newSearches);
-                                  if (entry.dollyId) {
-                                    const currentDolly = getSelectedDolly(entry.dollyId);
-                                    if (currentDolly && e.target.value !== `${currentDolly.unitNumber} - ${currentDolly.dollyType}`) {
-                                      handleDollyClear(index);
+                            {index === 2 ? (
+                              /* Disabled state for 3rd manifest */
+                              <div className="relative">
+                                <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 h-4 w-4 text-gray-300 dark:text-gray-600" />
+                                <input
+                                  type="text"
+                                  disabled
+                                  placeholder="Not available for 3rd manifest"
+                                  className="w-full pl-10 pr-3 py-2 border border-gray-200 dark:border-gray-700 rounded-md bg-gray-100 dark:bg-gray-800 text-gray-400 dark:text-gray-500 cursor-not-allowed"
+                                />
+                              </div>
+                            ) : (
+                              /* Enabled state for 1st and 2nd manifest */
+                              <div className="relative">
+                                <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 h-4 w-4 text-gray-400" />
+                                <input
+                                  type="text"
+                                  value={dollySearch}
+                                  onChange={(e) => {
+                                    const newSearches = [...dollySearches];
+                                    newSearches[index] = e.target.value;
+                                    setDollySearches(newSearches);
+                                    if (entry.dollyId) {
+                                      const currentDolly = getSelectedDolly(entry.dollyId);
+                                      if (currentDolly && e.target.value !== `${currentDolly.unitNumber} - ${currentDolly.dollyType}`) {
+                                        handleDollyClear(index);
+                                      }
                                     }
-                                  }
-                                }}
-                                onFocus={() => {
-                                  const newOpen = [...dollyDropdownOpen];
-                                  newOpen[index] = true;
-                                  setDollyDropdownOpen(newOpen);
-                                }}
-                                onBlur={() => {
-                                  setTimeout(() => {
+                                  }}
+                                  onFocus={() => {
                                     const newOpen = [...dollyDropdownOpen];
-                                    newOpen[index] = false;
+                                    newOpen[index] = true;
                                     setDollyDropdownOpen(newOpen);
-                                  }, 200);
-                                }}
-                                placeholder="Type to search dollies..."
-                                className="w-full pl-10 pr-3 py-2 border border-gray-300 dark:border-gray-600 rounded-md bg-white dark:bg-gray-700 text-gray-900 dark:text-gray-100 focus:ring-2 focus:ring-primary-500 focus:border-transparent"
-                              />
-                              {dollyDropdownOpen[index] && !entry.dollyId && (
-                                <div className="absolute z-10 w-full mt-1 bg-white dark:bg-gray-700 border border-gray-300 dark:border-gray-600 rounded-md shadow-lg max-h-60 overflow-auto">
-                                  {dolliesLoading ? (
-                                    <div className="px-4 py-2 text-gray-500">Loading dollies...</div>
-                                  ) : getAvailableDollies(index, dollySearch).length > 0 ? (
-                                    getAvailableDollies(index, dollySearch).map((dolly) => (
-                                      <button
-                                        key={dolly.id}
-                                        type="button"
-                                        onClick={() => {
-                                          handleDollySelect(index, dolly);
-                                          const newOpen = [...dollyDropdownOpen];
-                                          newOpen[index] = false;
-                                          setDollyDropdownOpen(newOpen);
-                                        }}
-                                        className="w-full px-4 py-2 text-left hover:bg-gray-100 dark:hover:bg-gray-600 text-gray-900 dark:text-gray-100"
-                                      >
-                                        <span className="font-medium">{dolly.unitNumber}</span>
-                                        <span className="text-gray-500 dark:text-gray-400 ml-2">- {dolly.dollyType}</span>
-                                      </button>
-                                    ))
-                                  ) : (
-                                    <div className="px-4 py-2 text-gray-500">
-                                      {dollies.length === 0 ? 'No dollies in database' : 'No dollies match your search'}
-                                    </div>
-                                  )}
-                                </div>
-                              )}
-                            </div>
-                            {entry.dollyId && (
+                                  }}
+                                  onBlur={() => {
+                                    setTimeout(() => {
+                                      const newOpen = [...dollyDropdownOpen];
+                                      newOpen[index] = false;
+                                      setDollyDropdownOpen(newOpen);
+                                    }, 200);
+                                  }}
+                                  placeholder="Type to search dollies..."
+                                  className="w-full pl-10 pr-3 py-2 border border-gray-300 dark:border-gray-600 rounded-md bg-white dark:bg-gray-700 text-gray-900 dark:text-gray-100 focus:ring-2 focus:ring-primary-500 focus:border-transparent"
+                                />
+                                {dollyDropdownOpen[index] && !entry.dollyId && (
+                                  <div className="absolute z-10 w-full mt-1 bg-white dark:bg-gray-700 border border-gray-300 dark:border-gray-600 rounded-md shadow-lg max-h-60 overflow-auto">
+                                    {dolliesLoading ? (
+                                      <div className="px-4 py-2 text-gray-500">Loading dollies...</div>
+                                    ) : getAvailableDollies(index, dollySearch).length > 0 ? (
+                                      getAvailableDollies(index, dollySearch).map((dolly) => (
+                                        <button
+                                          key={dolly.id}
+                                          type="button"
+                                          onClick={() => {
+                                            handleDollySelect(index, dolly);
+                                            const newOpen = [...dollyDropdownOpen];
+                                            newOpen[index] = false;
+                                            setDollyDropdownOpen(newOpen);
+                                          }}
+                                          className="w-full px-4 py-2 text-left hover:bg-gray-100 dark:hover:bg-gray-600 text-gray-900 dark:text-gray-100"
+                                        >
+                                          <span className="font-medium">{dolly.unitNumber}</span>
+                                          <span className="text-gray-500 dark:text-gray-400 ml-2">- {dolly.dollyType}</span>
+                                        </button>
+                                      ))
+                                    ) : (
+                                      <div className="px-4 py-2 text-gray-500">
+                                        {dollies.length === 0 ? 'No dollies in database' : 'No dollies match your search'}
+                                      </div>
+                                    )}
+                                  </div>
+                                )}
+                              </div>
+                            )}
+                            {entry.dollyId && index !== 2 && (
                               <p className="mt-1 text-sm text-green-600">
                                 Selected: {getSelectedDolly(entry.dollyId)?.unitNumber}
                               </p>
