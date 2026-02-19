@@ -418,6 +418,22 @@ export const ArrivalDetailsModal: React.FC<ArrivalDetailsModalProps> = ({
 
           <form onSubmit={handleSubmit}>
             <div className="px-6 py-4 space-y-6 max-h-[70vh] overflow-y-auto">
+              {/* Prominent Arrival Location Banner */}
+              <div className="bg-green-50 dark:bg-green-900/20 border border-green-200 dark:border-green-800 rounded-lg p-4">
+                <div className="flex items-center justify-center">
+                  <MapPin className="h-6 w-6 text-green-600 dark:text-green-400 mr-3" />
+                  <div className="text-center">
+                    <p className="text-xs font-medium text-green-600 dark:text-green-400 uppercase tracking-wider">Arriving At</p>
+                    <p className="text-2xl font-bold text-green-700 dark:text-green-300">
+                      {destination}
+                      {isAlternateDestination && (
+                        <span className="ml-2 text-sm font-normal text-amber-600 dark:text-amber-400">(Alternate Destination)</span>
+                      )}
+                    </p>
+                  </div>
+                </div>
+              </div>
+
               {/* Trip Information Section */}
               <div className="bg-gray-50 dark:bg-gray-700/50 rounded-lg p-4">
                 <h4 className="text-sm font-medium text-gray-700 dark:text-gray-300 mb-3">

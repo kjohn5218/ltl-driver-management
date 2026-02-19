@@ -287,6 +287,40 @@ export const ArriveTripModal: React.FC<ArriveTripModalProps> = ({
               </div>
             </div>
 
+            {/* Selected Trip Summary - Prominent Arrival Location */}
+            {selectedTripData && (
+              <div className="mx-6 mb-4 p-4 bg-orange-50 dark:bg-orange-900/20 border border-orange-200 dark:border-orange-800 rounded-lg">
+                <div className="flex items-center justify-between">
+                  <div className="flex items-center space-x-6">
+                    <div>
+                      <p className="text-xs font-medium text-orange-600 dark:text-orange-400 uppercase tracking-wider">Driver</p>
+                      <p className="text-sm font-semibold text-gray-900 dark:text-gray-100">{getDriverName(selectedTripData)}</p>
+                    </div>
+                    <div>
+                      <p className="text-xs font-medium text-orange-600 dark:text-orange-400 uppercase tracking-wider">Trip #</p>
+                      <p className="text-sm font-semibold text-gray-900 dark:text-gray-100">{selectedTripData.tripNumber}</p>
+                    </div>
+                    <div>
+                      <p className="text-xs font-medium text-orange-600 dark:text-orange-400 uppercase tracking-wider">Manifest(s)</p>
+                      <p className="text-sm font-semibold text-gray-900 dark:text-gray-100">{getManifests(selectedTripData)}</p>
+                    </div>
+                  </div>
+                  <div className="flex items-center bg-orange-100 dark:bg-orange-900/40 px-4 py-2 rounded-lg">
+                    <MapPin className="h-5 w-5 text-orange-600 dark:text-orange-400 mr-2" />
+                    <div>
+                      <p className="text-xs font-medium text-orange-600 dark:text-orange-400 uppercase tracking-wider">Arriving At</p>
+                      <p className="text-lg font-bold text-orange-700 dark:text-orange-300">
+                        {getRoute(selectedTripData).destination}
+                        {getRoute(selectedTripData).isAlternate && (
+                          <span className="ml-2 text-xs font-normal text-amber-600 dark:text-amber-400">(Alternate)</span>
+                        )}
+                      </p>
+                    </div>
+                  </div>
+                </div>
+              </div>
+            )}
+
             {/* Footer */}
             <div className="px-6 py-4 bg-gray-50 dark:bg-gray-700/50 border-t border-gray-200 dark:border-gray-700 flex justify-end space-x-3">
               <button
