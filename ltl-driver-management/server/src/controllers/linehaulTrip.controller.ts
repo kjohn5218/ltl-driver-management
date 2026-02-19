@@ -1549,13 +1549,13 @@ export const arriveTrip = async (req: Request, res: Response): Promise<void> => 
       // Use trip's destinationTerminalCode override if set, otherwise use profile destination
       const destinationCode = trip.destinationTerminalCode || trip.linehaulProfile?.destinationTerminal?.code;
 
-      // Helper to extract final destination from profile name
-      // Profile names like "DENWAMSLC1" encode the route: DEN -> WAM -> SLC
+      // Helper to extract final destination from profile/linehaul name
+      // Names like "DENWAMSLC1" encode the route: DEN -> WAM -> SLC
       // The final destination is the last 3-letter code before any trailing digits
-      const extractFinalDestination = (profileName: string | undefined): string | null => {
-        if (!profileName) return null;
+      const extractFinalDestination = (linehaulName: string | undefined | null): string | null => {
+        if (!linehaulName) return null;
         // Remove trailing digits (e.g., "DENWAMSLC1" -> "DENWAMSLC")
-        const nameWithoutDigits = profileName.replace(/\d+$/, '').toUpperCase();
+        const nameWithoutDigits = linehaulName.replace(/\d+$/, '').toUpperCase();
         // Terminal codes are typically 3 characters
         // Take the last 3 characters as the final destination
         if (nameWithoutDigits.length >= 3) {
@@ -1563,11 +1563,6 @@ export const arriveTrip = async (req: Request, res: Response): Promise<void> => 
         }
         return null;
       };
-
-      // Check if we're arriving at the route's FINAL destination
-      const routeFinalDest = extractFinalDestination(trip.linehaulProfile?.name);
-      const isAtFinalDestination = destinationCode && routeFinalDest &&
-        destinationCode.toUpperCase() === routeFinalDest.toUpperCase();
 
       // Check if destination is a physical terminal and get its ID
       let isPhysicalTerminal = false;
@@ -1581,10 +1576,10 @@ export const arriveTrip = async (req: Request, res: Response): Promise<void> => 
         destinationTerminalId = destinationLocation?.id || null;
       }
 
-      // Get loadsheets assigned to this trip
+      // Get loadsheets assigned to this trip (include linehaulName to check individual final destinations)
       const loadsheets = await tx.loadsheet.findMany({
         where: { linehaulTripId: tripId },
-        select: { id: true, manifestNumber: true, pieces: true, weight: true }
+        select: { id: true, manifestNumber: true, pieces: true, weight: true, linehaulName: true }
       });
 
       // For each loadsheet, recalculate capacity based on freight not yet unloaded at this terminal
@@ -1641,12 +1636,19 @@ export const arriveTrip = async (req: Request, res: Response): Promise<void> => 
           else capacityPercent = '0%';
         }
 
+        // Check if THIS SPECIFIC loadsheet has reached its final destination
+        // Each loadsheet may have a different linehaulName with a different final destination
+        // e.g., SLCDUBMSO1 terminates at MSO, SLCDUBKSP1 terminates at KSP
+        const loadsheetFinalDest = extractFinalDestination(loadsheet.linehaulName);
+        const isLoadsheetAtFinalDestination = destinationCode && loadsheetFinalDest &&
+          destinationCode.toUpperCase() === loadsheetFinalDest.toUpperCase();
+
         // Update loadsheet based on arrival location and remaining freight:
         // - CLOSED: Arrived at final destination (no more legs to continue)
         // - OPEN: Physical terminal, available for next leg (default for continuing loads)
         // - UNLOADED: Freight has been explicitly LHUNLOAD scanned off (unloadedPieces > 0 and no remaining)
         let newStatus: 'OPEN' | 'UNLOADED' | 'CLOSED';
-        if (isAtFinalDestination) {
+        if (isLoadsheetAtFinalDestination) {
           // At final destination - close the loadsheet, no more legs
           newStatus = 'CLOSED';
         } else if (isPhysicalTerminal) {
@@ -1671,24 +1673,19 @@ export const arriveTrip = async (req: Request, res: Response): Promise<void> => 
         // For continuing loads, determine the next leg destination from the linehaulName
         // e.g., "DENWAMSLC3" at WAM should have next destination SLC (the final destination in the route name)
         let nextDestination: string | null = null;
-        if (!isAtFinalDestination && loadsheet.manifestNumber) {
-          // Get the full loadsheet to access linehaulName
-          const fullLoadsheet = await tx.loadsheet.findUnique({
-            where: { id: loadsheet.id },
-            select: { linehaulName: true }
-          });
-          if (fullLoadsheet?.linehaulName) {
-            // Extract final destination from linehaulName (e.g., DENWAMSLC3 -> SLC)
-            const routeBase = fullLoadsheet.linehaulName.replace(/\d+$/, '').toUpperCase();
-            if (routeBase.length >= 3) {
-              const extractedDest = routeBase.slice(-3);
-              // Only use if it's different from current location (the arrival terminal)
-              if (extractedDest !== destinationCode?.toUpperCase()) {
-                nextDestination = extractedDest;
-              }
+        if (!isLoadsheetAtFinalDestination && loadsheet.linehaulName) {
+          // Extract final destination from linehaulName (e.g., DENWAMSLC3 -> SLC)
+          const routeBase = loadsheet.linehaulName.replace(/\d+$/, '').toUpperCase();
+          if (routeBase.length >= 3) {
+            const extractedDest = routeBase.slice(-3);
+            // Only use if it's different from current location (the arrival terminal)
+            if (extractedDest !== destinationCode?.toUpperCase()) {
+              nextDestination = extractedDest;
             }
           }
         }
+
+        console.log(`[Arrive Trip] Loadsheet ${loadsheet.manifestNumber}: linehaulName=${loadsheet.linehaulName}, finalDest=${loadsheetFinalDest}, arrivalDest=${destinationCode}, isAtFinal=${isLoadsheetAtFinalDestination}, newStatus=${newStatus}`);
 
         await tx.loadsheet.update({
           where: { id: loadsheet.id },
@@ -1697,10 +1694,10 @@ export const arriveTrip = async (req: Request, res: Response): Promise<void> => 
             linehaulTripId: tripId,
             // Only update origin for continuing loads (not at final destination)
             // Update BOTH originTerminalCode AND originTerminalId so loadsheets appear in dispatch modal
-            ...(!isAtFinalDestination && destinationCode && { originTerminalCode: destinationCode }),
-            ...(!isAtFinalDestination && destinationTerminalId && { originTerminalId: destinationTerminalId }),
+            ...(!isLoadsheetAtFinalDestination && destinationCode && { originTerminalCode: destinationCode }),
+            ...(!isLoadsheetAtFinalDestination && destinationTerminalId && { originTerminalId: destinationTerminalId }),
             // Set next destination for continuing loads, null for final destination
-            destinationTerminalCode: isAtFinalDestination ? null : nextDestination,
+            destinationTerminalCode: isLoadsheetAtFinalDestination ? null : nextDestination,
             status: newStatus,
             pieces: remainingPieces > 0 ? remainingPieces : 0,
             weight: remainingWeight > 0 ? remainingWeight : 0,
