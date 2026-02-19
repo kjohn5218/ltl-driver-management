@@ -471,6 +471,11 @@ model Location {
   okayToDispatchProfiles           ProfileOkayToDispatch[]       @relation("OkayToDispatchLocation")
   accountableLateDepartureReasons  LateDepartureReason[]         @relation("LateDepartureLocation")
 
+  // Relations - Linehaul Lanes
+  originLanes                      LinehaulLane[]                @relation("LaneOrigin")
+  destinationLanes                 LinehaulLane[]                @relation("LaneDestination")
+  laneSteps                        LinehaulLaneStep[]            @relation("LaneStepTerminal")
+
   @@map("locations")
 }
 
@@ -2011,4 +2016,43 @@ model ExpectedShipmentDetail {
   @@index([serviceLevel])
   @@index([externalProNumber])
   @@map("expected_shipment_details")
+}
+
+// Linehaul Lanes - Origin to destination freight routing
+model LinehaulLane {
+  id                    Int       @id @default(autoincrement())
+  originLocationId      Int
+  destinationLocationId Int
+  active                Boolean   @default(true)
+  createdAt             DateTime  @default(now())
+  updatedAt             DateTime  @updatedAt
+
+  originLocation        Location  @relation("LaneOrigin", fields: [originLocationId], references: [id])
+  destinationLocation   Location  @relation("LaneDestination", fields: [destinationLocationId], references: [id])
+  routingSteps          LinehaulLaneStep[]
+
+  @@unique([originLocationId, destinationLocationId])
+  @@index([originLocationId])
+  @@index([destinationLocationId])
+  @@index([active])
+  @@map("linehaul_lanes")
+}
+
+// Linehaul Lane Steps - Routing sequence for each lane
+model LinehaulLaneStep {
+  id                  Int       @id @default(autoincrement())
+  laneId              Int
+  sequence            Int       // 1, 2, 3, etc.
+  terminalLocationId  Int
+  transitDays         Int       @default(0)
+  departDeadline      String?   // HH:MM:SS format
+  createdAt           DateTime  @default(now())
+  updatedAt           DateTime  @updatedAt
+
+  lane                LinehaulLane @relation(fields: [laneId], references: [id], onDelete: Cascade)
+  terminalLocation    Location     @relation("LaneStepTerminal", fields: [terminalLocationId], references: [id])
+
+  @@unique([laneId, sequence])
+  @@index([laneId])
+  @@map("linehaul_lane_steps")
 }

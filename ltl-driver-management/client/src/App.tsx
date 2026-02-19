@@ -33,6 +33,7 @@ import { LateLinehaulReport } from './pages/LateLinehaulReport';
 import { LoadFactorReport } from './pages/LoadFactorReport';
 import { PayRules } from './pages/PayRules';
 import { DriverSelfService } from './pages/DriverSelfService';
+import { LinehaulLanes } from './pages/LinehaulLanes';
 
 // Create a client
 const queryClient = new QueryClient({
@@ -104,6 +105,10 @@ const router = createBrowserRouter([
           {
             path: 'pay-rules',
             element: <PayRules />
+          },
+          {
+            path: 'linehaul-lanes',
+            element: <LinehaulLanes />
           },
           {
             path: 'contract-power',

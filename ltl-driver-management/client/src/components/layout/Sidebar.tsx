@@ -25,7 +25,8 @@ import {
   CheckCircle,
   FileSpreadsheet,
   Scissors,
-  RefreshCw
+  RefreshCw,
+  GitBranch
 } from 'lucide-react';
 import { clsx } from 'clsx';
 import { api } from '../../services/api';
@@ -67,6 +68,7 @@ export const Sidebar: React.FC<SidebarProps> = ({ isOpen, onClose }) => {
     { name: 'Drivers', href: '/drivers', icon: User, section: 'management' },
     { name: 'Carriers', href: '/carriers', icon: Truck, section: 'management' },
     { name: 'Linehaul Profiles', href: '/routes', icon: Route, section: 'management' },
+    { name: 'Linehaul Lanes', href: '/linehaul-lanes', icon: GitBranch, section: 'management' },
     { name: 'Locations', href: '/locations', icon: MapPin, section: 'management' },
     { name: 'Pay Rules', href: '/pay-rules', icon: DollarSign, section: 'management' },
     { name: 'Reports', href: '/reports', icon: BarChart3, section: 'management' },
