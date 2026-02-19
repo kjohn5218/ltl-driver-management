@@ -19,7 +19,10 @@ export const createPayrollLineItemFromTripPay = async (tripPayId: number): Promi
           },
           driverTripReport: {
             select: { dropAndHook: true, chainUpCycles: true, waitTimeMinutes: true }
-          }
+          },
+          trailer: { select: { id: true } },
+          trailer2: { select: { id: true } },
+          trailer3: { select: { id: true } }
         }
       },
       driver: {
@@ -42,6 +45,11 @@ export const createPayrollLineItemFromTripPay = async (tripPayId: number): Promi
     await updatePayrollLineItemFromTripPay(tripPayId);
     return;
   }
+
+  // Determine trailer config based on number of trailers
+  const trailerCount = [tripPay.trip?.trailer, tripPay.trip?.trailer2, tripPay.trip?.trailer3]
+    .filter(t => t !== null && t !== undefined).length;
+  const trailerConfig = trailerCount >= 3 ? 'TRIPLE' : trailerCount === 2 ? 'DOUBLE' : 'SINGLE';
 
   // Calculate accessorial breakdown from driver trip report
   const report = tripPay.trip?.driverTripReport;
@@ -81,6 +89,9 @@ export const createPayrollLineItemFromTripPay = async (tripPayId: number): Promi
       origin: tripPay.trip?.linehaulProfile?.originTerminal?.code,
       destination: tripPay.trip?.linehaulProfile?.destinationTerminal?.code,
       totalMiles: tripPay.trip?.actualMileage ? new Prisma.Decimal(tripPay.trip.actualMileage) : null,
+      trailerConfig,
+      dropHookCount: dropAndHook,
+      chainUpCount: chainUp,
       basePay: tripPay.basePay || new Prisma.Decimal(0),
       mileagePay: tripPay.mileagePay || new Prisma.Decimal(0),
       dropAndHookPay: new Prisma.Decimal(dropHookPay),

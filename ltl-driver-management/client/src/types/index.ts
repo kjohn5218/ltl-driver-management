@@ -1413,6 +1413,12 @@ export interface PayrollLineItemUpdate {
   rateApplied?: number;
   notes?: string;
   status?: string;
+  // Trip info fields
+  totalMiles?: number;
+  dropAndHookCount?: number;
+  chainUpCount?: number;
+  waitTimeMinutes?: number;
+  trailerConfig?: string;
 }
 
 export interface PayrollExportOptions {

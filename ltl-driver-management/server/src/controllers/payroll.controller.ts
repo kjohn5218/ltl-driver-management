@@ -1074,7 +1074,10 @@ export const getUnifiedPayrollItems = async (req: Request, res: Response): Promi
 export const updatePayrollLineItem = async (req: Request, res: Response): Promise<void> => {
   try {
     const { type, id } = req.params;
-    const { basePay, mileagePay, accessorialPay, bonusPay, deductions, totalPay, notes, rateApplied, status } = req.body;
+    const {
+      basePay, mileagePay, accessorialPay, bonusPay, deductions, totalPay, notes, rateApplied, status,
+      totalMiles, dropAndHookCount, chainUpCount, waitTimeMinutes, trailerConfig
+    } = req.body;
     const itemId = parseInt(id, 10);
 
     if (type === 'trip') {
@@ -1097,8 +1100,8 @@ export const updatePayrollLineItem = async (req: Request, res: Response): Promis
       const newDeductions = deductions !== undefined ? deductions : Number(payrollItem.deductions);
       const newTotal = totalPay !== undefined ? totalPay : (newBasePay + newMileagePay + newAccessorialPay + newBonusPay - newDeductions);
 
-      // Determine the new status - use provided status or default to REVIEWED
-      const newStatus = status !== undefined ? status as PayrollLineItemStatus : 'REVIEWED';
+      // Determine the new status - use provided status or keep existing
+      const newStatus = status !== undefined ? status as PayrollLineItemStatus : payrollItem.status;
 
       // Update PayrollLineItem
       const updatedItem = await prisma.payrollLineItem.update({
@@ -1110,7 +1113,12 @@ export const updatePayrollLineItem = async (req: Request, res: Response): Promis
           ...(deductions !== undefined && { deductions: new Prisma.Decimal(deductions) }),
           totalGrossPay: new Prisma.Decimal(newTotal),
           ...(notes !== undefined && { notes }),
-          status: newStatus
+          ...(status !== undefined && { status: newStatus }),
+          // Trip info fields
+          ...(totalMiles !== undefined && { totalMiles: new Prisma.Decimal(totalMiles) }),
+          ...(dropAndHookCount !== undefined && { dropHookCount: dropAndHookCount }),
+          ...(chainUpCount !== undefined && { chainUpCount }),
+          ...(trailerConfig !== undefined && { trailerConfig })
         }
       });
 
@@ -1138,9 +1146,41 @@ export const updatePayrollLineItem = async (req: Request, res: Response): Promis
           ...(deductions !== undefined && { deductions: new Prisma.Decimal(deductions) }),
           totalGrossPay: new Prisma.Decimal(newTotal),
           ...(notes !== undefined && { notes }),
-          status: tripPayStatus as TripPayStatus
+          ...(status !== undefined && { status: tripPayStatus as TripPayStatus })
         }
       });
+
+      // Update the linked trip with miles if provided
+      if (totalMiles !== undefined) {
+        const tripPay = await prisma.tripPay.findUnique({
+          where: { id: itemId },
+          select: { tripId: true }
+        });
+        if (tripPay?.tripId) {
+          await prisma.linehaulTrip.update({
+            where: { id: tripPay.tripId },
+            data: { actualMileage: totalMiles }
+          });
+        }
+      }
+
+      // Update the driver trip report with accessorial counts if provided
+      if (dropAndHookCount !== undefined || chainUpCount !== undefined || waitTimeMinutes !== undefined) {
+        const tripPay = await prisma.tripPay.findUnique({
+          where: { id: itemId },
+          select: { tripId: true }
+        });
+        if (tripPay?.tripId) {
+          await prisma.driverTripReport.updateMany({
+            where: { tripId: tripPay.tripId },
+            data: {
+              ...(dropAndHookCount !== undefined && { dropAndHook: dropAndHookCount }),
+              ...(chainUpCount !== undefined && { chainUpCycles: chainUpCount }),
+              ...(waitTimeMinutes !== undefined && { waitTimeMinutes })
+            }
+          });
+        }
+      }
 
       res.json(updatedItem);
     } else if (type === 'cut') {
