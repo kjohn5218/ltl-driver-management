@@ -3,6 +3,7 @@ import { prisma } from '../index';
 import { Prisma, TripStatus, EquipmentStatus } from '@prisma/client';
 import { tripDocumentService } from '../services/tripDocument.service';
 import { etaService } from '../services/eta.service';
+import { calculateAndCreateTripPay } from '../services/payroll.service';
 
 // Get all trips with filtering
 export const getTrips = async (req: Request, res: Response): Promise<void> => {
@@ -376,7 +377,8 @@ export const createTrip = async (req: Request, res: Response): Promise<void> => 
       trailer2Id,
       dollyId,
       notes,
-      status
+      status,
+      destinationTerminalCode // Alternate destination override
     } = req.body;
 
     console.log('CreateTrip request body:', {
@@ -385,6 +387,7 @@ export const createTrip = async (req: Request, res: Response): Promise<void> => 
       driverId,
       truckId,
       dollyId,
+      destinationTerminalCode,
       notes: notes?.substring(0, 50)
     });
 
@@ -421,6 +424,7 @@ export const createTrip = async (req: Request, res: Response): Promise<void> => 
           trailerId: trailerId ? parseInt(trailerId, 10) : null,
           trailer2Id: trailer2Id ? parseInt(trailer2Id, 10) : null,
           dollyId: dollyId ? parseInt(dollyId, 10) : null,
+          destinationTerminalCode: destinationTerminalCode || null, // Alternate destination override
           notes,
           status: tripStatus,
           ...(tripStatus === 'DISPATCHED' && { actualDeparture: new Date() })
@@ -687,19 +691,20 @@ export const updateTripStatus = async (req: Request, res: Response): Promise<voi
       // When trip arrives or completes, update loadsheets for next leg
       // Update their origin to the arrival terminal so they're available for pickup there
       if (status === 'ARRIVED' || status === 'COMPLETED') {
-        // Get the trip's destination terminal code
+        // Get the trip's destination terminal code and ID
         const tripWithProfile = await tx.linehaulTrip.findUnique({
           where: { id: tripId },
           include: {
             linehaulProfile: {
               include: {
-                destinationTerminal: { select: { code: true } }
+                destinationTerminal: { select: { id: true, code: true } }
               }
             }
           }
         });
 
         const destinationCode = tripWithProfile?.linehaulProfile?.destinationTerminal?.code;
+        const destinationTerminalId = tripWithProfile?.linehaulProfile?.destinationTerminal?.id;
         const today = new Date().toISOString().split('T')[0]; // YYYY-MM-DD format
 
         // Update loadsheets: keep trip assignment for continuing loads, update origin to current location
@@ -709,7 +714,9 @@ export const updateTripStatus = async (req: Request, res: Response): Promise<voi
           data: {
             // Keep linehaulTripId so loadsheets show in Continuing Trips section
             // Update origin to where the freight now is (the arrival terminal)
+            // Update BOTH originTerminalCode AND originTerminalId so loadsheets appear in dispatch modal
             ...(destinationCode && { originTerminalCode: destinationCode }),
+            ...(destinationTerminalId && { originTerminalId: destinationTerminalId }),
             // Clear destination since it's no longer assigned to a specific leg
             destinationTerminalCode: null,
             // Reset status to OPEN so loadsheet is available for next leg pickup
@@ -1457,13 +1464,26 @@ export const arriveTrip = async (req: Request, res: Response): Promise<void> => 
 
     // Create the driver trip report and update trip status in a transaction
     const result = await prisma.$transaction(async (tx) => {
-      // Update trip status to ARRIVED
+      // Build arrival notes to append to existing trip notes
+      let arrivalNotesText = '';
+      if (notes) {
+        arrivalNotesText = `\n--- Arrival Notes ---\n${notes}`;
+      }
+      if (waitTimeMinutes && waitTimeReason) {
+        arrivalNotesText += `\nWait Time: ${waitTimeMinutes} min (${waitTimeReason})`;
+      }
+
+      // Update trip status to ARRIVED, appending arrival notes
       const updatedTrip = await tx.linehaulTrip.update({
         where: { id: tripId },
         data: {
           status: 'ARRIVED',
           actualArrival: arrivalTime,
-          actualMileage: actualMileage ? parseInt(actualMileage, 10) : undefined
+          actualMileage: actualMileage ? parseInt(actualMileage, 10) : undefined,
+          // Append arrival notes to existing notes
+          ...(arrivalNotesText && {
+            notes: trip.notes ? `${trip.notes}${arrivalNotesText}` : arrivalNotesText.trim()
+          })
         }
       });
 
@@ -1512,16 +1532,39 @@ export const arriveTrip = async (req: Request, res: Response): Promise<void> => 
       }
 
       // Release loadsheets for next leg at physical terminal arrivals
-      const destinationCode = trip.linehaulProfile?.destinationTerminal?.code;
+      // Use trip's destinationTerminalCode override if set, otherwise use profile destination
+      const destinationCode = trip.destinationTerminalCode || trip.linehaulProfile?.destinationTerminal?.code;
 
-      // Check if destination is a physical terminal
+      // Helper to extract final destination from profile name
+      // Profile names like "DENWAMSLC1" encode the route: DEN -> WAM -> SLC
+      // The final destination is the last 3-letter code before any trailing digits
+      const extractFinalDestination = (profileName: string | undefined): string | null => {
+        if (!profileName) return null;
+        // Remove trailing digits (e.g., "DENWAMSLC1" -> "DENWAMSLC")
+        const nameWithoutDigits = profileName.replace(/\d+$/, '').toUpperCase();
+        // Terminal codes are typically 3 characters
+        // Take the last 3 characters as the final destination
+        if (nameWithoutDigits.length >= 3) {
+          return nameWithoutDigits.slice(-3);
+        }
+        return null;
+      };
+
+      // Check if we're arriving at the route's FINAL destination
+      const routeFinalDest = extractFinalDestination(trip.linehaulProfile?.name);
+      const isAtFinalDestination = destinationCode && routeFinalDest &&
+        destinationCode.toUpperCase() === routeFinalDest.toUpperCase();
+
+      // Check if destination is a physical terminal and get its ID
       let isPhysicalTerminal = false;
+      let destinationTerminalId: number | null = null;
       if (destinationCode) {
         const destinationLocation = await tx.location.findUnique({
           where: { code: destinationCode },
-          select: { isPhysicalTerminal: true }
+          select: { id: true, isPhysicalTerminal: true }
         });
         isPhysicalTerminal = destinationLocation?.isPhysicalTerminal || false;
+        destinationTerminalId = destinationLocation?.id || null;
       }
 
       // Get loadsheets assigned to this trip
@@ -1584,27 +1627,66 @@ export const arriveTrip = async (req: Request, res: Response): Promise<void> => 
           else capacityPercent = '0%';
         }
 
-        // Update loadsheet based on remaining freight:
-        // - OPEN: Physical terminal with remaining freight (available for next leg)
-        // - UNLOADED: No freight remains (empty trailer - can still continue to next leg if needed)
-        let newStatus: 'OPEN' | 'UNLOADED';
-        if (remainingPieces > 0 && isPhysicalTerminal) {
-          newStatus = 'OPEN';
+        // Update loadsheet based on arrival location and remaining freight:
+        // - CLOSED: Arrived at final destination (no more legs to continue)
+        // - OPEN: Physical terminal, available for next leg (default for continuing loads)
+        // - UNLOADED: Freight has been explicitly LHUNLOAD scanned off (unloadedPieces > 0 and no remaining)
+        let newStatus: 'OPEN' | 'UNLOADED' | 'CLOSED';
+        if (isAtFinalDestination) {
+          // At final destination - close the loadsheet, no more legs
+          newStatus = 'CLOSED';
+        } else if (isPhysicalTerminal) {
+          // At a physical terminal - check if freight was explicitly unloaded
+          // UNLOADED only applies when freight has been LHUNLOAD scanned off
+          // (unloadedPieces > 0 indicates explicit unload scans occurred)
+          if (unloadedPieces > 0 && remainingPieces <= 0) {
+            // Freight was scanned off and nothing remains
+            newStatus = 'UNLOADED';
+          } else {
+            // Either has remaining freight OR no unload scans yet - keep OPEN for dispatch
+            newStatus = 'OPEN';
+          }
         } else {
-          newStatus = 'UNLOADED';
+          // Not at physical terminal - default to OPEN for continuing loads
+          newStatus = 'OPEN';
         }
 
         // Get current date for continuing loadsheets
         const today = new Date().toISOString().split('T')[0]; // YYYY-MM-DD format
 
+        // For continuing loads, determine the next leg destination from the linehaulName
+        // e.g., "DENWAMSLC3" at WAM should have next destination SLC (the final destination in the route name)
+        let nextDestination: string | null = null;
+        if (!isAtFinalDestination && loadsheet.manifestNumber) {
+          // Get the full loadsheet to access linehaulName
+          const fullLoadsheet = await tx.loadsheet.findUnique({
+            where: { id: loadsheet.id },
+            select: { linehaulName: true }
+          });
+          if (fullLoadsheet?.linehaulName) {
+            // Extract final destination from linehaulName (e.g., DENWAMSLC3 -> SLC)
+            const routeBase = fullLoadsheet.linehaulName.replace(/\d+$/, '').toUpperCase();
+            if (routeBase.length >= 3) {
+              const extractedDest = routeBase.slice(-3);
+              // Only use if it's different from current location (the arrival terminal)
+              if (extractedDest !== destinationCode?.toUpperCase()) {
+                nextDestination = extractedDest;
+              }
+            }
+          }
+        }
+
         await tx.loadsheet.update({
           where: { id: loadsheet.id },
           data: {
             // Keep linehaulTripId for all loadsheets so they display on Inbound tab
-            // Both OPEN and UNLOADED (empty) loadsheets stay linked - they can still continue to next leg
             linehaulTripId: tripId,
-            ...(destinationCode && { originTerminalCode: destinationCode }),
-            destinationTerminalCode: null,
+            // Only update origin for continuing loads (not at final destination)
+            // Update BOTH originTerminalCode AND originTerminalId so loadsheets appear in dispatch modal
+            ...(!isAtFinalDestination && destinationCode && { originTerminalCode: destinationCode }),
+            ...(!isAtFinalDestination && destinationTerminalId && { originTerminalId: destinationTerminalId }),
+            // Set next destination for continuing loads, null for final destination
+            destinationTerminalCode: isAtFinalDestination ? null : nextDestination,
             status: newStatus,
             pieces: remainingPieces > 0 ? remainingPieces : 0,
             weight: remainingWeight > 0 ? remainingWeight : 0,
@@ -1652,11 +1734,18 @@ export const arriveTrip = async (req: Request, res: Response): Promise<void> => 
       return { trip: updatedTrip, driverReport, equipmentIssue: createdIssue };
     });
 
+    // Auto-create TripPay and PayrollLineItem for payroll page
+    const payrollResult = await calculateAndCreateTripPay(tripId);
+    if (!payrollResult.success) {
+      console.warn(`[Arrive Trip] Payroll item creation warning for trip ${tripId}: ${payrollResult.message}`);
+    }
+
     res.json({
       message: 'Trip arrived successfully',
       trip: result.trip,
       driverReport: result.driverReport,
-      equipmentIssue: result.equipmentIssue
+      equipmentIssue: result.equipmentIssue,
+      payroll: payrollResult
     });
   } catch (error) {
     console.error('Error arriving trip:', error);

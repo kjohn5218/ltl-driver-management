@@ -18,9 +18,7 @@ import {
 import { useAuth } from '../contexts/AuthContext';
 import { toast } from 'react-hot-toast';
 import {
-  DollarSign,
   CheckCircle,
-  Download,
   Edit,
   Filter,
   Search,
@@ -788,39 +786,6 @@ export const Payroll: React.FC = () => {
         subtitle="Review and approve pay for arrived trips and cut pay requests"
       />
 
-      {/* Summary Cards */}
-      {summary && (
-        <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-          <div className="bg-white dark:bg-gray-800 rounded-lg shadow p-4">
-            <div className="flex items-center">
-              <div className="p-2 bg-blue-100 dark:bg-blue-900/50 rounded-lg">
-                <DollarSign className="w-5 h-5 text-blue-600 dark:text-blue-400" />
-              </div>
-              <div className="ml-4">
-                <p className="text-sm text-gray-500 dark:text-gray-400">Total Records</p>
-                <p className="text-2xl font-semibold text-gray-900 dark:text-gray-100">
-                  {summary.totalCount}
-                </p>
-              </div>
-            </div>
-          </div>
-
-          <div className="bg-white dark:bg-gray-800 rounded-lg shadow p-4">
-            <div className="flex items-center">
-              <div className="p-2 bg-yellow-100 dark:bg-yellow-900/50 rounded-lg">
-                <Clock className="w-5 h-5 text-yellow-600 dark:text-yellow-400" />
-              </div>
-              <div className="ml-4">
-                <p className="text-sm text-gray-500 dark:text-gray-400">Unapproved</p>
-                <p className="text-2xl font-semibold text-gray-900 dark:text-gray-100">
-                  {summary.unapprovedCount}
-                </p>
-              </div>
-            </div>
-          </div>
-        </div>
-      )}
-
       {/* Actions and Filters */}
       <div className="bg-white dark:bg-gray-800 shadow rounded-lg">
         <div className="border-b border-gray-200 dark:border-gray-700">
@@ -886,16 +851,24 @@ export const Payroll: React.FC = () => {
               ))}
             </select>
 
-            {/* Status Filter */}
+            {/* Approval Filter */}
             <select
-              value={filters.statuses?.[0] || ''}
-              onChange={(e) => handleFilterChange('statuses', e.target.value ? [e.target.value] : [])}
+              value={filters.statuses?.length === 1 && filters.statuses[0] === 'APPROVED' ? 'approved' :
+                     filters.statuses?.length > 0 && !filters.statuses.includes('APPROVED') ? 'unapproved' : ''}
+              onChange={(e) => {
+                if (e.target.value === 'approved') {
+                  handleFilterChange('statuses', ['APPROVED']);
+                } else if (e.target.value === 'unapproved') {
+                  handleFilterChange('statuses', ['PENDING', 'CALCULATED', 'REVIEWED']);
+                } else {
+                  handleFilterChange('statuses', []);
+                }
+              }}
               className="rounded-md border-gray-300 dark:border-gray-600 dark:bg-gray-700 dark:text-white text-sm"
             >
-              <option value="">All Statuses</option>
-              {Object.entries(statusConfig).map(([value, config]) => (
-                <option key={value} value={value}>{config.label}</option>
-              ))}
+              <option value="">All Items</option>
+              <option value="unapproved">Unapproved</option>
+              <option value="approved">Approved</option>
             </select>
 
             {/* Search */}

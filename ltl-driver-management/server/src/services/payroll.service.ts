@@ -335,3 +335,215 @@ export const syncAllPayrollLineItems = async (): Promise<{ tripPay: number; cutP
 
   return { tripPay: tripPayCount, cutPay: cutPayCount };
 };
+
+/**
+ * Calculate and create TripPay for an arrived trip
+ * Called automatically when a trip arrives to populate the payroll page
+ */
+export const calculateAndCreateTripPay = async (tripId: number): Promise<{ success: boolean; message: string; tripPayId?: number }> => {
+  try {
+    const trip = await prisma.linehaulTrip.findUnique({
+      where: { id: tripId },
+      include: {
+        linehaulProfile: {
+          include: {
+            originTerminal: true,
+            destinationTerminal: true
+          }
+        },
+        driver: true,
+        delays: true,
+        driverTripReport: true
+      }
+    });
+
+    if (!trip) {
+      return { success: false, message: 'Trip not found' };
+    }
+
+    if (!trip.driverId) {
+      return { success: false, message: 'Trip has no assigned driver' };
+    }
+
+    if (!trip.linehaulProfile) {
+      return { success: false, message: 'Trip has no linehaul profile' };
+    }
+
+    // Check if trip pay already exists
+    const existingTripPay = await prisma.tripPay.findFirst({
+      where: { tripId }
+    });
+
+    if (existingTripPay) {
+      // Update existing PayrollLineItem to ensure it's in sync
+      await updatePayrollLineItemFromTripPay(existingTripPay.id);
+      return { success: true, message: 'Trip pay already exists', tripPayId: existingTripPay.id };
+    }
+
+    // Get applicable rate card
+    const today = new Date();
+    let rateCard = null;
+
+    // Rate hierarchy: Driver > Linehaul > O/D Pair > Default
+    rateCard = await prisma.rateCard.findFirst({
+      where: {
+        rateType: 'DRIVER',
+        entityId: trip.driverId,
+        active: true,
+        effectiveDate: { lte: today },
+        OR: [{ expirationDate: null }, { expirationDate: { gte: today } }]
+      },
+      include: { accessorialRates: true }
+    });
+
+    if (!rateCard && trip.linehaulProfileId) {
+      rateCard = await prisma.rateCard.findFirst({
+        where: {
+          rateType: 'LINEHAUL',
+          linehaulProfileId: trip.linehaulProfileId,
+          active: true,
+          effectiveDate: { lte: today },
+          OR: [{ expirationDate: null }, { expirationDate: { gte: today } }]
+        },
+        include: { accessorialRates: true }
+      });
+    }
+
+    if (!rateCard && trip.linehaulProfile.originTerminalId && trip.linehaulProfile.destinationTerminalId) {
+      rateCard = await prisma.rateCard.findFirst({
+        where: {
+          rateType: 'OD_PAIR',
+          originTerminalId: trip.linehaulProfile.originTerminalId,
+          destinationTerminalId: trip.linehaulProfile.destinationTerminalId,
+          active: true,
+          effectiveDate: { lte: today },
+          OR: [{ expirationDate: null }, { expirationDate: { gte: today } }]
+        },
+        include: { accessorialRates: true }
+      });
+    }
+
+    if (!rateCard) {
+      rateCard = await prisma.rateCard.findFirst({
+        where: {
+          rateType: 'DEFAULT',
+          active: true,
+          effectiveDate: { lte: today },
+          OR: [{ expirationDate: null }, { expirationDate: { gte: today } }]
+        },
+        include: { accessorialRates: true }
+      });
+    }
+
+    // Calculate base pay
+    const miles = Number(trip.actualMileage || trip.linehaulProfile.distanceMiles || 0);
+    let basePay = 0;
+    let mileagePay = 0;
+
+    if (rateCard) {
+      switch (rateCard.rateMethod) {
+        case 'PER_MILE':
+          mileagePay = miles * Number(rateCard.rateAmount);
+          break;
+        case 'FLAT_RATE':
+          basePay = Number(rateCard.rateAmount);
+          break;
+        case 'HOURLY':
+          const hours = Number(trip.linehaulProfile.transitTimeMinutes || 0) / 60;
+          basePay = hours * Number(rateCard.rateAmount);
+          break;
+      }
+
+      // Apply minimum amount
+      if (rateCard.minimumAmount) {
+        const totalBase = basePay + mileagePay;
+        if (totalBase < Number(rateCard.minimumAmount)) {
+          basePay = Number(rateCard.minimumAmount) - mileagePay;
+        }
+      }
+    }
+
+    // Calculate accessorial pay based on delays
+    let accessorialPay = 0;
+    if (rateCard) {
+      for (const delay of trip.delays) {
+        const accessorialRate = rateCard.accessorialRates.find(
+          ar => ar.accessorialType === 'DETENTION' && delay.delayCode === 'DETENTION' ||
+                ar.accessorialType === 'BREAKDOWN' && delay.delayCode === 'EQUIPMENT_BREAKDOWN' ||
+                ar.accessorialType === 'LAYOVER' && delay.delayCode === 'DRIVER_UNAVAILABILITY'
+        );
+
+        if (accessorialRate) {
+          const delayMins = delay.delayMinutes || 0;
+          let charge = Number(accessorialRate.rateAmount);
+
+          if (accessorialRate.rateMethod === 'HOURLY') {
+            charge = (delayMins / 60) * Number(accessorialRate.rateAmount);
+          }
+
+          if (accessorialRate.minimumCharge && charge < Number(accessorialRate.minimumCharge)) {
+            charge = Number(accessorialRate.minimumCharge);
+          }
+          if (accessorialRate.maximumCharge && charge > Number(accessorialRate.maximumCharge)) {
+            charge = Number(accessorialRate.maximumCharge);
+          }
+
+          accessorialPay += charge;
+        }
+      }
+    }
+
+    const totalGrossPay = basePay + mileagePay + accessorialPay;
+
+    // Get or create an open pay period
+    let payPeriod = await prisma.payPeriod.findFirst({
+      where: {
+        status: 'OPEN',
+        periodStart: { lte: trip.dispatchDate || new Date() },
+        periodEnd: { gte: trip.dispatchDate || new Date() }
+      }
+    });
+
+    // If no pay period exists, create one for the current month
+    if (!payPeriod) {
+      const now = new Date();
+      const periodStart = new Date(now.getFullYear(), now.getMonth(), 1);
+      const periodEnd = new Date(now.getFullYear(), now.getMonth() + 1, 0);
+
+      payPeriod = await prisma.payPeriod.create({
+        data: {
+          periodStart,
+          periodEnd,
+          status: 'OPEN'
+        }
+      });
+    }
+
+    // Create TripPay record
+    const tripPay = await prisma.tripPay.create({
+      data: {
+        tripId,
+        payPeriodId: payPeriod.id,
+        driverId: trip.driverId,
+        rateCardId: rateCard?.id || null,
+        basePay: new Prisma.Decimal(basePay),
+        mileagePay: new Prisma.Decimal(mileagePay),
+        accessorialPay: new Prisma.Decimal(accessorialPay),
+        deductions: new Prisma.Decimal(0),
+        totalGrossPay: new Prisma.Decimal(totalGrossPay),
+        status: rateCard ? 'CALCULATED' : 'PENDING',
+        calculatedAt: new Date()
+      }
+    });
+
+    // Create PayrollLineItem
+    await createPayrollLineItemFromTripPay(tripPay.id);
+
+    console.log(`[Payroll] Created TripPay ${tripPay.id} for trip ${tripId} with total pay $${totalGrossPay.toFixed(2)}`);
+
+    return { success: true, message: 'Trip pay created', tripPayId: tripPay.id };
+  } catch (error) {
+    console.error(`[Payroll] Failed to create trip pay for trip ${tripId}:`, error);
+    return { success: false, message: error instanceof Error ? error.message : 'Unknown error' };
+  }
+};
