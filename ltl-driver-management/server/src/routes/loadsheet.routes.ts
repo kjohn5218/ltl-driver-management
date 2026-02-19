@@ -28,6 +28,7 @@ router.get(
     query('status').optional().isIn(['DRAFT', 'OPEN', 'LOADING', 'CLOSED', 'DISPATCHED']),
     query('linehaulTripId').optional().isInt({ min: 1 }),
     query('originTerminalId').optional().isInt({ min: 1 }),
+    query('originTerminalCode').optional().trim(),
     query('startDate').optional().isISO8601(),
     query('endDate').optional().isISO8601(),
     query('page').optional().isInt({ min: 1 }),
