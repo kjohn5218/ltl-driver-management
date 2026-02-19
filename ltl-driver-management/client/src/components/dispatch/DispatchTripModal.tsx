@@ -887,13 +887,26 @@ export const DispatchTripModal: React.FC<DispatchTripModalProps> = ({
         // Notes are already set during trip creation - don't overwrite
       });
 
+      // Link loadsheets to the trip
+      console.log(`[Dispatch] Linking ${selectedLoadsheets.length} loadsheets to trip ${createdTrip.id}`);
       for (const loadsheet of selectedLoadsheets) {
-        await loadsheetService.updateLoadsheet(loadsheet.id, {
-          linehaulTripId: createdTrip.id,
-          status: 'DISPATCHED',
-          // Update loadsheet destination if alternate destination was selected
-          ...(isAlternateDestination && { destinationTerminalCode: destinationCode })
-        });
+        if (!loadsheet.id) {
+          console.error('[Dispatch] Loadsheet missing ID:', loadsheet);
+          continue;
+        }
+        try {
+          console.log(`[Dispatch] Updating loadsheet ${loadsheet.id} (${loadsheet.manifestNumber}) with linehaulTripId=${createdTrip.id}`);
+          await loadsheetService.updateLoadsheet(loadsheet.id, {
+            linehaulTripId: createdTrip.id,
+            status: 'DISPATCHED',
+            // Update loadsheet destination if alternate destination was selected
+            ...(isAlternateDestination && { destinationTerminalCode: destinationCode })
+          });
+          console.log(`[Dispatch] Successfully updated loadsheet ${loadsheet.id}`);
+        } catch (loadsheetError: any) {
+          console.error(`[Dispatch] Failed to update loadsheet ${loadsheet.id}:`, loadsheetError);
+          toast.error(`Failed to link manifest ${loadsheet.manifestNumber} to trip`);
+        }
       }
 
       toast.success('Trip created and dispatched successfully');
