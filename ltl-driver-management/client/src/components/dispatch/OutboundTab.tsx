@@ -1,7 +1,6 @@
 import React, { useState, useMemo } from 'react';
 import { useQuery, useQueryClient } from '@tanstack/react-query';
 import { linehaulTripService } from '../../services/linehaulTripService';
-import { loadsheetService } from '../../services/loadsheetService';
 import { lateDepartureReasonService } from '../../services/lateDepartureReasonService';
 import { locationService } from '../../services/locationService';
 import { LinehaulTrip, Loadsheet, TripStatus } from '../../types';
@@ -131,20 +130,9 @@ export const OutboundTab: React.FC<OutboundTabProps> = ({ selectedLocations = []
     staleTime: 0 // Always fetch fresh data
   });
 
-  // Fetch loadsheets (we'll match by linehaulTripId to the trips)
-  const { data: loadsheetsData, refetch: refetchLoadsheets } = useQuery({
-    queryKey: ['loadsheets-for-outbound', startDate, endDate],
-    queryFn: async () => {
-      const response = await loadsheetService.getLoadsheets({
-        status: 'DISPATCHED',
-        startDate: startDate || undefined,
-        endDate: endDate || undefined,
-        limit: 500
-      });
-      return response.loadsheets;
-    },
-    staleTime: 0
-  });
+  // Note: We no longer fetch loadsheets separately - they come embedded in the trip query
+  // This ensures we always have loadsheets regardless of their status (DISPATCHED, UNLOADED, etc.)
+  const refetchLoadsheets = () => refetchTrips();
 
   // Fetch late departure reasons to know which trips have reasons recorded
   // We fetch all reasons without date filter since we just need to match by tripId
@@ -157,22 +145,17 @@ export const OutboundTab: React.FC<OutboundTabProps> = ({ selectedLocations = []
   });
 
   const trips = tripsData?.trips || [];
-  const loadsheets = loadsheetsData || [];
   const lateReasons = lateReasonsData?.reasons || [];
 
   // Create a Set of trip IDs that have late reasons recorded
   const tripIdsWithLateReasons = new Set(lateReasons.map(lr => lr.tripId));
 
-  // Build outbound trip rows with their loadsheets
+  // Build outbound trip rows with their loadsheets (embedded in trip query)
   const outboundRows: OutboundTripRow[] = trips.map(trip => {
-    // Find loadsheets associated with this trip from the separate query
-    const tripLoadsheets = loadsheets.filter(ls => ls.linehaulTripId === trip.id);
-    // If no loadsheets found from separate query, use embedded loadsheets from trip
-    // (these have fewer fields but at least have manifestNumber and linehaulName)
-    const effectiveLoadsheets = tripLoadsheets.length > 0
-      ? tripLoadsheets
-      : (trip.loadsheets as Loadsheet[] || []);
-    return { trip, loadsheets: effectiveLoadsheets };
+    // Use embedded loadsheets from trip - these are included in the trip query
+    // and contain all necessary fields (manifestNumber, linehaulName, pieces, weight, etc.)
+    const tripLoadsheets = (trip.loadsheets as Loadsheet[] || []);
+    return { trip, loadsheets: tripLoadsheets };
   });
 
   // Parse time string (HH:mm, HH:mm:ss, or HH:MM:SS) to minutes since midnight for comparison
