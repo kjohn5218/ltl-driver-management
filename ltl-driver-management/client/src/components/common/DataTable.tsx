@@ -19,6 +19,10 @@ interface DataTableProps<T> {
   sortBy?: keyof T | null;
   sortDirection?: SortDirection;
   onSort?: (column: keyof T) => void;
+  // Selection props
+  selectable?: boolean;
+  selectedIds?: Set<number>;
+  onSelectionChange?: (selectedIds: Set<number>) => void;
 }
 
 export function DataTable<T extends Record<string, any>>({
@@ -28,7 +32,10 @@ export function DataTable<T extends Record<string, any>>({
   keyExtractor = (item) => item.id,
   sortBy = null,
   sortDirection = null,
-  onSort
+  onSort,
+  selectable = false,
+  selectedIds = new Set(),
+  onSelectionChange
 }: DataTableProps<T>) {
   const renderSortIcon = (column: Column<T>) => {
     if (!column.sortable) return null;
@@ -42,6 +49,34 @@ export function DataTable<T extends Record<string, any>>({
     }
     return <ArrowUpDown className="w-4 h-4 ml-1 inline-block opacity-40" />;
   };
+
+  // Handle individual row selection
+  const handleRowSelect = (id: number, checked: boolean) => {
+    if (!onSelectionChange) return;
+    const newSelection = new Set(selectedIds);
+    if (checked) {
+      newSelection.add(id);
+    } else {
+      newSelection.delete(id);
+    }
+    onSelectionChange(newSelection);
+  };
+
+  // Handle select all
+  const handleSelectAll = (checked: boolean) => {
+    if (!onSelectionChange) return;
+    if (checked) {
+      const allIds = new Set(data.map(item => keyExtractor(item) as number));
+      onSelectionChange(allIds);
+    } else {
+      onSelectionChange(new Set());
+    }
+  };
+
+  // Check if all items are selected
+  const allSelected = data.length > 0 && data.every(item => selectedIds.has(keyExtractor(item) as number));
+  const someSelected = data.some(item => selectedIds.has(keyExtractor(item) as number));
+
   if (loading) {
     return (
       <div className="flex items-center justify-center py-12">
@@ -63,6 +98,21 @@ export function DataTable<T extends Record<string, any>>({
       <table className="min-w-full divide-y divide-gray-200">
         <thead className="bg-gray-50 dark:bg-gray-700">
           <tr>
+            {selectable && (
+              <th className="px-4 py-3 w-10">
+                <input
+                  type="checkbox"
+                  checked={allSelected}
+                  ref={(el) => {
+                    if (el) {
+                      el.indeterminate = someSelected && !allSelected;
+                    }
+                  }}
+                  onChange={(e) => handleSelectAll(e.target.checked)}
+                  className="h-4 w-4 text-primary-600 focus:ring-primary-500 border-gray-300 rounded cursor-pointer"
+                />
+              </th>
+            )}
             {columns.map((column, index) => (
               <th
                 key={index}
@@ -84,15 +134,34 @@ export function DataTable<T extends Record<string, any>>({
           </tr>
         </thead>
         <tbody className="bg-white dark:bg-gray-800 divide-y divide-gray-200 dark:divide-gray-700">
-          {data.map((item) => (
-            <tr key={keyExtractor(item)} className="hover:bg-gray-50 dark:hover:bg-gray-700">
-              {columns.map((column, index) => (
-                <td key={index} className={`px-4 py-3 whitespace-nowrap text-sm text-gray-900 dark:text-gray-100 ${column.width || ''}`}>
-                  {column.cell ? column.cell(item) : item[column.accessor]}
-                </td>
-              ))}
-            </tr>
-          ))}
+          {data.map((item) => {
+            const itemId = keyExtractor(item) as number;
+            const isSelected = selectedIds.has(itemId);
+            return (
+              <tr
+                key={itemId}
+                className={`hover:bg-gray-50 dark:hover:bg-gray-700 ${
+                  isSelected ? 'bg-primary-50 dark:bg-primary-900/20' : ''
+                }`}
+              >
+                {selectable && (
+                  <td className="px-4 py-3 w-10">
+                    <input
+                      type="checkbox"
+                      checked={isSelected}
+                      onChange={(e) => handleRowSelect(itemId, e.target.checked)}
+                      className="h-4 w-4 text-primary-600 focus:ring-primary-500 border-gray-300 rounded cursor-pointer"
+                    />
+                  </td>
+                )}
+                {columns.map((column, index) => (
+                  <td key={index} className={`px-4 py-3 whitespace-nowrap text-sm text-gray-900 dark:text-gray-100 ${column.width || ''}`}>
+                    {column.cell ? column.cell(item) : item[column.accessor]}
+                  </td>
+                ))}
+              </tr>
+            );
+          })}
         </tbody>
       </table>
     </div>

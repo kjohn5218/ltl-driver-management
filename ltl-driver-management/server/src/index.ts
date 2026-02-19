@@ -49,6 +49,7 @@ import workdayRoutes, { externalWorkdayRouter } from './routes/workday.routes';
 import interlineCarrierRoutes from './routes/interlineCarrier.routes';
 import expectedShipmentRoutes from './routes/expectedShipment.routes';
 import contractPowerRoutes from './routes/contractPower.routes';
+import tmsDispositionRoutes from './routes/tmsDisposition.routes';
 
 // External integrations
 import hrIntegrationRoutes from './routes/hrIntegration.routes';
@@ -177,6 +178,7 @@ app.use('/api/workday', workdayRoutes);
 app.use('/api/interline-carriers', interlineCarrierRoutes);
 app.use('/api/expected-shipments', expectedShipmentRoutes);
 app.use('/api/contract-power', contractPowerRoutes);
+app.use('/api/tms-disposition', tmsDispositionRoutes);
 
 // External integrations (API key authenticated, no CSRF)
 app.use('/api/hr', hrIntegrationRoutes);

@@ -4,7 +4,9 @@ import { locationService, TerminalLocation } from '../../services/locationServic
 import { linehaulTripService } from '../../services/linehaulTripService';
 import { loadsheetService } from '../../services/loadsheetService';
 import { lateDepartureReasonService, LateReasonType, LATE_REASON_LABELS } from '../../services/lateDepartureReasonService';
+import { tmsDispositionService } from '../../services/tmsDispositionService';
 import { LinehaulTrip, Loadsheet } from '../../types';
+import { getNextBusinessDayFormatted } from '../../utils/dateUtils';
 import {
   X,
   Clock,
@@ -61,6 +63,7 @@ export const LateReasonModal: React.FC<LateReasonModalProps> = ({
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [submitSuccess, setSubmitSuccess] = useState(false);
   const [submitError, setSubmitError] = useState<string | null>(null);
+  const [tmsUpdateStatus, setTmsUpdateStatus] = useState<'pending' | 'success' | 'partial' | 'skipped' | null>(null);
 
   // Fetch terminal locations for accountable terminal dropdown
   const { data: terminalLocations = [] } = useQuery({
@@ -184,6 +187,33 @@ export const LateReasonModal: React.FC<LateReasonModalProps> = ({
           actualDepartTime: dispatchTime || undefined,
           minutesLate: calculateMinutesLate() || undefined
         });
+
+        // Call TMS service to update schedules and add delay notes
+        try {
+          setTmsUpdateStatus('pending');
+          const tmsResult = await tmsDispositionService.singleDisposition(trip.id, {
+            lateReason,
+            willCauseServiceFailure: willCauseServiceFailure || false,
+            accountableTerminalId: accountableTerminalId || undefined,
+            accountableTerminalCode: selectedTerminal?.code,
+            notes: notes || undefined,
+            newScheduledDepartDate: getNextBusinessDayFormatted(),
+            scheduledDepartTime: schedDepartTime || undefined,
+            actualDepartTime: dispatchTime || undefined,
+            minutesLate: calculateMinutesLate() || undefined
+          });
+
+          if (tmsResult.errors.length === 0) {
+            setTmsUpdateStatus('success');
+          } else {
+            setTmsUpdateStatus('partial');
+            console.warn('TMS update had some errors:', tmsResult.errors);
+          }
+        } catch (tmsError: any) {
+          console.warn('TMS update failed (non-blocking):', tmsError);
+          setTmsUpdateStatus('skipped');
+        }
+
         setSubmitSuccess(true);
       }
 
@@ -212,6 +242,7 @@ export const LateReasonModal: React.FC<LateReasonModalProps> = ({
     setNotes('');
     setSubmitSuccess(false);
     setSubmitError(null);
+    setTmsUpdateStatus(null);
   };
 
   if (!isOpen) return null;
@@ -241,6 +272,14 @@ export const LateReasonModal: React.FC<LateReasonModalProps> = ({
               <div className="text-center">
                 <CheckCircle className="w-16 h-16 text-green-500 mx-auto mb-4" />
                 <p className="text-lg font-medium text-gray-900 dark:text-gray-100">Saved Successfully!</p>
+                {tmsUpdateStatus && (
+                  <p className="text-sm text-gray-500 dark:text-gray-400 mt-2">
+                    {tmsUpdateStatus === 'success' && 'TMS updates applied'}
+                    {tmsUpdateStatus === 'partial' && 'TMS updates partially applied'}
+                    {tmsUpdateStatus === 'skipped' && 'TMS updates pending'}
+                    {tmsUpdateStatus === 'pending' && 'Updating TMS...'}
+                  </p>
+                )}
               </div>
             </div>
           )}

@@ -33,6 +33,7 @@ import {
 } from 'lucide-react';
 import { RequestContractPowerModal } from './RequestContractPowerModal';
 import { DispatchTripModal } from './DispatchTripModal';
+import { BulkDispositionModal } from './BulkDispositionModal';
 
 // Load item type combining loadsheet data with additional load/unload info
 export interface LoadItem {
@@ -195,7 +196,9 @@ export const LoadsTab: React.FC<LoadsTabProps> = ({ loading: externalLoading = f
   const [isCreateModalOpen, setIsCreateModalOpen] = useState(false);
   const [isContractPowerModalOpen, setIsContractPowerModalOpen] = useState(false);
   const [isDispatchModalOpen, setIsDispatchModalOpen] = useState(false);
+  const [isBulkDispositionModalOpen, setIsBulkDispositionModalOpen] = useState(false);
   const [selectedLoadItem, setSelectedLoadItem] = useState<LoadItem | null>(null);
+  const [selectedLoadsheetIds, setSelectedLoadsheetIds] = useState<Set<number>>(new Set());
   const [deleting, setDeleting] = useState(false);
   const [terminating, setTerminating] = useState(false);
   const [saving, setSaving] = useState(false);
@@ -259,7 +262,7 @@ export const LoadsTab: React.FC<LoadsTabProps> = ({ loading: externalLoading = f
   });
   const locations = locationsData || [];
 
-  // Fetch loadsheets from the API
+  // Fetch loadsheets from the API (auto-refresh every 30 seconds)
   const { data: loadsheetsData, isLoading, refetch } = useQuery({
     queryKey: ['loadsheets-for-loads-tab', startDate, endDate],
     queryFn: async () => {
@@ -269,12 +272,14 @@ export const LoadsTab: React.FC<LoadsTabProps> = ({ loading: externalLoading = f
         endDate: endDate || undefined
       });
       return response.loadsheets;
-    }
+    },
+    refetchInterval: 30000 // Auto-refresh every 30 seconds
   });
 
-  // Fetch continuing trips (arrived and will continue) with their loadsheets
+  // Fetch continuing trips (arrived and will continue) with their loadsheets (auto-refresh every 30 seconds)
   const { data: continuingTripsData, refetch: refetchContinuingTrips } = useQuery({
     queryKey: ['continuing-trips-for-loads-tab', selectedLocations],
+    refetchInterval: 30000, // Auto-refresh every 30 seconds
     queryFn: async () => {
       // Fetch arrived trips
       const tripsResponse = await linehaulTripService.getTrips({
@@ -287,6 +292,18 @@ export const LoadsTab: React.FC<LoadsTabProps> = ({ loading: externalLoading = f
       // Filter to trips that arrived at one of the selected origins (arrival location)
       if (selectedLocations.length > 0) {
         arrivedTrips = arrivedTrips.filter(trip => {
+          // First check for trip's destinationTerminalCode override (alternate destination)
+          const tripDestOverride = (trip as any).destinationTerminalCode;
+          if (tripDestOverride) {
+            const matchingLocationIds = locations
+              .filter(l => l.code?.toUpperCase() === tripDestOverride.toUpperCase())
+              .map(l => l.id);
+            if (matchingLocationIds.some(id => selectedLocations.includes(id))) {
+              return true;
+            }
+            return false; // If trip has override, only use that for matching
+          }
+
           // Try multiple sources for the arrival location (destination of the trip)
           const destinationId = trip.linehaulProfile?.destinationTerminalId ||
             (trip.linehaulProfile as any)?.destinationTerminal?.id;
@@ -311,10 +328,14 @@ export const LoadsTab: React.FC<LoadsTabProps> = ({ loading: externalLoading = f
         });
       }
 
-      // Get unique arrival terminal codes
+      // Get unique arrival terminal codes (including alternate destinations)
       const arrivalCodes = [...new Set(
         arrivedTrips
-          .map(trip => trip.linehaulProfile?.destinationTerminal?.code)
+          .map(trip => {
+            // Use alternate destination if set, otherwise use profile destination
+            const tripDestOverride = (trip as any).destinationTerminalCode;
+            return tripDestOverride || trip.linehaulProfile?.destinationTerminal?.code;
+          })
           .filter(Boolean)
       )] as string[];
 
@@ -333,29 +354,66 @@ export const LoadsTab: React.FC<LoadsTabProps> = ({ loading: externalLoading = f
         continuingLoadsheets = results.flat();
       }
 
+      // Helper to extract final destination from profile name
+      // Profile names like "DENWAMSLC1" encode the route: DEN -> WAM -> SLC
+      // The final destination is the last 3-letter code before any trailing digits
+      const extractFinalDestination = (profileName: string | undefined): string | null => {
+        if (!profileName) return null;
+        // Remove trailing digits (e.g., "DENWAMSLC1" -> "DENWAMSLC")
+        const nameWithoutDigits = profileName.replace(/\d+$/, '').toUpperCase();
+        // Terminal codes are typically 3 characters
+        // Take the last 3 characters as the final destination
+        if (nameWithoutDigits.length >= 3) {
+          return nameWithoutDigits.slice(-3);
+        }
+        return null;
+      };
+
       // For each arrived trip, find loadsheets that can continue (not TERMINATED)
       // TERMINATED loadsheets are explicitly stopped by user and won't continue
       // UNLOADED loadsheets (empty trailers) can still continue if they have more legs
-      const tripsWithLoadsheets = arrivedTrips.map(trip => {
-        // Get non-TERMINATED loadsheets linked to this specific trip
-        const tripLoadsheets = continuingLoadsheets.filter(ls =>
-          ls.linehaulTripId === trip.id && ls.status !== 'TERMINATED'
-        );
+      const tripsWithLoadsheets = arrivedTrips
+        // First, filter out trips that arrived at the route's FINAL destination
+        // These trips have completed their route and should not appear on the Loads tab
+        .filter(trip => {
+          // Extract final destination from profile name (e.g., "DENWAMSLC1" -> "SLC")
+          const routeFinalDest = extractFinalDestination(trip.linehaulProfile?.name);
+          const tripDestOverride = (trip as any).destinationTerminalCode?.toUpperCase();
 
-        // Also include non-TERMINATED loadsheets from the trip include if not in continuingLoadsheets
-        const includedLoadsheets = (trip.loadsheets || []) as Loadsheet[];
-        for (const ls of includedLoadsheets) {
-          // Include any status except TERMINATED (OPEN, UNLOADED can continue)
-          if (ls.status !== 'TERMINATED' && !tripLoadsheets.some(tls => tls.id === ls.id)) {
-            tripLoadsheets.push(ls);
+          // The actual arrival location is the override if set, otherwise the profile's leg destination
+          const profileLegDest = trip.linehaulProfile?.destinationTerminal?.code?.toUpperCase();
+          const actualArrivalLocation = tripDestOverride || profileLegDest;
+
+          // If the trip arrived at the route's final destination, exclude it from loads tab
+          // This handles both:
+          // 1. Normal trips that completed all legs (arrived at last leg destination)
+          // 2. Alternate dispatch directly to final destination (e.g., DEN→SLC skipping WAM)
+          if (actualArrivalLocation && routeFinalDest && actualArrivalLocation === routeFinalDest) {
+            return false; // At final destination - no more legs to continue
           }
-        }
 
-        return {
-          ...trip,
-          loadsheets: tripLoadsheets
-        };
-      });
+          return true; // Still has legs to continue
+        })
+        .map(trip => {
+          // Get non-TERMINATED loadsheets linked to this specific trip
+          const tripLoadsheets = continuingLoadsheets.filter(ls =>
+            ls.linehaulTripId === trip.id && ls.status !== 'TERMINATED'
+          );
+
+          // Also include non-TERMINATED loadsheets from the trip include if not in continuingLoadsheets
+          const includedLoadsheets = (trip.loadsheets || []) as Loadsheet[];
+          for (const ls of includedLoadsheets) {
+            // Include any status except TERMINATED (OPEN, UNLOADED can continue)
+            if (ls.status !== 'TERMINATED' && !tripLoadsheets.some(tls => tls.id === ls.id)) {
+              tripLoadsheets.push(ls);
+            }
+          }
+
+          return {
+            ...trip,
+            loadsheets: tripLoadsheets
+          };
+        });
 
       // Only return trips that have non-TERMINATED loadsheets (continuing freight)
       return tripsWithLoadsheets.filter(trip => trip.loadsheets && trip.loadsheets.length > 0);
@@ -872,6 +930,11 @@ export const LoadsTab: React.FC<LoadsTabProps> = ({ loading: externalLoading = f
 
   const isLoadingData = externalLoading || isLoading;
 
+  // Get selected loadsheets for bulk disposition
+  const selectedLoadsheets = useMemo(() => {
+    return sortedLoads.filter(load => selectedLoadsheetIds.has(load.id));
+  }, [sortedLoads, selectedLoadsheetIds]);
+
   return (
     <div className="bg-white dark:bg-gray-800 shadow rounded-lg">
       {/* Header with summary stats */}
@@ -895,6 +958,19 @@ export const LoadsTab: React.FC<LoadsTabProps> = ({ loading: externalLoading = f
             >
               <Play className="w-3 h-3 mr-1" />
               Dispatch Trip
+            </button>
+            <button
+              onClick={() => setIsBulkDispositionModalOpen(true)}
+              disabled={selectedLoadsheetIds.size === 0}
+              className="inline-flex items-center px-3 py-1.5 bg-amber-600 text-white rounded hover:bg-amber-700 transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
+            >
+              <AlertTriangle className="w-3 h-3 mr-1" />
+              Late Disposition
+              {selectedLoadsheetIds.size > 0 && (
+                <span className="ml-1.5 bg-amber-800 px-1.5 py-0.5 rounded text-xs">
+                  {selectedLoadsheetIds.size}
+                </span>
+              )}
             </button>
             <button
               onClick={() => refetch()}
@@ -962,6 +1038,9 @@ export const LoadsTab: React.FC<LoadsTabProps> = ({ loading: externalLoading = f
         sortBy={sortBy}
         sortDirection={sortDirection}
         onSort={handleSort}
+        selectable={true}
+        selectedIds={selectedLoadsheetIds}
+        onSelectionChange={setSelectedLoadsheetIds}
       />
 
       {/* Continuing Trips Section - trips that arrived and will continue */}
@@ -1544,6 +1623,18 @@ export const LoadsTab: React.FC<LoadsTabProps> = ({ loading: externalLoading = f
         }}
         selectedLocations={selectedLocations}
         locations={locations}
+      />
+
+      {/* Bulk Disposition Modal */}
+      <BulkDispositionModal
+        isOpen={isBulkDispositionModalOpen}
+        onClose={() => setIsBulkDispositionModalOpen(false)}
+        selectedLoadsheets={selectedLoadsheets}
+        onSuccess={() => {
+          setIsBulkDispositionModalOpen(false);
+          setSelectedLoadsheetIds(new Set());
+          refetch();
+        }}
       />
     </div>
   );
