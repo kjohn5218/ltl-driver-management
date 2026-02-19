@@ -6,6 +6,7 @@ import { Prisma, PayrollSourceType, PayrollLineItemStatus } from '@prisma/client
  * Called when a trip is arrived and TripPay is created/calculated
  */
 export const createPayrollLineItemFromTripPay = async (tripPayId: number): Promise<void> => {
+  console.log(`[Payroll] createPayrollLineItemFromTripPay called for tripPayId=${tripPayId}`);
   const tripPay = await prisma.tripPay.findUnique({
     where: { id: tripPayId },
     include: {
@@ -32,8 +33,11 @@ export const createPayrollLineItemFromTripPay = async (tripPayId: number): Promi
   });
 
   if (!tripPay) {
+    console.error(`[Payroll] TripPay ${tripPayId} not found when creating PayrollLineItem`);
     throw new Error(`TripPay with id ${tripPayId} not found`);
   }
+
+  console.log(`[Payroll] TripPay found: id=${tripPayId}, tripId=${tripPay.tripId}, driverId=${tripPay.driverId}, dispatchDate=${tripPay.trip?.dispatchDate}`);
 
   // Check if PayrollLineItem already exists for this TripPay
   const existing = await prisma.payrollLineItem.findUnique({
@@ -41,6 +45,7 @@ export const createPayrollLineItemFromTripPay = async (tripPayId: number): Promi
   });
 
   if (existing) {
+    console.log(`[Payroll] PayrollLineItem already exists for TripPay ${tripPayId}`);
     // Update existing record
     await updatePayrollLineItemFromTripPay(tripPayId);
     return;
@@ -74,14 +79,17 @@ export const createPayrollLineItemFromTripPay = async (tripPayId: number): Promi
     DISPUTED: 'DISPUTED'
   };
 
-  await prisma.payrollLineItem.create({
+  const payrollDate = tripPay.trip?.dispatchDate || new Date();
+  console.log(`[Payroll] Creating PayrollLineItem with date=${payrollDate}, driverId=${tripPay.driverId}, status=${statusMap[tripPay.status] || 'PENDING'}`);
+
+  const payrollLineItem = await prisma.payrollLineItem.create({
     data: {
       sourceType: PayrollSourceType.TRIP_PAY,
       tripPayId: tripPay.id,
       driverId: tripPay.driverId!,
       tripId: tripPay.tripId,
       payPeriodId: tripPay.payPeriodId,
-      date: tripPay.trip?.dispatchDate || new Date(),
+      date: payrollDate,
       driverName: tripPay.driver?.name,
       driverNumber: tripPay.driver?.number,
       workdayEmployeeId: tripPay.driver?.workdayEmployeeId,
@@ -113,6 +121,7 @@ export const createPayrollLineItemFromTripPay = async (tripPayId: number): Promi
       notes: tripPay.notes
     }
   });
+  console.log(`[Payroll] PayrollLineItem created: id=${payrollLineItem.id}, tripPayId=${tripPayId}, date=${payrollLineItem.date}`);
 };
 
 /**
@@ -352,6 +361,7 @@ export const syncAllPayrollLineItems = async (): Promise<{ tripPay: number; cutP
  * Called automatically when a trip arrives to populate the payroll page
  */
 export const calculateAndCreateTripPay = async (tripId: number): Promise<{ success: boolean; message: string; tripPayId?: number }> => {
+  console.log(`[Payroll] calculateAndCreateTripPay called for tripId=${tripId}`);
   try {
     const trip = await prisma.linehaulTrip.findUnique({
       where: { id: tripId },
@@ -369,14 +379,19 @@ export const calculateAndCreateTripPay = async (tripId: number): Promise<{ succe
     });
 
     if (!trip) {
+      console.log(`[Payroll] Trip ${tripId} not found`);
       return { success: false, message: 'Trip not found' };
     }
 
+    console.log(`[Payroll] Trip ${tripId} found: driverId=${trip.driverId}, linehaulProfileId=${trip.linehaulProfileId}, dispatchDate=${trip.dispatchDate}`);
+
     if (!trip.driverId) {
+      console.log(`[Payroll] Trip ${tripId} has no driver assigned`);
       return { success: false, message: 'Trip has no assigned driver' };
     }
 
     if (!trip.linehaulProfile) {
+      console.log(`[Payroll] Trip ${tripId} has no linehaul profile`);
       return { success: false, message: 'Trip has no linehaul profile' };
     }
 
@@ -386,6 +401,7 @@ export const calculateAndCreateTripPay = async (tripId: number): Promise<{ succe
     });
 
     if (existingTripPay) {
+      console.log(`[Payroll] TripPay already exists for trip ${tripId}: tripPayId=${existingTripPay.id}`);
       // Update existing PayrollLineItem to ensure it's in sync
       await updatePayrollLineItemFromTripPay(existingTripPay.id);
       return { success: true, message: 'Trip pay already exists', tripPayId: existingTripPay.id };
@@ -548,9 +564,10 @@ export const calculateAndCreateTripPay = async (tripId: number): Promise<{ succe
     });
 
     // Create PayrollLineItem
+    console.log(`[Payroll] Creating PayrollLineItem for TripPay ${tripPay.id}, trip ${tripId}, dispatchDate=${trip.dispatchDate}`);
     await createPayrollLineItemFromTripPay(tripPay.id);
 
-    console.log(`[Payroll] Created TripPay ${tripPay.id} for trip ${tripId} with total pay $${totalGrossPay.toFixed(2)}`);
+    console.log(`[Payroll] Created TripPay ${tripPay.id} and PayrollLineItem for trip ${tripId} with total pay $${totalGrossPay.toFixed(2)}`);
 
     return { success: true, message: 'Trip pay created', tripPayId: tripPay.id };
   } catch (error) {

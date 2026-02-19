@@ -763,6 +763,14 @@ export const updateTripStatus = async (req: Request, res: Response): Promise<voi
         });
     }
 
+    // Auto-create TripPay and PayrollLineItem when trip is dispatched or in transit
+    if (status === 'DISPATCHED' || status === 'IN_TRANSIT') {
+      const payrollResult = await calculateAndCreateTripPay(tripId);
+      if (!payrollResult.success) {
+        console.warn(`[Update Trip Status] Payroll item creation warning for trip ${tripId}: ${payrollResult.message}`);
+      }
+    }
+
     res.json(updatedTrip);
   } catch (error) {
     console.error('Error updating trip status:', error);
