@@ -1,10 +1,10 @@
 import React, { useState, useEffect } from 'react';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
-import { locationService } from '../../services/locationService';
+import { locationService, TerminalLocation } from '../../services/locationService';
 import { linehaulTripService } from '../../services/linehaulTripService';
 import { loadsheetService } from '../../services/loadsheetService';
 import { lateDepartureReasonService, LateReasonType, LATE_REASON_LABELS } from '../../services/lateDepartureReasonService';
-import { LinehaulTrip, Loadsheet, Location } from '../../types';
+import { LinehaulTrip, Loadsheet } from '../../types';
 import {
   X,
   Clock,
@@ -62,10 +62,10 @@ export const LateReasonModal: React.FC<LateReasonModalProps> = ({
   const [submitSuccess, setSubmitSuccess] = useState(false);
   const [submitError, setSubmitError] = useState<string | null>(null);
 
-  // Fetch locations for accountable terminal dropdown
-  const { data: locations = [] } = useQuery({
-    queryKey: ['locations-list'],
-    queryFn: () => locationService.getLocationsList(),
+  // Fetch terminal locations for accountable terminal dropdown
+  const { data: terminalLocations = [] } = useQuery({
+    queryKey: ['terminal-locations'],
+    queryFn: () => locationService.getTerminalLocations(),
     staleTime: 5 * 60 * 1000
   });
 
@@ -170,7 +170,7 @@ export const LateReasonModal: React.FC<LateReasonModalProps> = ({
       } else if (correctionMode === 'none' && lateReason) {
         // Save late departure reason to database
         const selectedTerminal = accountableTerminalId
-          ? locations.find((l: Location) => l.id === accountableTerminalId)
+          ? terminalLocations.find((l: TerminalLocation) => l.id === accountableTerminalId)
           : null;
 
         await createLateReasonMutation.mutateAsync({
@@ -479,9 +479,9 @@ export const LateReasonModal: React.FC<LateReasonModalProps> = ({
                   disabled={willCauseServiceFailure === null}
                 >
                   <option value="">Select terminal...</option>
-                  {locations.map((location: Location) => (
-                    <option key={location.id} value={location.id}>
-                      {location.code} - {location.name || location.city}
+                  {terminalLocations.map((terminal: TerminalLocation) => (
+                    <option key={terminal.id} value={terminal.id}>
+                      {terminal.code} - {terminal.name || terminal.city}
                     </option>
                   ))}
                 </select>
