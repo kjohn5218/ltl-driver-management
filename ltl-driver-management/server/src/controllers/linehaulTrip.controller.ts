@@ -3,7 +3,7 @@ import { prisma } from '../index';
 import { Prisma, TripStatus, EquipmentStatus } from '@prisma/client';
 import { tripDocumentService } from '../services/tripDocument.service';
 import { etaService } from '../services/eta.service';
-import { calculateAndCreateTripPay } from '../services/payroll.service';
+import { calculateAndCreateTripPay, completePayrollOnArrival } from '../services/payroll.service';
 
 // Get all trips with filtering
 export const getTrips = async (req: Request, res: Response): Promise<void> => {
@@ -1131,7 +1131,13 @@ export const dispatchTrip = async (req: Request, res: Response): Promise<void> =
         console.error(`Failed to generate trip documents for trip ${tripId}:`, error);
       });
 
-    res.json(updatedTrip);
+    // Auto-create TripPay and PayrollLineItem with PENDING status when dispatched
+    const payrollResult = await calculateAndCreateTripPay(tripId);
+    if (!payrollResult.success) {
+      console.warn(`[Dispatch Trip] Payroll item creation warning for trip ${tripId}: ${payrollResult.message}`);
+    }
+
+    res.json({ ...updatedTrip, payroll: payrollResult });
   } catch (error) {
     console.error('Error dispatching trip:', error);
     res.status(500).json({ message: 'Failed to dispatch trip' });
@@ -1734,10 +1740,10 @@ export const arriveTrip = async (req: Request, res: Response): Promise<void> => 
       return { trip: updatedTrip, driverReport, equipmentIssue: createdIssue };
     });
 
-    // Auto-create TripPay and PayrollLineItem for payroll page
-    const payrollResult = await calculateAndCreateTripPay(tripId);
+    // Update PayrollLineItem status to COMPLETE and add accessorial details
+    const payrollResult = await completePayrollOnArrival(tripId);
     if (!payrollResult.success) {
-      console.warn(`[Arrive Trip] Payroll item creation warning for trip ${tripId}: ${payrollResult.message}`);
+      console.warn(`[Arrive Trip] Payroll completion warning for trip ${tripId}: ${payrollResult.message}`);
     }
 
     res.json({

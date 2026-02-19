@@ -42,6 +42,7 @@ model User {
   // Payroll line item relations
   reviewedPayrollLineItems  PayrollLineItem[] @relation("PayrollLineItemReviewer")
   approvedPayrollLineItems  PayrollLineItem[] @relation("PayrollLineItemApprover")
+  exportedPayrollLineItems  PayrollLineItem[] @relation("PayrollLineItemExporter")
 
   @@map("users")
 }
@@ -698,11 +699,13 @@ enum PayrollSourceType {
 
 enum PayrollLineItemStatus {
   PENDING
+  COMPLETE
   CALCULATED
   REVIEWED
   APPROVED
   PAID
   DISPUTED
+  CANCELLED
 }
 
 enum DriverStatus {
@@ -1296,9 +1299,19 @@ model PayrollLineItem {
 
   // Trip info (for trip pay)
   tripNumber        String?
+  linehaulCode1     String?               // First linehaul profile code
+  linehaulCode2     String?               // Second linehaul profile code (for combined trips)
+  linehaulCode3     String?               // Third linehaul profile code
   origin            String?               // Origin terminal code
   destination       String?               // Destination terminal code
+  terminalCode      String?               // Driver's assigned terminal
+  dispatchTime      DateTime?             // Dispatch time
+  arrivalTime       DateTime?             // Arrival time
   totalMiles        Decimal?              @db.Decimal(8, 1)
+  workHours         Decimal?              @db.Decimal(6, 2)  // Total work hours
+  stopHours         Decimal?              @db.Decimal(6, 2)  // Stop hours (different from wait time)
+  dropHookCount     Int?                  // Number of drop & hooks
+  chainUpCount      Int?                  // Number of chain up cycles
 
   // Pay breakdown
   basePay           Decimal               @default(0) @db.Decimal(10, 2)
@@ -1314,6 +1327,16 @@ model PayrollLineItem {
   bonusPay          Decimal               @default(0) @db.Decimal(10, 2)
   deductions        Decimal               @default(0) @db.Decimal(10, 2)
   totalGrossPay     Decimal               @default(0) @db.Decimal(10, 2)
+
+  // Cost breakdown (for reporting)
+  equipmentCost     Decimal?              @db.Decimal(10, 2)  // Equipment cost
+  fuelCost          Decimal?              @db.Decimal(10, 2)  // Fuel cost
+  totalCost         Decimal?              @db.Decimal(10, 2)  // Total cost (labor + fuel)
+
+  // Additional trip info
+  isSleeper         Boolean               @default(false)     // Sleeper berth trip
+  employer          String?               // Employer/company entity code
+  isCutPay          Boolean               @default(false)     // Flag if this is a cut pay
 
   // Cut pay specific fields
   cutPayType        CutPayType?           // HOURS or MILES
@@ -1334,6 +1357,7 @@ model PayrollLineItem {
   // Payroll export
   externalPayrollId String?
   exportedAt        DateTime?
+  exportedBy        Int?                  // User who exported
 
   notes             String?
   createdAt         DateTime              @default(now())
@@ -1347,6 +1371,7 @@ model PayrollLineItem {
   cutPayRequest     CutPayRequest?        @relation(fields: [cutPayRequestId], references: [id])
   reviewer          User?                 @relation("PayrollLineItemReviewer", fields: [reviewedBy], references: [id])
   approver          User?                 @relation("PayrollLineItemApprover", fields: [approvedBy], references: [id])
+  exporter          User?                 @relation("PayrollLineItemExporter", fields: [exportedBy], references: [id])
 
   @@index([sourceType])
   @@index([driverId])

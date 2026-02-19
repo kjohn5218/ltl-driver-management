@@ -33,11 +33,13 @@ import {
 
 const statusConfig: Record<string, { label: string; color: string }> = {
   PENDING: { label: 'Pending', color: 'default' },
+  COMPLETE: { label: 'Complete', color: 'info' },
   CALCULATED: { label: 'Calculated', color: 'info' },
   REVIEWED: { label: 'Reviewed', color: 'warning' },
   APPROVED: { label: 'Approved', color: 'success' },
   PAID: { label: 'Paid', color: 'success' },
-  DISPUTED: { label: 'Disputed', color: 'danger' }
+  DISPUTED: { label: 'Disputed', color: 'danger' },
+  CANCELLED: { label: 'Cancelled', color: 'danger' }
 };
 
 export const Payroll: React.FC = () => {
@@ -624,21 +626,6 @@ export const Payroll: React.FC = () => {
       }
     },
     {
-      header: 'Equip Cost',
-      accessor: 'equipmentCost' as keyof PayrollLineItem,
-      cell: (item: PayrollLineItem) => (
-        <div className="text-sm text-right">
-          {item.equipmentCost ? (
-            <span className="text-gray-600 dark:text-gray-400">
-              {formatCurrency(item.equipmentCost)}
-            </span>
-          ) : (
-            <span className="text-gray-400">-</span>
-          )}
-        </div>
-      )
-    },
-    {
       header: 'Fuel Cost',
       accessor: 'fuelCost' as keyof PayrollLineItem,
       cell: (item: PayrollLineItem) => (
@@ -670,21 +657,6 @@ export const Payroll: React.FC = () => {
           {item.totalCost ? (
             <span className="font-medium text-gray-900 dark:text-gray-100">
               {formatCurrency(item.totalCost)}
-            </span>
-          ) : (
-            <span className="text-gray-400">-</span>
-          )}
-        </div>
-      )
-    },
-    {
-      header: 'Sleeper',
-      accessor: 'isSleeper' as keyof PayrollLineItem,
-      cell: (item: PayrollLineItem) => (
-        <div className="text-center">
-          {item.isSleeper ? (
-            <span className="inline-flex items-center px-2 py-0.5 rounded text-xs font-medium bg-indigo-100 text-indigo-800 dark:bg-indigo-900/50 dark:text-indigo-300">
-              Yes
             </span>
           ) : (
             <span className="text-gray-400">-</span>

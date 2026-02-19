@@ -1074,7 +1074,7 @@ export const getUnifiedPayrollItems = async (req: Request, res: Response): Promi
 export const updatePayrollLineItem = async (req: Request, res: Response): Promise<void> => {
   try {
     const { type, id } = req.params;
-    const { basePay, mileagePay, accessorialPay, bonusPay, deductions, totalPay, notes, rateApplied } = req.body;
+    const { basePay, mileagePay, accessorialPay, bonusPay, deductions, totalPay, notes, rateApplied, status } = req.body;
     const itemId = parseInt(id, 10);
 
     if (type === 'trip') {
@@ -1097,6 +1097,9 @@ export const updatePayrollLineItem = async (req: Request, res: Response): Promis
       const newDeductions = deductions !== undefined ? deductions : Number(payrollItem.deductions);
       const newTotal = totalPay !== undefined ? totalPay : (newBasePay + newMileagePay + newAccessorialPay + newBonusPay - newDeductions);
 
+      // Determine the new status - use provided status or default to REVIEWED
+      const newStatus = status !== undefined ? status as PayrollLineItemStatus : 'REVIEWED';
+
       // Update PayrollLineItem
       const updatedItem = await prisma.payrollLineItem.update({
         where: { tripPayId: itemId },
@@ -1107,9 +1110,22 @@ export const updatePayrollLineItem = async (req: Request, res: Response): Promis
           ...(deductions !== undefined && { deductions: new Prisma.Decimal(deductions) }),
           totalGrossPay: new Prisma.Decimal(newTotal),
           ...(notes !== undefined && { notes }),
-          status: 'REVIEWED'
+          status: newStatus
         }
       });
+
+      // Map PayrollLineItemStatus to TripPayStatus (CANCELLED doesn't exist in TripPay)
+      const tripPayStatusMap: Record<string, string> = {
+        PENDING: 'PENDING',
+        COMPLETE: 'CALCULATED',
+        CALCULATED: 'CALCULATED',
+        REVIEWED: 'REVIEWED',
+        APPROVED: 'APPROVED',
+        PAID: 'PAID',
+        DISPUTED: 'DISPUTED',
+        CANCELLED: 'DISPUTED' // Map CANCELLED to DISPUTED for TripPay
+      };
+      const tripPayStatus = tripPayStatusMap[newStatus] || 'REVIEWED';
 
       // Also update the source TripPay record
       await prisma.tripPay.update({
@@ -1122,7 +1138,7 @@ export const updatePayrollLineItem = async (req: Request, res: Response): Promis
           ...(deductions !== undefined && { deductions: new Prisma.Decimal(deductions) }),
           totalGrossPay: new Prisma.Decimal(newTotal),
           ...(notes !== undefined && { notes }),
-          status: 'REVIEWED'
+          status: tripPayStatus as TripPayStatus
         }
       });
 
@@ -1138,23 +1154,40 @@ export const updatePayrollLineItem = async (req: Request, res: Response): Promis
         return;
       }
 
+      // Determine the new status
+      const newStatus = status !== undefined ? status as PayrollLineItemStatus : payrollItem.status;
+
       // Update PayrollLineItem
       const updatedItem = await prisma.payrollLineItem.update({
         where: { cutPayRequestId: itemId },
         data: {
           ...(totalPay !== undefined && { totalGrossPay: new Prisma.Decimal(totalPay) }),
           ...(rateApplied !== undefined && { rateApplied: new Prisma.Decimal(rateApplied) }),
-          ...(notes !== undefined && { notes })
+          ...(notes !== undefined && { notes }),
+          ...(status !== undefined && { status: newStatus })
         }
       });
 
-      // Also update the source CutPayRequest record
+      // Also update the source CutPayRequest record (CANCELLED maps to REJECTED for CutPay)
+      const cutPayStatusMap: Record<string, string> = {
+        PENDING: 'PENDING',
+        COMPLETE: 'APPROVED',
+        CALCULATED: 'APPROVED',
+        REVIEWED: 'APPROVED',
+        APPROVED: 'APPROVED',
+        PAID: 'PAID',
+        DISPUTED: 'REJECTED',
+        CANCELLED: 'REJECTED'
+      };
+      const cutPayStatus = status !== undefined ? cutPayStatusMap[status] : undefined;
+
       await prisma.cutPayRequest.update({
         where: { id: itemId },
         data: {
           ...(totalPay !== undefined && { totalPay: new Prisma.Decimal(totalPay) }),
           ...(rateApplied !== undefined && { rateApplied: new Prisma.Decimal(rateApplied) }),
-          ...(notes !== undefined && { notes })
+          ...(notes !== undefined && { notes }),
+          ...(cutPayStatus !== undefined && { status: cutPayStatus as any })
         }
       });
 

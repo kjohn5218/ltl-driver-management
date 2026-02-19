@@ -1412,6 +1412,7 @@ export interface PayrollLineItemUpdate {
   totalPay?: number;
   rateApplied?: number;
   notes?: string;
+  status?: string;
 }
 
 export interface PayrollExportOptions {

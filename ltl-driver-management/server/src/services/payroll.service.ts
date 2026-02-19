@@ -547,3 +547,86 @@ export const calculateAndCreateTripPay = async (tripId: number): Promise<{ succe
     return { success: false, message: error instanceof Error ? error.message : 'Unknown error' };
   }
 };
+
+/**
+ * Update payroll status to COMPLETE when trip arrives
+ * Also updates accessorial information from driver trip report
+ */
+export const completePayrollOnArrival = async (tripId: number): Promise<{ success: boolean; message: string }> => {
+  try {
+    // Find the PayrollLineItem for this trip
+    const payrollItem = await prisma.payrollLineItem.findFirst({
+      where: { tripId }
+    });
+
+    if (!payrollItem) {
+      return { success: false, message: 'No payroll item found for this trip' };
+    }
+
+    // Get the driver trip report to update accessorial pay
+    const report = await prisma.driverTripReport.findUnique({
+      where: { tripId }
+    });
+
+    // Calculate accessorial breakdown from driver trip report
+    const dropAndHook = report?.dropAndHook || 0;
+    const chainUp = report?.chainUpCycles || 0;
+    const waitTimeMinutes = report?.waitTimeMinutes || 0;
+
+    // Estimate individual accessorial pay (using standard rates)
+    const dropHookPay = dropAndHook > 0 ? dropAndHook * 25 : 0;
+    const chainUpPay = chainUp > 0 ? chainUp * 15 : 0;
+    const waitTimePay = waitTimeMinutes > 0 ? (waitTimeMinutes / 60) * 18 : 0;
+
+    // Update PayrollLineItem to COMPLETE and add accessorial details
+    await prisma.payrollLineItem.update({
+      where: { id: payrollItem.id },
+      data: {
+        status: 'COMPLETE',
+        dropAndHookPay: new Prisma.Decimal(dropHookPay),
+        chainUpPay: new Prisma.Decimal(chainUpPay),
+        waitTimePay: new Prisma.Decimal(waitTimePay),
+        // Recalculate total gross pay with accessorials
+        totalGrossPay: new Prisma.Decimal(
+          Number(payrollItem.basePay || 0) +
+          Number(payrollItem.mileagePay || 0) +
+          dropHookPay +
+          chainUpPay +
+          waitTimePay +
+          Number(payrollItem.otherAccessorialPay || 0) +
+          Number(payrollItem.bonusPay || 0) -
+          Number(payrollItem.deductions || 0)
+        )
+      }
+    });
+
+    // Also update TripPay status if it exists
+    const tripPay = await prisma.tripPay.findFirst({
+      where: { tripId }
+    });
+
+    if (tripPay) {
+      await prisma.tripPay.update({
+        where: { id: tripPay.id },
+        data: {
+          status: 'CALCULATED',
+          accessorialPay: new Prisma.Decimal(dropHookPay + chainUpPay + waitTimePay),
+          totalGrossPay: new Prisma.Decimal(
+            Number(tripPay.basePay || 0) +
+            Number(tripPay.mileagePay || 0) +
+            dropHookPay +
+            chainUpPay +
+            waitTimePay -
+            Number(tripPay.deductions || 0)
+          )
+        }
+      });
+    }
+
+    console.log(`[Payroll] Trip ${tripId} payroll marked as COMPLETE`);
+    return { success: true, message: 'Payroll status updated to COMPLETE' };
+  } catch (error) {
+    console.error(`[Payroll] Failed to complete payroll for trip ${tripId}:`, error);
+    return { success: false, message: error instanceof Error ? error.message : 'Unknown error' };
+  }
+};

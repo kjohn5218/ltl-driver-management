@@ -26,7 +26,8 @@ export const PayrollEditModal: React.FC<PayrollEditModalProps> = ({
     bonusPay: 0,
     deductions: 0,
     totalPay: 0,
-    notes: ''
+    notes: '',
+    status: ''
   });
   const [saving, setSaving] = useState(false);
 
@@ -42,7 +43,8 @@ export const PayrollEditModal: React.FC<PayrollEditModalProps> = ({
         bonusPay: item.bonusPay || 0,
         deductions: item.deductions || 0,
         totalPay: item.totalGrossPay || 0,
-        notes: item.notes || ''
+        notes: item.notes || '',
+        status: item.status || ''
       });
     }
   }, [item]);
@@ -76,6 +78,11 @@ export const PayrollEditModal: React.FC<PayrollEditModalProps> = ({
       const updateData: PayrollLineItemUpdate = {
         notes: formData.notes
       };
+
+      // Include status if it was changed
+      if (formData.status && formData.status !== item.status) {
+        updateData.status = formData.status;
+      }
 
       if (item.source === 'TRIP_PAY') {
         const totalAccessorial = formData.dropAndHookPay + formData.chainUpPay +
@@ -341,6 +348,30 @@ export const PayrollEditModal: React.FC<PayrollEditModalProps> = ({
               {formatCurrency(formData.totalPay)}
             </span>
           </div>
+        </div>
+
+        {/* Status */}
+        <div>
+          <label className="block text-sm font-medium text-gray-700 dark:text-gray-300">
+            Status
+          </label>
+          <select
+            value={formData.status}
+            onChange={(e) => setFormData({ ...formData, status: e.target.value })}
+            className="mt-1 block w-full rounded-md border-gray-300 dark:border-gray-600 dark:bg-gray-700 dark:text-white shadow-sm focus:border-indigo-500 focus:ring-indigo-500 sm:text-sm"
+          >
+            <option value="PENDING">Pending</option>
+            <option value="COMPLETE">Complete</option>
+            <option value="CALCULATED">Calculated</option>
+            <option value="REVIEWED">Reviewed</option>
+            <option value="APPROVED">Approved</option>
+            <option value="CANCELLED">Cancelled (Will not be exported to Workday)</option>
+          </select>
+          {formData.status === 'CANCELLED' && (
+            <p className="mt-1 text-sm text-red-600 dark:text-red-400">
+              Cancelled items will not be exported to Workday.
+            </p>
+          )}
         </div>
 
         {/* Notes */}
