@@ -1290,24 +1290,8 @@ export const DriverSelfService: React.FC = () => {
                   <select
                     value={equipmentIssueType}
                     onChange={(e) => {
-                      const type = e.target.value;
-                      setEquipmentIssueType(type);
-                      // Auto-populate equipment number based on type
-                      if (type === 'TRAILER') {
-                        const trailerNumbers = [
-                          selectedTrip?.trailer?.unitNumber,
-                          selectedTrip?.trailer2?.unitNumber
-                        ].filter(Boolean).join(', ');
-                        setEquipmentIssueNumber(trailerNumbers || '');
-                      } else if (type === 'DOLLY') {
-                        const dollyNumbers = [
-                          selectedTrip?.dolly?.unitNumber,
-                          selectedTrip?.dolly2?.unitNumber
-                        ].filter(Boolean).join(', ');
-                        setEquipmentIssueNumber(dollyNumbers || '');
-                      } else {
-                        setEquipmentIssueNumber('');
-                      }
+                      setEquipmentIssueType(e.target.value);
+                      setEquipmentIssueNumber(''); // Reset selection when type changes
                     }}
                     className="w-full px-3 py-2 border border-gray-300 rounded-lg"
                   >
@@ -1317,16 +1301,46 @@ export const DriverSelfService: React.FC = () => {
                     ))}
                   </select>
                 </div>
-                <div>
-                  <label className="block text-sm text-gray-500 mb-1">Equipment Number</label>
-                  <input
-                    type="text"
-                    value={equipmentIssueNumber}
-                    onChange={(e) => setEquipmentIssueNumber(e.target.value)}
-                    placeholder="e.g., TRL-1234"
-                    className="w-full px-3 py-2 border border-gray-300 rounded-lg"
-                  />
-                </div>
+                {equipmentIssueType && (
+                  <div>
+                    <label className="block text-sm text-gray-500 mb-1">Equipment</label>
+                    <select
+                      value={equipmentIssueNumber}
+                      onChange={(e) => setEquipmentIssueNumber(e.target.value)}
+                      className="w-full px-3 py-2 border border-gray-300 rounded-lg"
+                    >
+                      <option value="">Select equipment</option>
+                      {equipmentIssueType === 'TRAILER' && (
+                        <>
+                          {selectedTrip?.trailer?.unitNumber && (
+                            <option value={selectedTrip.trailer.unitNumber}>
+                              {selectedTrip.trailer.unitNumber}
+                            </option>
+                          )}
+                          {selectedTrip?.trailer2?.unitNumber && (
+                            <option value={selectedTrip.trailer2.unitNumber}>
+                              {selectedTrip.trailer2.unitNumber}
+                            </option>
+                          )}
+                        </>
+                      )}
+                      {equipmentIssueType === 'DOLLY' && (
+                        <>
+                          {selectedTrip?.dolly?.unitNumber && (
+                            <option value={selectedTrip.dolly.unitNumber}>
+                              {selectedTrip.dolly.unitNumber}
+                            </option>
+                          )}
+                          {selectedTrip?.dolly2?.unitNumber && (
+                            <option value={selectedTrip.dolly2.unitNumber}>
+                              {selectedTrip.dolly2.unitNumber}
+                            </option>
+                          )}
+                        </>
+                      )}
+                    </select>
+                  </div>
+                )}
                 <div>
                   <label className="block text-sm text-gray-500 mb-1">Description</label>
                   <textarea
