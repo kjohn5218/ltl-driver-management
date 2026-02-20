@@ -1,6 +1,7 @@
 import { Request, Response, NextFunction } from 'express';
-import { PrismaClient, User } from '@prisma/client';
+import { PrismaClient } from '@prisma/client';
 import crypto from 'crypto';
+import { getClientIdentity } from '../utils/clientIp.utils';
 
 const prisma = new PrismaClient();
 const MAX_SCAN_SIZE = 4096; // 4KB max scan size to prevent ReDoS
@@ -9,11 +10,6 @@ const MAX_SCAN_SIZE = 4096; // 4KB max scan size to prevent ReDoS
 interface StrikeCacheEntry {
   blocked: boolean;
   expiresAt: number;
-}
-
-// Extended Request with optional user (set by auth middleware)
-interface RequestWithUser extends Request {
-  user?: User;
 }
 
 // Define patterns for malicious request detection
@@ -40,14 +36,8 @@ const RECON_PATTERNS = [
 // In-memory cache for strike data (consider Redis for production)
 const strikeCache = new Map<string, StrikeCacheEntry>();
 
-// Get client identity - uses authenticated user ID if available, otherwise IP
-const getClientIdentity = (req: RequestWithUser): string => {
-  if (req.user?.id) {
-    return `user:${req.user.id}`;
-  }
-  const ip = req.ip || req.socket.remoteAddress || 'unknown';
-  return `ip:${ip}`;
-};
+// Note: getClientIdentity is imported from ../utils/clientIp.utils
+// It handles trusted proxy validation per SECURITY_STANDARDS.md §7.2
 
 // Track if we've already logged a storage failure (prevent log spam)
 let storageFailureLogged = false;
@@ -183,7 +173,7 @@ const generateRequestId = (): string => {
 
 // Security middleware
 export const securityMiddleware = async (
-  req: RequestWithUser,
+  req: Request,
   res: Response,
   next: NextFunction
 ): Promise<void> => {

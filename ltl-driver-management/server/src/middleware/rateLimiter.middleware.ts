@@ -1,14 +1,11 @@
 import rateLimit from 'express-rate-limit';
 import { Request, Response } from 'express';
+import { getClientIdentity, getClientIp } from '../utils/clientIp.utils';
 
 // Custom key generator to handle authenticated vs unauthenticated users
+// Uses trusted proxy validation per SECURITY_STANDARDS.md §7.2
 const keyGenerator = (req: Request): string => {
-  // If user is authenticated, use user ID
-  if ((req as any).user?.id) {
-    return `user:${(req as any).user.id}`;
-  }
-  // Otherwise use IP address
-  return `ip:${req.ip || req.socket.remoteAddress || 'unknown'}`;
+  return getClientIdentity(req);
 };
 
 // Strict rate limiter for auth endpoints (login, register, password reset)
@@ -74,7 +71,7 @@ export const publicApiLimiter = rateLimit({
   message: 'Too many requests from this IP, please try again later',
   standardHeaders: true,
   legacyHeaders: false,
-  keyGenerator: (req: Request) => req.ip || req.socket.remoteAddress || 'unknown',
+  keyGenerator: (req: Request) => `ip:${getClientIp(req)}`,
   handler: (req: Request, res: Response) => {
     res.status(429).json({
       error: 'Too Many Requests',

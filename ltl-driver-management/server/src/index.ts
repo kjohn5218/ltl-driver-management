@@ -99,10 +99,10 @@ app.use(helmet({
 app.use(cors({
   origin: (origin, callback) => {
     const allowedOrigins = (process.env.ALLOWED_ORIGINS || 'http://localhost:5173').split(',');
-    
+
     // Allow requests with no origin (mobile apps, Postman, etc)
     if (!origin) return callback(null, true);
-    
+
     if (allowedOrigins.includes(origin)) {
       callback(null, true);
     } else {
@@ -112,6 +112,16 @@ app.use(cors({
   credentials: true,
   optionsSuccessStatus: 200
 }));
+
+// Trust proxy configuration for X-Forwarded-For handling
+// Per SECURITY_STANDARDS.md §7.2: Only trust X-Forwarded-For from known proxies
+// Configure TRUSTED_PROXIES env var with your load balancer IPs (comma-separated CIDR)
+// Example: TRUSTED_PROXIES=10.0.0.0/8,172.16.0.0/12
+// Note: Our clientIp.utils.ts handles validation - this tells Express to parse headers
+if (process.env.TRUSTED_PROXIES) {
+  app.set('trust proxy', true);
+  console.log('🔒 Trusted proxy mode enabled');
+}
 
 // Health check endpoint (before other security middleware)
 app.get('/api/health', (_req, res) => {
@@ -179,8 +189,16 @@ app.use('/api/external/rate-cards', externalRateCardRouter);
 app.use('/api/external/workday', externalWorkdayRouter);
 
 // Error handling middleware
+// Per SECURITY_STANDARDS.md §7.3: Don't expose stack traces in production
 app.use((err: any, _req: express.Request, res: express.Response, _next: express.NextFunction) => {
-  console.error(err.stack);
+  // Only log full stack trace in development
+  if (process.env.NODE_ENV !== 'production') {
+    console.error(err.stack);
+  } else {
+    // In production, log minimal error info (no internal paths/structure)
+    console.error(`[ERROR] ${err.name}: ${err.message}`);
+  }
+
   res.status(err.status || 500).json({
     message: err.message || 'Something went wrong!',
     ...(process.env.NODE_ENV === 'development' && { stack: err.stack })
