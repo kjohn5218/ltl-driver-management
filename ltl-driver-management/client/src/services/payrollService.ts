@@ -199,10 +199,15 @@ export const payrollService = {
     const params = new URLSearchParams();
     if (filters?.startDate) params.append('startDate', filters.startDate);
     if (filters?.endDate) params.append('endDate', filters.endDate);
-    if (filters?.locationId) params.append('locationId', filters.locationId.toString());
+    if (filters?.locationIds?.length) {
+      filters.locationIds.forEach(id => params.append('locationIds', id.toString()));
+    } else if (filters?.locationId) {
+      params.append('locationId', filters.locationId.toString());
+    }
     if (filters?.statuses?.length) {
       filters.statuses.forEach(s => params.append('statuses', s));
     }
+    if (filters?.employer) params.append('employer', filters.employer);
     if (filters?.driverId) params.append('driverId', filters.driverId.toString());
     if (filters?.search) params.append('search', filters.search);
     if (filters?.source) params.append('source', filters.source);

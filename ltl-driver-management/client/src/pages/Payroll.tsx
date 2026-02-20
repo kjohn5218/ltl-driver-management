@@ -5,15 +5,16 @@ import { TablePagination } from '../components/common/TablePagination';
 import { StatusBadge } from '../components/common/StatusBadge';
 import { PayrollEditModal } from '../components/payroll/PayrollEditModal';
 import { PayrollExportModal } from '../components/payroll/PayrollExportModal';
+import { LocationMultiSelect } from '../components/LocationMultiSelect';
 import { payrollService } from '../services/payrollService';
-import { locationService } from '../services/locationService';
+import { carrierService } from '../services/carrierService';
 import {
   PayrollLineItem,
   PayrollFilters,
   PayrollSummary,
   PayrollLineItemUpdate,
   PayrollExportOptions,
-  Location
+  Carrier
 } from '../types';
 import { useAuth } from '../contexts/AuthContext';
 import { toast } from 'react-hot-toast';
@@ -46,14 +47,14 @@ export const Payroll: React.FC = () => {
   const { user } = useAuth();
   const [items, setItems] = useState<PayrollLineItem[]>([]);
   const [summary, setSummary] = useState<PayrollSummary | null>(null);
-  const [locations, setLocations] = useState<Location[]>([]);
+  const [carriers, setCarriers] = useState<Carrier[]>([]);
   const [loading, setLoading] = useState(true);
 
   // Filters
   const [filters, setFilters] = useState<PayrollFilters>({
     startDate: '',
     endDate: '',
-    locationId: undefined,
+    locationIds: [],
     statuses: [],
     search: '',
     source: 'all',
@@ -103,8 +104,17 @@ export const Payroll: React.FC = () => {
     }));
   }, []);
 
+  // Fetch carriers for employer filter
   useEffect(() => {
-    fetchLocations();
+    const fetchCarriers = async () => {
+      try {
+        const response = await carrierService.getCarriers({ limit: 500 });
+        setCarriers(response.carriers || []);
+      } catch (error) {
+        console.error('Failed to fetch carriers:', error);
+      }
+    };
+    fetchCarriers();
   }, []);
 
   useEffect(() => {
@@ -112,15 +122,6 @@ export const Payroll: React.FC = () => {
       fetchPayrollItems();
     }
   }, [filters, currentPage]);
-
-  const fetchLocations = async () => {
-    try {
-      const response = await locationService.getLocations({ limit: 500 });
-      setLocations(response.locations.filter(l => l.isPhysicalTerminal));
-    } catch (error) {
-      console.error('Failed to fetch locations:', error);
-    }
-  };
 
   const fetchPayrollItems = async () => {
     try {
@@ -1090,15 +1091,28 @@ export const Payroll: React.FC = () => {
             </div>
 
             {/* Location Filter (Driver's assigned location) */}
+            <LocationMultiSelect
+              value={filters.locationIds || []}
+              onChange={(locationIds) => handleFilterChange('locationIds', locationIds)}
+              placeholder="All Locations"
+              className="w-48"
+              physicalTerminalOnly
+            />
+
+            {/* Employer Filter */}
             <select
-              value={filters.locationId || ''}
-              onChange={(e) => handleFilterChange('locationId', e.target.value ? parseInt(e.target.value, 10) : undefined)}
+              value={filters.employer || ''}
+              onChange={(e) => handleFilterChange('employer', e.target.value || undefined)}
               className="rounded-md border-gray-300 dark:border-gray-600 dark:bg-gray-700 dark:text-white text-sm"
             >
-              <option value="">All Locations</option>
-              {[...locations].sort((a, b) => (a.code || '').localeCompare(b.code || '')).map((loc) => (
-                <option key={loc.id} value={loc.id}>{loc.code} - {loc.name || loc.city}</option>
-              ))}
+              <option value="">All Employers</option>
+              {carriers
+                .filter(c => c.name)
+                .sort((a, b) => a.name.localeCompare(b.name))
+                .map((carrier) => (
+                  <option key={carrier.id} value={carrier.name}>{carrier.name}</option>
+                ))
+              }
             </select>
 
             {/* Approval Filter */}
@@ -1183,6 +1197,14 @@ export const Payroll: React.FC = () => {
                 <div className="text-xs text-gray-500 mt-1">
                   {item.linehaulCode1}{item.linehaulCode2 ? ` / ${item.linehaulCode2}` : ''}{item.linehaulCode3 ? ` / ${item.linehaulCode3}` : ''}
                 </div>
+                {item.manifestNumbers && item.manifestNumbers.length > 0 && (
+                  <div className="mt-2 pt-2 border-t border-gray-200 dark:border-gray-700">
+                    <div className="text-xs text-gray-500 dark:text-gray-400">Manifests:</div>
+                    <div className="text-xs font-medium text-indigo-600 dark:text-indigo-400">
+                      {item.manifestNumbers.join(', ')}
+                    </div>
+                  </div>
+                )}
               </div>
 
               {/* Equipment */}

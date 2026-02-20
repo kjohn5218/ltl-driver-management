@@ -1373,12 +1373,15 @@ export interface PayrollLineItem {
   exportedBy?: string;
   isExported?: boolean;
   notes?: string;
+  manifestNumbers?: string[];
 }
 
 export interface PayrollFilters {
   startDate?: string;
   endDate?: string;
   locationId?: number;
+  locationIds?: number[];
+  employer?: string;
   statuses?: string[];
   driverId?: number;
   search?: string;

@@ -899,6 +899,8 @@ export const getUnifiedPayrollItems = async (req: Request, res: Response): Promi
       startDate,
       endDate,
       locationId,
+      locationIds,
+      employer,
       statuses,
       driverId,
       search,
@@ -941,10 +943,20 @@ export const getUnifiedPayrollItems = async (req: Request, res: Response): Promi
     }
 
     // Location filter (driver's assigned location)
-    if (locationId) {
+    if (locationIds) {
+      const locIdsArray = (Array.isArray(locationIds) ? locationIds : [locationIds]) as string[];
+      where.driver = {
+        locationId: { in: locIdsArray.map(id => parseInt(id, 10)) }
+      };
+    } else if (locationId) {
       where.driver = {
         locationId: parseInt(locationId as string, 10)
       };
+    }
+
+    // Employer filter
+    if (employer) {
+      where.employer = employer as string;
     }
 
     // Search filter
@@ -989,6 +1001,11 @@ export const getUnifiedPayrollItems = async (req: Request, res: Response): Promi
                   chainUpCycles: true,
                   waitTimeMinutes: true,
                   waitTimeReason: true
+                }
+              },
+              loadsheets: {
+                select: {
+                  manifestNumber: true
                 }
               }
             }
@@ -1072,7 +1089,8 @@ export const getUnifiedPayrollItems = async (req: Request, res: Response): Promi
         exportedAt: item.exportedAt?.toISOString(),
         exportedBy: item.exporter?.name,
         isExported: !!item.exportedAt,
-        notes: item.notes
+        notes: item.notes,
+        manifestNumbers: item.trip?.loadsheets?.map(ls => ls.manifestNumber) || []
       };
     });
 

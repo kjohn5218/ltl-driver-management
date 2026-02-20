@@ -66,8 +66,7 @@ export const PayrollEditModal: React.FC<PayrollEditModalProps> = ({
     if (item?.source === 'TRIP_PAY') {
       const total = formData.basePay + formData.mileagePay +
                     formData.dropAndHookPay + formData.chainUpPay +
-                    formData.waitTimePay + formData.otherAccessorialPay +
-                    formData.bonusPay - formData.deductions;
+                    formData.waitTimePay + formData.otherAccessorialPay;
       setFormData(prev => ({ ...prev, totalPay: Math.round(total * 100) / 100 }));
     }
   }, [
@@ -77,8 +76,6 @@ export const PayrollEditModal: React.FC<PayrollEditModalProps> = ({
     formData.chainUpPay,
     formData.waitTimePay,
     formData.otherAccessorialPay,
-    formData.bonusPay,
-    formData.deductions,
     item?.source
   ]);
 
@@ -102,8 +99,6 @@ export const PayrollEditModal: React.FC<PayrollEditModalProps> = ({
         updateData.basePay = formData.basePay;
         updateData.mileagePay = formData.mileagePay;
         updateData.accessorialPay = totalAccessorial;
-        updateData.bonusPay = formData.bonusPay;
-        updateData.deductions = formData.deductions;
         // Trip info fields
         updateData.totalMiles = formData.totalMiles;
         updateData.dropAndHookCount = formData.dropAndHookCount;
@@ -144,6 +139,7 @@ export const PayrollEditModal: React.FC<PayrollEditModalProps> = ({
       isOpen={isOpen}
       onClose={onClose}
       title={`Edit ${isTripPay ? 'Trip Pay' : 'Cut Pay'}`}
+      size="4xl"
     >
       <div className="space-y-6 max-h-[70vh] overflow-y-auto">
         {/* Item Info */}
@@ -191,9 +187,9 @@ export const PayrollEditModal: React.FC<PayrollEditModalProps> = ({
               Trip Information
             </h4>
 
-            <div className="grid grid-cols-2 gap-4">
+            <div className="grid grid-cols-2 sm:grid-cols-4 gap-3">
               <div>
-                <label className="block text-sm font-medium text-gray-700 dark:text-gray-300">
+                <label className="block text-xs font-medium text-gray-700 dark:text-gray-300 mb-1">
                   Miles
                 </label>
                 <input
@@ -201,20 +197,20 @@ export const PayrollEditModal: React.FC<PayrollEditModalProps> = ({
                   step="1"
                   value={formData.totalMiles}
                   onChange={(e) => setFormData({ ...formData, totalMiles: parseFloat(e.target.value) || 0 })}
-                  className="mt-1 block w-full rounded-md border-gray-300 dark:border-gray-600 dark:bg-gray-700 dark:text-white shadow-sm focus:border-indigo-500 focus:ring-indigo-500 sm:text-sm"
+                  className="block w-full rounded-md border-gray-300 dark:border-gray-600 dark:bg-gray-700 dark:text-white shadow-sm focus:border-indigo-500 focus:ring-indigo-500 text-sm py-1.5"
                 />
               </div>
 
               <div>
-                <label className="block text-sm font-medium text-gray-700 dark:text-gray-300">
+                <label className="block text-xs font-medium text-gray-700 dark:text-gray-300 mb-1">
                   Equipment
                 </label>
                 <select
                   value={formData.trailerConfig}
                   onChange={(e) => setFormData({ ...formData, trailerConfig: e.target.value })}
-                  className="mt-1 block w-full rounded-md border-gray-300 dark:border-gray-600 dark:bg-gray-700 dark:text-white shadow-sm focus:border-indigo-500 focus:ring-indigo-500 sm:text-sm"
+                  className="block w-full rounded-md border-gray-300 dark:border-gray-600 dark:bg-gray-700 dark:text-white shadow-sm focus:border-indigo-500 focus:ring-indigo-500 text-sm py-1.5"
                 >
-                  <option value="">Select Equipment</option>
+                  <option value="">Select</option>
                   <option value="SINGLE">Single</option>
                   <option value="DOUBLE">Doubles</option>
                   <option value="TRIPLE">Triples</option>
@@ -222,8 +218,8 @@ export const PayrollEditModal: React.FC<PayrollEditModalProps> = ({
               </div>
 
               <div>
-                <label className="block text-sm font-medium text-gray-700 dark:text-gray-300">
-                  Drop & Hook Count
+                <label className="block text-xs font-medium text-gray-700 dark:text-gray-300 mb-1">
+                  Drop & Hook
                 </label>
                 <input
                   type="number"
@@ -231,13 +227,13 @@ export const PayrollEditModal: React.FC<PayrollEditModalProps> = ({
                   min="0"
                   value={formData.dropAndHookCount}
                   onChange={(e) => setFormData({ ...formData, dropAndHookCount: parseInt(e.target.value) || 0 })}
-                  className="mt-1 block w-full rounded-md border-gray-300 dark:border-gray-600 dark:bg-gray-700 dark:text-white shadow-sm focus:border-indigo-500 focus:ring-indigo-500 sm:text-sm"
+                  className="block w-full rounded-md border-gray-300 dark:border-gray-600 dark:bg-gray-700 dark:text-white shadow-sm focus:border-indigo-500 focus:ring-indigo-500 text-sm py-1.5"
                 />
               </div>
 
               <div>
-                <label className="block text-sm font-medium text-gray-700 dark:text-gray-300">
-                  Chain Up Cycles
+                <label className="block text-xs font-medium text-gray-700 dark:text-gray-300 mb-1">
+                  Chain Ups
                 </label>
                 <input
                   type="number"
@@ -245,13 +241,13 @@ export const PayrollEditModal: React.FC<PayrollEditModalProps> = ({
                   min="0"
                   value={formData.chainUpCount}
                   onChange={(e) => setFormData({ ...formData, chainUpCount: parseInt(e.target.value) || 0 })}
-                  className="mt-1 block w-full rounded-md border-gray-300 dark:border-gray-600 dark:bg-gray-700 dark:text-white shadow-sm focus:border-indigo-500 focus:ring-indigo-500 sm:text-sm"
+                  className="block w-full rounded-md border-gray-300 dark:border-gray-600 dark:bg-gray-700 dark:text-white shadow-sm focus:border-indigo-500 focus:ring-indigo-500 text-sm py-1.5"
                 />
               </div>
 
               <div className="col-span-2">
-                <label className="block text-sm font-medium text-gray-700 dark:text-gray-300">
-                  Wait Time (minutes)
+                <label className="block text-xs font-medium text-gray-700 dark:text-gray-300 mb-1">
+                  Wait Time (min)
                 </label>
                 <div className="flex items-center gap-2">
                   <input
@@ -260,10 +256,10 @@ export const PayrollEditModal: React.FC<PayrollEditModalProps> = ({
                     min="0"
                     value={formData.waitTimeMinutes}
                     onChange={(e) => setFormData({ ...formData, waitTimeMinutes: parseInt(e.target.value) || 0 })}
-                    className="mt-1 block w-full rounded-md border-gray-300 dark:border-gray-600 dark:bg-gray-700 dark:text-white shadow-sm focus:border-indigo-500 focus:ring-indigo-500 sm:text-sm"
+                    className="block w-full rounded-md border-gray-300 dark:border-gray-600 dark:bg-gray-700 dark:text-white shadow-sm focus:border-indigo-500 focus:ring-indigo-500 text-sm py-1.5"
                   />
                   {formData.waitTimeMinutes > 0 && (
-                    <span className="mt-1 text-sm text-gray-500 dark:text-gray-400 whitespace-nowrap">
+                    <span className="text-xs text-gray-500 dark:text-gray-400 whitespace-nowrap">
                       = {formatWaitTime(formData.waitTimeMinutes)}
                     </span>
                   )}
@@ -281,152 +277,114 @@ export const PayrollEditModal: React.FC<PayrollEditModalProps> = ({
               Pay Breakdown
             </h4>
 
-            <div className="grid grid-cols-2 gap-4">
+            <div className="grid grid-cols-2 gap-3">
               <div>
-                <label className="block text-sm font-medium text-gray-700 dark:text-gray-300">
+                <label className="block text-xs font-medium text-gray-700 dark:text-gray-300 mb-1">
                   Base Pay
                 </label>
-                <div className="mt-1 relative rounded-md shadow-sm">
-                  <div className="absolute inset-y-0 left-0 pl-3 flex items-center pointer-events-none">
-                    <span className="text-gray-500 sm:text-sm">$</span>
+                <div className="relative rounded-md shadow-sm">
+                  <div className="absolute inset-y-0 left-0 pl-2 flex items-center pointer-events-none">
+                    <span className="text-gray-500 text-sm">$</span>
                   </div>
                   <input
                     type="number"
                     step="0.01"
                     value={formData.basePay}
                     onChange={(e) => setFormData({ ...formData, basePay: parseFloat(e.target.value) || 0 })}
-                    className="pl-7 block w-full rounded-md border-gray-300 dark:border-gray-600 dark:bg-gray-700 dark:text-white shadow-sm focus:border-indigo-500 focus:ring-indigo-500 sm:text-sm"
+                    className="pl-6 block w-full rounded-md border-gray-300 dark:border-gray-600 dark:bg-gray-700 dark:text-white shadow-sm focus:border-indigo-500 focus:ring-indigo-500 text-sm py-1.5"
                   />
                 </div>
               </div>
 
               <div>
-                <label className="block text-sm font-medium text-gray-700 dark:text-gray-300">
+                <label className="block text-xs font-medium text-gray-700 dark:text-gray-300 mb-1">
                   Mileage Pay
                 </label>
-                <div className="mt-1 relative rounded-md shadow-sm">
-                  <div className="absolute inset-y-0 left-0 pl-3 flex items-center pointer-events-none">
-                    <span className="text-gray-500 sm:text-sm">$</span>
+                <div className="relative rounded-md shadow-sm">
+                  <div className="absolute inset-y-0 left-0 pl-2 flex items-center pointer-events-none">
+                    <span className="text-gray-500 text-sm">$</span>
                   </div>
                   <input
                     type="number"
                     step="0.01"
                     value={formData.mileagePay}
                     onChange={(e) => setFormData({ ...formData, mileagePay: parseFloat(e.target.value) || 0 })}
-                    className="pl-7 block w-full rounded-md border-gray-300 dark:border-gray-600 dark:bg-gray-700 dark:text-white shadow-sm focus:border-indigo-500 focus:ring-indigo-500 sm:text-sm"
+                    className="pl-6 block w-full rounded-md border-gray-300 dark:border-gray-600 dark:bg-gray-700 dark:text-white shadow-sm focus:border-indigo-500 focus:ring-indigo-500 text-sm py-1.5"
                   />
                 </div>
               </div>
             </div>
 
-            <h5 className="text-sm font-medium text-gray-700 dark:text-gray-300">Accessorials</h5>
-            <div className="grid grid-cols-2 gap-4">
+            <h5 className="text-xs font-medium text-gray-700 dark:text-gray-300 mt-2">Accessorials</h5>
+            <div className="grid grid-cols-2 sm:grid-cols-4 gap-3">
               <div>
-                <label className="block text-sm text-gray-600 dark:text-gray-400">
-                  Drop & Hook Pay
+                <label className="block text-xs text-gray-600 dark:text-gray-400 mb-1">
+                  Drop & Hook
                 </label>
-                <div className="mt-1 relative rounded-md shadow-sm">
-                  <div className="absolute inset-y-0 left-0 pl-3 flex items-center pointer-events-none">
-                    <span className="text-gray-500 sm:text-sm">$</span>
+                <div className="relative rounded-md shadow-sm">
+                  <div className="absolute inset-y-0 left-0 pl-2 flex items-center pointer-events-none">
+                    <span className="text-gray-500 text-sm">$</span>
                   </div>
                   <input
                     type="number"
                     step="0.01"
                     value={formData.dropAndHookPay}
                     onChange={(e) => setFormData({ ...formData, dropAndHookPay: parseFloat(e.target.value) || 0 })}
-                    className="pl-7 block w-full rounded-md border-gray-300 dark:border-gray-600 dark:bg-gray-700 dark:text-white shadow-sm focus:border-indigo-500 focus:ring-indigo-500 sm:text-sm"
+                    className="pl-6 block w-full rounded-md border-gray-300 dark:border-gray-600 dark:bg-gray-700 dark:text-white shadow-sm focus:border-indigo-500 focus:ring-indigo-500 text-sm py-1.5"
                   />
                 </div>
               </div>
 
               <div>
-                <label className="block text-sm text-gray-600 dark:text-gray-400">
-                  Chain Up Pay
+                <label className="block text-xs text-gray-600 dark:text-gray-400 mb-1">
+                  Chain Up
                 </label>
-                <div className="mt-1 relative rounded-md shadow-sm">
-                  <div className="absolute inset-y-0 left-0 pl-3 flex items-center pointer-events-none">
-                    <span className="text-gray-500 sm:text-sm">$</span>
+                <div className="relative rounded-md shadow-sm">
+                  <div className="absolute inset-y-0 left-0 pl-2 flex items-center pointer-events-none">
+                    <span className="text-gray-500 text-sm">$</span>
                   </div>
                   <input
                     type="number"
                     step="0.01"
                     value={formData.chainUpPay}
                     onChange={(e) => setFormData({ ...formData, chainUpPay: parseFloat(e.target.value) || 0 })}
-                    className="pl-7 block w-full rounded-md border-gray-300 dark:border-gray-600 dark:bg-gray-700 dark:text-white shadow-sm focus:border-indigo-500 focus:ring-indigo-500 sm:text-sm"
+                    className="pl-6 block w-full rounded-md border-gray-300 dark:border-gray-600 dark:bg-gray-700 dark:text-white shadow-sm focus:border-indigo-500 focus:ring-indigo-500 text-sm py-1.5"
                   />
                 </div>
               </div>
 
               <div>
-                <label className="block text-sm text-gray-600 dark:text-gray-400">
-                  Wait Time Pay
+                <label className="block text-xs text-gray-600 dark:text-gray-400 mb-1">
+                  Wait Time
                 </label>
-                <div className="mt-1 relative rounded-md shadow-sm">
-                  <div className="absolute inset-y-0 left-0 pl-3 flex items-center pointer-events-none">
-                    <span className="text-gray-500 sm:text-sm">$</span>
+                <div className="relative rounded-md shadow-sm">
+                  <div className="absolute inset-y-0 left-0 pl-2 flex items-center pointer-events-none">
+                    <span className="text-gray-500 text-sm">$</span>
                   </div>
                   <input
                     type="number"
                     step="0.01"
                     value={formData.waitTimePay}
                     onChange={(e) => setFormData({ ...formData, waitTimePay: parseFloat(e.target.value) || 0 })}
-                    className="pl-7 block w-full rounded-md border-gray-300 dark:border-gray-600 dark:bg-gray-700 dark:text-white shadow-sm focus:border-indigo-500 focus:ring-indigo-500 sm:text-sm"
+                    className="pl-6 block w-full rounded-md border-gray-300 dark:border-gray-600 dark:bg-gray-700 dark:text-white shadow-sm focus:border-indigo-500 focus:ring-indigo-500 text-sm py-1.5"
                   />
                 </div>
               </div>
 
               <div>
-                <label className="block text-sm text-gray-600 dark:text-gray-400">
-                  Other Accessorials
+                <label className="block text-xs text-gray-600 dark:text-gray-400 mb-1">
+                  Other
                 </label>
-                <div className="mt-1 relative rounded-md shadow-sm">
-                  <div className="absolute inset-y-0 left-0 pl-3 flex items-center pointer-events-none">
-                    <span className="text-gray-500 sm:text-sm">$</span>
+                <div className="relative rounded-md shadow-sm">
+                  <div className="absolute inset-y-0 left-0 pl-2 flex items-center pointer-events-none">
+                    <span className="text-gray-500 text-sm">$</span>
                   </div>
                   <input
                     type="number"
                     step="0.01"
                     value={formData.otherAccessorialPay}
                     onChange={(e) => setFormData({ ...formData, otherAccessorialPay: parseFloat(e.target.value) || 0 })}
-                    className="pl-7 block w-full rounded-md border-gray-300 dark:border-gray-600 dark:bg-gray-700 dark:text-white shadow-sm focus:border-indigo-500 focus:ring-indigo-500 sm:text-sm"
-                  />
-                </div>
-              </div>
-            </div>
-
-            <div className="grid grid-cols-2 gap-4">
-              <div>
-                <label className="block text-sm font-medium text-gray-700 dark:text-gray-300">
-                  Bonus Pay
-                </label>
-                <div className="mt-1 relative rounded-md shadow-sm">
-                  <div className="absolute inset-y-0 left-0 pl-3 flex items-center pointer-events-none">
-                    <span className="text-gray-500 sm:text-sm">$</span>
-                  </div>
-                  <input
-                    type="number"
-                    step="0.01"
-                    value={formData.bonusPay}
-                    onChange={(e) => setFormData({ ...formData, bonusPay: parseFloat(e.target.value) || 0 })}
-                    className="pl-7 block w-full rounded-md border-gray-300 dark:border-gray-600 dark:bg-gray-700 dark:text-white shadow-sm focus:border-indigo-500 focus:ring-indigo-500 sm:text-sm"
-                  />
-                </div>
-              </div>
-
-              <div>
-                <label className="block text-sm font-medium text-gray-700 dark:text-gray-300">
-                  Deductions
-                </label>
-                <div className="mt-1 relative rounded-md shadow-sm">
-                  <div className="absolute inset-y-0 left-0 pl-3 flex items-center pointer-events-none">
-                    <span className="text-gray-500 sm:text-sm">$</span>
-                  </div>
-                  <input
-                    type="number"
-                    step="0.01"
-                    value={formData.deductions}
-                    onChange={(e) => setFormData({ ...formData, deductions: parseFloat(e.target.value) || 0 })}
-                    className="pl-7 block w-full rounded-md border-gray-300 dark:border-gray-600 dark:bg-gray-700 dark:text-white shadow-sm focus:border-indigo-500 focus:ring-indigo-500 sm:text-sm"
+                    className="pl-6 block w-full rounded-md border-gray-300 dark:border-gray-600 dark:bg-gray-700 dark:text-white shadow-sm focus:border-indigo-500 focus:ring-indigo-500 text-sm py-1.5"
                   />
                 </div>
               </div>
