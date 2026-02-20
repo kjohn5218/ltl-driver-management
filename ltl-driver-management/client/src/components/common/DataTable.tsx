@@ -99,8 +99,8 @@ export function DataTable<T extends Record<string, any>>({
   }
 
   return (
-    <div className="overflow-x-auto" style={{ overflowX: 'auto' }}>
-      <table className="w-max min-w-full divide-y divide-gray-200">
+    <div>
+      <table className="divide-y divide-gray-200" style={{ minWidth: '1600px', width: '100%' }}>
         <thead className="bg-gray-50 dark:bg-gray-700">
           <tr>
             {selectable && (
