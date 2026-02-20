@@ -1528,10 +1528,10 @@ export const exportPayrollToXls = async (req: Request, res: Response): Promise<v
           const dropHookPaycode = findPaycode('DROP_HOOK', trailerConfig);
           detailSheet.addRow({
             employeeId: item.workdayEmployeeId || '',
-            paycode: dropHookPaycode?.code || `DROP_HOOK_${trailerConfig}`,
+            paycode: dropHookPaycode?.code || `LH_${trailerConfig}_DROP_HOOKS`,
             workdayId: dropHookPaycode?.workdayId || '',
             amount: Number(item.dropAndHookPay),
-            quantity: 1,
+            quantity: item.dropHookCount || 1,
             date: item.date.toISOString().split('T')[0],
             reference: item.tripNumber || '',
             description: 'Drop & Hook'
@@ -1543,28 +1543,33 @@ export const exportPayrollToXls = async (req: Request, res: Response): Promise<v
           const chainUpPaycode = findPaycode('CHAIN_UP');
           detailSheet.addRow({
             employeeId: item.workdayEmployeeId || '',
-            paycode: chainUpPaycode?.code || 'CHAIN_UP',
+            paycode: chainUpPaycode?.code || 'LH_CHAIN_UPS',
             workdayId: chainUpPaycode?.workdayId || '',
             amount: Number(item.chainUpPay),
-            quantity: 1,
+            quantity: item.chainUpCount || 1,
             date: item.date.toISOString().split('T')[0],
             reference: item.tripNumber || '',
             description: 'Chain Up'
           });
         }
 
-        // Wait Time pay
-        if (Number(item.waitTimePay) > 0) {
+        // Stop Hours (includes wait time)
+        // Wait time is paid at $18/hr, so we can calculate hours from pay
+        const waitTimeHours = Number(item.waitTimePay) > 0 ? Number(item.waitTimePay) / 18 : 0;
+        const stopHoursValue = item.stopHours ? Number(item.stopHours) : 0;
+        const totalStopHours = stopHoursValue + waitTimeHours;
+
+        if (totalStopHours > 0 || Number(item.waitTimePay) > 0) {
           const stopHoursPaycode = findPaycode('STOP_HOURS');
           detailSheet.addRow({
             employeeId: item.workdayEmployeeId || '',
-            paycode: stopHoursPaycode?.code || 'STOP_HOURS',
+            paycode: stopHoursPaycode?.code || 'LH_STOP_HOURS',
             workdayId: stopHoursPaycode?.workdayId || '',
             amount: Number(item.waitTimePay),
-            quantity: 1,
+            quantity: parseFloat(totalStopHours.toFixed(2)),
             date: item.date.toISOString().split('T')[0],
             reference: item.tripNumber || '',
-            description: 'Wait Time'
+            description: 'Stop Hours'
           });
         }
       } else {
@@ -1583,7 +1588,7 @@ export const exportPayrollToXls = async (req: Request, res: Response): Promise<v
 
         detailSheet.addRow({
           employeeId: item.workdayEmployeeId || '',
-          paycode: paycode?.code || (item.cutPayType === 'HOURS' ? 'CUT_PAY' : `CUT_PAY_${config}_MILES`),
+          paycode: paycode?.code || (item.cutPayType === 'HOURS' ? 'LH_TRIP_CUT_PAY' : `LH_${config}_CUT_MILES`),
           workdayId: paycode?.workdayId || '',
           amount: Number(item.totalGrossPay),
           quantity: item.cutPayType === 'HOURS' ? Number(item.cutPayHours || 0) : Number(item.cutPayMiles || 0),

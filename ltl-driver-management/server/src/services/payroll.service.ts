@@ -667,6 +667,17 @@ export const completePayrollOnArrival = async (tripId: number): Promise<{ succes
       }
     });
 
+    // Calculate work hours from dispatch time to arrival time
+    let workHours: number | null = null;
+    if (trip?.dispatchDate && trip?.actualArrival) {
+      const dispatchTime = new Date(trip.dispatchDate).getTime();
+      const arrivalTime = new Date(trip.actualArrival).getTime();
+      const durationMs = arrivalTime - dispatchTime;
+      if (durationMs > 0) {
+        workHours = durationMs / (1000 * 60 * 60); // Convert ms to hours
+      }
+    }
+
     if (!trip) {
       return { success: false, message: 'Trip not found' };
     }
@@ -700,7 +711,10 @@ export const completePayrollOnArrival = async (tripId: number): Promise<{ succes
         trailerConfig,
         dropHookCount: dropAndHook,
         chainUpCount: chainUp,
-        totalCost: new Prisma.Decimal(totalCost)
+        totalCost: new Prisma.Decimal(totalCost),
+        workHours: workHours !== null ? new Prisma.Decimal(workHours) : null,
+        dispatchTime: trip?.dispatchDate || null,
+        arrivalTime: trip?.actualArrival || null
       }
     });
 
@@ -718,7 +732,7 @@ export const completePayrollOnArrival = async (tripId: number): Promise<{ succes
       });
     }
 
-    console.log(`[Payroll] Trip ${tripId} payroll marked as COMPLETE with miles=${miles}, trailerConfig=${trailerConfig}, laborCost=${laborCost}, totalCost=${totalCost}`);
+    console.log(`[Payroll] Trip ${tripId} payroll marked as COMPLETE with miles=${miles}, trailerConfig=${trailerConfig}, laborCost=${laborCost}, totalCost=${totalCost}, workHours=${workHours?.toFixed(2) || 'N/A'}`);
     return { success: true, message: 'Payroll status updated to COMPLETE' };
   } catch (error) {
     console.error(`[Payroll] Failed to complete payroll for trip ${tripId}:`, error);
