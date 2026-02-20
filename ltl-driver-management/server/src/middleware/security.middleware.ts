@@ -2,6 +2,7 @@ import { Request, Response, NextFunction } from 'express';
 import { PrismaClient } from '@prisma/client';
 import crypto from 'crypto';
 import { getClientIdentity } from '../utils/clientIp.utils';
+import { log } from '../utils/logger';
 
 const prisma = new PrismaClient();
 const MAX_SCAN_SIZE = 4096; // 4KB max scan size to prevent ReDoS
@@ -49,8 +50,11 @@ const logCriticalStorageFailure = (operation: string, identity: string, error: u
   const now = Date.now();
   if (!storageFailureLogged || (now - lastStorageFailureTime) > STORAGE_FAILURE_LOG_INTERVAL) {
     // P1 FIX: Log CRITICAL alert when storage is unreachable (per §2.2 Fail-Open with Alerting)
-    console.error(`[CRITICAL] Security storage unreachable during ${operation} for ${identity}:`, error);
-    console.error('[CRITICAL] Strike enforcement is disabled (fail-open). Investigate immediately!');
+    log.securityCritical(`Security storage unreachable during ${operation}. Strike enforcement disabled (fail-open).`, {
+      operation,
+      identity,
+      errorDetails: error instanceof Error ? error.message : String(error)
+    });
     // TODO: Send alert to monitoring system (PagerDuty, Slack, etc.)
     // alertService.sendCritical(`Security storage unreachable: ${operation}`);
     storageFailureLogged = true;
@@ -186,7 +190,7 @@ export const securityMiddleware = async (
 
   // Check if identity is blocked
   if (await isBlocked(identity)) {
-    res.status(403).json({ error: 'Access Denied' });
+    res.status(403).json({ message: 'Access Denied' });
     return;
   }
 
@@ -203,7 +207,7 @@ export const securityMiddleware = async (
   // Check for reconnaissance patterns (log only)
   for (const pattern of RECON_PATTERNS) {
     if (pattern.test(scanData)) {
-      console.warn(`[SECURITY] Reconnaissance detected from ${identity}: ${pattern}`);
+      log.security('Reconnaissance attempt detected', { identity, pattern: String(pattern), path: req.path });
       break;
     }
   }
@@ -211,9 +215,9 @@ export const securityMiddleware = async (
   // Check for malicious patterns (strike)
   for (const pattern of STRICT_PATTERNS) {
     if (pattern.test(scanData)) {
-      console.error(`[SECURITY] Malicious pattern detected from ${identity}: ${pattern}`);
+      log.security('Malicious pattern detected - strike added', { identity, pattern: String(pattern), path: req.path });
       await addStrike(identity, 1);
-      res.status(400).json({ error: 'Invalid Request' });
+      res.status(400).json({ message: 'Invalid Request' });
       return;
     }
   }
@@ -239,9 +243,9 @@ export const securityMiddleware = async (
       // Scan body for malicious patterns
       for (const pattern of STRICT_PATTERNS) {
         if (pattern.test(bodyToScan)) {
-          console.error(`[SECURITY] Malicious pattern in body from ${identity}: ${pattern}`);
+          log.security('Malicious pattern in request body - strike added', { identity, pattern: String(pattern), path: req.path });
           await addStrike(identity, 1);
-          res.status(400).json({ error: 'Invalid Content' });
+          res.status(400).json({ message: 'Invalid Content' });
           return;
         }
       }
@@ -301,11 +305,10 @@ export const initializeSecurityTables = async (): Promise<void> => {
     // Verify the SecurityStrike model is accessible via Prisma
     // This will throw if the table doesn't exist (migration not run)
     await prisma.securityStrike.count();
-    console.log('✅ Security tables verified');
+    log.lifecycle('Security tables verified');
   } catch (error) {
     // Table doesn't exist - migrations may not have been run
-    console.error('❌ Security tables not found. Run: npx prisma migrate dev');
-    console.error('   Error:', error instanceof Error ? error.message : error);
+    log.error('DATABASE', 'Security tables not found. Run: npx prisma migrate dev', error);
     // Don't throw - allow server to start but security features will fail-open
   }
 };

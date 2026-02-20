@@ -3,6 +3,8 @@
  * Fetches fuel surcharge rates from external fuel price service
  */
 
+import { log } from '../utils/logger';
+
 export interface FuelPriceConfig {
   apiUrl: string;
   apiKey?: string;
@@ -45,11 +47,12 @@ export const isFuelPriceConfigured = (): boolean => {
 export const logFuelPriceConfigStatus = (): void => {
   if (isFuelPriceConfigured()) {
     const config = getFuelPriceConfig();
-    console.log('[FuelPrice] Configuration loaded:');
-    console.log(`  - API URL: ${config.apiUrl}`);
-    console.log(`  - API Key: ${config.apiKey ? '***configured***' : 'not set'}`);
-    console.log(`  - Sync Interval: ${config.syncIntervalMinutes} minutes`);
+    log.info('CONFIG', 'Fuel Price API configured', {
+      apiUrl: config.apiUrl,
+      apiKeyConfigured: !!config.apiKey,
+      syncIntervalMinutes: config.syncIntervalMinutes
+    });
   } else {
-    console.log('[FuelPrice] Not configured - fuel price sync disabled');
+    log.info('CONFIG', 'Fuel Price API not configured - sync disabled');
   }
 };

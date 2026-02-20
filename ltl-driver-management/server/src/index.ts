@@ -62,12 +62,18 @@ import { startEquipmentSyncScheduler, startFuelPriceSyncScheduler } from './sche
 // Public driver routes (no SSO auth required)
 import publicDriverRoutes from './routes/publicDriver.routes';
 
+// Centralized logging
+import { log } from './utils/logger';
+
+// Environment validation
+import { validateAndLogEnv } from './config/env.config';
+
 // Load environment variables
 dotenv.config();
 
-// Validate critical environment variables
-if (!process.env.JWT_SECRET || process.env.JWT_SECRET.length < 32) {
-  console.error('[SECURITY] JWT_SECRET must be set and at least 32 characters long');
+// Validate all environment variables
+if (!validateAndLogEnv()) {
+  log.securityCritical('Environment validation failed - check configuration');
   process.exit(1);
 }
 
@@ -120,7 +126,7 @@ app.use(cors({
 // Note: Our clientIp.utils.ts handles validation - this tells Express to parse headers
 if (process.env.TRUSTED_PROXIES) {
   app.set('trust proxy', true);
-  console.log('🔒 Trusted proxy mode enabled');
+  log.lifecycle('Trusted proxy mode enabled');
 }
 
 // Health check endpoint (before other security middleware)
@@ -190,14 +196,12 @@ app.use('/api/external/workday', externalWorkdayRouter);
 
 // Error handling middleware
 // Per SECURITY_STANDARDS.md §7.3: Don't expose stack traces in production
-app.use((err: any, _req: express.Request, res: express.Response, _next: express.NextFunction) => {
-  // Only log full stack trace in development
-  if (process.env.NODE_ENV !== 'production') {
-    console.error(err.stack);
-  } else {
-    // In production, log minimal error info (no internal paths/structure)
-    console.error(`[ERROR] ${err.name}: ${err.message}`);
-  }
+app.use((err: any, req: express.Request, res: express.Response, _next: express.NextFunction) => {
+  log.error('HTTP', err.message || 'Unhandled error', err, {
+    method: req.method,
+    path: req.path,
+    requestId: req.headers['x-request-id'] as string
+  });
 
   res.status(err.status || 500).json({
     message: err.message || 'Something went wrong!',
@@ -209,17 +213,16 @@ app.use((err: any, _req: express.Request, res: express.Response, _next: express.
 async function startServer() {
   try {
     await prisma.$connect();
-    console.log('✅ Database connected successfully');
-    
+    log.lifecycle('Database connected successfully');
+
     // Initialize security tables
     await initializeSecurityTables();
-    
+
     app.listen(PORT, () => {
-      console.log(`🚀 Server is running on http://localhost:${PORT}`);
-      console.log(`🔒 Security features enabled`);
+      log.lifecycle('Server started', { port: PORT, env: process.env.NODE_ENV || 'development' });
 
       if (process.env.NODE_ENV !== 'production') {
-        console.log('⚠️  Running in development mode - some security features may be relaxed');
+        log.warn('LIFECYCLE', 'Running in development mode - some security features may be relaxed');
       }
 
       // Start equipment sync scheduler (if FormsApp is configured)
@@ -229,7 +232,7 @@ async function startServer() {
       startFuelPriceSyncScheduler();
     });
   } catch (error) {
-    console.error('❌ Failed to connect to database:', error);
+    log.error('DATABASE', 'Failed to connect to database', error);
     process.exit(1);
   }
 }
@@ -238,7 +241,7 @@ startServer();
 
 // Graceful shutdown
 process.on('SIGTERM', async () => {
-  console.log('SIGTERM signal received: closing HTTP server');
+  log.lifecycle('SIGTERM received - initiating graceful shutdown');
   await prisma.$disconnect();
   process.exit(0);
 });

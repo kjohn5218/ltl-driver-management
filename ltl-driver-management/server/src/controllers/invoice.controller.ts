@@ -12,7 +12,7 @@ export class InvoiceController {
       const { bookingId } = req.body;
       
       if (!bookingId) {
-        return res.status(400).json({ error: 'Booking ID is required' });
+        return res.status(400).json({ message: 'Booking ID is required' });
       }
       
       const invoice = await invoiceService.createInvoice(bookingId);
@@ -26,7 +26,7 @@ export class InvoiceController {
       return res.json(fullInvoice);
     } catch (error: any) {
       console.error('Create invoice error:', error);
-      return res.status(500).json({ error: error.message || 'Failed to create invoice' });
+      return res.status(500).json({ message: error.message || 'Failed to create invoice' });
     }
   }
 
@@ -38,13 +38,13 @@ export class InvoiceController {
       const invoice = await invoiceService.getInvoice(id);
       
       if (!invoice) {
-        return res.status(404).json({ error: 'Invoice not found' });
+        return res.status(404).json({ message: 'Invoice not found' });
       }
       
       return res.json(invoice);
     } catch (error: any) {
       console.error('Get invoice error:', error);
-      return res.status(500).json({ error: error.message || 'Failed to get invoice' });
+      return res.status(500).json({ message: error.message || 'Failed to get invoice' });
     }
   }
 
@@ -82,7 +82,7 @@ export class InvoiceController {
       return res.json(result);
     } catch (error: any) {
       console.error('List invoices error:', error);
-      return res.status(500).json({ error: error.message || 'Failed to list invoices' });
+      return res.status(500).json({ message: error.message || 'Failed to list invoices' });
     }
   }
 
@@ -94,7 +94,7 @@ export class InvoiceController {
       const userId = (req as any).user?.email || 'System';
       
       if (!status || !Object.values(InvoiceStatus).includes(status)) {
-        return res.status(400).json({ error: 'Valid status is required' });
+        return res.status(400).json({ message: 'Valid status is required' });
       }
       
       const invoice = await invoiceService.updateInvoiceStatus(id, status, userId);
@@ -102,7 +102,7 @@ export class InvoiceController {
       return res.json(invoice);
     } catch (error: any) {
       console.error('Update invoice status error:', error);
-      return res.status(500).json({ error: error.message || 'Failed to update invoice status' });
+      return res.status(500).json({ message: error.message || 'Failed to update invoice status' });
     }
   }
 
@@ -113,7 +113,7 @@ export class InvoiceController {
       const userId = (req as any).user?.email || 'System';
       
       if (!invoiceIds || !Array.isArray(invoiceIds) || invoiceIds.length === 0) {
-        return res.status(400).json({ error: 'Invoice IDs are required' });
+        return res.status(400).json({ message: 'Invoice IDs are required' });
       }
       
       // Get full invoice details for email
@@ -125,7 +125,7 @@ export class InvoiceController {
       const validInvoices = invoices.filter(invoice => invoice !== null);
       
       if (validInvoices.length === 0) {
-        return res.status(404).json({ error: 'No valid invoices found' });
+        return res.status(404).json({ message: 'No valid invoices found' });
       }
       
       // Send email to AP
@@ -142,7 +142,7 @@ export class InvoiceController {
       });
     } catch (error: any) {
       console.error('Send invoices to AP error:', error);
-      return res.status(500).json({ error: error.message || 'Failed to send invoices to AP' });
+      return res.status(500).json({ message: error.message || 'Failed to send invoices to AP' });
     }
   }
 
@@ -156,7 +156,7 @@ export class InvoiceController {
       return res.json({ success: true, message: 'Invoice deleted successfully' });
     } catch (error: any) {
       console.error('Delete invoice error:', error);
-      return res.status(500).json({ error: error.message || 'Failed to delete invoice' });
+      return res.status(500).json({ message: error.message || 'Failed to delete invoice' });
     }
   }
 
@@ -209,7 +209,7 @@ export class InvoiceController {
       return res.json(summary);
     } catch (error: any) {
       console.error('Get invoice summary error:', error);
-      return res.status(500).json({ error: error.message || 'Failed to get invoice summary' });
+      return res.status(500).json({ message: error.message || 'Failed to get invoice summary' });
     }
   }
 
@@ -221,7 +221,7 @@ export class InvoiceController {
       const invoice = await invoiceService.getInvoice(id);
       
       if (!invoice) {
-        return res.status(404).json({ error: 'Invoice not found' });
+        return res.status(404).json({ message: 'Invoice not found' });
       }
       
       // Generate PDF
@@ -235,7 +235,7 @@ export class InvoiceController {
       return res.send(pdfBuffer);
     } catch (error: any) {
       console.error('Download invoice PDF error:', error);
-      return res.status(500).json({ error: error.message || 'Failed to generate invoice PDF' });
+      return res.status(500).json({ message: error.message || 'Failed to generate invoice PDF' });
     }
   }
 }

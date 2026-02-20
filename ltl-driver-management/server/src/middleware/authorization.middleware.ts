@@ -1,5 +1,6 @@
 import { Request, Response, NextFunction } from 'express';
 import { PrismaClient, UserRole } from '@prisma/client';
+import { log } from '../utils/logger';
 
 const prisma = new PrismaClient();
 
@@ -14,12 +15,12 @@ export const checkResourceOwnership = (resourceType: string) => {
     try {
       const user = req.user;
       if (!user) {
-        return res.status(401).json({ error: 'Unauthorized' });
+        return res.status(401).json({ message: 'Unauthorized' });
       }
 
       const resourceId = parseInt(req.params.id || req.params[resourceType + 'Id']);
       if (!resourceId) {
-        return res.status(400).json({ error: 'Invalid resource ID' });
+        return res.status(400).json({ message: 'Invalid resource ID' });
       }
 
       // Admin users can access all resources
@@ -40,7 +41,7 @@ export const checkResourceOwnership = (resourceType: string) => {
           });
 
           if (!booking) {
-            return res.status(404).json({ error: 'Booking not found' });
+            return res.status(404).json({ message: 'Booking not found' });
           }
 
           // Check if user is a carrier associated with this booking
@@ -67,7 +68,7 @@ export const checkResourceOwnership = (resourceType: string) => {
           });
 
           if (!carrier) {
-            return res.status(404).json({ error: 'Carrier not found' });
+            return res.status(404).json({ message: 'Carrier not found' });
           }
 
           // Check if user owns the carrier profile (by email match)
@@ -84,7 +85,7 @@ export const checkResourceOwnership = (resourceType: string) => {
           });
 
           if (!invoice) {
-            return res.status(404).json({ error: 'Invoice not found' });
+            return res.status(404).json({ message: 'Invoice not found' });
           }
 
           // Check through booking relationship
@@ -116,7 +117,7 @@ export const checkResourceOwnership = (resourceType: string) => {
           });
 
           if (!driver) {
-            return res.status(404).json({ error: 'Driver not found' });
+            return res.status(404).json({ message: 'Driver not found' });
           }
 
           // Check if user owns the carrier that owns the driver
@@ -135,19 +136,18 @@ export const checkResourceOwnership = (resourceType: string) => {
           break;
 
         default:
-          return res.status(400).json({ error: 'Invalid resource type' });
+          return res.status(400).json({ message: 'Invalid resource type' });
       }
 
       if (!hasAccess) {
-        // Log unauthorized access attempt
-        console.warn(`[SECURITY] Unauthorized access attempt by user ${user.id} to ${resourceType} ${resourceId}`);
-        return res.status(403).json({ error: 'Access denied' });
+        log.security('Unauthorized access attempt', { userId: user.id, resourceType, resourceId });
+        return res.status(403).json({ message: 'Access denied' });
       }
 
       next();
     } catch (error) {
-      console.error(`[SECURITY] Error checking ownership for ${resourceType}:`, error);
-      return res.status(500).json({ error: 'Internal server error' });
+      log.error('AUTHORIZATION', `Error checking ownership for ${resourceType}`, error);
+      return res.status(500).json({ message: 'Internal server error' });
     }
   };
 };
@@ -157,12 +157,12 @@ export const checkCarrierAccess = async (req: AuthRequest, res: Response, next: 
   try {
     const user = req.user;
     if (!user) {
-      return res.status(401).json({ error: 'Unauthorized' });
+      return res.status(401).json({ message: 'Unauthorized' });
     }
 
     const carrierId = parseInt(req.params.carrierId || req.params.id);
     if (!carrierId) {
-      return res.status(400).json({ error: 'Invalid carrier ID' });
+      return res.status(400).json({ message: 'Invalid carrier ID' });
     }
 
     // Admin and dispatcher can access all carriers
@@ -180,18 +180,18 @@ export const checkCarrierAccess = async (req: AuthRequest, res: Response, next: 
     });
 
     if (!carrier) {
-      return res.status(404).json({ error: 'Carrier not found' });
+      return res.status(404).json({ message: 'Carrier not found' });
     }
 
     if (carrier.email !== user.email) {
-      console.warn(`[SECURITY] Unauthorized carrier access attempt by user ${user.id} to carrier ${carrierId}`);
-      return res.status(403).json({ error: 'Access denied' });
+      log.security('Unauthorized carrier access attempt', { userId: user.id, carrierId });
+      return res.status(403).json({ message: 'Access denied' });
     }
 
     next();
   } catch (error) {
-    console.error('[SECURITY] Error checking carrier access:', error);
-    return res.status(500).json({ error: 'Internal server error' });
+    log.error('AUTHORIZATION', 'Error checking carrier access', error);
+    return res.status(500).json({ message: 'Internal server error' });
   }
 };
 
@@ -238,9 +238,9 @@ export const logSensitiveAccess = (dataType: string) => {
   return (req: AuthRequest, _res: Response, next: NextFunction) => {
     const user = req.user;
     const resourceId = req.params.id;
-    
-    console.log(`[AUDIT] User ${user?.id} (${user?.email}) accessed ${dataType} ${resourceId} at ${new Date().toISOString()}`);
-    
+
+    log.audit(`Accessed ${dataType}`, { userId: user?.id, userEmail: user?.email, resourceId, dataType });
+
     next();
   };
 };

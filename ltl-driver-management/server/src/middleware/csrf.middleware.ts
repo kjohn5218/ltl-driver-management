@@ -66,7 +66,7 @@ export const csrfProtection = (req: Request, res: Response, next: NextFunction):
                        req.query?._csrf as string;
 
   if (!providedToken) {
-    res.status(403).json({ error: 'CSRF token missing' });
+    res.status(403).json({ message: 'CSRF token missing' });
     return;
   }
 
@@ -74,7 +74,7 @@ export const csrfProtection = (req: Request, res: Response, next: NextFunction):
   const storedData = csrfTokenStore.get(sessionId);
   
   if (!storedData || storedData.token !== providedToken || storedData.expiresAt < Date.now()) {
-    res.status(403).json({ error: 'Invalid CSRF token' });
+    res.status(403).json({ message: 'Invalid CSRF token' });
     return;
   }
 

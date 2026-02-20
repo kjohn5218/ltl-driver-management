@@ -80,7 +80,7 @@ export const getDrivers = async (req: Request, res: Response): Promise<Response>
     });
   } catch (error) {
     console.error('Error fetching drivers:', error);
-    return res.status(500).json({ error: 'Failed to fetch drivers' });
+    return res.status(500).json({ message: 'Failed to fetch drivers' });
   }
 };
 
@@ -100,7 +100,7 @@ export const getActiveDriversByCarrier = async (req: Request, res: Response): Pr
     return res.json(drivers);
   } catch (error) {
     console.error('Error fetching drivers by carrier:', error);
-    return res.status(500).json({ error: 'Failed to fetch drivers' });
+    return res.status(500).json({ message: 'Failed to fetch drivers' });
   }
 };
 
@@ -132,13 +132,13 @@ export const getDriverById = async (req: Request, res: Response): Promise<Respon
     });
 
     if (!driver) {
-      return res.status(404).json({ error: 'Driver not found' });
+      return res.status(404).json({ message: 'Driver not found' });
     }
 
     return res.json(driver);
   } catch (error) {
     console.error('Error fetching driver:', error);
-    return res.status(500).json({ error: 'Failed to fetch driver' });
+    return res.status(500).json({ message: 'Failed to fetch driver' });
   }
 };
 
@@ -153,7 +153,7 @@ export const createDriver = async (req: Request, res: Response): Promise<Respons
     });
 
     if (!carrier) {
-      return res.status(404).json({ error: 'Carrier not found' });
+      return res.status(404).json({ message: 'Carrier not found' });
     }
 
     // Verify location exists if provided
@@ -163,7 +163,7 @@ export const createDriver = async (req: Request, res: Response): Promise<Respons
       });
 
       if (!location) {
-        return res.status(404).json({ error: 'Location not found' });
+        return res.status(404).json({ message: 'Location not found' });
       }
     }
 
@@ -202,7 +202,7 @@ export const createDriver = async (req: Request, res: Response): Promise<Respons
     return res.status(201).json(driver);
   } catch (error) {
     console.error('Error creating driver:', error);
-    return res.status(500).json({ error: 'Failed to create driver' });
+    return res.status(500).json({ message: 'Failed to create driver' });
   }
 };
 
@@ -218,7 +218,7 @@ export const updateDriver = async (req: Request, res: Response): Promise<Respons
     });
 
     if (!existingDriver) {
-      return res.status(404).json({ error: 'Driver not found' });
+      return res.status(404).json({ message: 'Driver not found' });
     }
 
     // If changing carrier, verify new carrier exists
@@ -228,7 +228,7 @@ export const updateDriver = async (req: Request, res: Response): Promise<Respons
       });
 
       if (!carrier) {
-        return res.status(404).json({ error: 'New carrier not found' });
+        return res.status(404).json({ message: 'New carrier not found' });
       }
     }
 
@@ -239,7 +239,7 @@ export const updateDriver = async (req: Request, res: Response): Promise<Respons
       });
 
       if (!location) {
-        return res.status(404).json({ error: 'Location not found' });
+        return res.status(404).json({ message: 'Location not found' });
       }
     }
 
@@ -280,7 +280,7 @@ export const updateDriver = async (req: Request, res: Response): Promise<Respons
     return res.json(driver);
   } catch (error) {
     console.error('Error updating driver:', error);
-    return res.status(500).json({ error: 'Failed to update driver' });
+    return res.status(500).json({ message: 'Failed to update driver' });
   }
 };
 
@@ -295,7 +295,7 @@ export const deleteDriver = async (req: Request, res: Response): Promise<Respons
     });
 
     if (!driver) {
-      return res.status(404).json({ error: 'Driver not found' });
+      return res.status(404).json({ message: 'Driver not found' });
     }
 
     // Soft delete by marking as inactive
@@ -307,7 +307,7 @@ export const deleteDriver = async (req: Request, res: Response): Promise<Respons
     return res.status(204).send();
   } catch (error) {
     console.error('Error deleting driver:', error);
-    return res.status(500).json({ error: 'Failed to delete driver' });
+    return res.status(500).json({ message: 'Failed to delete driver' });
   }
 };
 
@@ -364,6 +364,6 @@ export const getDriverSyncStatus = async (_req: Request, res: Response): Promise
     });
   } catch (error) {
     console.error('Error getting driver sync status:', error);
-    return res.status(500).json({ error: 'Failed to get sync status' });
+    return res.status(500).json({ message: 'Failed to get sync status' });
   }
 };

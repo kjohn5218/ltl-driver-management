@@ -18,7 +18,6 @@ export const authLimiter = rateLimit({
   keyGenerator,
   handler: (req: Request, res: Response) => {
     res.status(429).json({
-      error: 'Too Many Requests',
       message: 'Too many authentication attempts, please try again later',
       retryAfter: Math.ceil((req as any).rateLimit?.resetTime?.getTime() || Date.now() / 1000)
     });
@@ -36,7 +35,6 @@ export const passwordResetLimiter = rateLimit({
   skipSuccessfulRequests: true, // Don't count successful requests
   handler: (req: Request, res: Response) => {
     res.status(429).json({
-      error: 'Too Many Requests',
       message: 'Too many password reset attempts, please try again later',
       retryAfter: Math.ceil((req as any).rateLimit?.resetTime?.getTime() || Date.now() / 1000)
     });
@@ -57,7 +55,6 @@ export const apiLimiter = rateLimit({
   },
   handler: (req: Request, res: Response) => {
     res.status(429).json({
-      error: 'Too Many Requests',
       message: 'API rate limit exceeded, please slow down',
       retryAfter: Math.ceil((req as any).rateLimit?.resetTime?.getTime() || Date.now() / 1000)
     });
@@ -74,7 +71,6 @@ export const publicApiLimiter = rateLimit({
   keyGenerator: (req: Request) => `ip:${getClientIp(req)}`,
   handler: (req: Request, res: Response) => {
     res.status(429).json({
-      error: 'Too Many Requests',
       message: 'Rate limit exceeded, please try again later',
       retryAfter: Math.ceil((req as any).rateLimit?.resetTime?.getTime() || Date.now() / 1000)
     });
@@ -91,7 +87,6 @@ export const uploadLimiter = rateLimit({
   keyGenerator,
   handler: (req: Request, res: Response) => {
     res.status(429).json({
-      error: 'Too Many Requests',
       message: 'Upload rate limit exceeded, please try again later',
       retryAfter: Math.ceil((req as any).rateLimit?.resetTime?.getTime() || Date.now() / 1000)
     });
