@@ -331,9 +331,9 @@ export const createAndDispatchTrip = async (req: Request, res: Response): Promis
       if (trailer2) trailer2Id = trailer2.id;
     }
 
-    // Generate trip number
+    // Generate trip number (format: YYMMDD + 3-digit sequence, matching main app)
     const date = new Date();
-    const dateStr = date.toISOString().slice(0, 10).replace(/-/g, '');
+    const dateStr = date.toISOString().slice(2, 10).replace(/-/g, '');
     const lastTrip = await prisma.linehaulTrip.findFirst({
       where: { tripNumber: { startsWith: dateStr } },
       orderBy: { tripNumber: 'desc' }
