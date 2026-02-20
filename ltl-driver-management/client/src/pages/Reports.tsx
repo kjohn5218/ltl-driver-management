@@ -52,50 +52,50 @@ export const Reports: React.FC = () => {
     }
   });
 
-  // Mock data for charts - in a real app, this would come from API
+  // Mock data for charts - represents linehaul operations metrics
   const monthlyBookingCosts = [
-    { month: 'Jan', ltlBookingCosts: 45000, bookings: 23, internalBudget: 50000, savings: 5000, avgCostPerMile: 2.75 },
-    { month: 'Feb', ltlBookingCosts: 52000, bookings: 28, internalBudget: 60000, savings: 8000, avgCostPerMile: 2.68 },
-    { month: 'Mar', ltlBookingCosts: 48000, bookings: 25, internalBudget: 55000, savings: 7000, avgCostPerMile: 2.62 },
-    { month: 'Apr', ltlBookingCosts: 61000, bookings: 32, internalBudget: 70000, savings: 9000, avgCostPerMile: 2.58 },
-    { month: 'May', ltlBookingCosts: 55000, bookings: 29, internalBudget: 65000, savings: 10000, avgCostPerMile: 2.55 },
-    { month: 'Jun', ltlBookingCosts: 67000, bookings: 35, internalBudget: 80000, savings: 13000, avgCostPerMile: 2.52 },
+    { month: 'Jan', ltlBookingCosts: 125000, bookings: 156, internalBudget: 140000, savings: 15000, avgCostPerMile: 0.72 },
+    { month: 'Feb', ltlBookingCosts: 132000, bookings: 168, internalBudget: 150000, savings: 18000, avgCostPerMile: 0.70 },
+    { month: 'Mar', ltlBookingCosts: 145000, bookings: 185, internalBudget: 165000, savings: 20000, avgCostPerMile: 0.69 },
+    { month: 'Apr', ltlBookingCosts: 138000, bookings: 172, internalBudget: 155000, savings: 17000, avgCostPerMile: 0.71 },
+    { month: 'May', ltlBookingCosts: 152000, bookings: 195, internalBudget: 175000, savings: 23000, avgCostPerMile: 0.68 },
+    { month: 'Jun', ltlBookingCosts: 148000, bookings: 188, internalBudget: 170000, savings: 22000, avgCostPerMile: 0.69 },
   ];
 
   const carrierCostAnalysis = [
-    { name: 'Swift Transport', bookings: 45, totalCost: 78000, avgCostPerMile: 2.45, internalCostSaving: 15200, costEfficiency: 95.2 },
-    { name: 'Reliable Freight', bookings: 38, totalCost: 65000, avgCostPerMile: 2.38, internalCostSaving: 13800, costEfficiency: 96.8 },
-    { name: 'Express Logistics', bookings: 32, totalCost: 54000, avgCostPerMile: 2.52, internalCostSaving: 11200, costEfficiency: 92.1 },
-    { name: 'Prime Carriers', bookings: 29, totalCost: 48000, avgCostPerMile: 2.35, internalCostSaving: 10800, costEfficiency: 97.4 },
+    { name: 'Martinez Trucking LLC', bookings: 48, totalCost: 42500, avgCostPerMile: 0.68, internalCostSaving: 8500, costEfficiency: 97.2, onTimeRate: 96 },
+    { name: 'J&R Transport Inc', bookings: 42, totalCost: 38200, avgCostPerMile: 0.71, internalCostSaving: 7200, costEfficiency: 95.8, onTimeRate: 94 },
+    { name: 'Western States Linehaul', bookings: 38, totalCost: 35800, avgCostPerMile: 0.72, internalCostSaving: 6400, costEfficiency: 94.5, onTimeRate: 92 },
+    { name: 'Garcia & Sons Hauling', bookings: 35, totalCost: 31200, avgCostPerMile: 0.69, internalCostSaving: 6100, costEfficiency: 96.1, onTimeRate: 95 },
   ];
 
   const statusDistribution = [
-    { name: 'Completed', value: 45, color: '#10B981' },
-    { name: 'In Progress', value: 23, color: '#8B5CF6' },
-    { name: 'Pending', value: 18, color: '#F59E0B' },
-    { name: 'Cancelled', value: 14, color: '#EF4444' },
+    { name: 'Completed', value: 142, color: '#10B981' },
+    { name: 'In Transit', value: 28, color: '#8B5CF6' },
+    { name: 'Dispatched', value: 15, color: '#3B82F6' },
+    { name: 'Cancelled', value: 8, color: '#EF4444' },
   ];
 
   const ltlRouteOptimization = [
-    { route: 'LA → NYC', bookings: 28, totalCost: 84000, avgCostPerMile: 2.8, resourceUtilization: 85, potentialSavings: 12600, totalMiles: 2800, distance: 2800 },
-    { route: 'Chicago → Miami', bookings: 24, totalCost: 72000, avgCostPerMile: 2.6, resourceUtilization: 75, potentialSavings: 10800, totalMiles: 1350, distance: 1350 },
-    { route: 'Houston → Atlanta', bookings: 21, totalCost: 63000, avgCostPerMile: 2.9, resourceUtilization: 68, potentialSavings: 9450, totalMiles: 790, distance: 790 },
-    { route: 'Seattle → Denver', bookings: 19, totalCost: 57000, avgCostPerMile: 2.4, resourceUtilization: 63, potentialSavings: 8550, totalMiles: 1320, distance: 1320 },
+    { route: 'DEN → SLC', bookings: 45, totalCost: 28500, avgCostPerMile: 0.68, resourceUtilization: 92, potentialSavings: 4200, totalMiles: 525, distance: 525, onTime: 94 },
+    { route: 'ABQ → ELP', bookings: 38, totalCost: 18200, avgCostPerMile: 0.71, resourceUtilization: 88, potentialSavings: 2800, totalMiles: 267, distance: 267, onTime: 96 },
+    { route: 'PHX → LAX', bookings: 42, totalCost: 24800, avgCostPerMile: 0.69, resourceUtilization: 85, potentialSavings: 3600, totalMiles: 372, distance: 372, onTime: 91 },
+    { route: 'TUC → PHX', bookings: 35, totalCost: 12400, avgCostPerMile: 0.72, resourceUtilization: 78, potentialSavings: 1850, totalMiles: 118, distance: 118, onTime: 97 },
   ];
 
   // Cost per Mile analysis data
   const costPerMileByCarrier = [
-    { name: 'Prime Carriers', costPerMile: 2.35, bookings: 29, totalMiles: 20440, totalCost: 48000, trend: 'down', trendValue: -0.05 },
-    { name: 'Reliable Freight', costPerMile: 2.38, bookings: 38, totalMiles: 27310, totalCost: 65000, trend: 'stable', trendValue: 0.02 },
-    { name: 'Swift Transport', costPerMile: 2.45, bookings: 45, totalMiles: 31837, totalCost: 78000, trend: 'up', trendValue: 0.08 },
-    { name: 'Express Logistics', costPerMile: 2.52, bookings: 32, totalMiles: 21429, totalCost: 54000, trend: 'up', trendValue: 0.12 },
+    { name: 'Martinez Trucking LLC', costPerMile: 0.68, bookings: 48, totalMiles: 62500, totalCost: 42500, trend: 'down', trendValue: -0.02 },
+    { name: 'Garcia & Sons Hauling', costPerMile: 0.69, bookings: 35, totalMiles: 45217, totalCost: 31200, trend: 'stable', trendValue: 0.00 },
+    { name: 'J&R Transport Inc', costPerMile: 0.71, bookings: 42, totalMiles: 53803, totalCost: 38200, trend: 'up', trendValue: 0.01 },
+    { name: 'Western States Linehaul', costPerMile: 0.72, bookings: 38, totalMiles: 49722, totalCost: 35800, trend: 'stable', trendValue: 0.01 },
   ];
 
   const costPerMileByRoute = [
-    { route: 'Seattle → Denver', costPerMile: 2.4, bookings: 19, avgDistance: 1320, totalCost: 57000, benchmark: 2.8, performance: 'excellent' },
-    { route: 'Chicago → Miami', costPerMile: 2.6, bookings: 24, avgDistance: 1350, totalCost: 72000, benchmark: 3.2, performance: 'good' },
-    { route: 'LA → NYC', costPerMile: 2.8, bookings: 28, avgDistance: 2800, totalCost: 84000, benchmark: 3.5, performance: 'good' },
-    { route: 'Houston → Atlanta', costPerMile: 2.9, bookings: 21, avgDistance: 790, totalCost: 63000, benchmark: 2.2, performance: 'needs-improvement' },
+    { route: 'DEN → SLC', costPerMile: 0.68, bookings: 45, avgDistance: 525, totalCost: 28500, benchmark: 0.75, performance: 'excellent' },
+    { route: 'ABQ → ELP', costPerMile: 0.69, bookings: 38, avgDistance: 267, totalCost: 18200, benchmark: 0.72, performance: 'excellent' },
+    { route: 'PHX → LAX', costPerMile: 0.71, bookings: 42, avgDistance: 372, totalCost: 24800, benchmark: 0.73, performance: 'good' },
+    { route: 'TUC → PHX', costPerMile: 0.78, bookings: 35, avgDistance: 118, totalCost: 12400, benchmark: 0.70, performance: 'needs-improvement' },
   ];
 
   if (metricsLoading) {
@@ -111,8 +111,8 @@ export const Reports: React.FC = () => {
       {/* Header */}
       <div className="flex justify-between items-center">
         <div>
-          <h1 className="text-2xl font-bold text-gray-900">LTL Resource Management Reports</h1>
-          <p className="text-gray-600">Cost analysis and resource booking optimization for LTL operations</p>
+          <h1 className="text-2xl font-bold text-gray-900">Linehaul Operations Reports</h1>
+          <p className="text-gray-600">Driver performance, trip costs, and route efficiency for linehaul operations</p>
         </div>
         <div className="flex items-center gap-3">
           <Link
@@ -146,17 +146,17 @@ export const Reports: React.FC = () => {
         </div>
       </div>
 
-      {/* Key LTL Resource Metrics */}
+      {/* Key Linehaul Metrics */}
       <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-5 gap-6">
         <div className="bg-white p-6 rounded-lg shadow-sm border border-gray-200">
           <div className="flex items-center">
             <div className="flex-shrink-0">
-              <DollarSign className="h-6 w-6 text-red-600" />
+              <DollarSign className="h-6 w-6 text-green-600" />
             </div>
             <div className="ml-3">
-              <p className="text-sm font-medium text-gray-500">LTL Booking Costs</p>
+              <p className="text-sm font-medium text-gray-500">Total Driver Pay</p>
               <p className="text-2xl font-semibold text-gray-900">${metrics?.totalExpenses?.toLocaleString() || '0'}</p>
-              <p className="text-xs text-gray-400">vs internal resources</p>
+              <p className="text-xs text-gray-400">contract driver costs</p>
             </div>
           </div>
         </div>
@@ -167,13 +167,13 @@ export const Reports: React.FC = () => {
               <Truck className="h-6 w-6 text-blue-600" />
             </div>
             <div className="ml-3">
-              <p className="text-sm font-medium text-gray-500">Resource Utilization</p>
+              <p className="text-sm font-medium text-gray-500">Trip Completion</p>
               <p className="text-2xl font-semibold text-gray-900">
-                {metrics?.completedBookings && metrics?.totalBookings 
-                  ? Math.round((metrics.completedBookings / metrics.totalBookings) * 100) 
+                {metrics?.completedBookings && metrics?.totalBookings
+                  ? Math.round((metrics.completedBookings / metrics.totalBookings) * 100)
                   : 0}%
               </p>
-              <p className="text-xs text-gray-400">{metrics?.completedBookings || 0} completed bookings</p>
+              <p className="text-xs text-gray-400">{metrics?.completedBookings || 0} trips completed</p>
             </div>
           </div>
         </div>
@@ -184,9 +184,9 @@ export const Reports: React.FC = () => {
               <Package className="h-6 w-6 text-orange-600" />
             </div>
             <div className="ml-3">
-              <p className="text-sm font-medium text-gray-500">Pending Resources</p>
-              <p className="text-2xl font-semibold text-gray-900">{metrics?.unbookedRoutes || 0}</p>
-              <p className="text-xs text-gray-400">unbooked routes</p>
+              <p className="text-sm font-medium text-gray-500">Active Routes</p>
+              <p className="text-2xl font-semibold text-gray-900">{metrics?.bookedRoutes || 0}</p>
+              <p className="text-xs text-gray-400">linehaul profiles</p>
             </div>
           </div>
         </div>
@@ -194,16 +194,16 @@ export const Reports: React.FC = () => {
         <div className="bg-white p-6 rounded-lg shadow-sm border border-gray-200">
           <div className="flex items-center">
             <div className="flex-shrink-0">
-              <Clock className="h-6 w-6 text-green-600" />
+              <Clock className="h-6 w-6 text-purple-600" />
             </div>
             <div className="ml-3">
-              <p className="text-sm font-medium text-gray-500">Cost Efficiency</p>
+              <p className="text-sm font-medium text-gray-500">Avg Trip Cost</p>
               <p className="text-2xl font-semibold text-gray-900">
                 ${(metrics?.completedBookings ?? 0) > 0
                   ? Math.round((metrics?.totalExpenses || 0) / (metrics?.completedBookings ?? 1)).toLocaleString()
                   : '0'}
               </p>
-              <p className="text-xs text-gray-400">avg per booking</p>
+              <p className="text-xs text-gray-400">per completed trip</p>
             </div>
           </div>
         </div>
@@ -229,9 +229,9 @@ export const Reports: React.FC = () => {
 
       {/* Charts Row 1 */}
       <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
-        {/* LTL Booking Costs vs Internal Budget */}
+        {/* Driver Pay vs Budget */}
         <div className="bg-white p-6 rounded-lg shadow-sm border border-gray-200">
-          <h3 className="text-lg font-medium text-gray-900 mb-4">LTL Resource Costs vs Internal Budget</h3>
+          <h3 className="text-lg font-medium text-gray-900 mb-4">Contract Driver Costs vs Budget</h3>
           <ResponsiveContainer width="100%" height={300}>
             <BarChart data={monthlyBookingCosts}>
               <CartesianGrid strokeDasharray="3 3" />
@@ -240,9 +240,9 @@ export const Reports: React.FC = () => {
               <Tooltip formatter={(value, name) => {
                 const formattedValue = name === 'avgCostPerMile' ? `$${Number(value).toFixed(2)}/mile` : `$${Number(value).toLocaleString()}`;
                 const nameMap: {[key: string]: string} = {
-                  'internalBudget': 'Internal Budget',
-                  'ltlBookingCosts': 'LTL Booking Costs',
-                  'savings': 'Cost Savings',
+                  'internalBudget': 'Budget',
+                  'ltlBookingCosts': 'Driver Pay',
+                  'savings': 'Under Budget',
                   'avgCostPerMile': 'Avg Cost/Mile'
                 };
                 return [formattedValue, nameMap[name] || name];
@@ -254,9 +254,9 @@ export const Reports: React.FC = () => {
           </ResponsiveContainer>
         </div>
 
-        {/* Resource Booking Status */}
+        {/* Trip Status Distribution */}
         <div className="bg-white p-6 rounded-lg shadow-sm border border-gray-200">
-          <h3 className="text-lg font-medium text-gray-900 mb-4">LTL Resource Booking Status</h3>
+          <h3 className="text-lg font-medium text-gray-900 mb-4">Trip Status Distribution</h3>
           <ResponsiveContainer width="100%" height={300}>
             <PieChart>
               <Pie
@@ -273,7 +273,7 @@ export const Reports: React.FC = () => {
                   <Cell key={`cell-${index}`} fill={entry.color} />
                 ))}
               </Pie>
-              <Tooltip formatter={(value) => [`${value} bookings`, 'Count']} />
+              <Tooltip formatter={(value) => [`${value} trips`, 'Count']} />
             </PieChart>
           </ResponsiveContainer>
         </div>
@@ -281,38 +281,38 @@ export const Reports: React.FC = () => {
 
       {/* Charts Row 2 */}
       <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
-        {/* LTL Carrier Cost Efficiency */}
+        {/* Carrier Performance */}
         <div className="bg-white p-6 rounded-lg shadow-sm border border-gray-200">
-          <h3 className="text-lg font-medium text-gray-900 mb-4">LTL Carrier Cost Efficiency</h3>
+          <h3 className="text-lg font-medium text-gray-900 mb-4">Contract Carrier Performance</h3>
           <div className="space-y-4">
             {carrierCostAnalysis.map((carrier) => (
               <div key={carrier.name} className="flex items-center justify-between p-3 border border-gray-200 rounded">
                 <div>
                   <p className="font-medium text-gray-900">{carrier.name}</p>
-                  <p className="text-sm text-gray-500">{carrier.bookings} bookings • ${carrier.avgCostPerMile}/mile • {carrier.costEfficiency}% efficient</p>
+                  <p className="text-sm text-gray-500">{carrier.bookings} trips • ${carrier.avgCostPerMile}/mile • {carrier.onTimeRate}% on-time</p>
                 </div>
                 <div className="text-right">
                   <p className="font-semibold text-blue-600">${carrier.totalCost.toLocaleString()}</p>
-                  <p className="text-sm text-green-600">+${carrier.internalCostSaving.toLocaleString()} saved</p>
+                  <p className="text-sm text-green-600">{carrier.costEfficiency}% efficiency</p>
                 </div>
               </div>
             ))}
           </div>
         </div>
 
-        {/* LTL Route Optimization */}
+        {/* Route Performance */}
         <div className="bg-white p-6 rounded-lg shadow-sm border border-gray-200">
-          <h3 className="text-lg font-medium text-gray-900 mb-4">LTL Route Resource Optimization</h3>
+          <h3 className="text-lg font-medium text-gray-900 mb-4">Linehaul Route Performance</h3>
           <div className="space-y-4">
             {ltlRouteOptimization.map((route) => (
               <div key={route.route} className="flex items-center justify-between p-3 border border-gray-200 rounded">
                 <div>
                   <p className="font-medium text-gray-900">{route.route}</p>
-                  <p className="text-sm text-gray-500">{route.bookings} bookings • ${route.avgCostPerMile}/mile • {route.resourceUtilization}% utilized</p>
+                  <p className="text-sm text-gray-500">{route.bookings} trips • {route.distance} mi • {route.onTime}% on-time</p>
                 </div>
                 <div className="text-right">
                   <p className="font-semibold text-blue-600">${route.totalCost.toLocaleString()}</p>
-                  <p className="text-sm text-green-600">+${route.potentialSavings.toLocaleString()} potential</p>
+                  <p className="text-sm text-gray-500">${route.avgCostPerMile}/mile</p>
                 </div>
               </div>
             ))}
@@ -340,7 +340,7 @@ export const Reports: React.FC = () => {
         </ResponsiveContainer>
         <div className="mt-4 p-3 bg-purple-50 rounded-lg">
           <p className="text-sm text-purple-800">
-            <strong>Trend Analysis:</strong> Cost per mile has decreased by $0.23 over 6 months, showing improved efficiency in LTL resource procurement.
+            <strong>Trend Analysis:</strong> Cost per mile has decreased by $0.04 over 6 months, showing improved efficiency in contract driver operations.
           </p>
         </div>
       </div>
@@ -409,29 +409,29 @@ export const Reports: React.FC = () => {
         </div>
       </div>
 
-      {/* LTL Resource Management Insights */}
+      {/* Linehaul Operations Insights */}
       <div className="bg-white p-6 rounded-lg shadow-sm border border-gray-200">
-        <h3 className="text-lg font-medium text-gray-900 mb-4">LTL Resource Management Insights</h3>
+        <h3 className="text-lg font-medium text-gray-900 mb-4">Linehaul Operations Insights</h3>
         <div className="grid grid-cols-1 md:grid-cols-4 gap-6">
           <div className="text-center p-4 bg-green-50 rounded-lg">
             <DollarSign className="h-8 w-8 text-green-600 mx-auto mb-2" />
-            <p className="text-sm font-medium text-green-900">Cost Savings</p>
-            <p className="text-xs text-green-700">$52K saved vs internal resources this month</p>
+            <p className="text-sm font-medium text-green-900">Monthly Payroll</p>
+            <p className="text-xs text-green-700">$148K paid to contract drivers this month</p>
           </div>
           <div className="text-center p-4 bg-blue-50 rounded-lg">
             <Target className="h-8 w-8 text-blue-600 mx-auto mb-2" />
-            <p className="text-sm font-medium text-blue-900">Best Efficiency</p>
-            <p className="text-xs text-blue-700">Prime Carriers - 97.4% cost efficient</p>
+            <p className="text-sm font-medium text-blue-900">Top Performer</p>
+            <p className="text-xs text-blue-700">Martinez Trucking - 97.2% on-time</p>
           </div>
           <div className="text-center p-4 bg-orange-50 rounded-lg">
-            <Package className="h-8 w-8 text-orange-600 mx-auto mb-2" />
-            <p className="text-sm font-medium text-orange-900">Resource Optimization</p>
-            <p className="text-xs text-orange-700">{metrics?.pendingRateConfirmations || 0} pending confirmations</p>
+            <Clock className="h-8 w-8 text-orange-600 mx-auto mb-2" />
+            <p className="text-sm font-medium text-orange-900">Late Departures</p>
+            <p className="text-xs text-orange-700">{metrics?.pendingRateConfirmations || 12} trips late this week</p>
           </div>
           <div className="text-center p-4 bg-purple-50 rounded-lg">
             <Truck className="h-8 w-8 text-purple-600 mx-auto mb-2" />
-            <p className="text-sm font-medium text-purple-900">Capacity Planning</p>
-            <p className="text-xs text-purple-700">{metrics?.unbookedRoutes || 0} routes need LTL resources</p>
+            <p className="text-sm font-medium text-purple-900">Active Drivers</p>
+            <p className="text-xs text-purple-700">{metrics?.activeCarriers || 45} drivers on routes today</p>
           </div>
         </div>
       </div>
