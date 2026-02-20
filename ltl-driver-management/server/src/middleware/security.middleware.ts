@@ -2,6 +2,9 @@ import { Request, Response, NextFunction } from 'express';
 import { PrismaClient } from '@prisma/client';
 import crypto from 'crypto';
 
+// Import Express type augmentation for req.user
+import '../types/express';
+
 const prisma = new PrismaClient();
 const MAX_SCAN_SIZE = 4096; // 4KB max scan size to prevent ReDoS
 
