@@ -1037,7 +1037,7 @@ export const Payroll: React.FC = () => {
       />
 
       {/* Actions and Filters */}
-      <div className="bg-white dark:bg-gray-800 shadow rounded-lg">
+      <div className="bg-white dark:bg-gray-800 shadow rounded-lg overflow-hidden">
         <div className="border-b border-gray-200 dark:border-gray-700">
           <div className="flex items-center justify-between px-4 py-3">
             <h3 className="text-lg font-medium text-gray-900 dark:text-gray-100">Payroll Items</h3>
@@ -1158,9 +1158,9 @@ export const Payroll: React.FC = () => {
           )}
         </div>
 
-        {/* Data Table */}
-        <div className="overflow-x-auto">
-          <div className="min-w-[1800px]">
+        {/* Data Table - Horizontally scrollable */}
+        <div className="overflow-x-auto" style={{ maxWidth: '100%' }}>
+          <div style={{ minWidth: '1800px' }}>
             <DataTable
               columns={columns}
               data={sortedItems}
