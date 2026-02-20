@@ -1181,3 +1181,100 @@ export const getDriverCutPayRequests = async (req: Request, res: Response): Prom
     res.status(500).json({ message: 'Failed to fetch cut pay requests' });
   }
 };
+
+// Get trip documents (for driver to view/download)
+export const getTripDocumentsForDriver = async (req: Request, res: Response): Promise<void> => {
+  try {
+    const { tripId } = req.params;
+    const { driverId } = req.query;
+    const tripIdNum = parseInt(tripId, 10);
+    const driverIdNum = driverId ? parseInt(driverId as string, 10) : null;
+
+    // Get the trip to verify driver assignment
+    const trip = await prisma.linehaulTrip.findUnique({
+      where: { id: tripIdNum },
+      select: { id: true, driverId: true, teamDriverId: true }
+    });
+
+    if (!trip) {
+      res.status(404).json({ message: 'Trip not found' });
+      return;
+    }
+
+    // If driverId is provided, verify the driver is assigned to this trip
+    if (driverIdNum && trip.driverId !== driverIdNum && trip.teamDriverId !== driverIdNum) {
+      res.status(403).json({ message: 'You are not assigned to this trip' });
+      return;
+    }
+
+    // Get documents for this trip
+    const documents = await prisma.tripDocument.findMany({
+      where: { tripId: tripIdNum },
+      select: {
+        id: true,
+        documentType: true,
+        documentNumber: true,
+        status: true,
+        generatedAt: true
+      },
+      orderBy: { createdAt: 'desc' }
+    });
+
+    res.json({ tripId: tripIdNum, documents });
+  } catch (error) {
+    console.error('Error fetching trip documents:', error);
+    res.status(500).json({ message: 'Failed to fetch trip documents' });
+  }
+};
+
+// Download a trip document as PDF
+export const downloadTripDocumentForDriver = async (req: Request, res: Response): Promise<void> => {
+  try {
+    const { documentId } = req.params;
+    const { driverId } = req.query;
+    const documentIdNum = parseInt(documentId, 10);
+    const driverIdNum = driverId ? parseInt(driverId as string, 10) : null;
+
+    // Get the document with trip info
+    const document = await prisma.tripDocument.findUnique({
+      where: { id: documentIdNum },
+      include: {
+        trip: {
+          select: { id: true, driverId: true, teamDriverId: true }
+        }
+      }
+    });
+
+    if (!document) {
+      res.status(404).json({ message: 'Document not found' });
+      return;
+    }
+
+    // If driverId is provided, verify the driver is assigned to this trip
+    if (driverIdNum && document.trip.driverId !== driverIdNum && document.trip.teamDriverId !== driverIdNum) {
+      res.status(403).json({ message: 'You are not assigned to this trip' });
+      return;
+    }
+
+    let pdfBuffer: Buffer;
+    let filename: string;
+
+    if (document.documentType === 'LINEHAUL_MANIFEST') {
+      pdfBuffer = await tripDocumentService.generateManifestPDF(documentIdNum);
+      filename = `linehaul-manifest-${document.documentNumber}.pdf`;
+    } else if (document.documentType === 'PLACARD_SHEET') {
+      pdfBuffer = await tripDocumentService.generatePlacardSheetPDF(documentIdNum);
+      filename = `placard-info-${document.documentNumber}.pdf`;
+    } else {
+      res.status(400).json({ message: 'Unsupported document type for download' });
+      return;
+    }
+
+    res.setHeader('Content-Type', 'application/pdf');
+    res.setHeader('Content-Disposition', `attachment; filename="${filename}"`);
+    res.send(pdfBuffer);
+  } catch (error) {
+    console.error('Error downloading document:', error);
+    res.status(500).json({ message: 'Failed to download document' });
+  }
+};

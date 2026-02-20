@@ -10,7 +10,9 @@ import {
   getLinehaulProfiles,
   createAndDispatchTrip,
   createCutPayRequest,
-  getDriverCutPayRequests
+  getDriverCutPayRequests,
+  getTripDocumentsForDriver,
+  downloadTripDocumentForDriver
 } from '../controllers/publicDriver.controller';
 
 /**
@@ -52,5 +54,11 @@ router.post('/cut-pay', createCutPayRequest);
 
 // Get driver's cut pay requests
 router.get('/cut-pay/:driverId', getDriverCutPayRequests);
+
+// Get trip documents for driver
+router.get('/trip/:tripId/documents', getTripDocumentsForDriver);
+
+// Download a trip document as PDF
+router.get('/document/:documentId/download', downloadTripDocumentForDriver);
 
 export default router;

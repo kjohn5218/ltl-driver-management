@@ -1,5 +1,5 @@
 import React, { useState, useEffect, useMemo } from 'react';
-import { Truck, MapPin, Clock, CheckCircle, ChevronRight, ArrowLeft, Star, LogOut, Flag, Search, Plus, X, Package, Scissors, Route } from 'lucide-react';
+import { Truck, MapPin, Clock, CheckCircle, ChevronRight, ArrowLeft, Star, LogOut, Flag, Search, Plus, X, Package, Scissors, Route, FileText, Download } from 'lucide-react';
 import toast, { Toaster } from 'react-hot-toast';
 
 // API base URL
@@ -69,6 +69,14 @@ interface Trip {
   dolly?: { id: number; unitNumber: string };
   dolly2?: { id: number; unitNumber: string };
   loadsheets?: Loadsheet[];
+}
+
+interface TripDocument {
+  id: number;
+  documentType: string;
+  documentNumber: string;
+  status: string;
+  generatedAt?: string;
 }
 
 // Wait time reason options
@@ -187,6 +195,51 @@ export const DriverSelfService: React.FC = () => {
       setTrips(data.trips || []);
     } catch (error: any) {
       toast.error(error.message || 'Failed to load trips');
+    }
+  };
+
+  // Download trip documents
+  const downloadTripDocuments = async (tripId: number) => {
+    if (!driver) return;
+
+    setIsLoading(true);
+    try {
+      // First get the list of documents for this trip
+      const docsResponse = await fetch(`${API_BASE}/trip/${tripId}/documents?driverId=${driver.id}`);
+      if (!docsResponse.ok) throw new Error('Failed to fetch documents');
+
+      const docsData = await docsResponse.json();
+      const documents: TripDocument[] = docsData.documents || [];
+
+      if (documents.length === 0) {
+        toast.error('No documents available for this trip yet');
+        return;
+      }
+
+      // Download each document
+      for (const doc of documents) {
+        const downloadResponse = await fetch(`${API_BASE}/document/${doc.id}/download?driverId=${driver.id}`);
+        if (!downloadResponse.ok) {
+          console.error(`Failed to download document ${doc.documentNumber}`);
+          continue;
+        }
+
+        const blob = await downloadResponse.blob();
+        const url = window.URL.createObjectURL(blob);
+        const a = document.createElement('a');
+        a.href = url;
+        a.download = `${doc.documentType.toLowerCase().replace('_', '-')}-${doc.documentNumber}.pdf`;
+        document.body.appendChild(a);
+        a.click();
+        window.URL.revokeObjectURL(url);
+        document.body.removeChild(a);
+      }
+
+      toast.success(`Downloaded ${documents.length} document(s)`);
+    } catch (error: any) {
+      toast.error(error.message || 'Failed to download documents');
+    } finally {
+      setIsLoading(false);
     }
   };
 
@@ -727,16 +780,30 @@ export const DriverSelfService: React.FC = () => {
                     )}
                   </div>
 
-                  {/* Action buttons - Only show Arrive for IN_TRANSIT trips */}
-                  {trip.status === 'IN_TRANSIT' && (
-                    <button
-                      onClick={() => selectTripForArrive(trip)}
-                      className="w-full py-3 bg-blue-600 text-white font-medium rounded-lg hover:bg-blue-700 flex items-center justify-center"
-                    >
-                      <Flag className="w-4 h-4 mr-2" />
-                      Arrive Trip
-                    </button>
-                  )}
+                  {/* Action buttons */}
+                  <div className="flex gap-2">
+                    {/* Download Documents button - show for dispatched/in-transit/arrived trips */}
+                    {['DISPATCHED', 'IN_TRANSIT', 'ARRIVED', 'COMPLETED'].includes(trip.status) && (
+                      <button
+                        onClick={() => downloadTripDocuments(trip.id)}
+                        disabled={isLoading}
+                        className="flex-1 py-3 bg-gray-100 text-gray-700 font-medium rounded-lg hover:bg-gray-200 disabled:opacity-50 flex items-center justify-center"
+                      >
+                        <Download className="w-4 h-4 mr-2" />
+                        Documents
+                      </button>
+                    )}
+                    {/* Arrive button - only for IN_TRANSIT or DISPATCHED trips */}
+                    {['DISPATCHED', 'IN_TRANSIT'].includes(trip.status) && (
+                      <button
+                        onClick={() => selectTripForArrive(trip)}
+                        className="flex-1 py-3 bg-blue-600 text-white font-medium rounded-lg hover:bg-blue-700 flex items-center justify-center"
+                      >
+                        <Flag className="w-4 h-4 mr-2" />
+                        Arrive Trip
+                      </button>
+                    )}
+                  </div>
                 </div>
               </div>
             ))}
