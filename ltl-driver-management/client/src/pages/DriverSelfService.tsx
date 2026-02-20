@@ -1289,7 +1289,26 @@ export const DriverSelfService: React.FC = () => {
                   <label className="block text-sm text-gray-500 mb-1">Equipment Type</label>
                   <select
                     value={equipmentIssueType}
-                    onChange={(e) => setEquipmentIssueType(e.target.value)}
+                    onChange={(e) => {
+                      const type = e.target.value;
+                      setEquipmentIssueType(type);
+                      // Auto-populate equipment number based on type
+                      if (type === 'TRAILER') {
+                        const trailerNumbers = [
+                          selectedTrip?.trailer?.unitNumber,
+                          selectedTrip?.trailer2?.unitNumber
+                        ].filter(Boolean).join(', ');
+                        setEquipmentIssueNumber(trailerNumbers || '');
+                      } else if (type === 'DOLLY') {
+                        const dollyNumbers = [
+                          selectedTrip?.dolly?.unitNumber,
+                          selectedTrip?.dolly2?.unitNumber
+                        ].filter(Boolean).join(', ');
+                        setEquipmentIssueNumber(dollyNumbers || '');
+                      } else {
+                        setEquipmentIssueNumber('');
+                      }
+                    }}
                     className="w-full px-3 py-2 border border-gray-300 rounded-lg"
                   >
                     <option value="">Select type</option>
