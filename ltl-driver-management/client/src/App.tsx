@@ -31,6 +31,10 @@ import { LoadsheetForm } from './pages/LoadsheetForm';
 import { ContractPowerHome } from './pages/ContractPowerHome';
 import { LateLinehaulReport } from './pages/LateLinehaulReport';
 import { LoadFactorReport } from './pages/LoadFactorReport';
+import { KPIDashboard } from './pages/reports/KPIDashboard';
+import { CostPerMileReport } from './pages/reports/CostPerMileReport';
+import { CCFSContractReport } from './pages/reports/CCFSContractReport';
+import { EnhancedLoadFactorReport } from './pages/reports/EnhancedLoadFactorReport';
 import { PayRules } from './pages/PayRules';
 import { DriverSelfService } from './pages/DriverSelfService';
 import { LinehaulLanes } from './pages/LinehaulLanes';
@@ -142,6 +146,22 @@ const router = createBrowserRouter([
           {
             path: 'reports/load-factor',
             element: <LoadFactorReport />
+          },
+          {
+            path: 'reports/kpi-dashboard',
+            element: <KPIDashboard />
+          },
+          {
+            path: 'reports/cost-per-mile',
+            element: <CostPerMileReport />
+          },
+          {
+            path: 'reports/ccfs-vs-contract',
+            element: <CCFSContractReport />
+          },
+          {
+            path: 'reports/load-factor-enhanced',
+            element: <EnhancedLoadFactorReport />
           },
           {
             path: 'administration',

@@ -2,7 +2,7 @@ import React, { useState } from 'react';
 import { useQuery } from '@tanstack/react-query';
 import { api } from '../services/api';
 import { BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer, PieChart, Pie, Cell, LineChart, Line } from 'recharts';
-import { Download, Target, Truck, Package, Clock, DollarSign, Route, Activity, AlertTriangle, Star, Smile, Percent } from 'lucide-react';
+import { Download, Target, Truck, Package, Clock, DollarSign, Route, Activity, AlertTriangle, Star, Smile, Percent, TrendingUp, BarChart2, Gauge } from 'lucide-react';
 import { Link } from 'react-router-dom';
 import { linehaulTripService, MoraleReportResponse } from '../services/linehaulTripService';
 
@@ -116,11 +116,39 @@ export const Reports: React.FC = () => {
         </div>
         <div className="flex items-center gap-3">
           <Link
+            to="/reports/kpi-dashboard"
+            className="inline-flex items-center px-3 py-2 border border-green-300 bg-green-50 text-green-700 rounded-md hover:bg-green-100 text-sm font-medium"
+          >
+            <TrendingUp className="w-4 h-4 mr-2" />
+            KPI Dashboard
+          </Link>
+          <Link
+            to="/reports/cost-per-mile"
+            className="inline-flex items-center px-3 py-2 border border-purple-300 bg-purple-50 text-purple-700 rounded-md hover:bg-purple-100 text-sm font-medium"
+          >
+            <DollarSign className="w-4 h-4 mr-2" />
+            Cost Per Mile
+          </Link>
+          <Link
+            to="/reports/ccfs-vs-contract"
+            className="inline-flex items-center px-3 py-2 border border-indigo-300 bg-indigo-50 text-indigo-700 rounded-md hover:bg-indigo-100 text-sm font-medium"
+          >
+            <BarChart2 className="w-4 h-4 mr-2" />
+            CCFS vs Contract
+          </Link>
+          <Link
             to="/reports/load-factor"
             className="inline-flex items-center px-3 py-2 border border-blue-300 bg-blue-50 text-blue-700 rounded-md hover:bg-blue-100 text-sm font-medium"
           >
             <Percent className="w-4 h-4 mr-2" />
             Load Factor Report
+          </Link>
+          <Link
+            to="/reports/load-factor-enhanced"
+            className="inline-flex items-center px-3 py-2 border border-teal-300 bg-teal-50 text-teal-700 rounded-md hover:bg-teal-100 text-sm font-medium"
+          >
+            <Gauge className="w-4 h-4 mr-2" />
+            Enhanced Load Factor
           </Link>
           <Link
             to="/reports/late-linehaul"
