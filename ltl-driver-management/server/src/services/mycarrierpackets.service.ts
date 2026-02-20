@@ -775,6 +775,78 @@ export class MyCarrierPacketsService {
   }
 
   /**
+   * Download a single document by blob name
+   * Used for downloading insurance certificates from monitored data
+   */
+  async downloadSingleDocument(
+    carrierId: number,
+    blobName: string,
+    documentType: string,
+    displayName: string
+  ): Promise<{
+    success: boolean;
+    fileName?: string;
+    filePath?: string;
+    error?: string;
+  }> {
+    const uploadDir = path.join(process.cwd(), 'uploads', 'documents', 'mcp', carrierId.toString());
+    await fs.mkdir(uploadDir, { recursive: true });
+
+    try {
+      const { buffer, fileName } = await this.getDocument(blobName);
+      const timestamp = Date.now();
+      const safeFileName = fileName.replace(/[^a-z0-9.-]/gi, '_');
+      const localFileName = `${documentType.toLowerCase()}_${timestamp}_${safeFileName}`;
+      const filePath = path.join(uploadDir, localFileName);
+
+      await fs.writeFile(filePath, buffer);
+
+      // Check if document already exists in database
+      const existingDoc = await prisma.carrierDocument.findFirst({
+        where: {
+          carrierId,
+          documentType,
+          filename: displayName
+        }
+      });
+
+      if (!existingDoc) {
+        // Save to database
+        await prisma.carrierDocument.create({
+          data: {
+            carrierId,
+            documentType,
+            filename: displayName,
+            filePath
+          }
+        });
+      } else {
+        // Update existing document
+        await prisma.carrierDocument.update({
+          where: { id: existingDoc.id },
+          data: {
+            filePath,
+            uploadedAt: new Date()
+          }
+        });
+      }
+
+      console.log(`Downloaded ${documentType} for carrier ${carrierId}: ${fileName}`);
+      return {
+        success: true,
+        fileName: displayName,
+        filePath
+      };
+    } catch (error) {
+      console.error(`Failed to download ${documentType} for carrier ${carrierId}:`, error);
+      return {
+        success: false,
+        error: error instanceof Error ? error.message : 'Unknown error'
+      };
+    }
+  }
+
+  /**
    * Sync all documents for a specific carrier
    */
   async syncCarrierDocuments(carrierId: number, dotNumber: string, mcNumber?: string): Promise<{
@@ -1365,11 +1437,25 @@ export class MyCarrierPacketsService {
               });
 
               // Download updated documents if insurance certificate is available
-              if (mcpCarrier.CertData?.Certificate?.[0]?.BlobName && 
-                  (!existingCarrier.mcpInsuranceExpiration || 
+              if (mcpCarrier.CertData?.Certificate?.[0]?.BlobName &&
+                  (!existingCarrier.mcpInsuranceExpiration ||
                    existingCarrier.mcpInsuranceExpiration.getTime() !== mappedData.mcpInsuranceExpiration?.getTime())) {
-                // TODO: Implement document download for monitored data format
-                console.log(`Insurance certificate available for carrier ${existingCarrier.id}, download needed`);
+                // Download the insurance certificate
+                const blobName = mcpCarrier.CertData.Certificate[0].BlobName;
+                console.log(`Downloading insurance certificate for carrier ${existingCarrier.id}...`);
+
+                const downloadResult = await this.downloadSingleDocument(
+                  existingCarrier.id,
+                  blobName,
+                  'MCP_INSURANCE',
+                  'Insurance Certificate'
+                );
+
+                if (downloadResult.success) {
+                  console.log(`Successfully downloaded insurance certificate for carrier ${existingCarrier.id}`);
+                } else {
+                  console.warn(`Failed to download insurance certificate for carrier ${existingCarrier.id}: ${downloadResult.error}`);
+                }
               }
 
               results.updated++;
