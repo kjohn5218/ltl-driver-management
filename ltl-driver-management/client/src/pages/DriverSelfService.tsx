@@ -62,6 +62,7 @@ interface Trip {
   actualDeparture?: string;
   actualArrival?: string;
   plannedArrival?: string;
+  notes?: string;
   linehaulProfile?: LinehaulProfile;
   truck?: { id: number; unitNumber: string };
   trailer?: { id: number; unitNumber: string };
@@ -135,6 +136,7 @@ export const DriverSelfService: React.FC = () => {
   const [dollySearch, setDollySearch] = useState('');
 
   // Arrival form state
+  const [actualMileage, setActualMileage] = useState('');
   const [dropAndHook, setDropAndHook] = useState('');
   const [chainUpCycles, setChainUpCycles] = useState('');
   const [hasWaitTime, setHasWaitTime] = useState(false);
@@ -370,13 +372,18 @@ export const DriverSelfService: React.FC = () => {
     if (!selectedTrip || !driver) return;
     setIsLoading(true);
 
+    // Check if this is an owner operator trip (no truck assigned or notes contain "Owner Operator")
+    const isOwnerOperator = !selectedTrip.truck || selectedTrip.notes?.includes('Owner Operator');
+
     try {
       const payload: any = {
         driverId: driver.id,
+        actualMileage: actualMileage ? parseInt(actualMileage) : undefined,
         dropAndHook: dropAndHook ? parseInt(dropAndHook) : undefined,
         chainUpCycles: chainUpCycles ? parseInt(chainUpCycles) : undefined,
         notes: arrivalNotes || undefined,
-        moraleRating: moraleRating > 0 ? moraleRating : undefined
+        // Only include morale rating for company drivers (not owner operators)
+        moraleRating: !isOwnerOperator && moraleRating > 0 ? moraleRating : undefined
       };
 
       if (hasWaitTime && waitTimeStart && waitTimeEnd) {
@@ -418,6 +425,7 @@ export const DriverSelfService: React.FC = () => {
 
   // Reset arrival form
   const resetArrivalForm = () => {
+    setActualMileage('');
     setDropAndHook('');
     setChainUpCycles('');
     setHasWaitTime(false);
@@ -1140,9 +1148,22 @@ export const DriverSelfService: React.FC = () => {
           </p>
         </div>
 
-        {/* Drop and Hook / Chain Up */}
+        {/* Trip Details */}
         <div className="bg-white rounded-xl shadow-sm p-4">
           <h3 className="font-medium text-gray-900 mb-3">Trip Details</h3>
+
+          {/* Mileage */}
+          <div className="mb-4">
+            <label className="block text-sm text-gray-500 mb-1">Trip Mileage</label>
+            <input
+              type="number"
+              min="0"
+              value={actualMileage}
+              onChange={(e) => setActualMileage(e.target.value)}
+              placeholder="Enter miles driven"
+              className="w-full px-3 py-2 border border-gray-300 rounded-lg"
+            />
+          </div>
 
           <div className="grid grid-cols-2 gap-4">
             <div>
@@ -1290,8 +1311,8 @@ export const DriverSelfService: React.FC = () => {
           />
         </div>
 
-        {/* Morale Rating - Only show for company drivers (not OWNOP) */}
-        {selectedTrip?.truck?.unitNumber !== 'OWNOP' && (
+        {/* Morale Rating - Only show for company drivers (not owner operators) */}
+        {selectedTrip?.truck && !selectedTrip?.notes?.includes('Owner Operator') && (
           <div className="bg-white rounded-xl shadow-sm p-4">
             <label className="block font-medium text-gray-900 mb-3 text-center">How was your trip?</label>
             <div className="flex justify-center gap-2">
