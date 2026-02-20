@@ -87,21 +87,10 @@ app.use(cookieParser());
 app.use(securityHeaders);
 
 // Enhanced Helmet configuration
+// P0 SECURITY: CSP is handled by securityHeaders middleware for consistency
+// Helmet's CSP is disabled to avoid conflicts
 app.use(helmet({
-  contentSecurityPolicy: {
-    directives: {
-      defaultSrc: ["'self'"],
-      scriptSrc: ["'self'"],
-      styleSrc: ["'self'", "'unsafe-inline'"], // Remove unsafe-inline in production
-      imgSrc: ["'self'", 'data:', 'https:'],
-      fontSrc: ["'self'"],
-      connectSrc: ["'self'"],
-      frameSrc: ["'none'"],
-      objectSrc: ["'none'"],
-      baseUri: ["'self'"],
-      formAction: ["'self'"]
-    }
-  },
+  contentSecurityPolicy: false, // Managed by securityHeaders middleware
   crossOriginEmbedderPolicy: { policy: "credentialless" },
   crossOriginOpenerPolicy: { policy: "same-origin" }
 }));

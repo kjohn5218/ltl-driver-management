@@ -38,6 +38,25 @@ const getClientIdentity = (req: Request): string => {
   return `ip:${ip}`;
 };
 
+// Track if we've already logged a storage failure (prevent log spam)
+let storageFailureLogged = false;
+let lastStorageFailureTime = 0;
+const STORAGE_FAILURE_LOG_INTERVAL = 60000; // Log at most every 60 seconds
+
+// CRITICAL alert helper - per SECURITY_STANDARDS.md §2.2
+const logCriticalStorageFailure = (operation: string, identity: string, error: unknown): void => {
+  const now = Date.now();
+  if (!storageFailureLogged || (now - lastStorageFailureTime) > STORAGE_FAILURE_LOG_INTERVAL) {
+    // P1 FIX: Log CRITICAL alert when storage is unreachable (per §2.2 Fail-Open with Alerting)
+    console.error(`[CRITICAL] Security storage unreachable during ${operation} for ${identity}:`, error);
+    console.error('[CRITICAL] Strike enforcement is disabled (fail-open). Investigate immediately!');
+    // TODO: Send alert to monitoring system (PagerDuty, Slack, etc.)
+    // alertService.sendCritical(`Security storage unreachable: ${operation}`);
+    storageFailureLogged = true;
+    lastStorageFailureTime = now;
+  }
+};
+
 // Check if identity is blocked
 const isBlocked = async (identity: string): Promise<boolean> => {
   // Check cache first
@@ -54,24 +73,28 @@ const isBlocked = async (identity: string): Promise<boolean> => {
   // Check database
   try {
     const strike = await prisma.$queryRaw<any[]>`
-      SELECT block_until FROM security_strikes 
-      WHERE identity = ${identity} 
+      SELECT block_until FROM security_strikes
+      WHERE identity = ${identity}
       AND block_until > NOW()
       LIMIT 1
     `;
-    
+
     const isBlocked = strike.length > 0;
-    
+
     // Cache the result for 60 seconds
     strikeCache.set(identity, {
       blocked: isBlocked,
       expiresAt: Date.now() + 60000
     });
-    
+
+    // Reset failure tracking on successful DB access
+    storageFailureLogged = false;
+
     return isBlocked;
   } catch (error) {
-    console.error('Failed to check strike status:', error);
-    return false; // Fail open
+    // P1 FIX: Fire CRITICAL alert on storage failure (per §2.2)
+    logCriticalStorageFailure('check_strikes', identity, error);
+    return false; // Fail open - but with alerting
   }
 };
 
@@ -130,8 +153,9 @@ const addStrike = async (identity: string, severity: number = 1): Promise<void> 
       `;
     }
   } catch (error) {
-    console.error('Failed to add strike:', error);
-    // Fail open - don't block legitimate users due to database errors
+    // P1 FIX: Fire CRITICAL alert on storage failure (per §2.2)
+    logCriticalStorageFailure('add_strike', identity, error);
+    // Fail open - but with alerting
   }
 };
 
@@ -188,33 +212,33 @@ export const securityMiddleware = async (
   }
 
   // For POST/PUT/PATCH requests, also scan body
+  // P1 FIX: Body is already parsed by express.json() middleware
+  // The previous code had a race condition where next() was called before body scanning completed
   if (['POST', 'PUT', 'PATCH'].includes(req.method)) {
-    let bodyData = '';
+    const contentType = req.headers['content-type'] || '';
 
-    // Capture request body
-    req.on('data', (chunk) => {
-      if (bodyData.length < MAX_SCAN_SIZE) {
-        bodyData += chunk.toString();
+    // Only scan non-JSON content for XSS patterns (per §2.2 note: JSON XSS is client-side)
+    if (!contentType.includes('application/json')) {
+      let bodyToScan = '';
+
+      // Get body data - express.json() may have already parsed it
+      if (req.body) {
+        // Body was parsed by express middleware
+        bodyToScan = typeof req.body === 'string'
+          ? req.body.substring(0, MAX_SCAN_SIZE)
+          : JSON.stringify(req.body).substring(0, MAX_SCAN_SIZE);
       }
-    });
 
-    req.on('end', async () => {
-      const contentType = req.headers['content-type'] || '';
-      
-      // Only scan non-JSON content for XSS patterns
-      if (!contentType.includes('application/json')) {
-        const bodyToScan = bodyData.substring(0, MAX_SCAN_SIZE);
-        
-        for (const pattern of STRICT_PATTERNS) {
-          if (pattern.test(bodyToScan)) {
-            console.error(`[SECURITY] Malicious pattern in body from ${identity}: ${pattern}`);
-            await addStrike(identity, 1);
-            res.status(400).json({ error: 'Invalid Content' });
-            return;
-          }
+      // Scan body for malicious patterns
+      for (const pattern of STRICT_PATTERNS) {
+        if (pattern.test(bodyToScan)) {
+          console.error(`[SECURITY] Malicious pattern in body from ${identity}: ${pattern}`);
+          await addStrike(identity, 1);
+          res.status(400).json({ error: 'Invalid Content' });
+          return;
         }
       }
-    });
+    }
   }
 
   next();
@@ -233,24 +257,32 @@ export const securityHeaders = (_req: Request, res: Response, next: NextFunction
   res.setHeader('X-XSS-Protection', '1; mode=block');
   res.setHeader('Referrer-Policy', 'strict-origin-when-cross-origin');
   res.setHeader('Permissions-Policy', 'camera=(), microphone=(), geolocation=()');
-  
+
   // Cross-Origin policies
   res.setHeader('Cross-Origin-Opener-Policy', 'same-origin');
   res.setHeader('Cross-Origin-Embedder-Policy', 'credentialless');
-  
-  // Basic CSP - adjust based on your application needs
+
+  // Content Security Policy - P0 SECURITY FIX
+  // Per SECURITY_STANDARDS.md §2.4: unsafe-inline is FORBIDDEN for scripts
+  // Note: If frontend breaks, add specific script hashes instead of unsafe-inline
+  const isProduction = process.env.NODE_ENV === 'production';
+  const connectSrc = isProduction
+    ? "'self'"
+    : "'self' ws://localhost:* http://localhost:*"; // Allow HMR in development
+
   res.setHeader(
     'Content-Security-Policy',
     "default-src 'self'; " +
-    "script-src 'self' 'unsafe-inline' 'unsafe-eval'; " + // Remove unsafe-inline/eval in production
-    "style-src 'self' 'unsafe-inline'; " +
+    "script-src 'self'; " + // P0 FIX: Removed unsafe-inline and unsafe-eval
+    "style-src 'self' 'unsafe-inline'; " + // Styles: unsafe-inline acceptable per §2.4 note
     "img-src 'self' data: https:; " +
-    "font-src 'self'; " +
-    "connect-src 'self'; " +
+    "font-src 'self' https:; " +
+    `connect-src ${connectSrc}; ` +
     "frame-src 'none'; " +
     "object-src 'none'; " +
     "base-uri 'self'; " +
-    "form-action 'self';"
+    "form-action 'self'; " +
+    "upgrade-insecure-requests;"
   );
 
   next();
