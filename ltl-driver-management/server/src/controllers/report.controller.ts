@@ -1,6 +1,51 @@
 import { Request, Response } from 'express';
 import { prisma } from '../index';
 import { CarrierStatus, BookingStatus } from '@prisma/client';
+import * as XLSX from 'xlsx';
+
+/**
+ * Convert array of objects to CSV string
+ * Handles nested objects by flattening them with dot notation
+ */
+const convertToCSV = (data: any[]): string => {
+  if (!data || data.length === 0) {
+    return '';
+  }
+
+  // Flatten nested objects for CSV export
+  const flattenObject = (obj: any, prefix = ''): Record<string, any> => {
+    const result: Record<string, any> = {};
+
+    for (const key in obj) {
+      if (obj[key] === null || obj[key] === undefined) {
+        result[prefix + key] = '';
+      } else if (typeof obj[key] === 'object' && !Array.isArray(obj[key]) && !(obj[key] instanceof Date)) {
+        // Recursively flatten nested objects (but limit depth for readability)
+        const nested = flattenObject(obj[key], `${prefix}${key}_`);
+        Object.assign(result, nested);
+      } else if (obj[key] instanceof Date) {
+        result[prefix + key] = obj[key].toISOString();
+      } else if (Array.isArray(obj[key])) {
+        result[prefix + key] = JSON.stringify(obj[key]);
+      } else {
+        result[prefix + key] = obj[key];
+      }
+    }
+
+    return result;
+  };
+
+  // Flatten all objects
+  const flatData = data.map(item => flattenObject(item));
+
+  // Create worksheet from flattened data
+  const worksheet = XLSX.utils.json_to_sheet(flatData);
+
+  // Convert to CSV
+  const csv = XLSX.utils.sheet_to_csv(worksheet);
+
+  return csv;
+};
 
 export const getDashboardMetrics = async (req: Request, res: Response) => {
   try {
@@ -317,8 +362,18 @@ export const exportData = async (req: Request, res: Response) => {
     }
 
     if (format === 'csv') {
-      // TODO: Implement CSV conversion
-      return res.status(501).json({ message: 'CSV export not implemented yet' });
+      const csv = convertToCSV(data);
+
+      if (!csv) {
+        return res.status(404).json({ message: 'No data to export' });
+      }
+
+      // Set headers for CSV download
+      const filename = `${type}_export_${new Date().toISOString().split('T')[0]}.csv`;
+      res.setHeader('Content-Type', 'text/csv; charset=utf-8');
+      res.setHeader('Content-Disposition', `attachment; filename="${filename}"`);
+
+      return res.send(csv);
     } else {
       return res.json(data);
     }
