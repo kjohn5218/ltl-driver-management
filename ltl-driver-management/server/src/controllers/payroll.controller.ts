@@ -368,7 +368,10 @@ export const calculateTripPay = async (req: Request, res: Response): Promise<voi
           }
         },
         driver: true,
-        delays: true
+        delays: true,
+        trailer: { select: { id: true } },
+        trailer2: { select: { id: true } },
+        trailer3: { select: { id: true } }
       }
     });
 
@@ -452,17 +455,39 @@ export const calculateTripPay = async (req: Request, res: Response): Promise<voi
     let basePay = 0;
     let mileagePay = 0;
 
-    switch (rateCard.rateMethod) {
-      case 'PER_MILE':
-        mileagePay = miles * Number(rateCard.rateAmount);
-        break;
-      case 'FLAT_RATE':
-        basePay = Number(rateCard.rateAmount);
-        break;
-      case 'HOURLY':
-        const hours = Number(trip.linehaulProfile.transitTimeMinutes || 0) / 60;
-        basePay = hours * Number(rateCard.rateAmount);
-        break;
+    // Determine trailer configuration for rate selection
+    const trailerCount = [trip.trailer, trip.trailer2, trip.trailer3]
+      .filter(t => t !== null && t !== undefined).length;
+    const trailerConfig = trailerCount >= 3 ? 'TRIPLE' : trailerCount === 2 ? 'DOUBLE' : 'SINGLE';
+
+    // First, check for flat trip rate (perTrip field takes precedence)
+    if (rateCard.perTrip && Number(rateCard.perTrip) > 0) {
+      basePay = Number(rateCard.perTrip);
+    }
+    // Then, check for equipment-specific mileage rates
+    else if (trailerConfig === 'TRIPLE' && rateCard.perTripleMile && Number(rateCard.perTripleMile) > 0) {
+      mileagePay = miles * Number(rateCard.perTripleMile);
+    }
+    else if (trailerConfig === 'DOUBLE' && rateCard.perDoubleMile && Number(rateCard.perDoubleMile) > 0) {
+      mileagePay = miles * Number(rateCard.perDoubleMile);
+    }
+    else if (rateCard.perSingleMile && Number(rateCard.perSingleMile) > 0) {
+      mileagePay = miles * Number(rateCard.perSingleMile);
+    }
+    // Fall back to old rateMethod/rateAmount fields
+    else {
+      switch (rateCard.rateMethod) {
+        case 'PER_MILE':
+          mileagePay = miles * Number(rateCard.rateAmount);
+          break;
+        case 'FLAT_RATE':
+          basePay = Number(rateCard.rateAmount);
+          break;
+        case 'HOURLY':
+          const hours = Number(trip.linehaulProfile.transitTimeMinutes || 0) / 60;
+          basePay = hours * Number(rateCard.rateAmount);
+          break;
+      }
     }
 
     // Apply minimum amount
