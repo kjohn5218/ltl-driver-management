@@ -1318,6 +1318,7 @@ export interface PayrollLineItem {
   id: string;
   source: PayrollSource;
   sourceId: number;
+  tripId?: number;
   driverId: number;
   driverName: string;
   driverNumber?: string;

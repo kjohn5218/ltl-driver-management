@@ -1,7 +1,8 @@
 import React, { useState, useEffect } from 'react';
 import { Modal } from '../common/Modal';
 import { PayrollLineItem, PayrollLineItemUpdate } from '../../types';
-import { DollarSign, User, MapPin, Calendar, Truck, FileText, ChevronDown, ChevronUp, Package, Clock } from 'lucide-react';
+import { payrollService } from '../../services/payrollService';
+import { DollarSign, User, MapPin, Calendar, Truck, FileText, ChevronDown, ChevronUp, Package, Clock, RefreshCw } from 'lucide-react';
 
 interface PayrollEditModalProps {
   isOpen: boolean;
@@ -36,6 +37,7 @@ export const PayrollEditModal: React.FC<PayrollEditModalProps> = ({
     trailerConfig: ''
   });
   const [saving, setSaving] = useState(false);
+  const [recalculating, setRecalculating] = useState(false);
   const [showTripDetails, setShowTripDetails] = useState(false);
 
   useEffect(() => {
@@ -78,6 +80,29 @@ export const PayrollEditModal: React.FC<PayrollEditModalProps> = ({
     formData.otherAccessorialPay,
     item?.source
   ]);
+
+  const handleRecalculate = async () => {
+    if (!item || !item.tripId) return;
+    setRecalculating(true);
+    try {
+      const result = await payrollService.calculateTripPay(item.tripId);
+      // Update form with recalculated values
+      setFormData(prev => ({
+        ...prev,
+        basePay: Number(result.basePay) || 0,
+        mileagePay: Number(result.mileagePay) || 0,
+        // Accessorial pay is stored as a total in TripPay, estimate breakdown
+        dropAndHookPay: prev.dropAndHookCount > 0 ? prev.dropAndHookCount * 25 : 0,
+        chainUpPay: prev.chainUpCount > 0 ? prev.chainUpCount * 15 : 0,
+        waitTimePay: prev.waitTimeMinutes > 0 ? (prev.waitTimeMinutes / 60) * 18 : 0,
+        totalPay: Number(result.totalGrossPay) || 0
+      }));
+    } catch (error) {
+      console.error('Error recalculating pay:', error);
+    } finally {
+      setRecalculating(false);
+    }
+  };
 
   const handleSave = async () => {
     if (!item) return;
@@ -272,10 +297,22 @@ export const PayrollEditModal: React.FC<PayrollEditModalProps> = ({
         {/* Pay Breakdown - Trip Pay */}
         {isTripPay && (
           <div className="space-y-4">
-            <h4 className="font-medium text-gray-900 dark:text-gray-100 flex items-center">
-              <DollarSign className="w-4 h-4 mr-2" />
-              Pay Breakdown
-            </h4>
+            <div className="flex items-center justify-between">
+              <h4 className="font-medium text-gray-900 dark:text-gray-100 flex items-center">
+                <DollarSign className="w-4 h-4 mr-2" />
+                Pay Breakdown
+              </h4>
+              {item.tripId && (
+                <button
+                  onClick={handleRecalculate}
+                  disabled={recalculating}
+                  className="flex items-center px-3 py-1.5 text-xs font-medium text-indigo-600 dark:text-indigo-400 bg-indigo-50 dark:bg-indigo-900/30 hover:bg-indigo-100 dark:hover:bg-indigo-900/50 rounded-md disabled:opacity-50"
+                >
+                  <RefreshCw className={`w-3 h-3 mr-1.5 ${recalculating ? 'animate-spin' : ''}`} />
+                  {recalculating ? 'Calculating...' : 'Recalculate from Rate Card'}
+                </button>
+              )}
+            </div>
 
             <div className="grid grid-cols-2 gap-3">
               <div>

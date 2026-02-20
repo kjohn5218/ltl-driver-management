@@ -1048,6 +1048,7 @@ export const getUnifiedPayrollItems = async (req: Request, res: Response): Promi
         id: `${item.sourceType === 'TRIP_PAY' ? 'trip' : 'cut'}-${item.tripPayId || item.cutPayRequestId}`,
         source: item.sourceType,
         sourceId: item.tripPayId || item.cutPayRequestId || item.id,
+        tripId: item.tripId, // Include tripId for recalculation
         driverId: item.driverId,
         driverName: item.driverName || item.driver?.name || 'Unknown',
         driverNumber: item.driverNumber || item.driver?.number,

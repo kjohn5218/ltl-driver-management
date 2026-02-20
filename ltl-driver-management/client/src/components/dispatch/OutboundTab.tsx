@@ -764,9 +764,14 @@ export const OutboundTab: React.FC<OutboundTabProps> = ({ selectedLocations = []
                       <td className="px-4 py-3 whitespace-nowrap">
                         <div className="flex items-center">
                           <User className="h-4 w-4 text-gray-400 mr-2" />
-                          <span className="text-gray-900 dark:text-gray-100">
-                            {row.trip.driver?.name || '-'}
-                          </span>
+                          <div>
+                            <div className="text-gray-900 dark:text-gray-100">
+                              {row.trip.driver?.name || '-'}
+                            </div>
+                            {row.trip.driver?.number && (
+                              <div className="text-xs text-gray-500">#{row.trip.driver.number}</div>
+                            )}
+                          </div>
                         </div>
                       </td>
                       <td className="px-4 py-3 whitespace-nowrap">
