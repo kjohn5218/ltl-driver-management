@@ -27,7 +27,13 @@ export const createPayrollLineItemFromTripPay = async (tripPayId: number): Promi
         }
       },
       driver: {
-        select: { id: true, name: true, number: true, workdayEmployeeId: true }
+        select: {
+          id: true,
+          name: true,
+          number: true,
+          workdayEmployeeId: true,
+          carrier: { select: { name: true } }
+        }
       }
     }
   });
@@ -93,6 +99,7 @@ export const createPayrollLineItemFromTripPay = async (tripPayId: number): Promi
       driverName: tripPay.driver?.name,
       driverNumber: tripPay.driver?.number,
       workdayEmployeeId: tripPay.driver?.workdayEmployeeId,
+      employer: tripPay.driver?.carrier?.name,
       tripNumber: tripPay.trip?.tripNumber,
       origin: tripPay.trip?.linehaulProfile?.originTerminal?.code,
       destination: tripPay.trip?.linehaulProfile?.destinationTerminal?.code,
@@ -154,7 +161,13 @@ export const updatePayrollLineItemFromTripPay = async (tripPayId: number): Promi
         }
       },
       driver: {
-        select: { id: true, name: true, number: true, workdayEmployeeId: true }
+        select: {
+          id: true,
+          name: true,
+          number: true,
+          workdayEmployeeId: true,
+          carrier: { select: { name: true } }
+        }
       }
     }
   });
@@ -195,6 +208,7 @@ export const updatePayrollLineItemFromTripPay = async (tripPayId: number): Promi
       driverName: tripPay.driver?.name,
       driverNumber: tripPay.driver?.number,
       workdayEmployeeId: tripPay.driver?.workdayEmployeeId,
+      employer: tripPay.driver?.carrier?.name,
       tripNumber: tripPay.trip?.tripNumber,
       origin: tripPay.trip?.linehaulProfile?.originTerminal?.code,
       destination: tripPay.trip?.linehaulProfile?.destinationTerminal?.code,
