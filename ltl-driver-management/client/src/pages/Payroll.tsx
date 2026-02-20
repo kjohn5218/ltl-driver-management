@@ -1159,7 +1159,7 @@ export const Payroll: React.FC = () => {
         </div>
 
         {/* Data Table - Scrollable container */}
-        <div style={{ overflowX: 'scroll', overflowY: 'visible', maxWidth: '100%', position: 'relative' }}>
+        <div className="overflow-x-auto overflow-y-visible" style={{ maxWidth: 'calc(100vw - 280px)' }}>
         <DataTable
               columns={columns}
               data={sortedItems}
