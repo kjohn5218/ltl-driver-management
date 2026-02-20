@@ -50,6 +50,7 @@ export const DriverDocumentsModal: React.FC<DriverDocumentsModalProps> = ({
   const [error, setError] = useState<string | null>(null);
   const [downloadingId, setDownloadingId] = useState<number | null>(null);
   const [downloadingAll, setDownloadingAll] = useState(false);
+  const [printingAll, setPrintingAll] = useState(false);
 
   // Detect if device is mobile (for UI adjustments)
   const isMobile = typeof window !== 'undefined' && window.innerWidth < 768;
@@ -150,6 +151,23 @@ export const DriverDocumentsModal: React.FC<DriverDocumentsModalProps> = ({
       window.open(url, '_blank');
     } catch (err) {
       console.error('Print error:', err);
+    }
+  };
+
+  // Print all documents (opens each in new tab)
+  const handlePrintAll = async () => {
+    const generatedDocs = documents.filter(d => d.status === 'GENERATED');
+    if (generatedDocs.length === 0) return;
+
+    setPrintingAll(true);
+    try {
+      for (const doc of generatedDocs) {
+        await handlePrint(doc);
+        // Small delay between opening tabs to prevent browser blocking
+        await new Promise(resolve => setTimeout(resolve, 300));
+      }
+    } finally {
+      setPrintingAll(false);
     }
   };
 
@@ -317,27 +335,45 @@ export const DriverDocumentsModal: React.FC<DriverDocumentsModalProps> = ({
 
           {/* Footer actions */}
           <div className="sticky bottom-0 bg-white border-t p-4 md:rounded-b-xl">
-            <div className="flex gap-3">
+            <div className="flex gap-2">
               <button
                 onClick={onClose}
-                className="flex-1 py-3 border border-gray-300 text-gray-700 font-medium rounded-lg hover:bg-gray-50"
+                className="py-3 px-4 border border-gray-300 text-gray-700 font-medium rounded-lg hover:bg-gray-50"
               >
                 {hasGeneratedDocs ? 'Done' : 'Close'}
               </button>
 
               {hasGeneratedDocs && (
-                <button
-                  onClick={handleDownloadAll}
-                  disabled={downloadingAll}
-                  className="flex-1 py-3 bg-green-600 text-white font-medium rounded-lg hover:bg-green-700 disabled:opacity-50 flex items-center justify-center gap-2"
-                >
-                  {downloadingAll ? (
-                    <Loader2 className="h-5 w-5 animate-spin" />
-                  ) : (
-                    <Download className="h-5 w-5" />
+                <>
+                  {/* Print All - shown on desktop */}
+                  {!isMobile && (
+                    <button
+                      onClick={handlePrintAll}
+                      disabled={printingAll}
+                      className="flex-1 py-3 border border-blue-600 text-blue-600 font-medium rounded-lg hover:bg-blue-50 disabled:opacity-50 flex items-center justify-center gap-2"
+                    >
+                      {printingAll ? (
+                        <Loader2 className="h-5 w-5 animate-spin" />
+                      ) : (
+                        <Printer className="h-5 w-5" />
+                      )}
+                      Print All
+                    </button>
                   )}
-                  Download All
-                </button>
+
+                  <button
+                    onClick={handleDownloadAll}
+                    disabled={downloadingAll}
+                    className="flex-1 py-3 bg-green-600 text-white font-medium rounded-lg hover:bg-green-700 disabled:opacity-50 flex items-center justify-center gap-2"
+                  >
+                    {downloadingAll ? (
+                      <Loader2 className="h-5 w-5 animate-spin" />
+                    ) : (
+                      <Download className="h-5 w-5" />
+                    )}
+                    Download All
+                  </button>
+                </>
               )}
             </div>
 
