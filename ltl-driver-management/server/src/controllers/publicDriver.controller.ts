@@ -21,11 +21,12 @@ export const verifyDriver = async (req: Request, res: Response): Promise<void> =
       return;
     }
 
-    // Find driver by number
+    // Find driver by number - must have a phone number to authenticate
     const driver = await prisma.carrierDriver.findFirst({
       where: {
-        number: driverNumber.toString().trim(),
-        active: true
+        number: { equals: driverNumber.toString().trim(), mode: 'insensitive' },
+        active: true,
+        phoneNumber: { not: null }
       },
       select: {
         id: true,
@@ -33,7 +34,8 @@ export const verifyDriver = async (req: Request, res: Response): Promise<void> =
         number: true,
         phoneNumber: true,
         driverStatus: true
-      }
+      },
+      orderBy: { id: 'asc' } // Prefer older (original) records
     });
 
     if (!driver) {
