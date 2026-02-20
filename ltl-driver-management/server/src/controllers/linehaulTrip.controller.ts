@@ -149,10 +149,10 @@ export const getTrips = async (req: Request, res: Response): Promise<void> => {
             }
           },
           driver: {
-            select: { id: true, name: true, phoneNumber: true }
+            select: { id: true, name: true, number: true, phoneNumber: true }
           },
           teamDriver: {
-            select: { id: true, name: true }
+            select: { id: true, name: true, number: true }
           },
           truck: {
             select: { id: true, unitNumber: true, truckType: true, externalFleetId: true }
@@ -306,7 +306,7 @@ export const getTripByNumber = async (req: Request, res: Response): Promise<void
           }
         },
         driver: {
-          select: { id: true, name: true, phoneNumber: true }
+          select: { id: true, name: true, number: true, phoneNumber: true }
         },
         truck: {
           select: { id: true, unitNumber: true }
@@ -434,7 +434,7 @@ export const createTrip = async (req: Request, res: Response): Promise<void> => 
             select: { id: true, profileCode: true, name: true }
           },
           driver: {
-            select: { id: true, name: true }
+            select: { id: true, name: true, number: true }
           },
           truck: {
             select: { id: true, unitNumber: true }
@@ -567,7 +567,7 @@ export const updateTrip = async (req: Request, res: Response): Promise<void> => 
             select: { id: true, profileCode: true, name: true }
           },
           driver: {
-            select: { id: true, name: true }
+            select: { id: true, name: true, number: true }
           },
           truck: {
             select: { id: true, unitNumber: true }
@@ -743,7 +743,7 @@ export const updateTripStatus = async (req: Request, res: Response): Promise<voi
             select: { id: true, profileCode: true, name: true }
           },
           driver: {
-            select: { id: true, name: true }
+            select: { id: true, name: true, number: true }
           },
           truck: {
             select: { id: true, unitNumber: true, status: true }
@@ -863,10 +863,10 @@ export const assignDriver = async (req: Request, res: Response): Promise<void> =
       },
       include: {
         driver: {
-          select: { id: true, name: true, phoneNumber: true }
+          select: { id: true, name: true, number: true, phoneNumber: true }
         },
         teamDriver: {
-          select: { id: true, name: true }
+          select: { id: true, name: true, number: true }
         }
       }
     });
@@ -959,10 +959,10 @@ export const getDispatchBoard = async (req: Request, res: Response) => {
           }
         },
         driver: {
-          select: { id: true, name: true, phoneNumber: true, driverStatus: true }
+          select: { id: true, name: true, number: true, phoneNumber: true, driverStatus: true }
         },
         teamDriver: {
-          select: { id: true, name: true }
+          select: { id: true, name: true, number: true }
         },
         truck: {
           select: { id: true, unitNumber: true, status: true }
@@ -1118,7 +1118,7 @@ export const dispatchTrip = async (req: Request, res: Response): Promise<void> =
             select: { id: true, profileCode: true, name: true }
           },
           driver: {
-            select: { id: true, name: true, phoneNumber: true }
+            select: { id: true, name: true, number: true, phoneNumber: true }
           },
           truck: {
             select: { id: true, unitNumber: true, status: true }
@@ -1781,7 +1781,7 @@ export const getDriverTripReport = async (req: Request, res: Response): Promise<
           }
         },
         driver: {
-          select: { id: true, name: true }
+          select: { id: true, name: true, number: true }
         }
       }
     });
@@ -1808,7 +1808,7 @@ export const getTripEquipmentIssues = async (req: Request, res: Response): Promi
       where: { tripId },
       include: {
         driver: {
-          select: { id: true, name: true }
+          select: { id: true, name: true, number: true }
         },
         resolver: {
           select: { id: true, name: true }
@@ -1888,7 +1888,7 @@ export const saveMoraleRating = async (req: Request, res: Response): Promise<voi
       },
       include: {
         driver: {
-          select: { id: true, name: true }
+          select: { id: true, name: true, number: true }
         }
       }
     });
@@ -1939,7 +1939,7 @@ export const getMoraleReport = async (req: Request, res: Response): Promise<void
         orderBy: { arrivedAt: 'desc' },
         include: {
           driver: {
-            select: { id: true, name: true }
+            select: { id: true, name: true, number: true }
           },
           trip: {
             select: {
