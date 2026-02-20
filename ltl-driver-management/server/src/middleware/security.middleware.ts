@@ -5,6 +5,12 @@ import crypto from 'crypto';
 const prisma = new PrismaClient();
 const MAX_SCAN_SIZE = 4096; // 4KB max scan size to prevent ReDoS
 
+// Type definitions for strike cache
+interface StrikeCacheEntry {
+  blocked: boolean;
+  expiresAt: number;
+}
+
 // Define patterns for malicious request detection
 const STRICT_PATTERNS = [
   /\.\.\//gi, // Path traversal
@@ -27,12 +33,12 @@ const RECON_PATTERNS = [
 ];
 
 // In-memory cache for strike data (consider Redis for production)
-const strikeCache = new Map<string, { blocked: boolean; expiresAt: number }>();
+const strikeCache = new Map<string, StrikeCacheEntry>();
 
-// Get client identity
+// Get client identity - uses typed Request.user from express.d.ts
 const getClientIdentity = (req: Request): string => {
-  if ((req as any).user?.id) {
-    return `user:${(req as any).user.id}`;
+  if (req.user?.id) {
+    return `user:${req.user.id}`;
   }
   const ip = req.ip || req.socket.remoteAddress || 'unknown';
   return `ip:${ip}`;
@@ -57,7 +63,7 @@ const logCriticalStorageFailure = (operation: string, identity: string, error: u
   }
 };
 
-// Check if identity is blocked
+// Check if identity is blocked - using Prisma ORM instead of raw SQL
 const isBlocked = async (identity: string): Promise<boolean> => {
   // Check cache first
   const cached = strikeCache.get(identity);
@@ -70,27 +76,32 @@ const isBlocked = async (identity: string): Promise<boolean> => {
     }
   }
 
-  // Check database
+  // Check database using Prisma ORM (type-safe)
   try {
-    const strike = await prisma.$queryRaw<any[]>`
-      SELECT block_until FROM security_strikes
-      WHERE identity = ${identity}
-      AND block_until > NOW()
-      LIMIT 1
-    `;
+    const strike = await prisma.securityStrike.findFirst({
+      where: {
+        identity,
+        blockUntil: {
+          gt: new Date()
+        }
+      },
+      select: {
+        blockUntil: true
+      }
+    });
 
-    const isBlocked = strike.length > 0;
+    const blocked = strike !== null;
 
     // Cache the result for 60 seconds
     strikeCache.set(identity, {
-      blocked: isBlocked,
+      blocked,
       expiresAt: Date.now() + 60000
     });
 
     // Reset failure tracking on successful DB access
     storageFailureLogged = false;
 
-    return isBlocked;
+    return blocked;
   } catch (error) {
     // P1 FIX: Fire CRITICAL alert on storage failure (per §2.2)
     logCriticalStorageFailure('check_strikes', identity, error);
@@ -98,60 +109,61 @@ const isBlocked = async (identity: string): Promise<boolean> => {
   }
 };
 
-// Add strike to identity
+// Add strike to identity - using Prisma ORM instead of raw SQL
 const addStrike = async (identity: string, severity: number = 1): Promise<void> => {
   try {
-    // First, try to get existing strikes
-    const existing = await prisma.$queryRaw<any[]>`
-      SELECT id, strike_count, updated_at 
-      FROM security_strikes 
-      WHERE identity = ${identity}
-      LIMIT 1
-    `;
-
     const now = new Date();
     const oneHourAgo = new Date(now.getTime() - 3600000);
 
-    if (existing.length > 0) {
-      const record = existing[0];
-      const lastUpdate = new Date(record.updated_at);
-      
-      // Reset strikes if last update was more than 1 hour ago
-      const newCount = lastUpdate < oneHourAgo ? severity : record.strike_count + severity;
-      
-      // Determine block duration based on strike count
-      let blockUntil = null;
-      if (newCount >= 10) {
-        // 30 days ban
-        blockUntil = new Date(now.getTime() + 30 * 24 * 3600000);
-      } else if (newCount >= 3) {
-        // 1 hour block
-        blockUntil = new Date(now.getTime() + 3600000);
-      }
+    // Use Prisma upsert for atomic create-or-update (type-safe)
+    const existing = await prisma.securityStrike.findUnique({
+      where: { identity }
+    });
 
-      // Update record
-      await prisma.$executeRaw`
-        UPDATE security_strikes 
-        SET strike_count = ${newCount},
-            block_until = ${blockUntil},
-            updated_at = ${now}
-        WHERE id = ${record.id}
-      `;
+    let newCount: number;
+    let blockUntil: Date | null = null;
 
-      // Update cache
-      if (blockUntil) {
-        strikeCache.set(identity, {
-          blocked: true,
-          expiresAt: blockUntil.getTime()
-        });
-      }
+    if (existing) {
+      // Reset strikes if last update was more than 1 hour ago (decay per §2.2)
+      newCount = existing.updatedAt < oneHourAgo ? severity : existing.strikeCount + severity;
     } else {
-      // Create new record
-      await prisma.$executeRaw`
-        INSERT INTO security_strikes (identity, strike_count, block_until, updated_at)
-        VALUES (${identity}, ${severity}, NULL, ${now})
-      `;
+      newCount = severity;
     }
+
+    // Determine block duration based on strike count (per §2.2)
+    if (newCount >= 10) {
+      // 30 days ban
+      blockUntil = new Date(now.getTime() + 30 * 24 * 3600000);
+    } else if (newCount >= 3) {
+      // 1 hour block
+      blockUntil = new Date(now.getTime() + 3600000);
+    }
+
+    // Upsert the strike record
+    await prisma.securityStrike.upsert({
+      where: { identity },
+      update: {
+        strikeCount: newCount,
+        blockUntil,
+        updatedAt: now
+      },
+      create: {
+        identity,
+        strikeCount: severity,
+        blockUntil: null
+      }
+    });
+
+    // Update cache if blocked
+    if (blockUntil) {
+      strikeCache.set(identity, {
+        blocked: true,
+        expiresAt: blockUntil.getTime()
+      });
+    }
+
+    // Reset failure tracking on successful DB access
+    storageFailureLogged = false;
   } catch (error) {
     // P1 FIX: Fire CRITICAL alert on storage failure (per §2.2)
     logCriticalStorageFailure('add_strike', identity, error);
@@ -288,28 +300,17 @@ export const securityHeaders = (_req: Request, res: Response, next: NextFunction
   next();
 };
 
-// Create security_strikes table if it doesn't exist
+// Verify security tables are available (managed by Prisma migrations)
 export const initializeSecurityTables = async (): Promise<void> => {
   try {
-    await prisma.$executeRaw`
-      CREATE TABLE IF NOT EXISTS security_strikes (
-        id SERIAL PRIMARY KEY,
-        identity VARCHAR(255) NOT NULL UNIQUE,
-        strike_count INTEGER DEFAULT 0,
-        block_until TIMESTAMP,
-        updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
-        created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
-      )
-    `;
-    
-    // Create index for faster lookups
-    await prisma.$executeRaw`
-      CREATE INDEX IF NOT EXISTS idx_security_strikes_identity_block 
-      ON security_strikes(identity, block_until)
-    `;
-    
-    console.log('✅ Security tables initialized');
+    // Verify the SecurityStrike model is accessible via Prisma
+    // This will throw if the table doesn't exist (migration not run)
+    await prisma.securityStrike.count();
+    console.log('✅ Security tables verified');
   } catch (error) {
-    console.error('Failed to initialize security tables:', error);
+    // Table doesn't exist - migrations may not have been run
+    console.error('❌ Security tables not found. Run: npx prisma migrate dev');
+    console.error('   Error:', error instanceof Error ? error.message : error);
+    // Don't throw - allow server to start but security features will fail-open
   }
 };

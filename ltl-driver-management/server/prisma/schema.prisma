@@ -2082,3 +2082,17 @@ model LinehaulLaneStep {
   @@index([laneId])
   @@map("linehaul_lane_steps")
 }
+
+// Security Strike tracking for malicious request detection
+// Per SECURITY_STANDARDS.md §2.2 - Strike System
+model SecurityStrike {
+  id          Int       @id @default(autoincrement())
+  identity    String    @unique // Format: "user:{id}" or "ip:{address}"
+  strikeCount Int       @default(0) @map("strike_count")
+  blockUntil  DateTime? @map("block_until")
+  createdAt   DateTime  @default(now()) @map("created_at")
+  updatedAt   DateTime  @updatedAt @map("updated_at")
+
+  @@index([identity, blockUntil])
+  @@map("security_strikes")
+}
