@@ -2,6 +2,7 @@ import { Request, Response } from 'express';
 import { prisma } from '../index';
 import { Prisma, CutPayType } from '@prisma/client';
 import { createPayrollLineItemFromCutPay } from '../services/payroll.service';
+import { tripDocumentService } from '../services/tripDocument.service';
 
 /**
  * Public Driver Controller
@@ -398,6 +399,15 @@ export const createAndDispatchTrip = async (req: Request, res: Response): Promis
       return trip;
     });
 
+    // Generate trip documents asynchronously (non-blocking)
+    tripDocumentService.generateAllDocuments(result.id)
+      .then(() => {
+        console.log(`Trip documents generated for trip ${result.id}`);
+      })
+      .catch((error) => {
+        console.error(`Failed to generate trip documents for trip ${result.id}:`, error);
+      });
+
     // Get full trip details
     const fullTrip = await prisma.linehaulTrip.findUnique({
       where: { id: result.id },
@@ -548,6 +558,15 @@ export const dispatchTrip = async (req: Request, res: Response): Promise<void> =
         }
       });
     });
+
+    // Generate trip documents asynchronously (non-blocking)
+    tripDocumentService.generateAllDocuments(tripIdNum)
+      .then(() => {
+        console.log(`Trip documents generated for trip ${tripIdNum}`);
+      })
+      .catch((error) => {
+        console.error(`Failed to generate trip documents for trip ${tripIdNum}:`, error);
+      });
 
     res.json({
       message: 'Trip dispatched successfully',

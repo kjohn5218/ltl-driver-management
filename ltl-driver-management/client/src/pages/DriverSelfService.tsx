@@ -915,23 +915,36 @@ export const DriverSelfService: React.FC = () => {
         {/* Owner Operator Toggle */}
         {selectedLoadsheets.length > 0 && (
           <div className="bg-white rounded-xl shadow-sm p-4">
-            <div className="flex items-center justify-between mb-3">
+            <div className="flex items-center gap-3 mb-3">
               <h3 className="font-medium text-gray-900">Owner Operator?</h3>
-              <label className="relative inline-flex items-center cursor-pointer">
-                <input
-                  type="checkbox"
-                  checked={isOwnerOperator}
-                  onChange={(e) => {
-                    setIsOwnerOperator(e.target.checked);
-                    if (e.target.checked) {
-                      setSelectedTruck(null);
-                      setTruckSearch('');
-                    }
+              <div className="flex rounded-lg overflow-hidden border border-gray-300">
+                <button
+                  type="button"
+                  onClick={() => {
+                    setIsOwnerOperator(true);
+                    setSelectedTruck(null);
+                    setTruckSearch('');
                   }}
-                  className="sr-only peer"
-                />
-                <div className="w-11 h-6 bg-gray-200 peer-focus:outline-none peer-focus:ring-4 peer-focus:ring-blue-300 rounded-full peer peer-checked:after:translate-x-full peer-checked:after:border-white after:content-[''] after:absolute after:top-[2px] after:left-[2px] after:bg-white after:border-gray-300 after:border after:rounded-full after:h-5 after:w-5 after:transition-all peer-checked:bg-blue-600"></div>
-              </label>
+                  className={`px-4 py-1.5 text-sm font-medium transition-colors ${
+                    isOwnerOperator
+                      ? 'bg-blue-600 text-white'
+                      : 'bg-white text-gray-700 hover:bg-gray-50'
+                  }`}
+                >
+                  Yes
+                </button>
+                <button
+                  type="button"
+                  onClick={() => setIsOwnerOperator(false)}
+                  className={`px-4 py-1.5 text-sm font-medium transition-colors border-l border-gray-300 ${
+                    !isOwnerOperator
+                      ? 'bg-blue-600 text-white'
+                      : 'bg-white text-gray-700 hover:bg-gray-50'
+                  }`}
+                >
+                  No
+                </button>
+              </div>
             </div>
 
             {isOwnerOperator ? (
