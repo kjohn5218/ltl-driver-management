@@ -1,8 +1,23 @@
 import { Request, Response } from 'express';
 import { prisma } from '../index';
 import { Prisma, CutPayType } from '@prisma/client';
-import { createPayrollLineItemFromCutPay } from '../services/payroll.service';
+import { createPayrollLineItemFromCutPay, calculateAndCreateTripPay, completePayrollOnArrival } from '../services/payroll.service';
 import { tripDocumentService } from '../services/tripDocument.service';
+
+// Helper to extract final destination from profile/linehaul name
+// Names like "DENWAMSLC1" encode the route: DEN -> WAM -> SLC
+// The final destination is the last 3-letter code before any trailing digits
+const extractFinalDestination = (linehaulName: string | undefined | null): string | null => {
+  if (!linehaulName) return null;
+  // Remove trailing digits (e.g., "DENWAMSLC1" -> "DENWAMSLC")
+  const nameWithoutDigits = linehaulName.replace(/\d+$/, '').toUpperCase();
+  // Terminal codes are typically 3 characters
+  // Take the last 3 characters as the final destination
+  if (nameWithoutDigits.length >= 3) {
+    return nameWithoutDigits.slice(-3);
+  }
+  return null;
+};
 
 /**
  * Public Driver Controller
@@ -350,50 +365,50 @@ export const createAndDispatchTrip = async (req: Request, res: Response): Promis
         }
       });
 
-      // Update loadsheets
+      // Update loadsheets: set status to DISPATCHED and clear door numbers
       for (const ls of loadsheets) {
         await tx.loadsheet.update({
           where: { id: ls.id },
-          data: { linehaulTripId: trip.id, status: 'DISPATCHED' }
+          data: { linehaulTripId: trip.id, status: 'DISPATCHED', doorNumber: null }
         });
       }
 
-      // Update equipment status
+      // Update equipment status to DISPATCHED
       if (trip.truckId) {
         await tx.equipmentTruck.update({
           where: { id: trip.truckId },
-          data: { status: 'IN_TRANSIT' }
+          data: { status: 'DISPATCHED' }
         });
       }
       if (trip.trailerId) {
         await tx.equipmentTrailer.update({
           where: { id: trip.trailerId },
-          data: { status: 'IN_TRANSIT' }
+          data: { status: 'DISPATCHED' }
         });
       }
       if (trip.trailer2Id) {
         await tx.equipmentTrailer.update({
           where: { id: trip.trailer2Id },
-          data: { status: 'IN_TRANSIT' }
+          data: { status: 'DISPATCHED' }
         });
       }
       if (trip.dollyId) {
         await tx.equipmentDolly.update({
           where: { id: trip.dollyId },
-          data: { status: 'IN_TRANSIT' }
+          data: { status: 'DISPATCHED' }
         });
       }
       if (trip.dolly2Id) {
         await tx.equipmentDolly.update({
           where: { id: trip.dolly2Id },
-          data: { status: 'IN_TRANSIT' }
+          data: { status: 'DISPATCHED' }
         });
       }
 
-      // Update driver status
+      // Update driver status to ON_DUTY
       await tx.carrierDriver.update({
         where: { id: driverIdNum },
-        data: { driverStatus: 'DRIVING' }
+        data: { driverStatus: 'ON_DUTY' }
       });
 
       return trip;
@@ -407,6 +422,12 @@ export const createAndDispatchTrip = async (req: Request, res: Response): Promis
       .catch((error) => {
         console.error(`Failed to generate trip documents for trip ${result.id}:`, error);
       });
+
+    // Auto-create TripPay and PayrollLineItem with PENDING status when dispatched
+    const payrollResult = await calculateAndCreateTripPay(result.id);
+    if (!payrollResult.success) {
+      console.warn(`[Driver Portal Dispatch] Payroll item creation warning for trip ${result.id}: ${payrollResult.message}`);
+    }
 
     // Get full trip details
     const fullTrip = await prisma.linehaulTrip.findUnique({
@@ -479,64 +500,73 @@ export const dispatchTrip = async (req: Request, res: Response): Promise<void> =
 
     // Update trip and equipment status in a transaction
     const updatedTrip = await prisma.$transaction(async (tx) => {
-      // Update truck status to IN_TRANSIT
+      // Update truck status to DISPATCHED
       if (trip.truckId) {
         await tx.equipmentTruck.update({
           where: { id: trip.truckId },
-          data: { status: 'IN_TRANSIT' }
+          data: { status: 'DISPATCHED' }
         });
       }
 
-      // Update trailer(s) status to IN_TRANSIT
+      // Update trailer(s) status to DISPATCHED
       if (trip.trailerId) {
         await tx.equipmentTrailer.update({
           where: { id: trip.trailerId },
-          data: { status: 'IN_TRANSIT' }
+          data: { status: 'DISPATCHED' }
         });
       }
 
       if (trip.trailer2Id) {
         await tx.equipmentTrailer.update({
           where: { id: trip.trailer2Id },
-          data: { status: 'IN_TRANSIT' }
+          data: { status: 'DISPATCHED' }
         });
       }
 
       if (trip.trailer3Id) {
         await tx.equipmentTrailer.update({
           where: { id: trip.trailer3Id },
-          data: { status: 'IN_TRANSIT' }
+          data: { status: 'DISPATCHED' }
         });
       }
 
-      // Update dolly(ies) status to IN_TRANSIT
+      // Update dolly(ies) status to DISPATCHED
       if (trip.dollyId) {
         await tx.equipmentDolly.update({
           where: { id: trip.dollyId },
-          data: { status: 'IN_TRANSIT' }
+          data: { status: 'DISPATCHED' }
         });
       }
 
       if (trip.dolly2Id) {
         await tx.equipmentDolly.update({
           where: { id: trip.dolly2Id },
-          data: { status: 'IN_TRANSIT' }
+          data: { status: 'DISPATCHED' }
         });
       }
 
-      // Update driver status to DRIVING
+      // Update driver status to ON_DUTY
       if (trip.driverId) {
         await tx.carrierDriver.update({
           where: { id: trip.driverId },
-          data: { driverStatus: 'DRIVING' }
+          data: { driverStatus: 'ON_DUTY' }
         });
       }
+
+      // Update loadsheets: set status to DISPATCHED and clear door numbers
+      await tx.loadsheet.updateMany({
+        where: { linehaulTripId: tripIdNum },
+        data: {
+          status: 'DISPATCHED',
+          doorNumber: null
+        }
+      });
 
       // Update the trip
       return tx.linehaulTrip.update({
         where: { id: tripIdNum },
         data: {
-          status: 'IN_TRANSIT',
+          status: 'DISPATCHED',
           actualDeparture: new Date(),
           ...(notes && { notes: trip.notes ? `${trip.notes}\n${notes}` : notes })
         },
@@ -568,9 +598,16 @@ export const dispatchTrip = async (req: Request, res: Response): Promise<void> =
         console.error(`Failed to generate trip documents for trip ${tripIdNum}:`, error);
       });
 
+    // Auto-create TripPay and PayrollLineItem with PENDING status when dispatched
+    const payrollResult = await calculateAndCreateTripPay(tripIdNum);
+    if (!payrollResult.success) {
+      console.warn(`[Driver Portal Dispatch] Payroll item creation warning for trip ${tripIdNum}: ${payrollResult.message}`);
+    }
+
     res.json({
       message: 'Trip dispatched successfully',
-      trip: updatedTrip
+      trip: updatedTrip,
+      payroll: payrollResult
     });
   } catch (error) {
     console.error('Error dispatching trip:', error);
@@ -631,10 +668,10 @@ export const arriveTrip = async (req: Request, res: Response): Promise<void> => 
       return;
     }
 
-    // Validate trip can be arrived (must be IN_TRANSIT status)
-    if (trip.status !== 'IN_TRANSIT') {
+    // Validate trip can be arrived (must be DISPATCHED or IN_TRANSIT status)
+    if (!['DISPATCHED', 'IN_TRANSIT'].includes(trip.status)) {
       res.status(400).json({
-        message: `Cannot arrive trip with status '${trip.status}'. Trip must be IN_TRANSIT.`
+        message: `Cannot arrive trip with status '${trip.status}'. Trip must be DISPATCHED or IN_TRANSIT.`
       });
       return;
     }
@@ -709,17 +746,139 @@ export const arriveTrip = async (req: Request, res: Response): Promise<void> => 
         });
       }
 
-      // Release loadsheets for next leg
-      const destinationCode = trip.linehaulProfile?.destinationTerminal?.code;
-      await tx.loadsheet.updateMany({
+      // Process loadsheets with proper status handling (matching main application logic)
+      const destinationCode = trip.destinationTerminalCode || trip.linehaulProfile?.destinationTerminal?.code;
+
+      // Check if destination is a physical terminal and get its ID
+      let isPhysicalTerminal = false;
+      let destinationTerminalId: number | null = null;
+      if (destinationCode) {
+        const destinationLocation = await tx.location.findUnique({
+          where: { code: destinationCode },
+          select: { id: true, isPhysicalTerminal: true }
+        });
+        isPhysicalTerminal = destinationLocation?.isPhysicalTerminal || false;
+        destinationTerminalId = destinationLocation?.id || null;
+      }
+
+      // Get loadsheets assigned to this trip (include linehaulName to check individual final destinations)
+      const loadsheets = await tx.loadsheet.findMany({
         where: { linehaulTripId: tripIdNum },
-        data: {
-          linehaulTripId: null,
-          ...(destinationCode && { originTerminalCode: destinationCode }),
-          destinationTerminalCode: null,
-          status: 'OPEN'
-        }
+        select: { id: true, manifestNumber: true, pieces: true, weight: true, linehaulName: true }
       });
+
+      // For each loadsheet, recalculate capacity based on freight not yet unloaded at this terminal
+      for (const loadsheet of loadsheets) {
+        // Get freight items for this loadsheet that have been unloaded at this terminal
+        const unloadedItems = await tx.manifestFreightItem.aggregate({
+          where: {
+            manifestNumber: loadsheet.manifestNumber,
+            unloadedTerminal: destinationCode
+          },
+          _sum: {
+            pieces: true,
+            weight: true
+          }
+        });
+
+        // Get total freight items for this loadsheet
+        const totalItems = await tx.manifestFreightItem.aggregate({
+          where: {
+            manifestNumber: loadsheet.manifestNumber
+          },
+          _sum: {
+            pieces: true,
+            weight: true
+          }
+        });
+
+        // Calculate remaining pieces and weight after unloading
+        const totalPieces = totalItems._sum.pieces || 0;
+        const totalWeight = totalItems._sum.weight || 0;
+        const unloadedPieces = unloadedItems._sum.pieces || 0;
+        const unloadedWeight = unloadedItems._sum.weight || 0;
+
+        // If no freight items tracked, use loadsheet's existing pieces/weight as "remaining"
+        const remainingPieces = totalPieces > 0
+          ? totalPieces - unloadedPieces
+          : (loadsheet.pieces || 0);
+        const remainingWeight = totalWeight > 0
+          ? totalWeight - unloadedWeight
+          : (loadsheet.weight || 0);
+
+        // Determine capacity percentage based on remaining weight
+        const maxWeight = 45000;
+        let capacityPercent = '0%';
+        if (remainingWeight > 0) {
+          const percentFull = (remainingWeight / maxWeight) * 100;
+          if (percentFull >= 90) capacityPercent = '100%';
+          else if (percentFull >= 65) capacityPercent = '75%';
+          else if (percentFull >= 40) capacityPercent = '50%';
+          else if (percentFull >= 15) capacityPercent = '25%';
+          else capacityPercent = '0%';
+        }
+
+        // Check if THIS SPECIFIC loadsheet has reached its final destination
+        const loadsheetFinalDest = extractFinalDestination(loadsheet.linehaulName);
+        const isLoadsheetAtFinalDestination = destinationCode && loadsheetFinalDest &&
+          destinationCode.toUpperCase() === loadsheetFinalDest.toUpperCase();
+
+        // Update loadsheet based on arrival location and remaining freight:
+        // - CLOSED: Arrived at final destination (no more legs to continue)
+        // - OPEN: Physical terminal, available for next leg (default for continuing loads)
+        // - UNLOADED: Freight has been explicitly LHUNLOAD scanned off
+        let newStatus: 'OPEN' | 'UNLOADED' | 'CLOSED';
+        if (isLoadsheetAtFinalDestination) {
+          newStatus = 'CLOSED';
+        } else if (isPhysicalTerminal) {
+          if (unloadedPieces > 0 && remainingPieces <= 0) {
+            newStatus = 'UNLOADED';
+          } else {
+            newStatus = 'OPEN';
+          }
+        } else {
+          newStatus = 'OPEN';
+        }
+
+        // Get current date for continuing loadsheets
+        const today = new Date().toISOString().split('T')[0];
+
+        // For continuing loads, determine the next leg destination from the linehaulName
+        let nextDestination: string | null = null;
+        if (!isLoadsheetAtFinalDestination && loadsheet.linehaulName) {
+          const routeBase = loadsheet.linehaulName.replace(/\d+$/, '').toUpperCase();
+          if (routeBase.length >= 3) {
+            const extractedDest = routeBase.slice(-3);
+            if (extractedDest !== destinationCode?.toUpperCase()) {
+              nextDestination = extractedDest;
+            }
+          }
+        }
+
+        console.log(`[Driver Portal Arrive] Loadsheet ${loadsheet.manifestNumber}: linehaulName=${loadsheet.linehaulName}, finalDest=${loadsheetFinalDest}, arrivalDest=${destinationCode}, isAtFinal=${isLoadsheetAtFinalDestination}, newStatus=${newStatus}`);
+
+        await tx.loadsheet.update({
+          where: { id: loadsheet.id },
+          data: {
+            // Keep linehaulTripId for all loadsheets so they display on Inbound tab
+            linehaulTripId: tripIdNum,
+            // Only update origin for continuing loads (not at final destination)
+            ...(!isLoadsheetAtFinalDestination && destinationCode && { originTerminalCode: destinationCode }),
+            ...(!isLoadsheetAtFinalDestination && destinationTerminalId && { originTerminalId: destinationTerminalId }),
+            // Set next destination for continuing loads, null for final destination
+            destinationTerminalCode: isLoadsheetAtFinalDestination ? null : nextDestination,
+            status: newStatus,
+            pieces: remainingPieces > 0 ? remainingPieces : 0,
+            weight: remainingWeight > 0 ? remainingWeight : 0,
+            capacity: capacityPercent,
+            // Update loadDate and scheduledDepartDate for continuing loads
+            ...(newStatus === 'OPEN' && {
+              loadDate: new Date(),
+              scheduledDepartDate: today
+            })
+          }
+        });
+      }
 
       // Create driver trip report
       const driverReport = await tx.driverTripReport.create({
@@ -775,12 +934,19 @@ export const arriveTrip = async (req: Request, res: Response): Promise<void> => 
       return { trip: updatedTrip, driverReport, equipmentIssue: createdIssue, moraleRating: createdMoraleRating };
     });
 
+    // Update PayrollLineItem status to COMPLETE and add accessorial details
+    const payrollResult = await completePayrollOnArrival(tripIdNum);
+    if (!payrollResult.success) {
+      console.warn(`[Driver Portal Arrive] Payroll completion warning for trip ${tripIdNum}: ${payrollResult.message}`);
+    }
+
     res.json({
       message: 'Trip arrived successfully',
       trip: result.trip,
       driverReport: result.driverReport,
       equipmentIssue: result.equipmentIssue,
-      moraleRating: result.moraleRating
+      moraleRating: result.moraleRating,
+      payroll: payrollResult
     });
   } catch (error) {
     console.error('Error arriving trip:', error);
