@@ -1,6 +1,7 @@
 import React, { useState, useEffect, useMemo } from 'react';
-import { Truck, MapPin, Clock, CheckCircle, ChevronRight, ArrowLeft, Star, LogOut, Flag, Search, Plus, X, Package, Scissors, Route, FileText, Download } from 'lucide-react';
+import { Truck, MapPin, Clock, CheckCircle, ChevronRight, ArrowLeft, Star, LogOut, Flag, Search, Plus, X, Package, Scissors, Route, FileText } from 'lucide-react';
 import toast, { Toaster } from 'react-hot-toast';
+import { DriverDocumentsModal } from '../components/driver/DriverDocumentsModal';
 
 // API base URL
 const API_BASE = '/api/public/driver';
@@ -158,6 +159,11 @@ export const DriverSelfService: React.FC = () => {
   const [cutPayReason, setCutPayReason] = useState('LOW_FREIGHT_VOLUME');
   const [cutPayReasonOther, setCutPayReasonOther] = useState('');
   const [cutPayNotes, setCutPayNotes] = useState('');
+
+  // Documents modal state
+  const [documentsModalOpen, setDocumentsModalOpen] = useState(false);
+  const [documentsModalTripId, setDocumentsModalTripId] = useState<number | null>(null);
+  const [documentsModalTripNumber, setDocumentsModalTripNumber] = useState<string | undefined>(undefined);
 
   // Verify driver
   const handleVerify = async (e: React.FormEvent) => {
@@ -343,9 +349,18 @@ export const DriverSelfService: React.FC = () => {
         throw new Error(error.message || 'Failed to dispatch trip');
       }
 
+      const data = await response.json();
       toast.success('Trip dispatched successfully! Drive safe!');
       resetDispatchForm();
       await loadTrips(driver.id);
+
+      // Show documents modal with the newly created trip
+      if (data.trip?.id) {
+        setDocumentsModalTripId(data.trip.id);
+        setDocumentsModalTripNumber(data.trip.tripNumber);
+        setDocumentsModalOpen(true);
+      }
+
       setStep('trips');
     } catch (error: any) {
       toast.error(error.message || 'Failed to dispatch trip');
@@ -790,14 +805,18 @@ export const DriverSelfService: React.FC = () => {
 
                   {/* Action buttons */}
                   <div className="flex gap-2">
-                    {/* Download Documents button - show for dispatched/in-transit/arrived trips */}
+                    {/* Documents button - show for dispatched/in-transit/arrived trips */}
                     {['DISPATCHED', 'IN_TRANSIT', 'ARRIVED', 'COMPLETED'].includes(trip.status) && (
                       <button
-                        onClick={() => downloadTripDocuments(trip.id)}
+                        onClick={() => {
+                          setDocumentsModalTripId(trip.id);
+                          setDocumentsModalTripNumber(trip.tripNumber);
+                          setDocumentsModalOpen(true);
+                        }}
                         disabled={isLoading}
                         className="flex-1 py-3 bg-gray-100 text-gray-700 font-medium rounded-lg hover:bg-gray-200 disabled:opacity-50 flex items-center justify-center"
                       >
-                        <Download className="w-4 h-4 mr-2" />
+                        <FileText className="w-4 h-4 mr-2" />
                         Documents
                       </button>
                     )}
@@ -1536,6 +1555,21 @@ export const DriverSelfService: React.FC = () => {
       {step === 'dispatch' && driver && renderDispatchForm()}
       {step === 'arrive' && selectedTrip && renderArrivalForm()}
       {step === 'cutpay' && driver && renderCutPayForm()}
+
+      {/* Documents Modal */}
+      {driver && documentsModalTripId && (
+        <DriverDocumentsModal
+          isOpen={documentsModalOpen}
+          onClose={() => {
+            setDocumentsModalOpen(false);
+            setDocumentsModalTripId(null);
+            setDocumentsModalTripNumber(undefined);
+          }}
+          tripId={documentsModalTripId}
+          tripNumber={documentsModalTripNumber}
+          driverId={driver.id}
+        />
+      )}
     </>
   );
 };
