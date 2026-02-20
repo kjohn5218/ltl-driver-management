@@ -1158,10 +1158,8 @@ export const Payroll: React.FC = () => {
           )}
         </div>
 
-        {/* Data Table - Horizontally scrollable */}
-        <div className="overflow-x-auto" style={{ maxWidth: '100%' }}>
-          <div style={{ minWidth: '1800px' }}>
-            <DataTable
+        {/* Data Table */}
+        <DataTable
               columns={columns}
               data={sortedItems}
               loading={loading}
@@ -1286,8 +1284,6 @@ export const Payroll: React.FC = () => {
             </div>
           )}
         />
-          </div>
-        </div>
 
         {/* Pagination */}
         {!loading && sortedItems.length > 0 && (
