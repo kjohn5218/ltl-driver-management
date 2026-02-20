@@ -1159,13 +1159,15 @@ export const Payroll: React.FC = () => {
         </div>
 
         {/* Data Table */}
-        <DataTable
-          columns={columns}
-          data={sortedItems}
-          loading={loading}
-          keyExtractor={(item) => item.id}
-          expandedRowIds={expandedRows}
-          renderExpandedRow={(item) => (
+        <div className="overflow-x-auto">
+          <div className="min-w-[1800px]">
+            <DataTable
+              columns={columns}
+              data={sortedItems}
+              loading={loading}
+              keyExtractor={(item) => item.id}
+              expandedRowIds={expandedRows}
+              renderExpandedRow={(item) => (
             <div className="grid grid-cols-2 md:grid-cols-4 gap-4 text-sm">
               {/* Arrival Details Panel */}
               <div className="col-span-2 md:col-span-4 mb-2">
@@ -1284,6 +1286,8 @@ export const Payroll: React.FC = () => {
             </div>
           )}
         />
+          </div>
+        </div>
 
         {/* Pagination */}
         {!loading && sortedItems.length > 0 && (
