@@ -1,17 +1,19 @@
 import { Request, Response, NextFunction } from 'express';
-import { PrismaClient } from '@prisma/client';
+import { PrismaClient, User } from '@prisma/client';
 import crypto from 'crypto';
-
-// Import Express type augmentation for req.user
-import '../types/express';
 
 const prisma = new PrismaClient();
 const MAX_SCAN_SIZE = 4096; // 4KB max scan size to prevent ReDoS
 
-// Type definitions for strike cache
+// Type definitions
 interface StrikeCacheEntry {
   blocked: boolean;
   expiresAt: number;
+}
+
+// Extended Request with optional user (set by auth middleware)
+interface RequestWithUser extends Request {
+  user?: User;
 }
 
 // Define patterns for malicious request detection
@@ -38,8 +40,8 @@ const RECON_PATTERNS = [
 // In-memory cache for strike data (consider Redis for production)
 const strikeCache = new Map<string, StrikeCacheEntry>();
 
-// Get client identity - uses typed Request.user from express.d.ts
-const getClientIdentity = (req: Request): string => {
+// Get client identity - uses authenticated user ID if available, otherwise IP
+const getClientIdentity = (req: RequestWithUser): string => {
   if (req.user?.id) {
     return `user:${req.user.id}`;
   }
@@ -181,7 +183,7 @@ const generateRequestId = (): string => {
 
 // Security middleware
 export const securityMiddleware = async (
-  req: Request,
+  req: RequestWithUser,
   res: Response,
   next: NextFunction
 ): Promise<void> => {
