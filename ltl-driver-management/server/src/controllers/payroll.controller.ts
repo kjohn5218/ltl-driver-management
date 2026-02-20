@@ -701,10 +701,16 @@ export const getDriverPaySummary = async (req: Request, res: Response): Promise<
     if (payPeriodId) {
       where.payPeriodId = parseInt(payPeriodId as string, 10);
     } else if (startDate || endDate) {
+      // For endDate, set to end of day (23:59:59.999) to include all records from that day
+      let endOfDay: Date | undefined;
+      if (endDate) {
+        endOfDay = new Date(endDate as string);
+        endOfDay.setHours(23, 59, 59, 999);
+      }
       where.trip = {
         dispatchDate: {
           ...(startDate && { gte: new Date(startDate as string) }),
-          ...(endDate && { lte: new Date(endDate as string) })
+          ...(endOfDay && { lte: endOfDay })
         }
       };
     }
@@ -936,9 +942,15 @@ export const getUnifiedPayrollItems = async (req: Request, res: Response): Promi
 
     // Date range filter
     if (startDate || endDate) {
+      // For endDate, set to end of day (23:59:59.999) to include all records from that day
+      let endOfDay: Date | undefined;
+      if (endDate) {
+        endOfDay = new Date(endDate as string);
+        endOfDay.setHours(23, 59, 59, 999);
+      }
       where.date = {
         ...(startDate && { gte: new Date(startDate as string) }),
-        ...(endDate && { lte: new Date(endDate as string) })
+        ...(endOfDay && { lte: endOfDay })
       };
     }
 
@@ -1403,9 +1415,15 @@ export const exportPayrollToXls = async (req: Request, res: Response): Promise<v
       where.status = 'APPROVED';
     }
     if (startDate || endDate) {
+      // For endDate, set to end of day (23:59:59.999) to include all records from that day
+      let endOfDay: Date | undefined;
+      if (endDate) {
+        endOfDay = new Date(endDate);
+        endOfDay.setHours(23, 59, 59, 999);
+      }
       where.date = {
         ...(startDate && { gte: new Date(startDate) }),
-        ...(endDate && { lte: new Date(endDate) })
+        ...(endOfDay && { lte: endOfDay })
       };
     }
 
