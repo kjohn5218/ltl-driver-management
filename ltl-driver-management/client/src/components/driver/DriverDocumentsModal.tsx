@@ -5,7 +5,7 @@
  * after dispatch from the driver portal.
  */
 
-import React, { useState, useEffect, useCallback } from 'react';
+import React, { useState, useEffect, useCallback, useRef } from 'react';
 import { FileText, AlertTriangle, Download, Printer, Loader2, CheckCircle, XCircle, X } from 'lucide-react';
 
 const API_BASE = '/api/public/driver';
@@ -72,6 +72,10 @@ export const DriverDocumentsModal: React.FC<DriverDocumentsModalProps> = ({
     }
   }, [tripId, driverId]);
 
+  // Use ref to track documents for polling without causing effect re-runs
+  const documentsRef = useRef<TripDocument[]>([]);
+  documentsRef.current = documents;
+
   // Initial fetch and polling for pending documents
   useEffect(() => {
     if (!isOpen) {
@@ -85,13 +89,15 @@ export const DriverDocumentsModal: React.FC<DriverDocumentsModalProps> = ({
 
     // Poll every 2 seconds if any documents are pending
     const interval = setInterval(() => {
-      if (documents.some(d => d.status === 'PENDING')) {
+      const hasPending = documentsRef.current.some(d => d.status === 'PENDING');
+      const isEmpty = documentsRef.current.length === 0;
+      if (hasPending || isEmpty) {
         fetchDocuments();
       }
     }, 2000);
 
     return () => clearInterval(interval);
-  }, [isOpen, fetchDocuments, documents]);
+  }, [isOpen, fetchDocuments]);
 
   // Download a single document
   const handleDownload = async (doc: TripDocument) => {
