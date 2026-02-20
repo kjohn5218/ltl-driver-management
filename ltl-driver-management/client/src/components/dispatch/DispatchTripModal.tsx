@@ -1515,7 +1515,7 @@ export const DispatchTripModal: React.FC<DispatchTripModalProps> = ({
                           className="w-full pl-10 pr-3 py-2 border border-gray-300 dark:border-gray-600 rounded-md bg-white dark:bg-gray-700 text-gray-900 dark:text-gray-100 focus:ring-2 focus:ring-primary-500 focus:border-transparent"
                         />
                         {powerUnitDropdownOpen && !selectedPowerUnit && (
-                          <div className="absolute z-10 w-full mt-1 bg-white dark:bg-gray-700 border border-gray-300 dark:border-gray-600 rounded-md shadow-lg max-h-60 overflow-auto">
+                          <div className="absolute z-10 w-[calc(100%-2rem)] mt-1 bg-white dark:bg-gray-700 border border-gray-300 dark:border-gray-600 rounded-md shadow-lg max-h-60 overflow-auto">
                             {trucksLoading ? (
                               <div className="px-4 py-2 text-gray-500">Loading power units...</div>
                             ) : getAvailableTrucks(powerUnitSearch).length > 0 ? (
