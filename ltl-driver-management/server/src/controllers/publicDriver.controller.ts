@@ -122,6 +122,7 @@ export const getDriverTrips = async (req: Request, res: Response): Promise<void>
             profileCode: true,
             name: true,
             transitTimeMinutes: true,
+            distanceMiles: true,
             originTerminal: {
               select: { code: true, name: true, city: true, state: true }
             },

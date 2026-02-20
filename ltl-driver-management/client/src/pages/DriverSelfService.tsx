@@ -27,6 +27,7 @@ interface LinehaulProfile {
   profileCode: string;
   name: string;
   transitTimeMinutes?: number;
+  distanceMiles?: number;
   originTerminal?: Terminal;
   destinationTerminal?: Terminal;
 }
@@ -546,6 +547,10 @@ export const DriverSelfService: React.FC = () => {
   // Select trip for arrive
   const selectTripForArrive = (trip: Trip) => {
     setSelectedTrip(trip);
+    // Pre-populate mileage from linehaul profile
+    if (trip.linehaulProfile?.distanceMiles) {
+      setActualMileage(trip.linehaulProfile.distanceMiles.toString());
+    }
     setStep('arrive');
   };
 
@@ -1262,8 +1267,8 @@ export const DriverSelfService: React.FC = () => {
           )}
         </div>
 
-        {/* Equipment Issue - Only show for owner operators (OWNOP) */}
-        {selectedTrip?.truck?.unitNumber === 'OWNOP' && (
+        {/* Equipment Issue - Only show for owner operators (no truck or notes contain Owner Operator) */}
+        {(!selectedTrip?.truck || selectedTrip?.notes?.includes('Owner Operator')) && (
           <div className="bg-white rounded-xl shadow-sm p-4">
             <div className="flex items-center justify-between mb-3">
               <h3 className="font-medium text-gray-900">Equipment Issue</h3>
