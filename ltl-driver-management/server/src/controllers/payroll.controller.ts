@@ -645,7 +645,7 @@ export const bulkApproveTripPays = async (req: Request, res: Response): Promise<
     const result = await prisma.tripPay.updateMany({
       where: {
         id: { in: tripPayIds.map((id: string | number) => parseInt(id.toString(), 10)) },
-        status: { in: ['CALCULATED', 'REVIEWED'] }
+        status: { in: ['PENDING', 'CALCULATED'] }
       },
       data: {
         status: 'APPROVED',
@@ -983,7 +983,7 @@ export const getUnifiedPayrollItems = async (req: Request, res: Response): Promi
     const unapprovedCount = await prisma.payrollLineItem.count({
       where: {
         ...where,
-        status: { in: ['PENDING', 'CALCULATED', 'REVIEWED'] }
+        status: { in: ['PENDING', 'COMPLETE'] }
       }
     });
 
@@ -1283,7 +1283,7 @@ export const bulkApprovePayrollItems = async (req: Request, res: Response): Prom
       await prisma.payrollLineItem.updateMany({
         where: {
           tripPayId: { in: tripIds },
-          status: { in: ['PENDING', 'CALCULATED', 'REVIEWED'] }
+          status: { in: ['PENDING', 'COMPLETE'] }
         },
         data: {
           status: 'APPROVED',
@@ -1296,7 +1296,7 @@ export const bulkApprovePayrollItems = async (req: Request, res: Response): Prom
       const result = await prisma.tripPay.updateMany({
         where: {
           id: { in: tripIds },
-          status: { in: ['PENDING', 'CALCULATED', 'REVIEWED'] }
+          status: { in: ['PENDING', 'CALCULATED'] }
         },
         data: {
           status: 'APPROVED',

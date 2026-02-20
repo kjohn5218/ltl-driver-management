@@ -37,11 +37,8 @@ import {
 const statusConfig: Record<string, { label: string; color: string }> = {
   PENDING: { label: 'Pending', color: 'default' },
   COMPLETE: { label: 'Complete', color: 'info' },
-  CALCULATED: { label: 'Calculated', color: 'info' },
-  REVIEWED: { label: 'Reviewed', color: 'warning' },
   APPROVED: { label: 'Approved', color: 'success' },
   PAID: { label: 'Paid', color: 'success' },
-  DISPUTED: { label: 'Disputed', color: 'danger' },
   CANCELLED: { label: 'Cancelled', color: 'danger' }
 };
 
@@ -216,7 +213,7 @@ export const Payroll: React.FC = () => {
 
   const selectAllApprovable = () => {
     const approvableIds = items
-      .filter(i => ['PENDING', 'CALCULATED', 'REVIEWED'].includes(i.status))
+      .filter(i => ['PENDING', 'COMPLETE'].includes(i.status))
       .map(i => i.id);
     if (selectedIds.length === approvableIds.length) {
       setSelectedIds([]);
@@ -273,8 +270,14 @@ export const Payroll: React.FC = () => {
       case 'dropAndHookCount':
         updateData.dropAndHookCount = value ? parseInt(value, 10) : 0;
         break;
+      case 'chainUpCount':
+        updateData.chainUpCount = value ? parseInt(value, 10) : 0;
+        break;
       case 'waitTimeMinutes':
         updateData.waitTimeMinutes = value ? parseInt(value, 10) : 0;
+        break;
+      case 'trailerConfig':
+        updateData.trailerConfig = value;
         break;
       case 'status':
         updateData.status = value;
@@ -510,7 +513,7 @@ export const Payroll: React.FC = () => {
             header: '',
             accessor: 'sourceId' as keyof PayrollLineItem,
             cell: (item: PayrollLineItem) =>
-              ['PENDING', 'CALCULATED', 'REVIEWED', 'COMPLETE'].includes(item.status) ? (
+              ['PENDING', 'COMPLETE'].includes(item.status) ? (
                 <input
                   type="checkbox"
                   checked={selectedIds.includes(item.id)}
@@ -677,8 +680,10 @@ export const Payroll: React.FC = () => {
       header: <SortableHeader label="Equipment" sortKey="equipment" />,
       accessor: 'trailerConfig' as keyof PayrollLineItem,
       cell: (item: PayrollLineItem) => {
+        const cellId = `${item.id}-trailerConfig`;
+        const isEditing = editingCellId === cellId;
+        const isEditable = canManagePayroll && item.status !== 'APPROVED' && item.status !== 'PAID' && item.source === 'TRIP_PAY';
         const config = item.trailerConfig;
-        if (!config) return <span className="text-gray-400">-</span>;
 
         const configColors: Record<string, string> = {
           SINGLE: 'bg-gray-100 text-gray-700 dark:bg-gray-700 dark:text-gray-300',
@@ -686,7 +691,58 @@ export const Payroll: React.FC = () => {
           TRIPLE: 'bg-purple-100 text-purple-700 dark:bg-purple-900/50 dark:text-purple-300'
         };
 
-        return (
+        if (isEditing) {
+          return (
+            <div className="flex items-center gap-1">
+              <select
+                value={editingCellValue}
+                onChange={(e) => setEditingCellValue(e.target.value)}
+                autoFocus
+                className="text-xs px-1 py-0.5 border border-indigo-500 rounded focus:ring-1 focus:ring-indigo-500 dark:bg-gray-700 dark:text-white"
+              >
+                <option value="SINGLE">Single</option>
+                <option value="DOUBLE">Doubles</option>
+                <option value="TRIPLE">Triples</option>
+              </select>
+              <button
+                onClick={() => saveInlineEdit(item, 'trailerConfig')}
+                className="p-0.5 text-green-600 hover:text-green-700"
+              >
+                <Save className="w-3 h-3" />
+              </button>
+              <button
+                onClick={cancelInlineEdit}
+                className="p-0.5 text-gray-400 hover:text-gray-600"
+              >
+                <X className="w-3 h-3" />
+              </button>
+            </div>
+          );
+        }
+
+        if (!config) {
+          return isEditable ? (
+            <button
+              onClick={() => startInlineEdit(item.id, 'trailerConfig', 'SINGLE')}
+              className="text-gray-400 hover:text-indigo-600 cursor-pointer"
+              title="Click to edit"
+            >
+              -
+            </button>
+          ) : (
+            <span className="text-gray-400">-</span>
+          );
+        }
+
+        return isEditable ? (
+          <button
+            onClick={() => startInlineEdit(item.id, 'trailerConfig', config)}
+            className={`inline-flex items-center px-2 py-0.5 rounded text-xs font-medium cursor-pointer hover:ring-2 hover:ring-indigo-500 ${configColors[config] || configColors.SINGLE}`}
+            title="Click to edit"
+          >
+            {config.charAt(0) + config.slice(1).toLowerCase()}
+          </button>
+        ) : (
           <span className={`inline-flex items-center px-2 py-0.5 rounded text-xs font-medium ${configColors[config] || configColors.SINGLE}`}>
             {config.charAt(0) + config.slice(1).toLowerCase()}
           </span>
@@ -744,18 +800,19 @@ export const Payroll: React.FC = () => {
       cell: (item: PayrollLineItem) => (
         <div className="text-sm text-right">
           {item.source === 'TRIP_PAY' ? (
-            item.chainUpCount !== undefined && item.chainUpCount > 0 ? (
-              <>
-                <div className="font-medium">{item.chainUpCount}x</div>
+            <div>
+              <EditableCell
+                item={item}
+                field="chainUpCount"
+                displayValue={item.chainUpCount}
+                suffix="x"
+              />
+              {(item.chainUpCount ?? 0) > 0 && (
                 <div className="text-xs text-gray-500 dark:text-gray-400">
                   {formatCurrency(item.chainUpPay)}
                 </div>
-              </>
-            ) : item.chainUpPay > 0 ? (
-              <div className="text-xs text-gray-500">{formatCurrency(item.chainUpPay)}</div>
-            ) : (
-              <span className="text-gray-400">-</span>
-            )
+              )}
+            </div>
           ) : (
             <span className="text-gray-400">-</span>
           )}
@@ -861,9 +918,6 @@ export const Payroll: React.FC = () => {
               >
                 <option value="PENDING">Pending</option>
                 <option value="COMPLETE">Complete</option>
-                <option value="CALCULATED">Calculated</option>
-                <option value="REVIEWED">Reviewed</option>
-                <option value="DISPUTED">Disputed</option>
                 <option value="CANCELLED">Cancelled</option>
               </select>
               <button
@@ -959,7 +1013,7 @@ export const Payroll: React.FC = () => {
                 >
                   <Edit className="w-4 h-4" />
                 </button>
-                {canApprove && ['PENDING', 'CALCULATED', 'REVIEWED'].includes(item.status) && (
+                {canApprove && ['PENDING', 'COMPLETE'].includes(item.status) && (
                   <button
                     onClick={() => handleApprove(item)}
                     className="text-gray-600 hover:text-green-600 dark:text-gray-400 dark:hover:text-green-400"
@@ -1055,7 +1109,7 @@ export const Payroll: React.FC = () => {
                 if (e.target.value === 'approved') {
                   handleFilterChange('statuses', ['APPROVED']);
                 } else if (e.target.value === 'unapproved') {
-                  handleFilterChange('statuses', ['PENDING', 'CALCULATED', 'REVIEWED']);
+                  handleFilterChange('statuses', ['PENDING', 'COMPLETE']);
                 } else {
                   handleFilterChange('statuses', []);
                 }
@@ -1090,13 +1144,13 @@ export const Payroll: React.FC = () => {
           </div>
 
           {/* Select All */}
-          {canApprove && items.some(i => ['PENDING', 'CALCULATED', 'REVIEWED'].includes(i.status)) && (
+          {canApprove && items.some(i => ['PENDING', 'COMPLETE'].includes(i.status)) && (
             <div className="flex items-center">
               <button
                 onClick={selectAllApprovable}
                 className="text-sm text-indigo-600 hover:text-indigo-800 dark:text-indigo-400 dark:hover:text-indigo-300"
               >
-                {selectedIds.length === items.filter(i => ['PENDING', 'CALCULATED', 'REVIEWED'].includes(i.status)).length
+                {selectedIds.length === items.filter(i => ['PENDING', 'COMPLETE'].includes(i.status)).length
                   ? 'Deselect All'
                   : 'Select All Approvable'}
               </button>

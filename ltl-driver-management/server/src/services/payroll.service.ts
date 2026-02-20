@@ -598,7 +598,8 @@ export const calculateAndCreateTripPay = async (tripId: number): Promise<{ succe
 
 /**
  * Update payroll status to COMPLETE when trip arrives
- * Also updates accessorial information and miles from driver trip report
+ * Also updates accessorial counts and miles from driver trip report
+ * IMPORTANT: This preserves the totalGrossPay calculated from rate cards
  */
 export const completePayrollOnArrival = async (tripId: number): Promise<{ success: boolean; message: string }> => {
   try {
@@ -631,16 +632,10 @@ export const completePayrollOnArrival = async (tripId: number): Promise<{ succes
       return { success: false, message: 'Trip not found' };
     }
 
-    // Calculate accessorial breakdown from driver trip report
+    // Get accessorial counts from driver trip report
     const report = trip.driverTripReport;
     const dropAndHook = report?.dropAndHook || 0;
     const chainUp = report?.chainUpCycles || 0;
-    const waitTimeMinutes = report?.waitTimeMinutes || 0;
-
-    // Estimate individual accessorial pay (using standard rates)
-    const dropHookPay = dropAndHook > 0 ? dropAndHook * 25 : 0;
-    const chainUpPay = chainUp > 0 ? chainUp * 15 : 0;
-    const waitTimePay = waitTimeMinutes > 0 ? (waitTimeMinutes / 60) * 18 : 0;
 
     // Get miles from trip (actualMileage set during arrival, or fall back to profile)
     const miles = trip.actualMileage || trip.linehaulProfile?.distanceMiles || null;
@@ -650,20 +645,14 @@ export const completePayrollOnArrival = async (tripId: number): Promise<{ succes
       .filter(t => t !== null && t !== undefined).length;
     const trailerConfig = trailerCount >= 3 ? 'TRIPLE' : trailerCount === 2 ? 'DOUBLE' : 'SINGLE';
 
-    // Calculate total cost (labor + fuel if available)
-    const laborCost = Number(payrollItem.basePay || 0) +
-      Number(payrollItem.mileagePay || 0) +
-      dropHookPay +
-      chainUpPay +
-      waitTimePay +
-      Number(payrollItem.otherAccessorialPay || 0) +
-      Number(payrollItem.bonusPay || 0) -
-      Number(payrollItem.deductions || 0);
-
+    // Use the existing totalGrossPay (labor cost) that was calculated from rate cards
+    // This preserves the proper rate card calculations instead of using hardcoded rates
+    const laborCost = Number(payrollItem.totalGrossPay || 0);
     const fuelCost = payrollItem.fuelCost ? Number(payrollItem.fuelCost) : 0;
     const totalCost = laborCost + fuelCost;
 
-    // Update PayrollLineItem to COMPLETE with all arrival data
+    // Update PayrollLineItem to COMPLETE with arrival data
+    // Note: We update counts but preserve the pay amounts calculated from rate cards
     await prisma.payrollLineItem.update({
       where: { id: payrollItem.id },
       data: {
@@ -672,10 +661,6 @@ export const completePayrollOnArrival = async (tripId: number): Promise<{ succes
         trailerConfig,
         dropHookCount: dropAndHook,
         chainUpCount: chainUp,
-        dropAndHookPay: new Prisma.Decimal(dropHookPay),
-        chainUpPay: new Prisma.Decimal(chainUpPay),
-        waitTimePay: new Prisma.Decimal(waitTimePay),
-        totalGrossPay: new Prisma.Decimal(laborCost),
         totalCost: new Prisma.Decimal(totalCost)
       }
     });
@@ -689,21 +674,12 @@ export const completePayrollOnArrival = async (tripId: number): Promise<{ succes
       await prisma.tripPay.update({
         where: { id: tripPay.id },
         data: {
-          status: 'CALCULATED',
-          accessorialPay: new Prisma.Decimal(dropHookPay + chainUpPay + waitTimePay),
-          totalGrossPay: new Prisma.Decimal(
-            Number(tripPay.basePay || 0) +
-            Number(tripPay.mileagePay || 0) +
-            dropHookPay +
-            chainUpPay +
-            waitTimePay -
-            Number(tripPay.deductions || 0)
-          )
+          status: 'CALCULATED'
         }
       });
     }
 
-    console.log(`[Payroll] Trip ${tripId} payroll marked as COMPLETE with miles=${miles}, trailerConfig=${trailerConfig}`);
+    console.log(`[Payroll] Trip ${tripId} payroll marked as COMPLETE with miles=${miles}, trailerConfig=${trailerConfig}, laborCost=${laborCost}, totalCost=${totalCost}`);
     return { success: true, message: 'Payroll status updated to COMPLETE' };
   } catch (error) {
     console.error(`[Payroll] Failed to complete payroll for trip ${tripId}:`, error);

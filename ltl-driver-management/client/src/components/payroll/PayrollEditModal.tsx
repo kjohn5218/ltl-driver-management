@@ -477,7 +477,6 @@ export const PayrollEditModal: React.FC<PayrollEditModalProps> = ({
           >
             <option value="PENDING">Pending</option>
             <option value="COMPLETE">Complete</option>
-            <option value="REVIEWED">Reviewed</option>
             <option value="APPROVED">Approved</option>
             <option value="CANCELLED">Cancelled (Will not be exported to Workday)</option>
           </select>
