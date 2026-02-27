@@ -323,6 +323,7 @@ model CarrierDriver {
   medicalCardExpiration DateTime?
   dateOfHire            DateTime?
   dateOfBirth           DateTime?
+  jobTitle              String?   // Job title from HR system
 
   // Current status and location
   driverStatus        DriverStatus @default(AVAILABLE)

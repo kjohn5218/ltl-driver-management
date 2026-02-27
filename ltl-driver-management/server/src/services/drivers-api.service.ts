@@ -27,6 +27,12 @@ interface ApiDriver {
   skills: DriverSkill[];
   userName: string;
   validHazmatEndorsement: boolean;
+  // Additional fields from API
+  department: string | null;
+  jobTitle: string | null;
+  active: boolean;
+  hireDate: number | null; // Unix timestamp
+  termDate: number | null; // Unix timestamp
 }
 
 export interface DriverSyncResult {
@@ -177,6 +183,8 @@ export class DriversApiService {
     driverType: string;
     hrStatus: string;
     locationId: number | null;
+    jobTitle: string | null;
+    dateOfHire: Date | null;
   } {
     const cdlInfo = this.extractCdlInfo(apiDriver.skills);
     const medicalExpiration = this.extractMedicalExpiration(apiDriver.skills);
@@ -200,10 +208,12 @@ export class DriversApiService {
       licenseExpiration: cdlInfo.licenseExpiration,
       medicalCardExpiration: medicalExpiration,
       endorsements: endorsements || null,
-      active: true,
+      active: apiDriver.active, // Use API's active status
       driverType,
-      hrStatus: 'Active', // Drivers in API are active
-      locationId
+      hrStatus: apiDriver.active ? 'Active' : 'Inactive', // Set from API's active field
+      locationId,
+      jobTitle: apiDriver.jobTitle || null,
+      dateOfHire: apiDriver.hireDate ? new Date(apiDriver.hireDate * 1000) : null
     };
   }
 
