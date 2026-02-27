@@ -227,10 +227,11 @@ export const CarrierSelect: React.FC<CarrierSelectProps> = ({
                           <div className="flex items-center gap-2">
                             <span className="font-medium text-gray-900 text-sm">{carrier.name}</span>
                           </div>
-                          <div className="text-xs text-gray-500 flex gap-2">
-                            {carrier.scacCode && <span>SCAC: {carrier.scacCode}</span>}
-                            {carrier.mcNumber && <span>MC: {carrier.mcNumber}</span>}
-                          </div>
+                          {carrier.scacCode && (
+                            <div className="text-xs text-gray-500">
+                              SCAC: {carrier.scacCode}
+                            </div>
+                          )}
                         </div>
                       </button>
                     );
