@@ -444,6 +444,7 @@ export const Drivers: React.FC = () => {
               }}
               placeholder="All Carriers"
               className="w-64"
+              hasDrivers={true}
             />
 
             {/* Location Filter */}

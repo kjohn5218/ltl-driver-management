@@ -9,6 +9,7 @@ interface CarrierSelectProps {
   placeholder?: string;
   className?: string;
   showAllOption?: boolean;
+  hasDrivers?: boolean; // Only show carriers that have drivers
 }
 
 export const CarrierSelect: React.FC<CarrierSelectProps> = ({
@@ -16,7 +17,8 @@ export const CarrierSelect: React.FC<CarrierSelectProps> = ({
   onChange,
   placeholder = "Select carrier...",
   className = "",
-  showAllOption = true
+  showAllOption = true,
+  hasDrivers = false
 }) => {
   const [isOpen, setIsOpen] = useState(false);
   const [searchTerm, setSearchTerm] = useState('');
@@ -31,7 +33,11 @@ export const CarrierSelect: React.FC<CarrierSelectProps> = ({
     const fetchCarriers = async () => {
       setIsLoading(true);
       try {
-        const response = await api.get('/carriers?limit=5000&status=ACTIVE');
+        let url = '/carriers?limit=5000&status=ACTIVE';
+        if (hasDrivers) {
+          url += '&hasDrivers=true';
+        }
+        const response = await api.get(url);
         const carrierList = response.data.carriers || response.data || [];
         // Sort alphabetically
         carrierList.sort((a: Carrier, b: Carrier) => a.name.localeCompare(b.name));
@@ -44,7 +50,7 @@ export const CarrierSelect: React.FC<CarrierSelectProps> = ({
       }
     };
     fetchCarriers();
-  }, []);
+  }, [hasDrivers]);
 
   // Find selected carrier when value changes
   useEffect(() => {

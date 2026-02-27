@@ -13,15 +13,19 @@ import { isMCPConfigured } from '../config/mcp.config';
 
 export const getCarriers = async (req: Request, res: Response) => {
   try {
-    const { status, onboardingComplete, search, page = 1, limit = 20 } = req.query;
+    const { status, onboardingComplete, search, hasDrivers, page = 1, limit = 20 } = req.query;
     const pageNum = parseInt(page as string);
     const limitNum = parseInt(limit as string);
-    
+
     // Build filter
     const where: Prisma.CarrierWhereInput = {};
     if (status) where.status = status as any;
     if (onboardingComplete !== undefined) {
       where.onboardingComplete = onboardingComplete === 'true';
+    }
+    // Filter to only carriers that have at least one driver
+    if (hasDrivers === 'true') {
+      where.drivers = { some: {} };
     }
     
     // Add search functionality
