@@ -145,7 +145,7 @@ export const getDriverById = async (req: Request, res: Response): Promise<Respon
 // Create new driver
 export const createDriver = async (req: Request, res: Response): Promise<Response> => {
   try {
-    const { carrierId, name, phoneNumber, email, licenseNumber, number, locationId, hazmatEndorsement } = req.body;
+    const { carrierId, name, phoneNumber, email, licenseNumber, number, locationId, hazmatEndorsement, driverType, hrStatus } = req.body;
 
     // Verify carrier exists
     const carrier = await prisma.carrier.findUnique({
@@ -177,7 +177,9 @@ export const createDriver = async (req: Request, res: Response): Promise<Respons
         email,
         licenseNumber,
         hazmatEndorsement: hazmatEndorsement ?? false,
-        locationId: locationId || null
+        locationId: locationId || null,
+        driverType: driverType || 'C', // Default to Contractor for manually created drivers
+        hrStatus: hrStatus || 'Active'
       },
       include: {
         carrier: {
@@ -210,7 +212,7 @@ export const createDriver = async (req: Request, res: Response): Promise<Respons
 export const updateDriver = async (req: Request, res: Response): Promise<Response> => {
   try {
     const { id } = req.params;
-    const { name, phoneNumber, email, licenseNumber, active, carrierId, number, locationId, hazmatEndorsement } = req.body;
+    const { name, phoneNumber, email, licenseNumber, active, carrierId, number, locationId, hazmatEndorsement, driverType, hrStatus } = req.body;
 
     // Verify driver exists
     const existingDriver = await prisma.carrierDriver.findUnique({
@@ -255,7 +257,9 @@ export const updateDriver = async (req: Request, res: Response): Promise<Respons
         ...(carrierId !== undefined && { carrierId }),
         ...(number !== undefined && { number }),
         ...(locationId !== undefined && { locationId: locationId || null }),
-        ...(hazmatEndorsement !== undefined && { hazmatEndorsement })
+        ...(hazmatEndorsement !== undefined && { hazmatEndorsement }),
+        ...(driverType !== undefined && { driverType }),
+        ...(hrStatus !== undefined && { hrStatus })
       },
       include: {
         carrier: {

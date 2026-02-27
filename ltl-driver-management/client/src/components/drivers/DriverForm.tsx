@@ -1,7 +1,7 @@
 import React, { useState, useEffect } from 'react';
 import { CarrierDriver, Carrier, Location } from '../../types';
 import { locationService } from '../../services/locationService';
-import { User, Hash, Phone, Mail, CreditCard, Truck, MapPin, AlertTriangle } from 'lucide-react';
+import { User, Hash, Phone, Mail, CreditCard, Truck, MapPin, AlertTriangle, Users, Building } from 'lucide-react';
 
 interface DriverFormProps {
   driver?: CarrierDriver | null;
@@ -25,7 +25,8 @@ export const DriverForm: React.FC<DriverFormProps> = ({
     licenseNumber: driver?.licenseNumber || '',
     hazmatEndorsement: driver?.hazmatEndorsement ?? false,
     locationId: driver?.locationId ? driver.locationId.toString() : '',
-    active: driver?.active ?? true
+    active: driver?.active ?? true,
+    driverType: driver?.driverType || 'C'
   });
 
   const [errors, setErrors] = useState<Record<string, string>>({});
@@ -58,7 +59,8 @@ export const DriverForm: React.FC<DriverFormProps> = ({
         licenseNumber: driver.licenseNumber || '',
         hazmatEndorsement: driver.hazmatEndorsement ?? false,
         locationId: driver.locationId ? driver.locationId.toString() : '',
-        active: driver.active ?? true
+        active: driver.active ?? true,
+        driverType: driver.driverType || 'C'
       });
       // Clear any existing errors when driver changes
       setErrors({});
@@ -104,7 +106,8 @@ export const DriverForm: React.FC<DriverFormProps> = ({
       licenseNumber: formData.licenseNumber || undefined,
       number: formData.number || undefined,
       hazmatEndorsement: formData.hazmatEndorsement,
-      locationId: formData.locationId ? parseInt(formData.locationId as string) : null
+      locationId: formData.locationId ? parseInt(formData.locationId as string) : null,
+      driverType: formData.driverType
     };
 
     onSubmit(submitData);
@@ -310,6 +313,46 @@ export const DriverForm: React.FC<DriverFormProps> = ({
           Assign a home location for this driver
         </p>
       </div>
+
+      {/* Driver Type */}
+      <div>
+        <label htmlFor="driverType" className="flex items-center text-sm font-medium text-gray-700 mb-2">
+          <Users className="w-4 h-4 mr-2" />
+          Driver Type
+        </label>
+        <select
+          id="driverType"
+          name="driverType"
+          value={formData.driverType}
+          onChange={handleChange}
+          className="mt-1 block w-full rounded-md border-gray-300 shadow-sm focus:border-indigo-500 focus:ring-indigo-500 sm:text-sm"
+        >
+          <option value="C">Contractor</option>
+          <option value="E">Employee</option>
+          <option value="T">Temp</option>
+        </select>
+        <p className="mt-1 text-sm text-gray-500">
+          E=Employee, C=Contractor, T=Temp. Employees are synced from HR system.
+        </p>
+      </div>
+
+      {/* HR Status (read-only, only show for existing drivers) */}
+      {driver && driver.hrStatus && (
+        <div>
+          <label className="flex items-center text-sm font-medium text-gray-700 mb-2">
+            <Building className="w-4 h-4 mr-2" />
+            HR Status
+          </label>
+          <div className={`inline-flex items-center px-3 py-1 rounded-full text-sm font-medium ${
+            driver.hrStatus === 'Active' ? 'bg-green-100 text-green-800' : 'bg-gray-100 text-gray-800'
+          }`}>
+            {driver.hrStatus}
+          </div>
+          <p className="mt-1 text-sm text-gray-500">
+            This status is managed by the HR system sync and cannot be changed manually.
+          </p>
+        </div>
+      )}
 
       {/* Active Status (only show for editing) */}
       {driver && (

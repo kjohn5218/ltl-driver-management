@@ -174,10 +174,16 @@ export class DriversApiService {
     medicalCardExpiration: Date | null;
     endorsements: string | null;
     active: boolean;
+    driverType: string;
+    hrStatus: string;
   } {
     const cdlInfo = this.extractCdlInfo(apiDriver.skills);
     const medicalExpiration = this.extractMedicalExpiration(apiDriver.skills);
     const endorsements = this.extractEndorsements(apiDriver.skills);
+
+    // Determine driver type: T for temp drivers, E for regular employees
+    const isTemp = /temp/i.test(apiDriver.refNum);
+    const driverType = isTemp ? 'T' : 'E';
 
     return {
       carrierId,
@@ -193,7 +199,9 @@ export class DriversApiService {
       licenseExpiration: cdlInfo.licenseExpiration,
       medicalCardExpiration: medicalExpiration,
       endorsements: endorsements || null,
-      active: true
+      active: true,
+      driverType,
+      hrStatus: 'Active' // Drivers in API are active
     };
   }
 
@@ -216,6 +224,8 @@ export class DriversApiService {
   async syncDrivers(): Promise<DriverSyncResult> {
     const result: DriverSyncResult = { created: 0, updated: 0, errors: [], total: 0 };
     let assignedToOther = 0;
+    let markedInactive = 0;
+    const processedExternalIds: Set<string> = new Set();
 
     try {
       console.log('[DriversAPI] Fetching drivers from external API...');
@@ -274,16 +284,30 @@ export class DriversApiService {
 
             const driverData = this.mapToDriver(apiDriver, carrierId);
 
-            // Find existing by externalDriverId first, then by number
+            // Track this external ID as processed (active in HR)
+            processedExternalIds.add(driverData.externalDriverId);
+
+            // Find existing by externalDriverId first, then by driver number, then by name
             let existing = await prisma.carrierDriver.findFirst({
               where: { externalDriverId: driverData.externalDriverId }
             });
 
             if (!existing) {
+              // Try matching by driver number
               existing = await prisma.carrierDriver.findFirst({
                 where: {
                   carrierId,
                   number: driverData.number
+                }
+              });
+            }
+
+            if (!existing) {
+              // Try matching by name (for merging duplicates)
+              existing = await prisma.carrierDriver.findFirst({
+                where: {
+                  carrierId,
+                  name: { equals: driverData.name, mode: 'insensitive' }
                 }
               });
             }
@@ -313,6 +337,29 @@ export class DriversApiService {
         const processed = Math.min(i + batchSize, apiDrivers.length);
         console.log(`[DriversAPI] Processed ${processed}/${apiDrivers.length} drivers`);
       }
+
+      // Mark drivers NOT in the API response as inactive (they are no longer in HR system)
+      // Only update drivers that have an externalDriverId (meaning they were previously synced)
+      // and are currently marked as active in HR
+      if (processedExternalIds.size > 0) {
+        const inactiveResult = await prisma.carrierDriver.updateMany({
+          where: {
+            externalDriverId: { not: null },
+            hrStatus: 'Active',
+            NOT: {
+              externalDriverId: { in: Array.from(processedExternalIds) }
+            }
+          },
+          data: {
+            hrStatus: 'Inactive'
+          }
+        });
+        markedInactive = inactiveResult.count;
+
+        if (markedInactive > 0) {
+          console.log(`[DriversAPI] Marked ${markedInactive} drivers as HR Inactive (no longer in API)`);
+        }
+      }
     } catch (error) {
       const message = error instanceof Error ? error.message : 'Unknown error';
       result.errors.push(`Failed to fetch drivers: ${message}`);
@@ -322,7 +369,7 @@ export class DriversApiService {
     this.lastSyncAt = new Date();
     this.lastSyncResult = result;
 
-    const summary = `Synced: ${result.created} created, ${result.updated} updated, ${result.errors.length} errors`;
+    const summary = `Synced: ${result.created} created, ${result.updated} updated, ${markedInactive} marked inactive, ${result.errors.length} errors`;
     console.log(`[DriversAPI] ${summary}`);
     if (assignedToOther > 0) {
       console.log(`[DriversAPI] ${assignedToOther} drivers assigned to "Other" carrier (alphanumeric driver numbers)`);

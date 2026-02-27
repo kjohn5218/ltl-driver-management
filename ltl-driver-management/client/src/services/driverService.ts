@@ -29,6 +29,7 @@ interface CreateDriverData {
   licenseNumber?: string;
   locationId?: number;
   hazmatEndorsement?: boolean;
+  driverType?: 'C' | 'E' | 'T';
 }
 
 interface UpdateDriverData {
@@ -41,6 +42,8 @@ interface UpdateDriverData {
   carrierId?: number;
   locationId?: number | null;
   hazmatEndorsement?: boolean;
+  driverType?: 'C' | 'E' | 'T';
+  hrStatus?: 'Active' | 'Inactive';
 }
 
 export const driverService = {

@@ -309,6 +309,10 @@ model CarrierDriver {
   updatedAt     DateTime @updatedAt
   number        String?
 
+  // Driver classification
+  driverType    String   @default("C") // C=Contractor, E=Employee, T=Temp
+  hrStatus      String   @default("Active") // Active or Inactive (from HR API)
+
   // Extended driver information for dispatch
   externalDriverId      String? // External system ID
   licenseClass          String? // CDL class (A, B, C)

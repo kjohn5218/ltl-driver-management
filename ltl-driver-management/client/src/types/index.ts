@@ -35,6 +35,9 @@ export interface CarrierDriver {
   email?: string;
   licenseNumber?: string;
   active: boolean;
+  // Driver classification
+  driverType?: 'C' | 'E' | 'T'; // C=Contractor, E=Employee, T=Temp
+  hrStatus?: 'Active' | 'Inactive'; // HR system status
   // Location assignment
   locationId?: number;
   // Dispatch-related fields

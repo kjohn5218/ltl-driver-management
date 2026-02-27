@@ -39,7 +39,8 @@ export const Drivers: React.FC = () => {
   const [carrierFilter, setCarrierFilter] = useState<number | ''>('');
   const [selectedLocations, setSelectedLocations] = useState<number[]>([]);
   const [endorsementFilter, setEndorsementFilter] = useState<string>('');
-  const [statusFilter, setStatusFilter] = useState<'active' | 'inactive' | ''>('');
+  const [statusFilter, setStatusFilter] = useState<'active' | 'inactive' | ''>('active');
+  const [driverTypeFilter, setDriverTypeFilter] = useState<'E' | 'C' | 'T' | ''>('');
 
   // Sort state
   const [sortBy, setSortBy] = useState<keyof CarrierDriver | null>(null);
@@ -81,7 +82,7 @@ export const Drivers: React.FC = () => {
     }
   };
 
-  // Client-side filtering for location and endorsements (after server-side filters)
+  // Client-side filtering for location, endorsements, and driver type (after server-side filters)
   const filteredDrivers = useMemo(() => {
     return drivers.filter(d => {
       // Filter by location
@@ -92,9 +93,13 @@ export const Drivers: React.FC = () => {
       if (endorsementFilter) {
         if (!d.endorsements?.toLowerCase().includes(endorsementFilter.toLowerCase())) return false;
       }
+      // Filter by driver type
+      if (driverTypeFilter) {
+        if (d.driverType !== driverTypeFilter) return false;
+      }
       return true;
     });
-  }, [drivers, selectedLocations, endorsementFilter]);
+  }, [drivers, selectedLocations, endorsementFilter, driverTypeFilter]);
 
   // Sort filtered drivers
   const sortedDrivers = useMemo(() => {
@@ -216,10 +221,11 @@ export const Drivers: React.FC = () => {
     setSelectedLocations([]);
     setEndorsementFilter('');
     setStatusFilter('');
+    setDriverTypeFilter('');
     setCurrentPage(1);
   };
 
-  const hasActiveFilters = carrierFilter !== '' || selectedLocations.length > 0 || endorsementFilter !== '' || statusFilter !== '';
+  const hasActiveFilters = carrierFilter !== '' || selectedLocations.length > 0 || endorsementFilter !== '' || statusFilter !== '' || driverTypeFilter !== '';
 
   const columns = [
     {
@@ -308,6 +314,35 @@ export const Drivers: React.FC = () => {
             <span className="text-gray-400">None</span>
           )}
         </div>
+      )
+    },
+    {
+      header: 'Type',
+      accessor: 'driverType' as keyof CarrierDriver,
+      sortable: true,
+      cell: (driver: CarrierDriver) => {
+        const typeLabels: Record<string, { label: string; color: string }> = {
+          'E': { label: 'Employee', color: 'bg-blue-100 text-blue-800' },
+          'C': { label: 'Contractor', color: 'bg-purple-100 text-purple-800' },
+          'T': { label: 'Temp', color: 'bg-orange-100 text-orange-800' }
+        };
+        const type = typeLabels[driver.driverType || 'C'] || typeLabels['C'];
+        return (
+          <span className={`inline-flex items-center px-2 py-0.5 rounded text-xs font-medium ${type.color}`}>
+            {type.label}
+          </span>
+        );
+      }
+    },
+    {
+      header: 'HR Status',
+      accessor: 'hrStatus' as keyof CarrierDriver,
+      sortable: true,
+      cell: (driver: CarrierDriver) => (
+        <StatusBadge
+          status={driver.hrStatus === 'Active' ? 'active' : 'inactive'}
+          variant={driver.hrStatus === 'Active' ? 'success' : 'default'}
+        />
       )
     },
     {
@@ -458,6 +493,20 @@ export const Drivers: React.FC = () => {
               <option value="">All Statuses</option>
               <option value="active">Active</option>
               <option value="inactive">Inactive</option>
+            </select>
+
+            {/* Driver Type Filter */}
+            <select
+              value={driverTypeFilter}
+              onChange={(e) => {
+                setDriverTypeFilter(e.target.value as 'E' | 'C' | 'T' | '');
+              }}
+              className="rounded-md border border-gray-300 shadow-sm text-sm focus:ring-indigo-500 focus:border-indigo-500"
+            >
+              <option value="">All Types</option>
+              <option value="E">Employee</option>
+              <option value="C">Contractor</option>
+              <option value="T">Temp</option>
             </select>
 
             {/* Clear Filters */}
