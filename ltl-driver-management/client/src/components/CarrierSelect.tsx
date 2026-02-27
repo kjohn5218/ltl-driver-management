@@ -132,9 +132,6 @@ export const CarrierSelect: React.FC<CarrierSelectProps> = ({
           <div className="flex items-center gap-2 flex-1 min-w-0 truncate">
             <Truck className="w-4 h-4 text-gray-400 flex-shrink-0" />
             <span className="font-medium text-gray-900">{selectedCarrier.name}</span>
-            {selectedCarrier.scacCode && (
-              <span className="text-gray-500 text-xs">({selectedCarrier.scacCode})</span>
-            )}
           </div>
         ) : (
           <span className="text-gray-500">{placeholder}</span>
@@ -224,14 +221,7 @@ export const CarrierSelect: React.FC<CarrierSelectProps> = ({
 
                         {/* Carrier info */}
                         <div className="min-w-0 flex-1">
-                          <div className="flex items-center gap-2">
-                            <span className="font-medium text-gray-900 text-sm">{carrier.name}</span>
-                          </div>
-                          {carrier.scacCode && (
-                            <div className="text-xs text-gray-500">
-                              SCAC: {carrier.scacCode}
-                            </div>
-                          )}
+                          <span className="font-medium text-gray-900 text-sm">{carrier.name}</span>
                         </div>
                       </button>
                     );
