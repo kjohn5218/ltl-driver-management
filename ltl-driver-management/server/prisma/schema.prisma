@@ -17,6 +17,12 @@ model User {
   homeLocation          Location?           @relation("UserHomeLocation", fields: [homeLocationId], references: [id])
   createdAt             DateTime            @default(now())
   updatedAt             DateTime            @updatedAt
+
+  // SSO Provider fields
+  ssoProvider           String?             // "microsoft_entra" | null for password users
+  ssoProviderId         String?             // Azure AD Object ID (oid claim)
+  ssoEmail              String?             // Email from SSO provider
+  ssoLastLogin          DateTime?           // Last SSO login timestamp
   createdLineItems      BookingLineItem[]
   sentInvitations       CarrierInvitation[]
   systemSettingsUpdates SystemSettings[]
@@ -44,6 +50,7 @@ model User {
   approvedPayrollLineItems  PayrollLineItem[] @relation("PayrollLineItemApprover")
   exportedPayrollLineItems  PayrollLineItem[] @relation("PayrollLineItemExporter")
 
+  @@index([ssoProvider, ssoProviderId])
   @@map("users")
 }
 

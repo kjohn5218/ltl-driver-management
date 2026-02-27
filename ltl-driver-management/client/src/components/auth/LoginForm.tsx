@@ -1,29 +1,61 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import { useForm } from 'react-hook-form';
-import { useNavigate, Link } from 'react-router-dom';
+import { useNavigate, Link, useSearchParams } from 'react-router-dom';
 import { LoginCredentials } from '../../types';
 import { useAuth } from '../../contexts/AuthContext';
 import { AlertCircle } from 'lucide-react';
 
+// SSO error message mappings
+const SSO_ERROR_MESSAGES: Record<string, string> = {
+  sso_not_enabled: 'SSO is not enabled. Please use password login.',
+  sso_init_failed: 'Failed to start SSO login. Please try again.',
+  sso_denied: 'SSO login was cancelled or denied.',
+  invalid_callback: 'Invalid SSO callback. Please try again.',
+  invalid_state: 'SSO session expired. Please try again.',
+  session_expired: 'SSO session expired. Please try again.',
+  user_not_found: 'No account found for your organization email. Please contact your administrator.',
+  no_email: 'Your organization account does not have an email configured. Please contact your administrator.',
+  sso_failed: 'SSO login failed. Please try again or use password.',
+};
+
 export const LoginForm: React.FC = () => {
   const { register, handleSubmit, formState: { errors } } = useForm<LoginCredentials>();
-  const { login } = useAuth();
+  const { login, loginWithSSO, ssoStatus } = useAuth();
   const navigate = useNavigate();
+  const [searchParams] = useSearchParams();
   const [error, setError] = useState<string>('');
   const [loading, setLoading] = useState(false);
+  const [ssoLoading, setSsoLoading] = useState(false);
+
+  // Check for SSO error in URL params
+  useEffect(() => {
+    const ssoError = searchParams.get('error');
+    if (ssoError && SSO_ERROR_MESSAGES[ssoError]) {
+      setError(SSO_ERROR_MESSAGES[ssoError]);
+    }
+  }, [searchParams]);
 
   const onSubmit = async (data: LoginCredentials) => {
     setError('');
     setLoading(true);
-    
+
     try {
       await login(data);
       navigate('/dashboard');
     } catch (err: any) {
-      setError(err.response?.data?.message || 'Login failed. Please try again.');
+      if (err.response?.data?.ssoOnly) {
+        setError('This account uses SSO. Please click "Sign in with Microsoft" below.');
+      } else {
+        setError(err.response?.data?.message || 'Login failed. Please try again.');
+      }
     } finally {
       setLoading(false);
     }
+  };
+
+  const handleSSOLogin = () => {
+    setSsoLoading(true);
+    loginWithSSO();
   };
 
   return (
@@ -54,7 +86,36 @@ export const LoginForm: React.FC = () => {
               </div>
             </div>
           )}
-          
+
+          {/* SSO Button */}
+          {ssoStatus?.enabled && (
+            <>
+              <button
+                type="button"
+                onClick={handleSSOLogin}
+                disabled={ssoLoading}
+                className="group relative w-full flex justify-center py-3 px-4 border border-gray-300 text-sm font-medium rounded-md text-gray-700 bg-white hover:bg-gray-50 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-primary-500 disabled:opacity-50 disabled:cursor-not-allowed"
+              >
+                <svg className="w-5 h-5 mr-2" viewBox="0 0 21 21" fill="none" xmlns="http://www.w3.org/2000/svg">
+                  <rect x="1" y="1" width="9" height="9" fill="#F25022"/>
+                  <rect x="11" y="1" width="9" height="9" fill="#7FBA00"/>
+                  <rect x="1" y="11" width="9" height="9" fill="#00A4EF"/>
+                  <rect x="11" y="11" width="9" height="9" fill="#FFB900"/>
+                </svg>
+                {ssoLoading ? 'Redirecting...' : 'Sign in with Microsoft'}
+              </button>
+
+              <div className="relative">
+                <div className="absolute inset-0 flex items-center">
+                  <div className="w-full border-t border-gray-300" />
+                </div>
+                <div className="relative flex justify-center text-sm">
+                  <span className="px-2 bg-gray-50 text-gray-500">Or continue with password</span>
+                </div>
+              </div>
+            </>
+          )}
+
           <div className="rounded-md shadow-sm -space-y-px">
             <div>
               <label htmlFor="email" className="sr-only">

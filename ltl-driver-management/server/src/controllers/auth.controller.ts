@@ -84,6 +84,15 @@ export const login = async (req: Request, res: Response) => {
       return res.status(401).json({ message: 'Invalid credentials' });
     }
 
+    // Check if user is SSO-only (empty password)
+    if (user.password === '' && user.ssoProvider) {
+      return res.status(401).json({
+        message: 'This account uses SSO. Please sign in with your organization account.',
+        ssoOnly: true,
+        ssoProvider: user.ssoProvider
+      });
+    }
+
     // Verify password
     const isValidPassword = await verifyPassword(password, user.password);
 

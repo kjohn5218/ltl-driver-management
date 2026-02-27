@@ -38,6 +38,7 @@ import { EnhancedLoadFactorReport } from './pages/reports/EnhancedLoadFactorRepo
 import { PayRules } from './pages/PayRules';
 import { DriverSelfService } from './pages/DriverSelfService';
 import { LinehaulLanes } from './pages/LinehaulLanes';
+import { SSOCallback } from './pages/SSOCallback';
 
 // Create a client
 const queryClient = new QueryClient({
@@ -74,6 +75,10 @@ const router = createBrowserRouter([
   {
     path: '/driver',
     element: <DriverSelfService />
+  },
+  {
+    path: '/sso/callback',
+    element: <SSOCallback />
   },
   {
     path: '/',

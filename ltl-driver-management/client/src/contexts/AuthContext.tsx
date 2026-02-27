@@ -6,14 +6,22 @@ interface UpdateProfileData {
   homeLocationId?: number | null;
 }
 
+interface SSOStatus {
+  enabled: boolean;
+  provider: string | null;
+}
+
 interface AuthContextType {
   user: User | null;
   loading: boolean;
   login: (credentials: LoginCredentials) => Promise<void>;
   register: (data: RegisterData) => Promise<void>;
+  loginWithSSO: () => void;
+  handleSSOCallback: (token: string, user: User) => void;
   logout: () => void;
   updateProfile: (data: UpdateProfileData) => Promise<void>;
   isAuthenticated: boolean;
+  ssoStatus: SSOStatus | null;
 }
 
 const AuthContext = createContext<AuthContextType | undefined>(undefined);
@@ -33,15 +41,27 @@ interface AuthProviderProps {
 export const AuthProvider: React.FC<AuthProviderProps> = ({ children }) => {
   const [user, setUser] = useState<User | null>(null);
   const [loading, setLoading] = useState(true);
+  const [ssoStatus, setSsoStatus] = useState<SSOStatus | null>(null);
 
   useEffect(() => {
+    // Check SSO status on mount
+    const checkSSOStatus = async () => {
+      try {
+        const { data } = await api.get<SSOStatus>('/auth/sso/status');
+        setSsoStatus(data);
+      } catch {
+        setSsoStatus({ enabled: false, provider: null });
+      }
+    };
+
     const token = localStorage.getItem('token');
     const storedUser = localStorage.getItem('user');
-    
+
     if (token && storedUser) {
       setUser(JSON.parse(storedUser));
     }
-    
+
+    checkSSOStatus();
     setLoading(false);
   }, []);
 
@@ -71,6 +91,18 @@ export const AuthProvider: React.FC<AuthProviderProps> = ({ children }) => {
     }
   };
 
+  const loginWithSSO = () => {
+    // Redirect to backend SSO endpoint
+    const apiUrl = import.meta.env.VITE_API_URL || 'http://localhost:3001/api';
+    window.location.href = `${apiUrl}/auth/sso/login`;
+  };
+
+  const handleSSOCallback = (token: string, userData: User) => {
+    localStorage.setItem('token', token);
+    localStorage.setItem('user', JSON.stringify(userData));
+    setUser(userData);
+  };
+
   const logout = () => {
     localStorage.removeItem('token');
     localStorage.removeItem('user');
@@ -94,9 +126,12 @@ export const AuthProvider: React.FC<AuthProviderProps> = ({ children }) => {
     loading,
     login,
     register,
+    loginWithSSO,
+    handleSSOCallback,
     logout,
     updateProfile,
-    isAuthenticated: !!user
+    isAuthenticated: !!user,
+    ssoStatus
   };
 
   return (

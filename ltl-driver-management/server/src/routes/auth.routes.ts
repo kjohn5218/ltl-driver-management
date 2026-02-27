@@ -3,8 +3,12 @@ import { body } from 'express-validator';
 import { register, login, getProfile, updateProfile } from '../controllers/auth.controller';
 import { authenticate } from '../middleware/auth.middleware';
 import { validateRequest } from '../middleware/validation.middleware';
+import ssoRoutes from './sso.routes';
 
 const router = Router();
+
+// SSO routes (Microsoft Entra ID)
+router.use('/sso', ssoRoutes);
 
 // Register new user
 router.post(
