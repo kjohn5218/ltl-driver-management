@@ -190,9 +190,10 @@ export class DriversApiService {
     const medicalExpiration = this.extractMedicalExpiration(apiDriver.skills);
     const endorsements = this.extractEndorsements(apiDriver.skills);
 
-    // Determine driver type: T for temp drivers, E for regular employees
+    // Determine driver type: T for temp, C for contractor (null jobTitle), E for employee
     const isTemp = /temp/i.test(apiDriver.refNum);
-    const driverType = isTemp ? 'T' : 'E';
+    const isContractor = !apiDriver.jobTitle;
+    const driverType = isTemp ? 'T' : isContractor ? 'C' : 'E';
 
     return {
       carrierId,
@@ -286,7 +287,7 @@ export class DriversApiService {
       }
       console.log(`[DriversAPI] Loaded ${locationMap.size} locations for mapping`);
 
-      // Only sync drivers with these job titles
+      // Only sync drivers with these job titles (employees) or null job title (contractors)
       const allowedJobTitles = [
         'CDL A1',
         'Linehaul Driver 1',
@@ -299,11 +300,14 @@ export class DriversApiService {
       ];
       const allowedJobTitlesLower = allowedJobTitles.map(t => t.toLowerCase());
 
-      // Filter to only allowed job titles
+      // Filter to allowed job titles (employees) OR null job title (contractors)
       const filteredDrivers = apiDrivers.filter(d =>
-        d.jobTitle && allowedJobTitlesLower.includes(d.jobTitle.toLowerCase())
+        d.jobTitle === null || allowedJobTitlesLower.includes((d.jobTitle || '').toLowerCase())
       );
-      console.log(`[DriversAPI] Filtered to ${filteredDrivers.length} drivers with allowed job titles`);
+
+      const employeeCount = filteredDrivers.filter(d => d.jobTitle !== null).length;
+      const contractorCount = filteredDrivers.filter(d => d.jobTitle === null).length;
+      console.log(`[DriversAPI] Filtered to ${filteredDrivers.length} drivers (${employeeCount} employees, ${contractorCount} contractors)`);
 
       // Process drivers in batches
       const batchSize = 100;
