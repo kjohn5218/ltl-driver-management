@@ -1,23 +1,22 @@
 import React, { useState, useEffect } from 'react';
-import { CarrierDriver, Carrier, Location } from '../../types';
+import { CarrierDriver, Location } from '../../types';
 import { locationService } from '../../services/locationService';
+import { CarrierSelect } from '../CarrierSelect';
 import { User, Hash, Phone, Mail, CreditCard, Truck, MapPin, AlertTriangle, Users, Building } from 'lucide-react';
 
 interface DriverFormProps {
   driver?: CarrierDriver | null;
-  carriers: Carrier[];
   onSubmit: (data: any) => void;
   onCancel: () => void;
 }
 
 export const DriverForm: React.FC<DriverFormProps> = ({
   driver,
-  carriers,
   onSubmit,
   onCancel
 }) => {
   const [formData, setFormData] = useState({
-    carrierId: driver?.carrierId ? driver.carrierId.toString() : '',
+    carrierId: driver?.carrierId || '' as number | '',
     name: driver?.name || '',
     number: driver?.number || '',
     phoneNumber: driver?.phoneNumber || '',
@@ -51,7 +50,7 @@ export const DriverForm: React.FC<DriverFormProps> = ({
       console.log('DriverForm: Setting driver data:', driver);
       console.log('DriverForm: CarrierId:', driver.carrierId);
       setFormData({
-        carrierId: driver.carrierId ? driver.carrierId.toString() : '',
+        carrierId: driver.carrierId || '' as number | '',
         name: driver.name || '',
         number: driver.number || '',
         phoneNumber: driver.phoneNumber || '',
@@ -100,7 +99,7 @@ export const DriverForm: React.FC<DriverFormProps> = ({
 
     const submitData = {
       ...formData,
-      carrierId: parseInt(formData.carrierId as string),
+      carrierId: formData.carrierId as number,
       phoneNumber: formData.phoneNumber || undefined,
       email: formData.email || undefined,
       licenseNumber: formData.licenseNumber || undefined,
@@ -116,7 +115,7 @@ export const DriverForm: React.FC<DriverFormProps> = ({
   const handleChange = (e: React.ChangeEvent<HTMLInputElement | HTMLSelectElement>) => {
     const { name, value, type } = e.target;
     const checked = (e.target as HTMLInputElement).checked;
-    
+
     setFormData(prev => ({
       ...prev,
       [name]: type === 'checkbox' ? checked : value
@@ -127,6 +126,21 @@ export const DriverForm: React.FC<DriverFormProps> = ({
       setErrors(prev => ({
         ...prev,
         [name]: ''
+      }));
+    }
+  };
+
+  const handleCarrierChange = (value: number | '') => {
+    setFormData(prev => ({
+      ...prev,
+      carrierId: value
+    }));
+
+    // Clear error when carrier is selected
+    if (errors.carrierId) {
+      setErrors(prev => ({
+        ...prev,
+        carrierId: ''
       }));
     }
   };
@@ -144,22 +158,13 @@ export const DriverForm: React.FC<DriverFormProps> = ({
             </span>
           )}
         </label>
-        <select
-          id="carrierId"
-          name="carrierId"
+        <CarrierSelect
           value={formData.carrierId}
-          onChange={handleChange}
-          className={`mt-1 block w-full rounded-md border-gray-300 shadow-sm focus:border-indigo-500 focus:ring-indigo-500 sm:text-sm ${
-            errors.carrierId ? 'border-red-300' : ''
-          }`}
-        >
-          <option value="">Select a carrier</option>
-          {[...carriers].sort((a, b) => (a.name || '').localeCompare(b.name || '')).map((carrier) => (
-            <option key={carrier.id} value={carrier.id}>
-              {carrier.name}
-            </option>
-          ))}
-        </select>
+          onChange={handleCarrierChange}
+          placeholder="Select a carrier..."
+          showAllOption={false}
+          className={errors.carrierId ? 'border-red-300' : ''}
+        />
         {errors.carrierId && (
           <p className="mt-1 text-sm text-red-600">{errors.carrierId}</p>
         )}

@@ -65,6 +65,7 @@ export interface CarrierDriver {
 export interface Carrier {
   id: number;
   name: string;
+  scacCode?: string;
   contactPerson?: string;
   phone?: string;
   email?: string;

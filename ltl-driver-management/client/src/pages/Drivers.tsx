@@ -547,7 +547,6 @@ export const Drivers: React.FC = () => {
         title="Add New Driver"
       >
         <DriverForm
-          carriers={carriers}
           onSubmit={handleCreateDriver}
           onCancel={() => setIsCreateModalOpen(false)}
         />
@@ -561,7 +560,6 @@ export const Drivers: React.FC = () => {
       >
         <DriverForm
           driver={selectedDriver}
-          carriers={carriers}
           onSubmit={handleUpdateDriver}
           onCancel={() => setIsEditModalOpen(false)}
         />
