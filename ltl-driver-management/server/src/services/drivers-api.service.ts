@@ -159,7 +159,7 @@ export class DriversApiService {
   }
 
   // Map API driver to local CarrierDriver data
-  private mapToDriver(apiDriver: ApiDriver, carrierId: number): {
+  private mapToDriver(apiDriver: ApiDriver, carrierId: number, locationId: number | null): {
     carrierId: number;
     name: string;
     phoneNumber: string | null;
@@ -176,6 +176,7 @@ export class DriversApiService {
     active: boolean;
     driverType: string;
     hrStatus: string;
+    locationId: number | null;
   } {
     const cdlInfo = this.extractCdlInfo(apiDriver.skills);
     const medicalExpiration = this.extractMedicalExpiration(apiDriver.skills);
@@ -201,7 +202,8 @@ export class DriversApiService {
       endorsements: endorsements || null,
       active: true,
       driverType,
-      hrStatus: 'Active' // Drivers in API are active
+      hrStatus: 'Active', // Drivers in API are active
+      locationId
     };
   }
 
@@ -264,6 +266,16 @@ export class DriversApiService {
         console.log(`[DriversAPI] Warning: "Other" carrier (ID: 5014) not found, using default carrier`);
       }
 
+      // Build location code -> id map for linking drivers to locations
+      const locations = await prisma.location.findMany({
+        select: { id: true, code: true }
+      });
+      const locationMap = new Map<string, number>();
+      for (const loc of locations) {
+        locationMap.set(loc.code.toUpperCase(), loc.id);
+      }
+      console.log(`[DriversAPI] Loaded ${locationMap.size} locations for mapping`);
+
       // Process drivers in batches
       const batchSize = 100;
 
@@ -282,7 +294,12 @@ export class DriversApiService {
               assignedToOther++;
             }
 
-            const driverData = this.mapToDriver(apiDriver, carrierId);
+            // Look up locationId from serviceCenterCode
+            const locationId = apiDriver.serviceCenterCode
+              ? locationMap.get(apiDriver.serviceCenterCode.toUpperCase()) || null
+              : null;
+
+            const driverData = this.mapToDriver(apiDriver, carrierId, locationId);
 
             // Track this external ID as processed (active in HR)
             processedExternalIds.add(driverData.externalDriverId);
