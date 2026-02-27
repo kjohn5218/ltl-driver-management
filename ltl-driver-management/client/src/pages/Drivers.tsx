@@ -51,7 +51,7 @@ export const Drivers: React.FC = () => {
   useEffect(() => {
     fetchDrivers();
     fetchCarriers();
-  }, [currentPage, searchTerm, carrierFilter, statusFilter]);
+  }, [currentPage, searchTerm, carrierFilter, statusFilter, driverTypeFilter]);
 
   const fetchDrivers = async () => {
     try {
@@ -60,6 +60,7 @@ export const Drivers: React.FC = () => {
         search: searchTerm || undefined,
         carrierId: carrierFilter || undefined,
         active: statusFilter === '' ? undefined : statusFilter === 'active',
+        driverType: driverTypeFilter || undefined,
         page: currentPage,
         limit: 50
       });
@@ -82,7 +83,7 @@ export const Drivers: React.FC = () => {
     }
   };
 
-  // Client-side filtering for location, endorsements, and driver type (after server-side filters)
+  // Client-side filtering for location and endorsements (after server-side filters)
   const filteredDrivers = useMemo(() => {
     return drivers.filter(d => {
       // Filter by location
@@ -93,13 +94,9 @@ export const Drivers: React.FC = () => {
       if (endorsementFilter) {
         if (!d.endorsements?.toLowerCase().includes(endorsementFilter.toLowerCase())) return false;
       }
-      // Filter by driver type
-      if (driverTypeFilter) {
-        if (d.driverType !== driverTypeFilter) return false;
-      }
       return true;
     });
-  }, [drivers, selectedLocations, endorsementFilter, driverTypeFilter]);
+  }, [drivers, selectedLocations, endorsementFilter]);
 
   // Sort filtered drivers
   const sortedDrivers = useMemo(() => {
@@ -500,6 +497,7 @@ export const Drivers: React.FC = () => {
               value={driverTypeFilter}
               onChange={(e) => {
                 setDriverTypeFilter(e.target.value as 'E' | 'C' | 'T' | '');
+                setCurrentPage(1);
               }}
               className="rounded-md border border-gray-300 shadow-sm text-sm focus:ring-indigo-500 focus:border-indigo-500"
             >

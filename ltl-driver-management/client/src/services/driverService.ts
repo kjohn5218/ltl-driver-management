@@ -16,6 +16,7 @@ interface DriverFilters {
   active?: boolean;
   carrierId?: number;
   search?: string;
+  driverType?: 'C' | 'E' | 'T';
   page?: number;
   limit?: number;
 }
@@ -53,6 +54,7 @@ export const driverService = {
     if (filters?.active !== undefined) params.append('active', filters.active.toString());
     if (filters?.carrierId) params.append('carrierId', filters.carrierId.toString());
     if (filters?.search) params.append('search', filters.search);
+    if (filters?.driverType) params.append('driverType', filters.driverType);
     if (filters?.page) params.append('page', filters.page.toString());
     if (filters?.limit) params.append('limit', filters.limit.toString());
 

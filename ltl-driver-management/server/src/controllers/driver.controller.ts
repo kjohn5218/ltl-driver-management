@@ -6,20 +6,24 @@ const prisma = new PrismaClient();
 // Get all drivers with filtering
 export const getDrivers = async (req: Request, res: Response): Promise<Response> => {
   try {
-    const { active, carrierId, search, page = 1, limit = 20 } = req.query;
-    console.log('getDrivers called with params:', { active, carrierId, search, page, limit });
-    
+    const { active, carrierId, search, driverType, page = 1, limit = 20 } = req.query;
+    console.log('getDrivers called with params:', { active, carrierId, search, driverType, page, limit });
+
     // Build where clause
     const where: any = {};
-    
+
     if (active !== undefined) {
       where.active = active === 'true';
     }
-    
+
     if (carrierId) {
       where.carrierId = parseInt(carrierId as string);
     }
-    
+
+    if (driverType) {
+      where.driverType = driverType as string;
+    }
+
     if (search) {
       where.OR = [
         { name: { contains: search as string, mode: 'insensitive' } },
