@@ -8,6 +8,7 @@ import { Modal } from '../components/common/Modal';
 import { DriverForm } from '../components/drivers/DriverForm';
 import { DriverImport } from '../components/drivers/DriverImport';
 import { LocationMultiSelect } from '../components/LocationMultiSelect';
+import { CarrierSelect } from '../components/CarrierSelect';
 import { driverService } from '../services/driverService';
 import { carrierService } from '../services/carrierService';
 import { CarrierDriver, Carrier } from '../types';
@@ -76,7 +77,7 @@ export const Drivers: React.FC = () => {
 
   const fetchCarriers = async () => {
     try {
-      const response = await carrierService.getCarriers({ limit: 1000 });
+      const response = await carrierService.getCarriers({ limit: 1000, status: 'ACTIVE' });
       setCarriers(response.carriers);
     } catch (error) {
       console.error('Failed to fetch carriers:', error);
@@ -435,21 +436,15 @@ export const Drivers: React.FC = () => {
             </div>
 
             {/* Carrier Filter */}
-            <select
+            <CarrierSelect
               value={carrierFilter}
-              onChange={(e) => {
-                setCarrierFilter(e.target.value ? parseInt(e.target.value) : '');
+              onChange={(value) => {
+                setCarrierFilter(value);
                 setCurrentPage(1);
               }}
-              className="rounded-md border border-gray-300 shadow-sm text-sm focus:ring-indigo-500 focus:border-indigo-500"
-            >
-              <option value="">All Carriers</option>
-              {[...carriers].sort((a, b) => a.name.localeCompare(b.name)).map(carrier => (
-                <option key={carrier.id} value={carrier.id}>
-                  {carrier.name}
-                </option>
-              ))}
-            </select>
+              placeholder="All Carriers"
+              className="w-64"
+            />
 
             {/* Location Filter */}
             <div className="flex items-center gap-2">
