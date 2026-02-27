@@ -226,6 +226,55 @@ export const updateLocation = async (req: Request, res: Response) => {
       }
     });
 
+    // If location is set to inactive, deactivate all related linehaul lanes
+    if (updateData.active === false) {
+      await prisma.linehaulLane.updateMany({
+        where: {
+          OR: [
+            { originLocationId: parseInt(id) },
+            { destinationLocationId: parseInt(id) }
+          ]
+        },
+        data: { active: false }
+      });
+    }
+
+    // If location is reactivated and is a physical or virtual terminal, reactivate related linehaul lanes
+    // Only reactivate lanes where both endpoints are active terminals
+    if (updateData.active === true && (location.isPhysicalTerminal || location.isVirtualTerminal)) {
+      const locationId = parseInt(id);
+
+      // Reactivate lanes where this location is the origin and destination is an active terminal
+      await prisma.linehaulLane.updateMany({
+        where: {
+          originLocationId: locationId,
+          destinationLocation: {
+            active: true,
+            OR: [
+              { isPhysicalTerminal: true },
+              { isVirtualTerminal: true }
+            ]
+          }
+        },
+        data: { active: true }
+      });
+
+      // Reactivate lanes where this location is the destination and origin is an active terminal
+      await prisma.linehaulLane.updateMany({
+        where: {
+          destinationLocationId: locationId,
+          originLocation: {
+            active: true,
+            OR: [
+              { isPhysicalTerminal: true },
+              { isVirtualTerminal: true }
+            ]
+          }
+        },
+        data: { active: true }
+      });
+    }
+
     return res.json(location);
   } catch (error) {
     console.error('Update location error:', error);

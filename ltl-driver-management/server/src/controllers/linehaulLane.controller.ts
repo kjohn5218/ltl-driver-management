@@ -3,11 +3,11 @@ import { prisma } from '../index';
 import { Prisma } from '@prisma/client';
 
 // Get all linehaul lanes with optional filtering
+// Only shows lanes where both origin and destination locations are active
 export const getLinehaulLanes = async (req: Request, res: Response): Promise<void> => {
   try {
     const {
       originLocationId,
-      active,
       page = '1',
       limit = '100'
     } = req.query;
@@ -16,14 +16,14 @@ export const getLinehaulLanes = async (req: Request, res: Response): Promise<voi
     const limitNum = parseInt(limit as string, 10);
     const skip = (pageNum - 1) * limitNum;
 
-    const where: Prisma.LinehaulLaneWhereInput = {};
+    // Always filter to only show lanes where both locations are active
+    const where: Prisma.LinehaulLaneWhereInput = {
+      originLocation: { active: true },
+      destinationLocation: { active: true }
+    };
 
     if (originLocationId) {
       where.originLocationId = parseInt(originLocationId as string, 10);
-    }
-
-    if (active !== undefined) {
-      where.active = active === 'true';
     }
 
     const [lanes, total] = await Promise.all([
@@ -297,10 +297,14 @@ export const deleteLinehaulLane = async (req: Request, res: Response): Promise<v
   }
 };
 
-// Get unique origin locations that have lanes
+// Get unique origin locations that have lanes (only active locations)
 export const getOriginLocations = async (_req: Request, res: Response): Promise<void> => {
   try {
     const locations = await prisma.linehaulLane.findMany({
+      where: {
+        originLocation: { active: true },
+        destinationLocation: { active: true }
+      },
       select: {
         originLocation: {
           select: { id: true, code: true, name: true, city: true }

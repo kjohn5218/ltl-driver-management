@@ -24,7 +24,6 @@ export const LinehaulLanes: React.FC = () => {
 
   // Filters
   const [originFilter, setOriginFilter] = useState<number | null>(null);
-  const [hideInactive, setHideInactive] = useState(false);
 
   // Selection
   const [selectedLaneId, setSelectedLaneId] = useState<number | null>(null);
@@ -34,12 +33,11 @@ export const LinehaulLanes: React.FC = () => {
   const [editingLane, setEditingLane] = useState<LinehaulLane | null>(null);
   const [deletingLane, setDeletingLane] = useState<LinehaulLane | null>(null);
 
-  // Fetch all lanes
+  // Fetch all lanes (only lanes with active locations are returned)
   const { data: lanesData, isLoading: lanesLoading } = useQuery({
-    queryKey: ['linehaul-lanes', originFilter, hideInactive],
+    queryKey: ['linehaul-lanes', originFilter],
     queryFn: () => linehaulLaneService.getLanes({
       originLocationId: originFilter || undefined,
-      active: hideInactive ? true : undefined,
       limit: 500
     })
   });
@@ -63,14 +61,8 @@ export const LinehaulLanes: React.FC = () => {
     return lanes.find(l => l.id === selectedLaneId) || null;
   }, [lanes, selectedLaneId]);
 
-  // Filter lanes by origin (client-side additional filtering if needed)
-  const filteredLanes = useMemo(() => {
-    let result = lanes;
-    if (hideInactive) {
-      result = result.filter(l => l.active);
-    }
-    return result;
-  }, [lanes, hideInactive]);
+  // All filtering is now done server-side based on location active status
+  const filteredLanes = lanes;
 
   // Mutations
   const createMutation = useMutation({
@@ -141,15 +133,6 @@ export const LinehaulLanes: React.FC = () => {
             </select>
           </div>
 
-          <label className="flex items-center gap-2 text-sm text-gray-700 dark:text-gray-300">
-            <input
-              type="checkbox"
-              checked={hideInactive}
-              onChange={(e) => setHideInactive(e.target.checked)}
-              className="rounded border-gray-300 dark:border-gray-600 text-blue-600 focus:ring-blue-500"
-            />
-            Hide Inactive
-          </label>
         </div>
 
         <div className="flex items-center gap-2">
@@ -198,9 +181,7 @@ export const LinehaulLanes: React.FC = () => {
                   className={`grid grid-cols-2 gap-2 px-4 py-2 cursor-pointer border-b border-gray-100 dark:border-gray-700 text-sm ${
                     selectedLaneId === lane.id
                       ? 'bg-blue-50 dark:bg-blue-900/30 text-blue-700 dark:text-blue-300'
-                      : lane.active
-                        ? 'hover:bg-gray-50 dark:hover:bg-gray-700 text-gray-900 dark:text-white'
-                        : 'hover:bg-gray-50 dark:hover:bg-gray-700 text-gray-400 dark:text-gray-500'
+                      : 'hover:bg-gray-50 dark:hover:bg-gray-700 text-gray-900 dark:text-white'
                   }`}
                 >
                   <div className="font-medium">{lane.originLocation.code}</div>
@@ -470,17 +451,6 @@ const LaneModal: React.FC<LaneModalProps> = ({ lane, locations, onSave, onClose,
                 </select>
               </div>
             </div>
-
-            {/* Active toggle */}
-            <label className="flex items-center gap-2">
-              <input
-                type="checkbox"
-                checked={formData.active}
-                onChange={(e) => setFormData({ ...formData, active: e.target.checked })}
-                className="rounded border-gray-300 dark:border-gray-600 text-blue-600 focus:ring-blue-500"
-              />
-              <span className="text-sm text-gray-700 dark:text-gray-300">Active</span>
-            </label>
 
             {/* Routing Steps */}
             <div>
