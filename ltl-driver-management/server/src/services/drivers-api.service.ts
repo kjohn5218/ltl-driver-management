@@ -286,11 +286,30 @@ export class DriversApiService {
       }
       console.log(`[DriversAPI] Loaded ${locationMap.size} locations for mapping`);
 
+      // Only sync drivers with these job titles
+      const allowedJobTitles = [
+        'CDL A1',
+        'Linehaul Driver 1',
+        'CDL A',
+        'Linehaul Driver',
+        'Operations Supervisor',
+        'Service Center Manager',
+        'CDL A 0-90 DAYS',
+        'CDL B1'
+      ];
+      const allowedJobTitlesLower = allowedJobTitles.map(t => t.toLowerCase());
+
+      // Filter to only allowed job titles
+      const filteredDrivers = apiDrivers.filter(d =>
+        d.jobTitle && allowedJobTitlesLower.includes(d.jobTitle.toLowerCase())
+      );
+      console.log(`[DriversAPI] Filtered to ${filteredDrivers.length} drivers with allowed job titles`);
+
       // Process drivers in batches
       const batchSize = 100;
 
-      for (let i = 0; i < apiDrivers.length; i += batchSize) {
-        const batch = apiDrivers.slice(i, i + batchSize);
+      for (let i = 0; i < filteredDrivers.length; i += batchSize) {
+        const batch = filteredDrivers.slice(i, i + batchSize);
 
         for (const apiDriver of batch) {
           try {
@@ -361,8 +380,8 @@ export class DriversApiService {
         }
 
         // Log progress
-        const processed = Math.min(i + batchSize, apiDrivers.length);
-        console.log(`[DriversAPI] Processed ${processed}/${apiDrivers.length} drivers`);
+        const processed = Math.min(i + batchSize, filteredDrivers.length);
+        console.log(`[DriversAPI] Processed ${processed}/${filteredDrivers.length} drivers`);
       }
 
       // Mark drivers NOT in the API response as inactive (they are no longer in HR system)
