@@ -77,7 +77,7 @@ export const Drivers: React.FC = () => {
 
   const fetchCarriers = async () => {
     try {
-      const response = await carrierService.getCarriers({ limit: 1000, status: 'ACTIVE' });
+      const response = await carrierService.getCarriers({ limit: 5000, status: 'ACTIVE' });
       setCarriers(response.carriers);
     } catch (error) {
       console.error('Failed to fetch carriers:', error);

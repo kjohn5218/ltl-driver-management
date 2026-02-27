@@ -31,7 +31,7 @@ export const CarrierSelect: React.FC<CarrierSelectProps> = ({
     const fetchCarriers = async () => {
       setIsLoading(true);
       try {
-        const response = await api.get('/carriers?limit=1000&status=ACTIVE');
+        const response = await api.get('/carriers?limit=5000&status=ACTIVE');
         const carrierList = response.data.carriers || response.data || [];
         // Sort alphabetically
         carrierList.sort((a: Carrier, b: Carrier) => a.name.localeCompare(b.name));
