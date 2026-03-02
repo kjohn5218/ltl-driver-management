@@ -130,6 +130,8 @@ export const ArrivalDetailsModal: React.FC<ArrivalDetailsModalProps> = ({
       // Invalidate loadsheet queries so Loads tab refreshes
       queryClient.invalidateQueries({ queryKey: ['loadsheets-for-loads-tab'] });
       queryClient.invalidateQueries({ queryKey: ['continuing-trips-for-loads-tab'] });
+      // Invalidate equipment allocation to reflect arrived equipment
+      queryClient.invalidateQueries({ queryKey: ['equipment-allocation-summary'] });
 
       // Check if we should show the morale rating dialog
       // Only show if: 1) NOT an OWNOP trip, 2) Driver is assigned, 3) This is the second arrival in 24 hours

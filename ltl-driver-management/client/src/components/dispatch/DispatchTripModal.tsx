@@ -918,6 +918,7 @@ export const DispatchTripModal: React.FC<DispatchTripModalProps> = ({
       queryClient.invalidateQueries({ queryKey: ['loadsheets-for-dispatch'] });
       queryClient.invalidateQueries({ queryKey: ['loadsheets-for-loads-tab'] });
       queryClient.invalidateQueries({ queryKey: ['continuing-trips-for-loads-tab'] });
+      queryClient.invalidateQueries({ queryKey: ['equipment-allocation-summary'] });
 
       setDispatchedTripId(createdTrip.id);
       setDispatchedTripNumber(createdTrip.tripNumber);

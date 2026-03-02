@@ -1,4 +1,5 @@
 import React, { useState, useEffect } from 'react';
+import { useQuery, useQueryClient } from '@tanstack/react-query';
 import { PageHeader } from '../components/common/PageHeader';
 import { DataTable } from '../components/common/DataTable';
 import { TablePagination } from '../components/common/TablePagination';
@@ -100,9 +101,12 @@ export const Equipment: React.FC = () => {
   const [selectedUnitNumber, setSelectedUnitNumber] = useState<string>('');
   const [isFetchingLocation, setIsFetchingLocation] = useState(false);
 
-  // Allocation state
-  const [allocationData, setAllocationData] = useState<AllocationSummaryResponse | null>(null);
-  const [allocationLoading, setAllocationLoading] = useState(false);
+  // Allocation state - using React Query for cache invalidation support
+  const { data: allocationData, isLoading: allocationLoading, refetch: refetchAllocation } = useQuery({
+    queryKey: ['equipment-allocation-summary'],
+    queryFn: () => equipmentService.getAllocationSummary(),
+    enabled: activeTab === 'allocation'
+  });
   const [expandedTerminals, setExpandedTerminals] = useState<Set<number>>(new Set());
   const [editingAllocation, setEditingAllocation] = useState<number | null>(null);
   const [editedAllocations, setEditedAllocations] = useState<Record<string, number>>({});
@@ -115,9 +119,7 @@ export const Equipment: React.FC = () => {
   }, []);
 
   useEffect(() => {
-    if (activeTab === 'allocation') {
-      fetchAllocationData();
-    } else {
+    if (activeTab !== 'allocation') {
       fetchData();
     }
   }, [activeTab, currentPage, searchTerm, statusFilter, terminalFilter]);
@@ -131,18 +133,6 @@ export const Equipment: React.FC = () => {
     }
   };
 
-  const fetchAllocationData = async () => {
-    setAllocationLoading(true);
-    try {
-      const data = await equipmentService.getAllocationSummary();
-      setAllocationData(data);
-    } catch (error) {
-      toast.error('Failed to fetch allocation data');
-      console.error('Failed to fetch allocation data:', error);
-    } finally {
-      setAllocationLoading(false);
-    }
-  };
 
 
   const fetchData = async () => {
@@ -219,7 +209,7 @@ export const Equipment: React.FC = () => {
       toast.success('Allocation targets saved successfully');
       setEditingAllocation(null);
       setEditedAllocations({});
-      fetchAllocationData();
+      refetchAllocation();
     } catch (error) {
       toast.error('Failed to save allocation targets');
     } finally {
@@ -906,7 +896,7 @@ export const Equipment: React.FC = () => {
                 <p className="text-sm text-gray-500">View and manage equipment allocation targets for each terminal</p>
               </div>
               <button
-                onClick={fetchAllocationData}
+                onClick={refetchAllocation}
                 disabled={allocationLoading}
                 className="inline-flex items-center px-4 py-2 border border-gray-300 rounded-md shadow-sm text-sm font-medium text-gray-700 bg-white hover:bg-gray-50 disabled:opacity-50"
               >
