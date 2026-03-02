@@ -111,6 +111,7 @@ export const Equipment: React.FC = () => {
   const [editingAllocation, setEditingAllocation] = useState<number | null>(null);
   const [editedAllocations, setEditedAllocations] = useState<Record<string, number>>({});
   const [savingAllocation, setSavingAllocation] = useState(false);
+  const [allocationTerminalFilter, setAllocationTerminalFilter] = useState<number | ''>('');
 
   const isAdmin = user?.role === 'ADMIN' || user?.role === 'DISPATCHER';
 
@@ -838,14 +839,12 @@ export const Equipment: React.FC = () => {
                     }}
                     className="rounded-md border border-gray-300 shadow-sm text-sm focus:ring-indigo-500 focus:border-indigo-500"
                   >
-                    <option value="">All Physical Terminals</option>
-                    {locations
-                      .filter((location) => location.isPhysicalTerminal)
-                      .map((location) => (
-                        <option key={location.id} value={location.id}>
-                          {location.code} - {location.name}
-                        </option>
-                      ))}
+                    <option value="">All Locations</option>
+                    {locations.map((location) => (
+                      <option key={location.id} value={location.id}>
+                        {location.code} - {location.name}
+                      </option>
+                    ))}
                   </select>
                 </div>
               </div>
@@ -897,14 +896,30 @@ export const Equipment: React.FC = () => {
                 <h2 className="text-lg font-medium text-gray-900">Equipment Allocation by Terminal</h2>
                 <p className="text-sm text-gray-500">View and manage equipment allocation targets for each terminal</p>
               </div>
-              <button
-                onClick={refetchAllocation}
-                disabled={allocationLoading}
-                className="inline-flex items-center px-4 py-2 border border-gray-300 rounded-md shadow-sm text-sm font-medium text-gray-700 bg-white hover:bg-gray-50 disabled:opacity-50"
-              >
-                <RefreshCw className={`w-4 h-4 mr-2 ${allocationLoading ? 'animate-spin' : ''}`} />
-                Refresh
-              </button>
+              <div className="flex items-center space-x-3">
+                <select
+                  value={allocationTerminalFilter}
+                  onChange={(e) => setAllocationTerminalFilter(e.target.value ? parseInt(e.target.value) : '')}
+                  className="rounded-md border border-gray-300 shadow-sm text-sm focus:ring-indigo-500 focus:border-indigo-500"
+                >
+                  <option value="">All Physical Terminals</option>
+                  {locations
+                    .filter((location) => location.isPhysicalTerminal)
+                    .map((location) => (
+                      <option key={location.id} value={location.id}>
+                        {location.code} - {location.name}
+                      </option>
+                    ))}
+                </select>
+                <button
+                  onClick={refetchAllocation}
+                  disabled={allocationLoading}
+                  className="inline-flex items-center px-4 py-2 border border-gray-300 rounded-md shadow-sm text-sm font-medium text-gray-700 bg-white hover:bg-gray-50 disabled:opacity-50"
+                >
+                  <RefreshCw className={`w-4 h-4 mr-2 ${allocationLoading ? 'animate-spin' : ''}`} />
+                  Refresh
+                </button>
+              </div>
             </div>
           </div>
 
@@ -931,7 +946,17 @@ export const Equipment: React.FC = () => {
             </div>
           ) : allocationData ? (
             <div className="divide-y divide-gray-200">
-              {allocationData.terminals.map((terminal) => {
+              {allocationData.terminals
+                .filter((terminal) => {
+                  // Filter by selected terminal if one is selected
+                  if (allocationTerminalFilter) {
+                    return terminal.id === allocationTerminalFilter;
+                  }
+                  // Otherwise show all physical terminals
+                  const location = locations.find(l => l.id === terminal.id);
+                  return location?.isPhysicalTerminal !== false;
+                })
+                .map((terminal) => {
                 const isExpanded = expandedTerminals.has(terminal.id);
                 const isEditing = editingAllocation === terminal.id;
 
