@@ -266,7 +266,11 @@ export const CreateLoadsheetModal: React.FC<CreateLoadsheetModalProps> = ({
   const fetchTrailers = async () => {
     try {
       const response = await equipmentService.getTrailers({ limit: 2000 });
-      setTrailers(response.trailers || []);
+      // Filter out OUT_OF_SERVICE trailers to only show active units
+      const activeTrailers = (response.trailers || []).filter(
+        trailer => trailer.status !== 'OUT_OF_SERVICE'
+      );
+      setTrailers(activeTrailers);
     } catch (error) {
       console.error('Failed to fetch trailers:', error);
     }
