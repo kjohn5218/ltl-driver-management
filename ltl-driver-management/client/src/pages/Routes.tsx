@@ -751,6 +751,7 @@ const RouteEditModal: React.FC<RouteEditModalProps> = ({ route, onClose, onSave 
 
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [isCalculating, setIsCalculating] = useState(false);
+  const [arrivalTimeManuallyEdited, setArrivalTimeManuallyEdited] = useState(false);
 
   // Okay to Load/Dispatch state
   const [okayToLoadIds, setOkayToLoadIds] = useState<number[]>([]);
@@ -844,8 +845,9 @@ const RouteEditModal: React.FC<RouteEditModalProps> = ({ route, onClose, onSave 
     }
   };
 
-  // Auto-calculate arrival time when departure time or run time changes
+  // Auto-calculate arrival time when departure time or run time changes (unless manually edited)
   useEffect(() => {
+    if (arrivalTimeManuallyEdited) return;
     if (formData.departureTime && formData.runTime) {
       const runTimeNumber = parseInt(formData.runTime);
       const arrivalTime = calculateArrivalTime(
@@ -858,7 +860,7 @@ const RouteEditModal: React.FC<RouteEditModalProps> = ({ route, onClose, onSave 
         setFormData(prev => ({ ...prev, arrivalTime }));
       }
     }
-  }, [formData.departureTime, formData.runTime, formData.originTimeZone, formData.destinationTimeZone]);
+  }, [formData.departureTime, formData.runTime, formData.originTimeZone, formData.destinationTimeZone, arrivalTimeManuallyEdited]);
 
   const handleCalculateDistance = async () => {
     setIsCalculating(true);
@@ -908,6 +910,7 @@ const RouteEditModal: React.FC<RouteEditModalProps> = ({ route, onClose, onSave 
           ...prev,
           runTime: estimatedDuration.toString()
         }));
+        setArrivalTimeManuallyEdited(false);
       } else {
         // Fall back to calculating from addresses if no distance entered
         const origin = {
@@ -931,6 +934,7 @@ const RouteEditModal: React.FC<RouteEditModalProps> = ({ route, onClose, onSave 
             ...prev,
             runTime: result.duration!.toString()
           }));
+          setArrivalTimeManuallyEdited(false);
         } else {
           alert('Could not calculate run time. Please enter a distance first or provide sufficient address information.');
         }
@@ -1209,17 +1213,20 @@ const RouteEditModal: React.FC<RouteEditModalProps> = ({ route, onClose, onSave 
                   type="number"
                   min="1"
                   value={formData.runTime}
-                  onChange={(e) => setFormData({ ...formData, runTime: e.target.value })}
+                  onChange={(e) => {
+                    setFormData({ ...formData, runTime: e.target.value });
+                    setArrivalTimeManuallyEdited(false);
+                  }}
                   className="flex-1 px-3 py-2 border border-gray-300 rounded-md focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
                   placeholder="Optional"
                 />
                 <button
                   type="button"
                   onClick={handleCalculateRunTime}
-                  disabled={isCalculating || !hasAddressInfo({ 
-                    address: formData.originAddress, city: formData.originCity, state: formData.originState, zipCode: formData.originZipCode 
-                  }) || !hasAddressInfo({ 
-                    address: formData.destinationAddress, city: formData.destinationCity, state: formData.destinationState, zipCode: formData.destinationZipCode 
+                  disabled={isCalculating || !hasAddressInfo({
+                    address: formData.originAddress, city: formData.originCity, state: formData.originState, zipCode: formData.originZipCode
+                  }) || !hasAddressInfo({
+                    address: formData.destinationAddress, city: formData.destinationCity, state: formData.destinationState, zipCode: formData.destinationZipCode
                   })}
                   className="px-3 py-2 bg-blue-600 text-white rounded-md hover:bg-blue-700 disabled:bg-gray-300 disabled:cursor-not-allowed"
                   title="Calculate run time using addresses"
@@ -1247,7 +1254,10 @@ const RouteEditModal: React.FC<RouteEditModalProps> = ({ route, onClose, onSave 
               <input
                 type="time"
                 value={formData.departureTime}
-                onChange={(e) => setFormData({ ...formData, departureTime: e.target.value })}
+                onChange={(e) => {
+                  setFormData({ ...formData, departureTime: e.target.value });
+                  setArrivalTimeManuallyEdited(false);
+                }}
                 className="w-full px-3 py-2 border border-gray-300 rounded-md focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
               />
             </div>
@@ -1256,7 +1266,10 @@ const RouteEditModal: React.FC<RouteEditModalProps> = ({ route, onClose, onSave 
               <input
                 type="time"
                 value={formData.arrivalTime}
-                onChange={(e) => setFormData({ ...formData, arrivalTime: e.target.value })}
+                onChange={(e) => {
+                  setFormData({ ...formData, arrivalTime: e.target.value });
+                  setArrivalTimeManuallyEdited(true);
+                }}
                 className="w-full px-3 py-2 border border-gray-300 rounded-md focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
               />
             </div>
