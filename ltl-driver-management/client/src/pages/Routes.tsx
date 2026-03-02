@@ -848,12 +848,17 @@ const RouteEditModal: React.FC<RouteEditModalProps> = ({ route, onClose, onSave 
   useEffect(() => {
     if (formData.departureTime && formData.runTime) {
       const runTimeNumber = parseInt(formData.runTime);
-      const arrivalTime = calculateArrivalTime(formData.departureTime, runTimeNumber);
+      const arrivalTime = calculateArrivalTime(
+        formData.departureTime,
+        runTimeNumber,
+        formData.originTimeZone,
+        formData.destinationTimeZone
+      );
       if (arrivalTime && arrivalTime !== formData.arrivalTime) {
         setFormData(prev => ({ ...prev, arrivalTime }));
       }
     }
-  }, [formData.departureTime, formData.runTime]);
+  }, [formData.departureTime, formData.runTime, formData.originTimeZone, formData.destinationTimeZone]);
 
   const handleCalculateDistance = async () => {
     setIsCalculating(true);
@@ -1652,12 +1657,17 @@ const AddRouteModal: React.FC<AddRouteModalProps> = ({ onClose, onSave, copyFrom
   // Auto-calculate arrival time when departure time or run time changes
   useEffect(() => {
     if (formData.departureTime && formData.runTime) {
-      const arrivalTime = calculateArrivalTime(formData.departureTime, parseInt(formData.runTime));
+      const arrivalTime = calculateArrivalTime(
+        formData.departureTime,
+        parseInt(formData.runTime),
+        formData.originTimeZone,
+        formData.destinationTimeZone
+      );
       if (arrivalTime && arrivalTime !== formData.arrivalTime) {
         setFormData(prev => ({ ...prev, arrivalTime }));
       }
     }
-  }, [formData.departureTime, formData.runTime]);
+  }, [formData.departureTime, formData.runTime, formData.originTimeZone, formData.destinationTimeZone]);
 
   // Calculate distance using addresses
   const handleCalculateDistance = async () => {

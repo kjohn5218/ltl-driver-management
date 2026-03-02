@@ -165,27 +165,52 @@ export const calculateRouteFromCoordinates = (
   }
 };
 
-// Calculate arrival time from departure time and run time
-export const calculateArrivalTime = (departureTime: string, runTimeMinutes: number): string => {
+// Get the UTC offset in minutes for a given timezone
+const getTimezoneOffset = (timezone: string): number => {
+  try {
+    const now = new Date();
+    const utcDate = new Date(now.toLocaleString('en-US', { timeZone: 'UTC' }));
+    const tzDate = new Date(now.toLocaleString('en-US', { timeZone: timezone }));
+    return (tzDate.getTime() - utcDate.getTime()) / (1000 * 60);
+  } catch {
+    return 0;
+  }
+};
+
+// Calculate arrival time from departure time and run time, accounting for time zone changes
+export const calculateArrivalTime = (
+  departureTime: string,
+  runTimeMinutes: number,
+  originTimeZone?: string,
+  destinationTimeZone?: string
+): string => {
   if (!departureTime || !runTimeMinutes) return '';
 
   try {
     // Parse departure time (HH:MM format)
     const [hours, minutes] = departureTime.split(':').map(Number);
-    
+
     // Create a date object for today with the departure time
     const departureDate = new Date();
     departureDate.setHours(hours, minutes, 0, 0);
-    
+
     // Add run time in minutes
-    const arrivalDate = new Date(departureDate.getTime() + runTimeMinutes * 60 * 1000);
-    
+    let arrivalDate = new Date(departureDate.getTime() + runTimeMinutes * 60 * 1000);
+
+    // Adjust for time zone difference if both zones are provided
+    if (originTimeZone && destinationTimeZone && originTimeZone !== destinationTimeZone) {
+      const originOffset = getTimezoneOffset(originTimeZone);
+      const destOffset = getTimezoneOffset(destinationTimeZone);
+      const tzDifferenceMinutes = destOffset - originOffset;
+      arrivalDate = new Date(arrivalDate.getTime() + tzDifferenceMinutes * 60 * 1000);
+    }
+
     // Format as HH:MM
     const arrivalHours = arrivalDate.getHours().toString().padStart(2, '0');
     const arrivalMinutes = arrivalDate.getMinutes().toString().padStart(2, '0');
-    
+
     return `${arrivalHours}:${arrivalMinutes}`;
-    
+
   } catch (error) {
     console.error('Arrival time calculation error:', error);
     return '';
