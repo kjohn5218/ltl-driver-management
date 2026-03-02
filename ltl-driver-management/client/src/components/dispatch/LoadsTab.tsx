@@ -513,9 +513,9 @@ export const LoadsTab: React.FC<LoadsTabProps> = ({ loading: externalLoading = f
   const openEditModal = (loadItem: LoadItem) => {
     setSelectedLoadItem(loadItem);
     setEditLinehaulName(loadItem.linehaulName || '');
-    // Use original loadsheet trailer number to avoid '-' placeholder
-    const actualTrailerNumber = loadItem.originalLoadsheet?.trailerNumber || '';
-    setEditTrailerNumber(actualTrailerNumber);
+    // Use trailer number from loadItem, converting '-' placeholder back to empty
+    const trailerNum = loadItem.trailerNumber === '-' ? '' : (loadItem.trailerNumber || '');
+    setEditTrailerNumber(trailerNum);
     setEditStatus(loadItem.status as LoadsheetStatus);
     setEditDoNotLoadHazmat(loadItem.doNotLoadPlacardableHazmat || false);
     setEditDoorNumber(loadItem.door || '');
@@ -1480,6 +1480,10 @@ export const LoadsTab: React.FC<LoadsTabProps> = ({ loading: externalLoading = f
               className="w-full px-3 py-2 border border-gray-300 dark:border-gray-600 rounded-lg bg-white dark:bg-gray-700 text-gray-900 dark:text-white focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
             >
               <option value="">Select trailer...</option>
+              {/* Show current trailer number if it exists and isn't in the list */}
+              {editTrailerNumber && !trailers.some(t => t.unitNumber === editTrailerNumber) && (
+                <option value={editTrailerNumber}>{editTrailerNumber} (current)</option>
+              )}
               {trailers.map((trailer) => (
                 <option key={trailer.id} value={trailer.unitNumber}>
                   {trailer.unitNumber}
