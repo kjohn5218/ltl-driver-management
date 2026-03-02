@@ -9,6 +9,7 @@ import { EquipmentStatusBadge } from '../components/equipment/EquipmentStatusBad
 import { TruckForm } from '../components/equipment/TruckForm';
 import { TrailerForm } from '../components/equipment/TrailerForm';
 import { DollyForm } from '../components/equipment/DollyForm';
+import { LocationMultiSelect } from '../components/LocationMultiSelect';
 import { equipmentService, VehicleLocationData, TerminalAllocationData, AllocationSummaryResponse } from '../services/equipmentService';
 import { locationService } from '../services/locationService';
 import {
@@ -111,7 +112,7 @@ export const Equipment: React.FC = () => {
   const [editingAllocation, setEditingAllocation] = useState<number | null>(null);
   const [editedAllocations, setEditedAllocations] = useState<Record<string, number>>({});
   const [savingAllocation, setSavingAllocation] = useState(false);
-  const [allocationTerminalFilter, setAllocationTerminalFilter] = useState<number | ''>('');
+  const [allocationTerminalFilter, setAllocationTerminalFilter] = useState<number[]>([]);
 
   const isAdmin = user?.role === 'ADMIN' || user?.role === 'DISPATCHER';
 
@@ -896,21 +897,21 @@ export const Equipment: React.FC = () => {
                 <h2 className="text-lg font-medium text-gray-900">Equipment Allocation by Terminal</h2>
                 <p className="text-sm text-gray-500">View and manage equipment allocation targets for each terminal</p>
               </div>
-              <div className="flex items-center space-x-3">
-                <select
-                  value={allocationTerminalFilter}
-                  onChange={(e) => setAllocationTerminalFilter(e.target.value ? parseInt(e.target.value) : '')}
-                  className="rounded-md border border-gray-300 shadow-sm text-sm focus:ring-indigo-500 focus:border-indigo-500"
-                >
-                  <option value="">All Physical Terminals</option>
-                  {locations
-                    .filter((location) => location.isPhysicalTerminal)
-                    .map((location) => (
-                      <option key={location.id} value={location.id}>
-                        {location.code} - {location.name}
-                      </option>
-                    ))}
-                </select>
+              <div className="flex items-center space-x-4">
+                <div className="flex items-center gap-2">
+                  <Filter className="h-4 w-4 text-gray-400" />
+                  <span className="text-sm font-medium text-gray-700">Filter:</span>
+                </div>
+                <div className="flex items-center gap-2">
+                  <MapPin className="h-4 w-4 text-gray-400" />
+                  <LocationMultiSelect
+                    value={allocationTerminalFilter}
+                    onChange={setAllocationTerminalFilter}
+                    placeholder="All Physical Terminals"
+                    className="w-64"
+                    physicalTerminalOnly={true}
+                  />
+                </div>
                 <button
                   onClick={refetchAllocation}
                   disabled={allocationLoading}
@@ -948,9 +949,9 @@ export const Equipment: React.FC = () => {
             <div className="divide-y divide-gray-200">
               {allocationData.terminals
                 .filter((terminal) => {
-                  // Filter by selected terminal if one is selected
-                  if (allocationTerminalFilter) {
-                    return terminal.id === allocationTerminalFilter;
+                  // Filter by selected terminals if any are selected
+                  if (allocationTerminalFilter.length > 0) {
+                    return allocationTerminalFilter.includes(terminal.id);
                   }
                   // Otherwise show all physical terminals
                   const location = locations.find(l => l.id === terminal.id);
