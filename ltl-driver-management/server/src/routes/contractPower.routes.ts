@@ -1,5 +1,5 @@
 import { Router } from 'express';
-import { requestContractPower, getContractPowerStatus } from '../controllers/contractPower.controller';
+import { requestContractPower, requestContractPowerCancellation, getContractPowerStatus } from '../controllers/contractPower.controller';
 import { authenticate } from '../middleware/auth.middleware';
 
 const router = Router();
@@ -9,6 +9,9 @@ router.use(authenticate);
 
 // Request contract power for a loadsheet
 router.post('/request', requestContractPower);
+
+// Request cancellation of contract power for a loadsheet
+router.post('/cancel', requestContractPowerCancellation);
 
 // Get contract power request status for a loadsheet
 router.get('/status/:loadsheetId', getContractPowerStatus);

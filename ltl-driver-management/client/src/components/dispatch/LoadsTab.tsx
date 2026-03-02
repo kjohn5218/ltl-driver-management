@@ -213,6 +213,11 @@ export const LoadsTab: React.FC<LoadsTabProps> = ({ loading: externalLoading = f
   const [editContractPowerDriverName, setEditContractPowerDriverName] = useState('');
   const [editContractPowerCarrierName, setEditContractPowerCarrierName] = useState('');
 
+  // Contract Power Cancellation state
+  const [isCancelContractPowerModalOpen, setIsCancelContractPowerModalOpen] = useState(false);
+  const [cancelReason, setCancelReason] = useState('');
+  const [cancellingContractPower, setCancellingContractPower] = useState(false);
+
   // Fetch drivers
   const { data: driversData } = useQuery({
     queryKey: ['drivers-for-loads-tab'],
@@ -588,6 +593,32 @@ export const LoadsTab: React.FC<LoadsTabProps> = ({ loading: externalLoading = f
       toast.error(error.response?.data?.message || 'Failed to terminate loadsheet');
     } finally {
       setTerminating(false);
+    }
+  };
+
+  // Handle contract power cancellation request
+  const handleCancelContractPower = async () => {
+    if (!selectedLoadItem) return;
+    try {
+      setCancellingContractPower(true);
+      const response = await api.post('/contract-power/cancel', {
+        loadsheetId: selectedLoadItem.id,
+        reason: cancelReason
+      });
+      if (response.data.success) {
+        toast.success('Cancellation request submitted successfully');
+        setIsCancelContractPowerModalOpen(false);
+        setIsEditModalOpen(false);
+        setCancelReason('');
+        setSelectedLoadItem(null);
+        refetch();
+      } else {
+        toast.error(response.data.message || 'Failed to submit cancellation request');
+      }
+    } catch (error: any) {
+      toast.error(error.response?.data?.message || 'Failed to submit cancellation request');
+    } finally {
+      setCancellingContractPower(false);
     }
   };
 
@@ -1512,39 +1543,52 @@ export const LoadsTab: React.FC<LoadsTabProps> = ({ loading: externalLoading = f
             />
           </div>
 
-          {/* Contract Power Driver/Carrier - only show if booked */}
-          {selectedLoadItem?.contractPowerStatus === 'BOOKED' && (
-            <div className="p-4 bg-green-50 dark:bg-green-900/20 border border-green-200 dark:border-green-800 rounded-lg space-y-3">
-              <div className="flex items-center gap-2 mb-2">
-                <Truck className="w-4 h-4 text-green-600 dark:text-green-400" />
-                <span className="text-sm font-medium text-green-800 dark:text-green-200">
-                  Contract Power Assignment
-                </span>
+          {/* Contract Power Section - show if requested or booked */}
+          {(selectedLoadItem?.contractPowerStatus === 'BOOKED' || selectedLoadItem?.contractPowerStatus === 'REQUESTED') && (
+            <div className={`p-4 ${selectedLoadItem?.contractPowerStatus === 'BOOKED' ? 'bg-green-50 dark:bg-green-900/20 border-green-200 dark:border-green-800' : 'bg-blue-50 dark:bg-blue-900/20 border-blue-200 dark:border-blue-800'} border rounded-lg space-y-3`}>
+              <div className="flex items-center justify-between mb-2">
+                <div className="flex items-center gap-2">
+                  <Truck className={`w-4 h-4 ${selectedLoadItem?.contractPowerStatus === 'BOOKED' ? 'text-green-600 dark:text-green-400' : 'text-blue-600 dark:text-blue-400'}`} />
+                  <span className={`text-sm font-medium ${selectedLoadItem?.contractPowerStatus === 'BOOKED' ? 'text-green-800 dark:text-green-200' : 'text-blue-800 dark:text-blue-200'}`}>
+                    Contract Power {selectedLoadItem?.contractPowerStatus === 'BOOKED' ? 'Assignment' : 'Request Pending'}
+                  </span>
+                </div>
+                <button
+                  type="button"
+                  onClick={() => setIsCancelContractPowerModalOpen(true)}
+                  className="px-3 py-1 text-sm text-red-600 dark:text-red-400 bg-red-50 dark:bg-red-900/30 border border-red-200 dark:border-red-800 rounded-md hover:bg-red-100 dark:hover:bg-red-900/50 transition-colors"
+                >
+                  Request Cancellation
+                </button>
               </div>
-              <div>
-                <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">
-                  Driver Name
-                </label>
-                <input
-                  type="text"
-                  value={editContractPowerDriverName}
-                  onChange={(e) => setEditContractPowerDriverName(e.target.value)}
-                  className="w-full px-3 py-2 border border-gray-300 dark:border-gray-600 rounded-lg bg-white dark:bg-gray-700 text-gray-900 dark:text-white focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
-                  placeholder="Enter driver name"
-                />
-              </div>
-              <div>
-                <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">
-                  Carrier Name
-                </label>
-                <input
-                  type="text"
-                  value={editContractPowerCarrierName}
-                  onChange={(e) => setEditContractPowerCarrierName(e.target.value)}
-                  className="w-full px-3 py-2 border border-gray-300 dark:border-gray-600 rounded-lg bg-white dark:bg-gray-700 text-gray-900 dark:text-white focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
-                  placeholder="Enter carrier name"
-                />
-              </div>
+              {selectedLoadItem?.contractPowerStatus === 'BOOKED' && (
+                <>
+                  <div>
+                    <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">
+                      Driver Name
+                    </label>
+                    <input
+                      type="text"
+                      value={editContractPowerDriverName}
+                      onChange={(e) => setEditContractPowerDriverName(e.target.value)}
+                      className="w-full px-3 py-2 border border-gray-300 dark:border-gray-600 rounded-lg bg-white dark:bg-gray-700 text-gray-900 dark:text-white focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
+                      placeholder="Enter driver name"
+                    />
+                  </div>
+                  <div>
+                    <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">
+                      Carrier Name
+                    </label>
+                    <input
+                      type="text"
+                      value={editContractPowerCarrierName}
+                      onChange={(e) => setEditContractPowerCarrierName(e.target.value)}
+                      className="w-full px-3 py-2 border border-gray-300 dark:border-gray-600 rounded-lg bg-white dark:bg-gray-700 text-gray-900 dark:text-white focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
+                      placeholder="Enter carrier name"
+                    />
+                  </div>
+                </>
+              )}
             </div>
           )}
 
@@ -1635,6 +1679,69 @@ export const LoadsTab: React.FC<LoadsTabProps> = ({ loading: externalLoading = f
           refetch();
         }}
       />
+
+      {/* Contract Power Cancellation Confirmation Modal */}
+      <Modal
+        isOpen={isCancelContractPowerModalOpen}
+        onClose={() => {
+          setIsCancelContractPowerModalOpen(false);
+          setCancelReason('');
+        }}
+        title="Request Contract Power Cancellation"
+      >
+        <div className="space-y-4">
+          <div className="p-4 bg-red-50 dark:bg-red-900/20 border border-red-200 dark:border-red-800 rounded-lg">
+            <div className="flex items-start gap-3">
+              <AlertTriangle className="w-5 h-5 text-red-600 dark:text-red-400 mt-0.5 flex-shrink-0" />
+              <div>
+                <p className="text-sm font-medium text-red-800 dark:text-red-200">
+                  You are about to request cancellation of the contract power booking for:
+                </p>
+                <p className="text-sm text-red-700 dark:text-red-300 mt-1">
+                  <strong>Manifest:</strong> {selectedLoadItem?.manifestNumber}<br />
+                  <strong>Linehaul:</strong> {selectedLoadItem?.linehaulName}
+                </p>
+              </div>
+            </div>
+          </div>
+
+          <div>
+            <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">
+              Reason for Cancellation (optional)
+            </label>
+            <textarea
+              value={cancelReason}
+              onChange={(e) => setCancelReason(e.target.value)}
+              rows={3}
+              className="w-full px-3 py-2 border border-gray-300 dark:border-gray-600 rounded-lg bg-white dark:bg-gray-700 text-gray-900 dark:text-white focus:ring-2 focus:ring-red-500 focus:border-red-500"
+              placeholder="Enter reason for cancellation..."
+            />
+          </div>
+
+          <p className="text-xs text-gray-500 dark:text-gray-400">
+            A cancellation request will be sent to the Contract Power team for review and processing.
+          </p>
+
+          <div className="flex justify-end gap-3 pt-4">
+            <button
+              onClick={() => {
+                setIsCancelContractPowerModalOpen(false);
+                setCancelReason('');
+              }}
+              className="px-4 py-2 text-gray-700 dark:text-gray-300 bg-gray-100 dark:bg-gray-700 rounded-lg hover:bg-gray-200 dark:hover:bg-gray-600 transition-colors"
+            >
+              Go Back
+            </button>
+            <button
+              onClick={handleCancelContractPower}
+              disabled={cancellingContractPower}
+              className="px-4 py-2 bg-red-600 text-white rounded-lg hover:bg-red-700 disabled:opacity-50 transition-colors"
+            >
+              {cancellingContractPower ? 'Submitting...' : 'Submit Cancellation Request'}
+            </button>
+          </div>
+        </div>
+      </Modal>
     </div>
   );
 };

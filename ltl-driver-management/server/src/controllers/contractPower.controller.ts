@@ -176,6 +176,161 @@ export const requestContractPower = async (req: Request, res: Response) => {
   }
 };
 
+// Request cancellation of contract power for a loadsheet
+export const requestContractPowerCancellation = async (req: Request, res: Response) => {
+  try {
+    const {
+      loadsheetId,
+      reason
+    } = req.body;
+
+    // Get user info from request (set by auth middleware)
+    const userName = (req as any).user?.name || 'Unknown User';
+    const userEmail = (req as any).user?.email || '';
+
+    // Validate loadsheet exists and has an active contract power request
+    const loadsheet = await prisma.loadsheet.findUnique({
+      where: { id: parseInt(loadsheetId) },
+      include: {
+        linehaulTrip: {
+          include: {
+            linehaulProfile: {
+              include: {
+                originTerminal: true,
+                destinationTerminal: true
+              }
+            }
+          }
+        }
+      }
+    });
+
+    if (!loadsheet) {
+      return res.status(404).json({ success: false, message: 'Loadsheet not found' });
+    }
+
+    // Check if there's an active contract power request to cancel
+    if (!loadsheet.contractPowerStatus || loadsheet.contractPowerStatus === 'CANCEL_REQUESTED') {
+      return res.status(400).json({
+        success: false,
+        message: 'No active contract power request to cancel'
+      });
+    }
+
+    const previousStatus = loadsheet.contractPowerStatus;
+    const origin = loadsheet.originTerminalCode ||
+      loadsheet.linehaulTrip?.linehaulProfile?.originTerminal?.code || 'UNK';
+    const destination = loadsheet.destinationTerminalCode ||
+      loadsheet.linehaulTrip?.linehaulProfile?.destinationTerminal?.code || 'UNK';
+
+    // Update loadsheet with cancellation request
+    await prisma.loadsheet.update({
+      where: { id: parseInt(loadsheetId) },
+      data: {
+        contractPowerStatus: 'CANCEL_REQUESTED'
+      }
+    });
+
+    // Send email notification
+    const emailSubject = `Contract Power CANCELLATION Request - ${loadsheet.manifestNumber} (${origin} → ${destination})`;
+    const emailHtml = `
+      <div style="font-family: Arial, sans-serif; max-width: 600px; margin: 0 auto;">
+        <h2 style="color: #DC2626;">Contract Power Cancellation Request</h2>
+
+        <div style="background-color: #FEE2E2; padding: 20px; border-radius: 8px; margin: 20px 0; border: 1px solid #FECACA;">
+          <h3 style="margin-top: 0; color: #991B1B;">⚠️ Cancellation Requested</h3>
+          <p style="color: #7F1D1D; margin-bottom: 0;">
+            A cancellation has been requested for this contract power booking. Please review and take appropriate action.
+          </p>
+        </div>
+
+        <div style="background-color: #F3F4F6; padding: 20px; border-radius: 8px; margin: 20px 0;">
+          <h3 style="margin-top: 0; color: #374151;">Load Details</h3>
+          <table style="width: 100%; border-collapse: collapse;">
+            <tr>
+              <td style="padding: 8px 0; color: #6B7280; width: 40%;">Manifest Number:</td>
+              <td style="padding: 8px 0; color: #111827; font-weight: bold;">${loadsheet.manifestNumber}</td>
+            </tr>
+            <tr>
+              <td style="padding: 8px 0; color: #6B7280;">Linehaul:</td>
+              <td style="padding: 8px 0; color: #111827; font-weight: bold;">${loadsheet.linehaulName || 'N/A'}</td>
+            </tr>
+            <tr>
+              <td style="padding: 8px 0; color: #6B7280;">Route:</td>
+              <td style="padding: 8px 0; color: #111827; font-weight: bold;">${origin} → ${destination}</td>
+            </tr>
+            <tr>
+              <td style="padding: 8px 0; color: #6B7280;">Trailer:</td>
+              <td style="padding: 8px 0; color: #111827;">${loadsheet.trailerNumber || 'N/A'}</td>
+            </tr>
+            <tr>
+              <td style="padding: 8px 0; color: #6B7280;">Previous Status:</td>
+              <td style="padding: 8px 0; color: #111827;">${previousStatus}</td>
+            </tr>
+            ${loadsheet.contractPowerCarrierName ? `
+            <tr>
+              <td style="padding: 8px 0; color: #6B7280;">Carrier:</td>
+              <td style="padding: 8px 0; color: #111827;">${loadsheet.contractPowerCarrierName}</td>
+            </tr>
+            ` : ''}
+            ${loadsheet.contractPowerDriverName ? `
+            <tr>
+              <td style="padding: 8px 0; color: #6B7280;">Driver:</td>
+              <td style="padding: 8px 0; color: #111827;">${loadsheet.contractPowerDriverName}</td>
+            </tr>
+            ` : ''}
+          </table>
+        </div>
+
+        ${reason ? `
+        <div style="background-color: #FEF3C7; padding: 15px; border-radius: 8px; margin: 20px 0;">
+          <h4 style="margin-top: 0; color: #92400E;">Cancellation Reason</h4>
+          <p style="color: #78350F; margin-bottom: 0;">${reason}</p>
+        </div>
+        ` : ''}
+
+        <div style="background-color: #E0E7FF; padding: 15px; border-radius: 8px; margin: 20px 0;">
+          <h4 style="margin-top: 0; color: #3730A3;">Requested By</h4>
+          <p style="color: #4338CA; margin-bottom: 0;">
+            <strong>${userName}</strong><br/>
+            ${userEmail ? `<a href="mailto:${userEmail}">${userEmail}</a><br/>` : ''}
+            ${format(new Date(), 'MMMM d, yyyy \'at\' h:mm a')}
+          </p>
+        </div>
+
+        <p style="color: #6B7280; font-size: 12px; margin-top: 30px;">
+          This cancellation request has been logged in the system. Please process this cancellation in the Bookings page.
+          ${loadsheet.contractPowerBookingId ? `<br/><br/>Booking ID: ${loadsheet.contractPowerBookingId}` : ''}
+        </p>
+      </div>
+    `;
+
+    try {
+      await NotificationService.sendEmail({
+        to: 'linehaulmanagement@ccfs.com',
+        subject: emailSubject,
+        html: emailHtml
+      });
+      console.log('Contract power cancellation request email sent successfully');
+    } catch (emailError) {
+      console.error('Failed to send contract power cancellation request email:', emailError);
+      // Don't fail the request if email fails
+    }
+
+    return res.json({
+      success: true,
+      message: 'Cancellation request submitted successfully'
+    });
+
+  } catch (error) {
+    console.error('Contract power cancellation request error:', error);
+    return res.status(500).json({
+      success: false,
+      message: 'Failed to submit cancellation request'
+    });
+  }
+};
+
 // Get contract power request status for a loadsheet
 export const getContractPowerStatus = async (req: Request, res: Response) => {
   try {
