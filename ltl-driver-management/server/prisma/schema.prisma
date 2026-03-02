@@ -1693,6 +1693,7 @@ model PlacardSheetData {
   id             Int      @id @default(autoincrement())
   tripDocumentId Int      @unique
   tripDisplay    String
+  manifestNumber String?
   trailerNumber  String?
   createdAt      DateTime @default(now())
 

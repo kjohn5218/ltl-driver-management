@@ -25,6 +25,7 @@ export interface RequiredPlacard {
 
 export interface PlacardSheetData {
   tripDisplay: string;
+  manifestNumber?: string;
   trailerNumber?: string;
   hazmatItems: PlacardHazmatItem[];
   requiredPlacards: RequiredPlacard[];
@@ -323,7 +324,7 @@ export const generatePlacardSheetHTML = (data: PlacardSheetData): string => {
 <body>
   <div class="page">
     <div class="page-header">
-      <div class="trip-id">${data.tripDisplay}</div>
+      <div class="trip-id">${data.manifestNumber ? `Manifest: ${data.manifestNumber} - ` : ''}${data.tripDisplay}</div>
       <div class="document-title">Placard Information Sheet</div>
     </div>
 

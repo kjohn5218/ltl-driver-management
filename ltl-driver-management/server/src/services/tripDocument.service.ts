@@ -370,6 +370,14 @@ export const tripDocumentService = {
       return { id: existing.id, documentNumber: existing.documentNumber };
     }
 
+    // Get loadsheets associated with this trip for manifest numbers
+    const loadsheets = await prisma.loadsheet.findMany({
+      where: { linehaulTripId: tripId },
+      select: { manifestNumber: true },
+    });
+    const manifestNumbers = loadsheets.map(ls => ls.manifestNumber).filter(Boolean);
+    const manifestNumber = manifestNumbers.length > 0 ? manifestNumbers.join(', ') : null;
+
     // Get hazmat shipments from TMS
     const tmsData = await tmsMockService.getTripData(tripId, trip.tripNumber);
     const hazmatShipments = tmsData.shipments.filter(s => s.hazmat !== undefined);
@@ -412,7 +420,8 @@ export const tripDocumentService = {
         placardData: {
           create: {
             tripDisplay,
-            trailerNumber: tmsData.trailerNumber || trip.trailer?.unitNumber,
+            manifestNumber,
+            trailerNumber: trip.trailer?.unitNumber,
             hazmatItems: {
               create: hazmatItems.map((item, index) => ({
                 proNumber: item.proNumber,
@@ -590,6 +599,7 @@ export const tripDocumentService = {
 
     const placardSheetData: PlacardSheetData = {
       tripDisplay: data.tripDisplay,
+      manifestNumber: data.manifestNumber || undefined,
       trailerNumber: data.trailerNumber || undefined,
       hazmatItems: data.hazmatItems.map(item => ({
         proNumber: item.proNumber,
