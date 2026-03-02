@@ -513,7 +513,9 @@ export const LoadsTab: React.FC<LoadsTabProps> = ({ loading: externalLoading = f
   const openEditModal = (loadItem: LoadItem) => {
     setSelectedLoadItem(loadItem);
     setEditLinehaulName(loadItem.linehaulName || '');
-    setEditTrailerNumber(loadItem.trailerNumber || '');
+    // Use original loadsheet trailer number to avoid '-' placeholder
+    const actualTrailerNumber = loadItem.originalLoadsheet?.trailerNumber || '';
+    setEditTrailerNumber(actualTrailerNumber);
     setEditStatus(loadItem.status as LoadsheetStatus);
     setEditDoNotLoadHazmat(loadItem.doNotLoadPlacardableHazmat || false);
     setEditDoorNumber(loadItem.door || '');
