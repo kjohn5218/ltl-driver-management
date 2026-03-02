@@ -10,6 +10,7 @@ import { TruckForm } from '../components/equipment/TruckForm';
 import { TrailerForm } from '../components/equipment/TrailerForm';
 import { DollyForm } from '../components/equipment/DollyForm';
 import { LocationMultiSelect } from '../components/LocationMultiSelect';
+import { LocationSelect } from '../components/LocationSelect';
 import { equipmentService, VehicleLocationData, TerminalAllocationData, AllocationSummaryResponse } from '../services/equipmentService';
 import { locationService } from '../services/locationService';
 import {
@@ -67,13 +68,13 @@ export const Equipment: React.FC = () => {
     activeTab: 'trucks' as TabType,
     searchTerm: '',
     statusFilter: '' as EquipmentStatus | '',
-    terminalFilter: '' as number | '',
+    terminalFilter: '',  // Location code (string)
   });
   const { activeTab, searchTerm, statusFilter, terminalFilter } = filters;
   const setActiveTab = (v: TabType) => updateFilter('activeTab', v);
   const setSearchTerm = (v: string) => updateFilter('searchTerm', v);
   const setStatusFilter = (v: EquipmentStatus | '') => updateFilter('statusFilter', v);
-  const setTerminalFilter = (v: number | '') => updateFilter('terminalFilter', v);
+  const setTerminalFilter = (v: string) => updateFilter('terminalFilter', v);
 
   const [loading, setLoading] = useState(true);
   const [currentPage, setCurrentPage] = useState(1);
@@ -124,7 +125,7 @@ export const Equipment: React.FC = () => {
     if (activeTab !== 'allocation') {
       fetchData();
     }
-  }, [activeTab, currentPage, searchTerm, statusFilter, terminalFilter]);
+  }, [activeTab, currentPage, searchTerm, statusFilter, terminalFilter, locations]);
 
   const fetchLocations = async () => {
     try {
@@ -139,10 +140,14 @@ export const Equipment: React.FC = () => {
 
   const fetchData = async () => {
     setLoading(true);
+    // Convert location code to terminal ID for API filtering
+    const terminalId = terminalFilter
+      ? locations.find(loc => loc.code === terminalFilter)?.id
+      : undefined;
     const filters = {
       search: searchTerm || undefined,
       status: statusFilter || undefined,
-      terminalId: terminalFilter || undefined,
+      terminalId: terminalId,
       page: currentPage,
       limit: 20
     };
@@ -832,21 +837,15 @@ export const Equipment: React.FC = () => {
                     ))}
                   </select>
 
-                  <select
+                  <LocationSelect
                     value={terminalFilter}
-                    onChange={(e) => {
-                      setTerminalFilter(e.target.value ? parseInt(e.target.value) : '');
+                    onChange={(value) => {
+                      setTerminalFilter(value);
                       setCurrentPage(1);
                     }}
-                    className="rounded-md border border-gray-300 shadow-sm text-sm focus:ring-indigo-500 focus:border-indigo-500"
-                  >
-                    <option value="">All Locations</option>
-                    {locations.map((location) => (
-                      <option key={location.id} value={location.id}>
-                        {location.code} - {location.name}
-                      </option>
-                    ))}
-                  </select>
+                    placeholder="All Locations"
+                    className="min-w-[200px]"
+                  />
                 </div>
               </div>
 
