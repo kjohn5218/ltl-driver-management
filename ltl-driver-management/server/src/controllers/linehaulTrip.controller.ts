@@ -1260,7 +1260,7 @@ export const getTripEtaBatch = async (req: Request, res: Response): Promise<void
   }
 };
 
-// Get vehicle location from GoMotive API
+// Get vehicle location from Motive API
 export const getVehicleLocation = async (req: Request, res: Response): Promise<void> => {
   try {
     const { vehicleId } = req.params;
@@ -1288,118 +1288,43 @@ export const getVehicleLocation = async (req: Request, res: Response): Promise<v
       return;
     }
 
-    // GoMotive API configuration
-    const goMotiveApiKey = process.env.GOMOTIVE_API_KEY;
-    const goMotiveApiUrl = process.env.GOMOTIVE_API_URL || 'https://api.gomotive.com/v3';
+    // Use Motive API service to get vehicle location
+    const { getMotiveService } = await import('../services/motive.service');
+    const motiveService = getMotiveService();
 
-    if (!goMotiveApiKey || !truck.externalFleetId) {
-      console.warn('GOMOTIVE_API_KEY not configured or no externalFleetId, returning mock data');
-      // Return mock data for development
+    try {
+      const location = await motiveService.getTruckLocation(truck.unitNumber);
+
+      if (!location) {
+        res.json({
+          vehicleId: truck.externalFleetId || String(truck.id),
+          unitNumber: truck.unitNumber,
+          error: 'No location data available from Motive'
+        });
+        return;
+      }
+
       res.json({
         vehicleId: truck.externalFleetId || String(truck.id),
         unitNumber: truck.unitNumber,
         location: {
-          latitude: 33.7490 + (Math.random() - 0.5) * 2,
-          longitude: -84.3880 + (Math.random() - 0.5) * 2,
-          address: '123 Interstate Highway',
-          city: 'Atlanta',
-          state: 'GA',
-          speed: Math.floor(Math.random() * 70),
-          heading: Math.floor(Math.random() * 360),
-          timestamp: new Date().toISOString()
+          latitude: location.latitude,
+          longitude: location.longitude,
+          address: location.description,
+          speed: location.speed,
+          heading: location.bearing,
+          timestamp: location.locatedAt.toISOString(),
+          currentDriver: location.currentDriverName
         }
       });
-      return;
-    }
-
-    // Calculate date range for API (last 24 hours)
-    const endDate = new Date();
-    const startDate = new Date(endDate.getTime() - 24 * 60 * 60 * 1000);
-
-    const apiUrl = `${goMotiveApiUrl}/vehicle_locations/${vehicleId}?start_date=${startDate.toISOString()}&end_date=${endDate.toISOString()}`;
-
-    const response = await fetch(apiUrl, {
-      method: 'GET',
-      headers: {
-        'Authorization': `Bearer ${goMotiveApiKey}`,
-        'Content-Type': 'application/json'
-      }
-    });
-
-    if (!response.ok) {
-      const errorText = await response.text();
-      console.error('GoMotive API error:', response.status, errorText);
-      res.status(response.status).json({
-        vehicleId,
-        unitNumber: truck.unitNumber,
-        error: `GoMotive API error: ${response.status}`
-      });
-      return;
-    }
-
-    const data = await response.json() as {
-      vehicle_locations?: Array<{
-        latitude?: number;
-        lat?: number;
-        longitude?: number;
-        lng?: number;
-        lon?: number;
-        address?: string;
-        located_at?: string;
-        city?: string;
-        state?: string;
-        speed?: number;
-        heading?: number;
-        bearing?: number;
-        timestamp?: string;
-        created_at?: string;
-      }>;
-      locations?: Array<{
-        latitude?: number;
-        lat?: number;
-        longitude?: number;
-        lng?: number;
-        lon?: number;
-        address?: string;
-        located_at?: string;
-        city?: string;
-        state?: string;
-        speed?: number;
-        heading?: number;
-        bearing?: number;
-        timestamp?: string;
-        created_at?: string;
-      }>;
-    };
-
-    // Parse GoMotive response and extract latest location
-    // GoMotive API typically returns an array of location records
-    const locations = data.vehicle_locations || data.locations || [];
-    const latestLocation = locations.length > 0 ? locations[locations.length - 1] : null;
-
-    if (!latestLocation) {
+    } catch (motiveError) {
+      console.error('Motive API error:', motiveError);
       res.json({
-        vehicleId,
+        vehicleId: truck.externalFleetId || String(truck.id),
         unitNumber: truck.unitNumber,
-        error: 'No location data available'
+        error: 'Failed to fetch location from Motive API'
       });
-      return;
     }
-
-    res.json({
-      vehicleId,
-      unitNumber: truck.unitNumber,
-      location: {
-        latitude: latestLocation.latitude || latestLocation.lat,
-        longitude: latestLocation.longitude || latestLocation.lng || latestLocation.lon,
-        address: latestLocation.address || latestLocation.located_at,
-        city: latestLocation.city,
-        state: latestLocation.state,
-        speed: latestLocation.speed,
-        heading: latestLocation.heading || latestLocation.bearing,
-        timestamp: latestLocation.located_at || latestLocation.timestamp || latestLocation.created_at
-      }
-    });
   } catch (error) {
     console.error('Error fetching vehicle location:', error);
     res.status(500).json({
