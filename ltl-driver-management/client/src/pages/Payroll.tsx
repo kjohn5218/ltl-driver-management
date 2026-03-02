@@ -6,6 +6,7 @@ import { StatusBadge } from '../components/common/StatusBadge';
 import { PayrollEditModal } from '../components/payroll/PayrollEditModal';
 import { PayrollExportModal } from '../components/payroll/PayrollExportModal';
 import { LocationMultiSelect } from '../components/LocationMultiSelect';
+import { CarrierSelect } from '../components/CarrierSelect';
 import { payrollService } from '../services/payrollService';
 import { carrierService } from '../services/carrierService';
 import {
@@ -81,6 +82,9 @@ export const Payroll: React.FC = () => {
   // Expanded rows for viewing arrival details
   const [expandedRows, setExpandedRows] = useState<Set<string>>(new Set());
 
+  // Employer filter - track ID for CarrierSelect, convert to name for API
+  const [employerFilterId, setEmployerFilterId] = useState<number | ''>('');
+
   // Inline editing state
   const [editingCellId, setEditingCellId] = useState<string | null>(null);
   const [editingCellValue, setEditingCellValue] = useState<string>('');
@@ -116,6 +120,18 @@ export const Payroll: React.FC = () => {
     };
     fetchCarriers();
   }, []);
+
+  // Update employer filter when carrier selection changes
+  useEffect(() => {
+    if (employerFilterId && carriers.length > 0) {
+      const carrier = carriers.find(c => c.id === employerFilterId);
+      if (carrier) {
+        setFilters(prev => ({ ...prev, employer: carrier.name }));
+      }
+    } else if (!employerFilterId) {
+      setFilters(prev => ({ ...prev, employer: undefined }));
+    }
+  }, [employerFilterId, carriers]);
 
   useEffect(() => {
     if (filters.startDate && filters.endDate) {
@@ -1100,20 +1116,13 @@ export const Payroll: React.FC = () => {
             />
 
             {/* Employer Filter */}
-            <select
-              value={filters.employer || ''}
-              onChange={(e) => handleFilterChange('employer', e.target.value || undefined)}
-              className="rounded-md border-gray-300 dark:border-gray-600 dark:bg-gray-700 dark:text-white text-sm"
-            >
-              <option value="">All Employers</option>
-              {carriers
-                .filter(c => c.name)
-                .sort((a, b) => a.name.localeCompare(b.name))
-                .map((carrier) => (
-                  <option key={carrier.id} value={carrier.name}>{carrier.name}</option>
-                ))
-              }
-            </select>
+            <CarrierSelect
+              value={employerFilterId}
+              onChange={setEmployerFilterId}
+              placeholder="All Employers"
+              className="min-w-[200px]"
+              hasDrivers
+            />
 
             {/* Approval Filter */}
             <select
