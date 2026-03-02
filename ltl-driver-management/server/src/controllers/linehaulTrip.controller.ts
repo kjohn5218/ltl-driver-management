@@ -377,7 +377,8 @@ export const createTrip = async (req: Request, res: Response): Promise<void> => 
       dollyId,
       notes,
       status,
-      destinationTerminalCode // Alternate destination override
+      destinationTerminalCode, // Alternate destination override
+      loadsheetIds // Array of loadsheet IDs to link atomically
     } = req.body;
 
     console.log('CreateTrip request body:', {
@@ -387,6 +388,7 @@ export const createTrip = async (req: Request, res: Response): Promise<void> => 
       truckId,
       dollyId,
       destinationTerminalCode,
+      loadsheetIds,
       notes: notes?.substring(0, 50)
     });
 
@@ -444,10 +446,46 @@ export const createTrip = async (req: Request, res: Response): Promise<void> => 
         }
       });
 
+      // Link loadsheets to the trip if provided
+      if (loadsheetIds && Array.isArray(loadsheetIds) && loadsheetIds.length > 0) {
+        console.log(`[CreateTrip] Linking ${loadsheetIds.length} loadsheets to trip ${newTrip.id}`);
+        await tx.loadsheet.updateMany({
+          where: {
+            id: { in: loadsheetIds.map((id: number | string) => typeof id === 'string' ? parseInt(id, 10) : id) }
+          },
+          data: {
+            linehaulTripId: newTrip.id,
+            status: tripStatus === 'DISPATCHED' ? 'DISPATCHED' : undefined,
+            ...(destinationTerminalCode && { destinationTerminalCode })
+          }
+        });
+        console.log(`[CreateTrip] Successfully linked loadsheets to trip ${newTrip.id}`);
+      }
+
       return newTrip;
     });
 
-    res.status(201).json(trip);
+    // Re-fetch trip with loadsheets included
+    const tripWithLoadsheets = await prisma.linehaulTrip.findUnique({
+      where: { id: trip.id },
+      include: {
+        linehaulProfile: {
+          select: { id: true, profileCode: true, name: true }
+        },
+        driver: {
+          select: { id: true, name: true, number: true }
+        },
+        truck: {
+          select: { id: true, unitNumber: true }
+        },
+        trailer: {
+          select: { id: true, unitNumber: true }
+        },
+        loadsheets: true
+      }
+    });
+
+    res.status(201).json(tripWithLoadsheets);
   } catch (error: any) {
     console.error('Error creating trip:', error);
     console.error('Error details:', {

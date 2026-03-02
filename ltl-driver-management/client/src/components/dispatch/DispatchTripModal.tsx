@@ -866,9 +866,15 @@ export const DispatchTripModal: React.FC<DispatchTripModalProps> = ({
       // Calculate planned arrival based on mileage/transit time
       const plannedArrivalTime = calculatedETA ? calculatedETA.toISOString() : undefined;
 
+      // Collect loadsheet IDs for atomic linking
+      const loadsheetIds = selectedLoadsheets
+        .filter(ls => ls.id)
+        .map(ls => ls.id);
+
       const tripData = {
         linehaulProfileId: matchingProfile.id,
         dispatchDate: new Date().toISOString(),
+        status: 'DISPATCHED', // Create as dispatched so loadsheets are also marked DISPATCHED
         driverId: selectedDriver?.id,
         truckId: isOwnerOperator ? undefined : selectedPowerUnit?.id,
         trailerId: trailerId,
@@ -877,9 +883,11 @@ export const DispatchTripModal: React.FC<DispatchTripModalProps> = ({
         destinationTerminalCode: destinationCode, // Override destination if alternate selected
         plannedArrival: plannedArrivalTime, // Calculated ETA based on mileage
         calculatedMiles: calculatedMiles, // Distance in miles
+        loadsheetIds, // Link loadsheets atomically with trip creation
         notes: notes + (manifestNotes ? `\nManifests: ${manifestNotes}` : '') + (isOwnerOperator ? '\nOwner Operator' : '') + (isAlternateDestination ? `\nAlternate Destination: ${destinationCode}` : '') + (calculatedMiles ? `\nDistance: ${calculatedMiles} miles` : '')
       };
 
+      console.log(`[Dispatch] Creating trip with ${loadsheetIds.length} loadsheets linked atomically`);
       const createdTrip = await linehaulTripService.createTrip(tripData);
 
       await linehaulTripService.updateTripStatus(createdTrip.id, {
@@ -887,28 +895,6 @@ export const DispatchTripModal: React.FC<DispatchTripModalProps> = ({
         actualDeparture: new Date().toISOString()
         // Notes are already set during trip creation - don't overwrite
       });
-
-      // Link loadsheets to the trip
-      console.log(`[Dispatch] Linking ${selectedLoadsheets.length} loadsheets to trip ${createdTrip.id}`);
-      for (const loadsheet of selectedLoadsheets) {
-        if (!loadsheet.id) {
-          console.error('[Dispatch] Loadsheet missing ID:', loadsheet);
-          continue;
-        }
-        try {
-          console.log(`[Dispatch] Updating loadsheet ${loadsheet.id} (${loadsheet.manifestNumber}) with linehaulTripId=${createdTrip.id}`);
-          await loadsheetService.updateLoadsheet(loadsheet.id, {
-            linehaulTripId: createdTrip.id,
-            status: 'DISPATCHED',
-            // Update loadsheet destination if alternate destination was selected
-            ...(isAlternateDestination && { destinationTerminalCode: destinationCode })
-          });
-          console.log(`[Dispatch] Successfully updated loadsheet ${loadsheet.id}`);
-        } catch (loadsheetError: any) {
-          console.error(`[Dispatch] Failed to update loadsheet ${loadsheet.id}:`, loadsheetError);
-          toast.error(`Failed to link manifest ${loadsheet.manifestNumber} to trip`);
-        }
-      }
 
       // Generate trip documents after loadsheets are linked
       try {

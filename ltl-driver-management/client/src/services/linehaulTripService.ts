@@ -84,7 +84,7 @@ export const linehaulTripService = {
   },
 
   // Create trip
-  createTrip: async (data: Partial<LinehaulTrip>): Promise<LinehaulTrip> => {
+  createTrip: async (data: Partial<LinehaulTrip> & { loadsheetIds?: number[] }): Promise<LinehaulTrip> => {
     const response = await api.post('/linehaul-trips', data);
     return response.data;
   },
