@@ -1,5 +1,5 @@
 import React, { useState, useEffect } from 'react';
-import { X, Truck, MapPin, Package, Scale, Clock, Calendar, Send, Loader2 } from 'lucide-react';
+import { X, Truck, MapPin, Clock, Calendar, Send, Loader2 } from 'lucide-react';
 import { LoadItem } from './LoadsTab';
 import { api } from '../../services/api';
 import { toast } from 'react-hot-toast';
@@ -25,8 +25,6 @@ export const RequestContractPowerModal: React.FC<RequestContractPowerModalProps>
     linehaulName: '',
     trailerNumber: '',
     trailerLength: 53,
-    weight: 0,
-    pieces: 0,
     scheduledDate: '',
     scheduledTime: '',
     notes: ''
@@ -42,8 +40,6 @@ export const RequestContractPowerModal: React.FC<RequestContractPowerModalProps>
         linehaulName: loadItem.linehaulName || '',
         trailerNumber: loadItem.trailerNumber || '',
         trailerLength: loadItem.trailerLength || 53,
-        weight: loadItem.weight || 0,
-        pieces: loadItem.pieces || 0,
         scheduledDate: loadItem.scheduledDepartDate || '',
         scheduledTime: loadItem.scheduledDeparture || '',
         notes: ''
@@ -65,8 +61,6 @@ export const RequestContractPowerModal: React.FC<RequestContractPowerModalProps>
         linehaulName: formData.linehaulName,
         trailerNumber: formData.trailerNumber,
         trailerLength: formData.trailerLength,
-        weight: formData.weight,
-        pieces: formData.pieces,
         scheduledDate: formData.scheduledDate,
         scheduledTime: formData.scheduledTime,
         notes: formData.notes
@@ -206,34 +200,6 @@ export const RequestContractPowerModal: React.FC<RequestContractPowerModalProps>
                   <option value={48}>48′</option>
                   <option value={53}>53′</option>
                 </select>
-              </div>
-            </div>
-
-            {/* Load Details */}
-            <div className="grid grid-cols-2 gap-4">
-              <div>
-                <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">
-                  <Scale className="w-4 h-4 inline mr-1" />
-                  Weight (lbs)
-                </label>
-                <input
-                  type="number"
-                  value={formData.weight}
-                  onChange={(e) => setFormData({ ...formData, weight: parseInt(e.target.value) || 0 })}
-                  className="w-full px-3 py-2 border border-gray-300 dark:border-gray-600 rounded-md bg-white dark:bg-gray-700 text-gray-900 dark:text-white"
-                />
-              </div>
-              <div>
-                <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">
-                  <Package className="w-4 h-4 inline mr-1" />
-                  Pieces
-                </label>
-                <input
-                  type="number"
-                  value={formData.pieces}
-                  onChange={(e) => setFormData({ ...formData, pieces: parseInt(e.target.value) || 0 })}
-                  className="w-full px-3 py-2 border border-gray-300 dark:border-gray-600 rounded-md bg-white dark:bg-gray-700 text-gray-900 dark:text-white"
-                />
               </div>
             </div>
 

@@ -85,9 +85,9 @@ interface PlanningData {
 const loadsheetToLoadItem = (loadsheet: Loadsheet, _index: number): LoadItem => {
   // Parse linehaul name to get origin and destination (e.g., "ATL-MEM" -> origin: ATL, dest: MEM)
   const parts = loadsheet.linehaulName?.split('-') || [];
-  // Prioritize actual originTerminalCode from loadsheet, fall back to parsing from linehaul name
+  // Prioritize actual terminal codes from loadsheet, fall back to parsing from linehaul name
   const originCode = loadsheet.originTerminalCode || parts[0] || 'UNK';
-  const destCode = parts[1] || 'UNK';
+  const destCode = loadsheet.destinationTerminalCode || parts[1] || 'UNK';
 
   // Capacity data based on trailer length (in lbs)
   const trailerLength = loadsheet.suggestedTrailerLength || 53;
