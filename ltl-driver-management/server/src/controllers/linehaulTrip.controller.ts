@@ -1,7 +1,6 @@
 import { Request, Response } from 'express';
 import { prisma } from '../index';
 import { Prisma, TripStatus, EquipmentStatus } from '@prisma/client';
-import { tripDocumentService } from '../services/tripDocument.service';
 import { etaService } from '../services/eta.service';
 import { calculateAndCreateTripPay, completePayrollOnArrival } from '../services/payroll.service';
 
