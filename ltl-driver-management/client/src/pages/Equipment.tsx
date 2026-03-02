@@ -838,12 +838,14 @@ export const Equipment: React.FC = () => {
                     }}
                     className="rounded-md border border-gray-300 shadow-sm text-sm focus:ring-indigo-500 focus:border-indigo-500"
                   >
-                    <option value="">All Locations</option>
-                    {locations.map((location) => (
-                      <option key={location.id} value={location.id}>
-                        {location.code} - {location.name}
-                      </option>
-                    ))}
+                    <option value="">All Physical Terminals</option>
+                    {locations
+                      .filter((location) => location.isPhysicalTerminal)
+                      .map((location) => (
+                        <option key={location.id} value={location.id}>
+                          {location.code} - {location.name}
+                        </option>
+                      ))}
                   </select>
                 </div>
               </div>
