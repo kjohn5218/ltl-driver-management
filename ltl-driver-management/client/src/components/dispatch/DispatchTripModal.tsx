@@ -8,6 +8,7 @@ import { equipmentService } from '../../services/equipmentService';
 import { loadsheetService } from '../../services/loadsheetService';
 import { driverService } from '../../services/driverService';
 import { linehaulProfileService } from '../../services/linehaulProfileService';
+import { tripDocumentService } from '../../services/tripDocumentService';
 import { api } from '../../services/api';
 import { Loadsheet, EquipmentTruck, EquipmentTrailer, EquipmentDolly, CarrierDriver, Route, Location, Terminal } from '../../types';
 import { TripDocumentsModal } from './TripDocumentsModal';
@@ -907,6 +908,16 @@ export const DispatchTripModal: React.FC<DispatchTripModalProps> = ({
           console.error(`[Dispatch] Failed to update loadsheet ${loadsheet.id}:`, loadsheetError);
           toast.error(`Failed to link manifest ${loadsheet.manifestNumber} to trip`);
         }
+      }
+
+      // Generate trip documents after loadsheets are linked
+      try {
+        console.log(`[Dispatch] Generating documents for trip ${createdTrip.id}`);
+        await tripDocumentService.generateDocuments(createdTrip.id);
+        console.log(`[Dispatch] Documents generated successfully`);
+      } catch (docError: any) {
+        console.error(`[Dispatch] Failed to generate documents:`, docError);
+        // Don't fail the dispatch if document generation fails
       }
 
       toast.success('Trip created and dispatched successfully');

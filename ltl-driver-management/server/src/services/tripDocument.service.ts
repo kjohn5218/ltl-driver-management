@@ -84,17 +84,6 @@ export const tripDocumentService = {
     console.log(`Generating documents for trip ${tripId}...`);
 
     try {
-      // Check if documents already exist for this trip to prevent duplicates
-      const existingDocs = await prisma.tripDocument.findMany({
-        where: { tripId },
-        select: { id: true, documentType: true },
-      });
-
-      if (existingDocs.length > 0) {
-        console.log(`Documents already exist for trip ${tripId}, skipping generation`);
-        return;
-      }
-
       // Get trip details
       const trip = await prisma.linehaulTrip.findUnique({
         where: { id: tripId },
@@ -209,8 +198,8 @@ export const tripDocumentService = {
             create: {
               tripDisplay,
               manifestNumber: tmsData.manifestNumber,
-              driverName: tmsData.driverName || trip.driver?.name,
-              trailerNumber: tmsData.trailerNumber || trip.trailer?.unitNumber,
+              driverName: trip.linehaulProfile?.name || trip.driver?.name,
+              trailerNumber: trip.trailer?.unitNumber,
               originCode,
               destCode,
               effort: tmsData.effort,
@@ -303,7 +292,7 @@ export const tripDocumentService = {
             create: {
               tripDisplay,
               manifestNumber: loadsheet.manifestNumber,
-              driverName: trip.driver?.name,
+              driverName: trip.linehaulProfile?.name || trip.driver?.name,
               trailerNumber: loadsheet.trailerNumber || trip.trailer?.unitNumber,
               originCode,
               destCode,

@@ -752,16 +752,8 @@ export const updateTripStatus = async (req: Request, res: Response): Promise<voi
       });
     });
 
-    // Generate trip documents when dispatched or in transit (async, non-blocking)
-    if (status === 'DISPATCHED' || status === 'IN_TRANSIT') {
-      tripDocumentService.generateAllDocuments(tripId)
-        .then(() => {
-          console.log(`Trip documents generated for trip ${tripId}`);
-        })
-        .catch((error) => {
-          console.error(`Failed to generate trip documents for trip ${tripId}:`, error);
-        });
-    }
+    // Note: Document generation is now triggered explicitly by the frontend after loadsheets are linked
+    // This prevents race conditions where documents were generated before loadsheets were associated
 
     // Auto-create TripPay and PayrollLineItem when trip is dispatched or in transit
     if (status === 'DISPATCHED' || status === 'IN_TRANSIT') {
@@ -1130,14 +1122,8 @@ export const dispatchTrip = async (req: Request, res: Response): Promise<void> =
       });
     });
 
-    // Generate trip documents asynchronously
-    tripDocumentService.generateAllDocuments(tripId)
-      .then(() => {
-        console.log(`Trip documents generated for trip ${tripId}`);
-      })
-      .catch((error) => {
-        console.error(`Failed to generate trip documents for trip ${tripId}:`, error);
-      });
+    // Note: Document generation is now triggered explicitly by the frontend after loadsheets are linked
+    // This prevents race conditions where documents were generated before loadsheets were associated
 
     // Auto-create TripPay and PayrollLineItem with PENDING status when dispatched
     const payrollResult = await calculateAndCreateTripPay(tripId);
