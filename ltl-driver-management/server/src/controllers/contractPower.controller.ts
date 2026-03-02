@@ -81,6 +81,19 @@ export const requestContractPower = async (req: Request, res: Response) => {
       }
     });
 
+    // Record history entry
+    await prisma.loadsheetContractPowerHistory.create({
+      data: {
+        loadsheetId: parseInt(loadsheetId),
+        action: 'REQUESTED',
+        status: 'REQUESTED',
+        bookingId: booking.id,
+        notes: `Contract power requested for ${origin} to ${destination}`,
+        performedBy: userId,
+        performedByName: userName
+      }
+    });
+
     // Send email notification
     const emailSubject = `Contract Power Request - ${manifestNumber} (${origin} → ${destination})`;
     const emailHtml = `
@@ -223,11 +236,29 @@ export const requestContractPowerCancellation = async (req: Request, res: Respon
     const destination = loadsheet.destinationTerminalCode ||
       loadsheet.linehaulTrip?.linehaulProfile?.destinationTerminal?.code || 'UNK';
 
+    // Get user ID
+    const userId = (req as any).user?.id;
+
     // Update loadsheet with cancellation request
     await prisma.loadsheet.update({
       where: { id: parseInt(loadsheetId) },
       data: {
         contractPowerStatus: 'CANCEL_REQUESTED'
+      }
+    });
+
+    // Record history entry
+    await prisma.loadsheetContractPowerHistory.create({
+      data: {
+        loadsheetId: parseInt(loadsheetId),
+        action: 'CANCEL_REQUESTED',
+        status: 'CANCEL_REQUESTED',
+        carrierName: loadsheet.contractPowerCarrierName,
+        driverName: loadsheet.contractPowerDriverName,
+        bookingId: loadsheet.contractPowerBookingId,
+        notes: reason || 'Cancellation requested',
+        performedBy: userId,
+        performedByName: userName
       }
     });
 
@@ -365,6 +396,30 @@ export const getContractPowerStatus = async (req: Request, res: Response) => {
     return res.status(500).json({
       success: false,
       message: 'Failed to get contract power status'
+    });
+  }
+};
+
+// Get contract power history for a loadsheet
+export const getContractPowerHistory = async (req: Request, res: Response) => {
+  try {
+    const { loadsheetId } = req.params;
+
+    const history = await prisma.loadsheetContractPowerHistory.findMany({
+      where: { loadsheetId: parseInt(loadsheetId) },
+      orderBy: { createdAt: 'desc' }
+    });
+
+    return res.json({
+      success: true,
+      history
+    });
+
+  } catch (error) {
+    console.error('Get contract power history error:', error);
+    return res.status(500).json({
+      success: false,
+      message: 'Failed to get contract power history'
     });
   }
 };

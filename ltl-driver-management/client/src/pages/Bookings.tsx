@@ -56,18 +56,24 @@ export const Bookings: React.FC = () => {
   const [deletingBooking, setDeletingBooking] = useState<Booking | null>(null);
   const [rateConfirmationBooking, setRateConfirmationBooking] = useState<Booking | null>(null);
   const [rateConfirmationFilter, setRateConfirmationFilter] = useState('');
+  const [cancelRequestFilter, setCancelRequestFilter] = useState('');
 
   // Handle URL query parameters
   useEffect(() => {
     const status = searchParams.get('status');
     const rateConfirmation = searchParams.get('rateConfirmation');
-    
+    const cancelRequest = searchParams.get('cancelRequest');
+
     if (status) {
       setStatusFilter(status);
     }
-    
+
     if (rateConfirmation) {
       setRateConfirmationFilter(rateConfirmation);
+    }
+
+    if (cancelRequest) {
+      setCancelRequestFilter(cancelRequest);
     }
   }, [searchParams]);
 
@@ -172,8 +178,14 @@ export const Bookings: React.FC = () => {
       } else if (documentsFilter === 'without_documents') {
         matchesDocuments = !booking.documents || booking.documents.length === 0;
       }
-      
-      return matchesSearch && matchesStatus && matchesDate && matchesRateConfirmation && matchesDocuments;
+
+      // Cancel request filter
+      let matchesCancelRequest = true;
+      if (cancelRequestFilter === 'open') {
+        matchesCancelRequest = !!(booking.linkedLoadsheet?.hasCancelRequest);
+      }
+
+      return matchesSearch && matchesStatus && matchesDate && matchesRateConfirmation && matchesDocuments && matchesCancelRequest;
     });
 
     // Then, sort the filtered results
@@ -223,7 +235,7 @@ export const Bookings: React.FC = () => {
     });
 
     return filtered;
-  }, [bookings, searchTerm, statusFilter, dateFromFilter, dateToFilter, documentsFilter, rateConfirmationFilter, sortField, sortDirection]);
+  }, [bookings, searchTerm, statusFilter, dateFromFilter, dateToFilter, documentsFilter, rateConfirmationFilter, cancelRequestFilter, sortField, sortDirection]);
 
   const handleSort = (field: SortField) => {
     if (sortField === field) {
@@ -490,6 +502,21 @@ export const Bookings: React.FC = () => {
             </button>
           </div>
         )}
+
+        {/* Cancel Request Filter Indicator */}
+        {cancelRequestFilter === 'open' && (
+          <div className="flex items-center gap-2 text-sm px-3 py-1 rounded-md text-red-600 bg-red-50">
+            <X className="w-4 h-4" />
+            <span className="font-medium">Showing: Open Cancel Requests</span>
+            <button
+              onClick={() => setCancelRequestFilter('')}
+              className="ml-2 hover:opacity-80"
+              title="Clear filter"
+            >
+              <X className="w-4 h-4" />
+            </button>
+          </div>
+        )}
       </div>
 
       {/* Bookings Table */}
@@ -629,9 +656,16 @@ export const Bookings: React.FC = () => {
                   </div>
                 </td>
                 <td className="px-6 py-4 whitespace-nowrap">
-                  <span className={`inline-flex px-2 py-1 rounded-full text-xs font-medium ${getStatusBadge(booking.status)}`}>
-                    {booking.status === 'PENDING' ? 'UNBOOKED' : booking.status === 'CONFIRMED' ? 'BOOKED' : booking.status.replace('_', ' ')}
-                  </span>
+                  <div className="flex items-center gap-2">
+                    <span className={`inline-flex px-2 py-1 rounded-full text-xs font-medium ${getStatusBadge(booking.status)}`}>
+                      {booking.status === 'PENDING' ? 'UNBOOKED' : booking.status === 'CONFIRMED' ? 'BOOKED' : booking.status.replace('_', ' ')}
+                    </span>
+                    {booking.linkedLoadsheet?.hasCancelRequest && (
+                      <span className="inline-flex px-2 py-1 rounded-full text-xs font-medium bg-red-100 text-red-800" title={`Cancel requested for manifest ${booking.linkedLoadsheet.manifestNumber}`}>
+                        CANCEL REQUEST
+                      </span>
+                    )}
+                  </div>
                 </td>
                 <td className="px-6 py-4 whitespace-nowrap text-right text-sm font-medium">
                   <div className="flex items-center gap-2 justify-end">

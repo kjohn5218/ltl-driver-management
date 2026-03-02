@@ -9,7 +9,7 @@ import {
   Clock,
   XCircle,
   Shield,
-  DollarSign,
+  Ban,
   Building2
 } from 'lucide-react';
 import { CompanyProfileModal } from '../components/CompanyProfileModal';
@@ -29,6 +29,7 @@ interface DashboardMetrics {
   openBookings: number;
   outstandingRateConfirmations: number;
   rateConfirmationsNotSent: number;
+  openCancelRequests: number;
 }
 
 interface DashboardData {
@@ -95,12 +96,13 @@ export const ContractPowerHome: React.FC = () => {
       onClick: () => navigate('/bookings?rateConfirmation=notSent')
     },
     {
-      name: 'Pending Invoices',
-      value: data.metrics.pendingInvoices || 0,
-      icon: DollarSign,
-      color: 'bg-green-600',
-      urgent: data.metrics.pendingInvoices > 10,
-      onClick: () => navigate('/invoices?status=PENDING')
+      name: 'Open Cancel Requests',
+      value: data.metrics.openCancelRequests || 0,
+      icon: Ban,
+      color: 'bg-red-600',
+      description: 'Cancellation requests pending review',
+      urgent: data.metrics.openCancelRequests > 0,
+      onClick: () => navigate('/bookings?cancelRequest=open')
     }
   ];
 

@@ -1483,6 +1483,7 @@ model Loadsheet {
   hazmatItems             LoadsheetHazmatItem[]
   dispatchEntries         LoadsheetDispatchEntry[]
   freightPlacements       LoadsheetFreightPlacement[]
+  contractPowerHistory    LoadsheetContractPowerHistory[]
 
   @@index([manifestNumber])
   @@index([status])
@@ -1544,6 +1545,27 @@ model LoadsheetFreightPlacement {
 
   @@index([loadsheetId])
   @@map("loadsheet_freight_placements")
+}
+
+// Contract Power History - tracks all contract power actions on a loadsheet
+model LoadsheetContractPowerHistory {
+  id          Int       @id @default(autoincrement())
+  loadsheetId Int
+  action      String    // REQUESTED, BOOKED, CANCEL_REQUESTED, CANCELLED, CLEARED
+  status      String?   // Status at time of action
+  carrierName String?   // Carrier name (if applicable)
+  driverName  String?   // Driver name (if applicable)
+  bookingId   Int?      // Reference to booking (if applicable)
+  notes       String?   // Additional notes
+  performedBy Int?      // User who performed the action
+  performedByName String? // User name for display
+  createdAt   DateTime  @default(now())
+
+  loadsheet   Loadsheet @relation(fields: [loadsheetId], references: [id], onDelete: Cascade)
+
+  @@index([loadsheetId])
+  @@index([createdAt])
+  @@map("loadsheet_contract_power_history")
 }
 
 // ============================================

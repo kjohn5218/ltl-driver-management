@@ -88,7 +88,8 @@ export const getDashboardMetrics = async (req: Request, res: Response) => {
       pendingRateConfirmations,
       openBookings,
       outstandingRateConfirmations,
-      rateConfirmationsNotSent
+      rateConfirmationsNotSent,
+      openCancelRequests
     ] = await Promise.all([
       prisma.carrier.count(),
       prisma.carrier.count({ where: { status: CarrierStatus.ACTIVE } }),
@@ -111,35 +112,41 @@ export const getDashboardMetrics = async (req: Request, res: Response) => {
       // Count booked routes (CONFIRMED status bookings)
       prisma.booking.count({ where: { status: BookingStatus.CONFIRMED } }),
       // Count pending rate confirmations (not CANCELLED/COMPLETED and either not sent or not signed)
-      prisma.booking.count({ 
-        where: { 
+      prisma.booking.count({
+        where: {
           status: { notIn: [BookingStatus.CANCELLED, BookingStatus.COMPLETED] },
           OR: [
             { confirmationSentAt: null },
             { confirmationSignedAt: null }
           ]
-        } 
+        }
       }),
       // Count open bookings (not COMPLETED or CANCELLED)
-      prisma.booking.count({ 
-        where: { 
+      prisma.booking.count({
+        where: {
           status: { notIn: [BookingStatus.COMPLETED, BookingStatus.CANCELLED] }
-        } 
+        }
       }),
       // Count outstanding rate confirmations (sent but not yet signed for open bookings)
-      prisma.booking.count({ 
-        where: { 
+      prisma.booking.count({
+        where: {
           status: { notIn: [BookingStatus.COMPLETED, BookingStatus.CANCELLED] },
           confirmationSentAt: { not: null },
           confirmationSignedAt: null
-        } 
+        }
       }),
       // Count rate confirmations not sent (bookings without confirmation sent)
-      prisma.booking.count({ 
-        where: { 
+      prisma.booking.count({
+        where: {
           status: { notIn: [BookingStatus.COMPLETED, BookingStatus.CANCELLED] },
           confirmationSentAt: null
-        } 
+        }
+      }),
+      // Count open cancel requests (loadsheets with CANCEL_REQUESTED status)
+      prisma.loadsheet.count({
+        where: {
+          contractPowerStatus: 'CANCEL_REQUESTED'
+        }
       })
     ]);
 
@@ -168,7 +175,8 @@ export const getDashboardMetrics = async (req: Request, res: Response) => {
         pendingRateConfirmations,
         openBookings,
         outstandingRateConfirmations,
-        rateConfirmationsNotSent
+        rateConfirmationsNotSent,
+        openCancelRequests
       },
       recentActivities: recentBookings.map(booking => ({
         id: booking.id,

@@ -29,7 +29,9 @@ import {
   AlertTriangle,
   Truck,
   XCircle,
-  Play
+  Play,
+  Clock,
+  History
 } from 'lucide-react';
 import { RequestContractPowerModal } from './RequestContractPowerModal';
 import { DispatchTripModal } from './DispatchTripModal';
@@ -218,6 +220,20 @@ export const LoadsTab: React.FC<LoadsTabProps> = ({ loading: externalLoading = f
   const [isCancelContractPowerModalOpen, setIsCancelContractPowerModalOpen] = useState(false);
   const [cancelReason, setCancelReason] = useState('');
   const [cancellingContractPower, setCancellingContractPower] = useState(false);
+
+  // Contract Power History state
+  const [showHistory, setShowHistory] = useState(false);
+
+  // Fetch contract power history when edit modal is open
+  const { data: contractPowerHistory } = useQuery({
+    queryKey: ['contractPowerHistory', selectedLoadItem?.loadsheetId],
+    queryFn: async () => {
+      if (!selectedLoadItem?.loadsheetId) return [];
+      const response = await api.get(`/contract-power/history/${selectedLoadItem.loadsheetId}`);
+      return response.data.history || [];
+    },
+    enabled: isEditModalOpen && !!selectedLoadItem?.loadsheetId
+  });
 
   // Fetch drivers
   const { data: driversData } = useQuery({
@@ -1621,6 +1637,66 @@ export const LoadsTab: React.FC<LoadsTabProps> = ({ loading: externalLoading = f
               </div>
             </label>
           </div>
+
+          {/* Contract Power History Section */}
+          {contractPowerHistory && contractPowerHistory.length > 0 && (
+            <div className="border border-gray-200 dark:border-gray-700 rounded-lg">
+              <button
+                type="button"
+                onClick={() => setShowHistory(!showHistory)}
+                className="w-full flex items-center justify-between px-4 py-3 text-left text-sm font-medium text-gray-700 dark:text-gray-300 bg-gray-50 dark:bg-gray-800 hover:bg-gray-100 dark:hover:bg-gray-700 rounded-t-lg"
+              >
+                <div className="flex items-center gap-2">
+                  <History className="w-4 h-4" />
+                  <span>Contract Power History ({contractPowerHistory.length})</span>
+                </div>
+                <span className="text-gray-400">{showHistory ? '−' : '+'}</span>
+              </button>
+              {showHistory && (
+                <div className="p-4 space-y-3 max-h-48 overflow-y-auto">
+                  {contractPowerHistory.map((entry: any) => (
+                    <div key={entry.id} className="flex items-start gap-3 text-sm border-l-2 border-gray-300 dark:border-gray-600 pl-3">
+                      <div className="flex-shrink-0">
+                        <Clock className="w-4 h-4 text-gray-400 mt-0.5" />
+                      </div>
+                      <div className="flex-1 min-w-0">
+                        <div className="flex items-center gap-2">
+                          <span className={`inline-flex px-2 py-0.5 rounded text-xs font-medium ${
+                            entry.action === 'REQUESTED' ? 'bg-blue-100 text-blue-800 dark:bg-blue-900 dark:text-blue-200' :
+                            entry.action === 'BOOKED' ? 'bg-green-100 text-green-800 dark:bg-green-900 dark:text-green-200' :
+                            entry.action === 'CANCEL_REQUESTED' ? 'bg-yellow-100 text-yellow-800 dark:bg-yellow-900 dark:text-yellow-200' :
+                            entry.action === 'CANCELLED' ? 'bg-red-100 text-red-800 dark:bg-red-900 dark:text-red-200' :
+                            'bg-gray-100 text-gray-800 dark:bg-gray-700 dark:text-gray-200'
+                          }`}>
+                            {entry.action.replace('_', ' ')}
+                          </span>
+                          {entry.performedByName && (
+                            <span className="text-gray-500 dark:text-gray-400 text-xs">
+                              by {entry.performedByName}
+                            </span>
+                          )}
+                        </div>
+                        {entry.carrierName && (
+                          <p className="text-gray-600 dark:text-gray-400 text-xs mt-1">
+                            Carrier: {entry.carrierName}
+                            {entry.driverName && ` | Driver: ${entry.driverName}`}
+                          </p>
+                        )}
+                        {entry.notes && (
+                          <p className="text-gray-500 dark:text-gray-400 text-xs mt-1 truncate">
+                            {entry.notes}
+                          </p>
+                        )}
+                        <p className="text-gray-400 dark:text-gray-500 text-xs mt-1">
+                          {format(new Date(entry.createdAt), 'MMM d, yyyy h:mm a')}
+                        </p>
+                      </div>
+                    </div>
+                  ))}
+                </div>
+              )}
+            </div>
+          )}
 
           {/* Actions */}
           <div className="flex justify-end gap-3 pt-4">

@@ -59,8 +59,38 @@ export const getBookings = async (req: Request, res: Response) => {
       }
     });
 
+    // Get linked loadsheets with cancel request status for each booking
+    const bookingIds = bookings.map(b => b.id);
+    const linkedLoadsheets = await prisma.loadsheet.findMany({
+      where: {
+        contractPowerBookingId: { in: bookingIds }
+      },
+      select: {
+        contractPowerBookingId: true,
+        contractPowerStatus: true,
+        manifestNumber: true
+      }
+    });
+
+    // Create a map of booking ID to loadsheet cancel status
+    const loadsheetStatusMap = new Map<number, { hasCancelRequest: boolean; manifestNumber: string | null }>();
+    for (const loadsheet of linkedLoadsheets) {
+      if (loadsheet.contractPowerBookingId) {
+        loadsheetStatusMap.set(loadsheet.contractPowerBookingId, {
+          hasCancelRequest: loadsheet.contractPowerStatus === 'CANCEL_REQUESTED',
+          manifestNumber: loadsheet.manifestNumber
+        });
+      }
+    }
+
+    // Attach loadsheet status to bookings
+    const bookingsWithLoadsheetStatus = bookings.map(booking => ({
+      ...booking,
+      linkedLoadsheet: loadsheetStatusMap.get(booking.id) || null
+    }));
+
     return res.json({
-      bookings,
+      bookings: bookingsWithLoadsheetStatus,
       pagination: {
         page: pageNum,
         limit: limitNum,
@@ -465,6 +495,21 @@ export const updateBooking = async (req: Request, res: Response) => {
             }
           });
 
+          // Record history entry
+          await prisma.loadsheetContractPowerHistory.create({
+            data: {
+              loadsheetId: loadsheet.id,
+              action: 'BOOKED',
+              status: 'BOOKED',
+              carrierName: carrierName,
+              driverName: driverName,
+              bookingId: booking.id,
+              notes: `Booking confirmed with ${carrierName || 'carrier'}`,
+              performedBy: (req as any).user?.id,
+              performedByName: (req as any).user?.name
+            }
+          });
+
           console.log(`Updated loadsheet ${loadsheet.id} with contract power booking info`);
         }
       } catch (loadsheetError) {
@@ -603,7 +648,7 @@ export const cancelBooking = async (req: Request, res: Response) => {
 
     const updatedBooking = await prisma.booking.update({
       where: { id: parseInt(id) },
-      data: { 
+      data: {
         status: 'CANCELLED',
         notes: reason ? `${booking.notes || ''}\nCancellation reason: ${reason}` : booking.notes
       },
@@ -612,6 +657,46 @@ export const cancelBooking = async (req: Request, res: Response) => {
         route: true
       }
     });
+
+    // Clear contract power status on linked loadsheets
+    try {
+      const linkedLoadsheets = await prisma.loadsheet.findMany({
+        where: { contractPowerBookingId: parseInt(id) }
+      });
+
+      for (const loadsheet of linkedLoadsheets) {
+        // Record history entry before clearing
+        await prisma.loadsheetContractPowerHistory.create({
+          data: {
+            loadsheetId: loadsheet.id,
+            action: 'CANCELLED',
+            status: null,
+            carrierName: loadsheet.contractPowerCarrierName,
+            driverName: loadsheet.contractPowerDriverName,
+            bookingId: loadsheet.contractPowerBookingId,
+            notes: reason ? `Booking cancelled: ${reason}` : 'Booking cancelled',
+            performedBy: (req as any).user?.id,
+            performedByName: (req as any).user?.name
+          }
+        });
+
+        await prisma.loadsheet.update({
+          where: { id: loadsheet.id },
+          data: {
+            contractPowerStatus: null,
+            contractPowerBookingId: null,
+            contractPowerCarrierName: null,
+            contractPowerDriverName: null,
+            contractPowerRequestedAt: null,
+            contractPowerRequestedBy: null
+          }
+        });
+        console.log(`Cleared contract power status for loadsheet ${loadsheet.id} (manifest: ${loadsheet.manifestNumber})`);
+      }
+    } catch (loadsheetError) {
+      console.error('Failed to clear linked loadsheet contract power status:', loadsheetError);
+      // Don't fail the booking cancellation if loadsheet update fails
+    }
 
     // Send cancellation notification
     await NotificationService.sendBookingCancellation(updatedBooking, reason);

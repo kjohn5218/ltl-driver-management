@@ -302,6 +302,12 @@ export interface Booking {
   childBookings?: Booking[];
   parentBooking?: Booking;
   documents?: BookingDocument[];
+
+  // Linked loadsheet info for cancel request tracking
+  linkedLoadsheet?: {
+    hasCancelRequest: boolean;
+    manifestNumber: string | null;
+  } | null;
 }
 
 export interface Invoice {
