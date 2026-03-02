@@ -98,11 +98,11 @@ export const DispatchTripModal: React.FC<DispatchTripModalProps> = ({
     }
   }, [isOpen]);
 
-  // Fetch trucks (power units)
+  // Fetch trucks (power units) - all active units (exclude OUT_OF_SERVICE)
   const { data: trucksData, isLoading: trucksLoading } = useQuery({
     queryKey: ['trucks-dispatch'],
     queryFn: async () => {
-      const response = await equipmentService.getTrucks({ limit: 100 });
+      const response = await equipmentService.getTrucks({ limit: 2000 });
       return response;
     },
     enabled: isOpen
@@ -186,11 +186,11 @@ export const DispatchTripModal: React.FC<DispatchTripModalProps> = ({
     enabled: isOpen
   });
 
-  // Fetch drivers for search
+  // Fetch drivers for search - all active drivers
   const { data: driversData, isLoading: driversLoading } = useQuery({
     queryKey: ['drivers-dispatch'],
     queryFn: async () => {
-      const response = await driverService.getDrivers({ active: true, limit: 2000 });
+      const response = await driverService.getDrivers({ active: true });
       return response;
     },
     enabled: isOpen
@@ -980,11 +980,12 @@ export const DispatchTripModal: React.FC<DispatchTripModalProps> = ({
   };
 
   const getAvailableTrucks = (searchTerm: string) => {
-    let filtered = trucks;
+    // Filter to only active units (exclude OUT_OF_SERVICE)
+    let filtered = trucks.filter(truck => truck.status !== 'OUT_OF_SERVICE');
 
     if (searchTerm.trim()) {
       const search = searchTerm.toLowerCase();
-      filtered = trucks.filter(truck =>
+      filtered = filtered.filter(truck =>
         truck.unitNumber?.toLowerCase().includes(search) ||
         truck.truckType?.toLowerCase().includes(search)
       );
