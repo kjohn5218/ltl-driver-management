@@ -893,29 +893,42 @@ const RouteEditModal: React.FC<RouteEditModalProps> = ({ route, onClose, onSave 
   const handleCalculateRunTime = async () => {
     setIsCalculating(true);
     try {
-      const origin = {
-        address: formData.originAddress,
-        city: formData.originCity,
-        state: formData.originState,
-        zipCode: formData.originZipCode
-      };
+      // Use the distance already entered in the form if available
+      const distance = formData.distance ? parseFloat(formData.distance) : null;
 
-      const destination = {
-        address: formData.destinationAddress,
-        city: formData.destinationCity,
-        state: formData.destinationState,
-        zipCode: formData.destinationZipCode
-      };
-
-      const result = await calculateRoute(origin, destination);
-      
-      if (result.duration) {
-        setFormData(prev => ({ 
-          ...prev, 
-          runTime: result.duration!.toString()
+      if (distance && distance > 0) {
+        // Calculate run time from the entered distance (60 mph average for trucks)
+        const estimatedDuration = Math.round((distance / 60) * 60);
+        setFormData(prev => ({
+          ...prev,
+          runTime: estimatedDuration.toString()
         }));
       } else {
-        alert('Could not calculate run time. Please ensure you have provided sufficient address information.');
+        // Fall back to calculating from addresses if no distance entered
+        const origin = {
+          address: formData.originAddress,
+          city: formData.originCity,
+          state: formData.originState,
+          zipCode: formData.originZipCode
+        };
+
+        const destination = {
+          address: formData.destinationAddress,
+          city: formData.destinationCity,
+          state: formData.destinationState,
+          zipCode: formData.destinationZipCode
+        };
+
+        const result = await calculateRoute(origin, destination);
+
+        if (result.duration) {
+          setFormData(prev => ({
+            ...prev,
+            runTime: result.duration!.toString()
+          }));
+        } else {
+          alert('Could not calculate run time. Please enter a distance first or provide sufficient address information.');
+        }
       }
     } catch (error) {
       console.error('Run time calculation error:', error);

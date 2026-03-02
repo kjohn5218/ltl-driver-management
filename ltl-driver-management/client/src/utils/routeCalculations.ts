@@ -112,8 +112,8 @@ const getRouteData = async (
       destination.lat, destination.lon
     );
 
-    // Estimate driving time for trucks (average 45 mph including stops)
-    const estimatedDuration = Math.round((distance / 45) * 60); // minutes
+    // Estimate driving time for trucks (average 60 mph)
+    const estimatedDuration = Math.round((distance / 60) * 60); // minutes
 
     return {
       distance: Math.round(distance * 10) / 10, // round to 1 decimal
@@ -152,8 +152,8 @@ export const calculateRouteFromCoordinates = (
   try {
     const distance = calculateHaversineDistance(originLat, originLon, destLat, destLon);
 
-    // Estimate driving time for trucks (average 45 mph including stops)
-    const estimatedDuration = Math.round((distance / 45) * 60); // minutes
+    // Estimate driving time for trucks (average 60 mph)
+    const estimatedDuration = Math.round((distance / 60) * 60); // minutes
 
     return {
       distance: Math.round(distance * 10) / 10, // round to 1 decimal
