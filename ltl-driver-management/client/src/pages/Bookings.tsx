@@ -8,6 +8,7 @@ import { Plus, Search, Edit, Eye, Calendar, MapPin, User, DollarSign, X, Chevron
 import { format, isAfter, isBefore, isSameDay, parseISO } from 'date-fns';
 import { RateConfirmationModal } from '../components/RateConfirmation';
 import { BookingLineItems } from '../components/BookingLineItems';
+import { CarrierSelect } from '../components/CarrierSelect';
 
 type SortField = 'id' | 'carrier' | 'route' | 'bookingDate' | 'rate' | 'status';
 type SortDirection = 'asc' | 'desc';
@@ -966,8 +967,9 @@ const BookingViewModal: React.FC<BookingViewModalProps> = ({ booking, onClose, g
   };
 
   // Handle carrier change - reset driver and lookup carrier rate
-  const handleCarrierChange = (carrierId: string) => {
-    setFormData(prev => ({ ...prev, carrierId }));
+  const handleCarrierChange = (carrierId: number | '') => {
+    const carrierIdStr = carrierId === '' ? '' : String(carrierId);
+    setFormData(prev => ({ ...prev, carrierId: carrierIdStr }));
     setSelectedDriver(null);
     setDriverSearch('');
     setApplicableRateCard(null);
@@ -1363,21 +1365,12 @@ const BookingViewModal: React.FC<BookingViewModalProps> = ({ booking, onClose, g
             <div>
               <label className="block text-sm font-medium text-gray-700 mb-1">Carrier</label>
               {isEditMode ? (
-                <select
-                  value={formData.carrierId}
-                  onChange={(e) => handleCarrierChange(e.target.value)}
-                  className="w-full p-2 border rounded focus:ring-blue-500 focus:border-blue-500"
-                >
-                  <option value="">Select Carrier</option>
-                  {carriersData?.carriers
-                    ?.slice()
-                    .sort((a: any, b: any) => (a.name || '').localeCompare(b.name || ''))
-                    .map((carrier: any) => (
-                      <option key={carrier.id} value={carrier.id}>
-                        {carrier.name}
-                      </option>
-                    ))}
-                </select>
+                <CarrierSelect
+                  value={formData.carrierId ? Number(formData.carrierId) : ''}
+                  onChange={handleCarrierChange}
+                  placeholder="Select Carrier"
+                  showAllOption={false}
+                />
               ) : (
                 <p className="text-sm text-gray-900">{bookingToDisplay.carrier?.name || 'N/A'}</p>
               )}
