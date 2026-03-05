@@ -1133,10 +1133,11 @@ const BookingViewModal: React.FC<BookingViewModalProps> = ({ booking, onClose, g
       };
 
       console.log('Sending payload:', payload);
-      console.log('Manifest number being sent:', payload.manifestNumber);
+      console.log('Status being sent:', payload.status);
 
       const response = await api.put(`/bookings/${bookingToDisplay.id}`, payload);
       console.log('Update response:', response.data);
+      console.log('Booking updated to status:', response.data.status);
 
       // Check if rates were changed and we need to create/update a pay rule
       const rateChanged = originalRates && (

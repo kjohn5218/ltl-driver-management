@@ -142,7 +142,24 @@ export const getBookingById = async (req: Request, res: Response) => {
       return res.status(404).json({ message: 'Booking not found' });
     }
 
-    return res.json(booking);
+    // Get linked loadsheet with cancel request status
+    const linkedLoadsheet = await prisma.loadsheet.findFirst({
+      where: { contractPowerBookingId: parseInt(id) },
+      select: {
+        contractPowerStatus: true,
+        manifestNumber: true
+      }
+    });
+
+    const bookingWithLoadsheet = {
+      ...booking,
+      linkedLoadsheet: linkedLoadsheet ? {
+        hasCancelRequest: linkedLoadsheet.contractPowerStatus === 'CANCEL_REQUESTED',
+        manifestNumber: linkedLoadsheet.manifestNumber
+      } : null
+    };
+
+    return res.json(bookingWithLoadsheet);
   } catch (error) {
     console.error('Get booking by id error:', error);
     return res.status(500).json({ message: 'Failed to fetch booking' });
@@ -522,12 +539,15 @@ export const updateBooking = async (req: Request, res: Response) => {
 
     // Clear contract power status on linked loadsheets when status changes to CANCELLED
     if (isStatusChangingToCancelled) {
+      console.log(`Booking ${id} status changing to CANCELLED - clearing linked loadsheet cancel requests`);
       try {
         const linkedLoadsheets = await prisma.loadsheet.findMany({
           where: { contractPowerBookingId: parseInt(id) }
         });
+        console.log(`Found ${linkedLoadsheets.length} linked loadsheet(s) for booking ${id}`);
 
         for (const loadsheet of linkedLoadsheets) {
+          console.log(`Clearing loadsheet ${loadsheet.id} (manifest: ${loadsheet.manifestNumber}, status: ${loadsheet.contractPowerStatus})`);
           // Record history entry before clearing
           await prisma.loadsheetContractPowerHistory.create({
             data: {
