@@ -403,7 +403,11 @@ export const updateBooking = async (req: Request, res: Response) => {
     const isStatusChangingToConfirmed = updateData.status === 'CONFIRMED' && currentBooking.status !== 'CONFIRMED';
     // Check if status is changing to CANCELLED
     const isStatusChangingToCancelled = updateData.status === 'CANCELLED' && currentBooking.status !== 'CANCELLED';
-    
+
+    console.log('Current booking status:', currentBooking.status);
+    console.log('New status:', updateData.status);
+    console.log('isStatusChangingToCancelled:', isStatusChangingToCancelled);
+
     // Generate document upload token if confirming the booking
     const documentUploadToken = isStatusChangingToConfirmed ? uuidv4() : undefined;
     const booking = await prisma.booking.update({
