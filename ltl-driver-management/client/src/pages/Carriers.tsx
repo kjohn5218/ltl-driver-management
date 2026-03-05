@@ -132,7 +132,10 @@ export const Carriers: React.FC = () => {
       (carrier.dotNumber && carrier.dotNumber.includes(searchTerm)) ||
       (carrier.city && carrier.city.toLowerCase().includes(searchTerm.toLowerCase()));
     
-    const matchesStatus = statusFilter === '' || carrier.status === statusFilter;
+    const matchesStatus = statusFilter === '' ||
+      (statusFilter === 'ONBOARDED' && carrier.onboardingComplete === true) ||
+      (statusFilter === 'NOT_ONBOARDED' && carrier.onboardingComplete === false) ||
+      (statusFilter !== 'ONBOARDED' && statusFilter !== 'NOT_ONBOARDED' && carrier.status === statusFilter);
     const matchesState = stateFilter === '' || carrier.state === stateFilter;
     
     return matchesSearch && matchesStatus && matchesState;
