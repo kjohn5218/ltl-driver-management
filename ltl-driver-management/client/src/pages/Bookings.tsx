@@ -324,6 +324,27 @@ export const Bookings: React.FC = () => {
     setViewingBooking(null);
   };
 
+  const handleBookingUpdated = async (newStatus: string) => {
+    // Invalidate dashboard query to update ContractPowerHome open cancel requests count
+    queryClient.invalidateQueries({ queryKey: ['dashboard'] });
+
+    // If status changed to CANCELLED and we're filtering by open cancel requests
+    if (newStatus === 'CANCELLED' && cancelRequestFilter === 'open') {
+      // Wait for bookings to refetch
+      await queryClient.refetchQueries({ queryKey: ['bookings'] });
+
+      // Check if any remaining bookings have open cancel requests
+      const currentBookings = queryClient.getQueryData<{ bookings: Booking[] }>(['bookings']);
+      const hasRemainingCancelRequests = currentBookings?.bookings?.some(
+        (b: Booking) => b.linkedLoadsheet?.hasCancelRequest
+      );
+
+      // Clear the filter if no more cancel requests remain
+      if (!hasRemainingCancelRequests) {
+        setCancelRequestFilter('');
+      }
+    }
+  };
 
   const handleCloseDelete = () => {
     setDeletingBooking(null);
@@ -717,12 +738,13 @@ export const Bookings: React.FC = () => {
 
       {/* View Booking Modal */}
       {viewingBooking && (
-        <BookingViewModal 
-          booking={viewingBooking} 
-          onClose={handleCloseView} 
+        <BookingViewModal
+          booking={viewingBooking}
+          onClose={handleCloseView}
           getStatusBadge={getStatusBadge}
           settingsData={settingsData}
           onRateConfirmation={handleRateConfirmation}
+          onBookingUpdated={handleBookingUpdated}
         />
       )}
 
@@ -794,9 +816,10 @@ interface BookingViewModalProps {
   getStatusBadge: (status: string) => string;
   onRateConfirmation?: (booking: Booking) => void;
   settingsData?: any;
+  onBookingUpdated?: (newStatus: string) => void;
 }
 
-const BookingViewModal: React.FC<BookingViewModalProps> = ({ booking, onClose, getStatusBadge, onRateConfirmation, settingsData }) => {
+const BookingViewModal: React.FC<BookingViewModalProps> = ({ booking, onClose, getStatusBadge, onRateConfirmation, settingsData, onBookingUpdated }) => {
   const queryClient = useQueryClient();
   const [isEditMode, setIsEditMode] = useState(false);
   const [isSubmitting, setIsSubmitting] = useState(false);
@@ -1172,6 +1195,11 @@ const BookingViewModal: React.FC<BookingViewModalProps> = ({ booking, onClose, g
       // Update the bookings cache
       queryClient.invalidateQueries({ queryKey: ['bookings'] });
       queryClient.invalidateQueries({ queryKey: ['booking', bookingToDisplay.id] });
+
+      // Notify parent of booking update (for cancel request filter handling)
+      if (onBookingUpdated) {
+        onBookingUpdated(formData.status);
+      }
 
       // Reset state
       setOriginalRates(null);

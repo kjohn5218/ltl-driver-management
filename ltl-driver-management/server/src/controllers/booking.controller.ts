@@ -384,6 +384,8 @@ export const updateBooking = async (req: Request, res: Response) => {
 
     // Check if status is changing to CONFIRMED
     const isStatusChangingToConfirmed = updateData.status === 'CONFIRMED' && currentBooking.status !== 'CONFIRMED';
+    // Check if status is changing to CANCELLED
+    const isStatusChangingToCancelled = updateData.status === 'CANCELLED' && currentBooking.status !== 'CANCELLED';
     
     // Generate document upload token if confirming the booking
     const documentUploadToken = isStatusChangingToConfirmed ? uuidv4() : undefined;
@@ -514,6 +516,48 @@ export const updateBooking = async (req: Request, res: Response) => {
         }
       } catch (loadsheetError) {
         console.error('Failed to update linked loadsheets:', loadsheetError);
+        // Don't fail the booking update if loadsheet update fails
+      }
+    }
+
+    // Clear contract power status on linked loadsheets when status changes to CANCELLED
+    if (isStatusChangingToCancelled) {
+      try {
+        const linkedLoadsheets = await prisma.loadsheet.findMany({
+          where: { contractPowerBookingId: parseInt(id) }
+        });
+
+        for (const loadsheet of linkedLoadsheets) {
+          // Record history entry before clearing
+          await prisma.loadsheetContractPowerHistory.create({
+            data: {
+              loadsheetId: loadsheet.id,
+              action: 'CANCELLED',
+              status: null,
+              carrierName: loadsheet.contractPowerCarrierName,
+              driverName: loadsheet.contractPowerDriverName,
+              bookingId: loadsheet.contractPowerBookingId,
+              notes: 'Booking status changed to cancelled',
+              performedBy: (req as any).user?.id,
+              performedByName: (req as any).user?.name
+            }
+          });
+
+          await prisma.loadsheet.update({
+            where: { id: loadsheet.id },
+            data: {
+              contractPowerStatus: null,
+              contractPowerBookingId: null,
+              contractPowerCarrierName: null,
+              contractPowerDriverName: null,
+              contractPowerRequestedAt: null,
+              contractPowerRequestedBy: null
+            }
+          });
+          console.log(`Cleared contract power status for loadsheet ${loadsheet.id} (manifest: ${loadsheet.manifestNumber}) - booking cancelled`);
+        }
+      } catch (loadsheetError) {
+        console.error('Failed to clear linked loadsheet contract power status:', loadsheetError);
         // Don't fail the booking update if loadsheet update fails
       }
     }
