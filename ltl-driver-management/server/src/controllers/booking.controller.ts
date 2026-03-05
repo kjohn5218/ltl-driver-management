@@ -541,9 +541,10 @@ export const updateBooking = async (req: Request, res: Response) => {
       }
     }
 
-    // Clear contract power status on linked loadsheets when status changes to CANCELLED
-    if (isStatusChangingToCancelled) {
-      console.log(`Booking ${id} status changing to CANCELLED - clearing linked loadsheet cancel requests`);
+    // Clear contract power cancel request status on linked loadsheets when booking is CANCELLED
+    // This runs if status is changing to CANCELLED OR if booking is already CANCELLED (to handle previously missed clears)
+    if (isStatusChangingToCancelled || booking.status === 'CANCELLED') {
+      console.log(`Booking ${id} is CANCELLED - clearing linked loadsheet cancel requests`);
       try {
         const linkedLoadsheets = await prisma.loadsheet.findMany({
           where: { contractPowerBookingId: parseInt(id) }
@@ -551,7 +552,15 @@ export const updateBooking = async (req: Request, res: Response) => {
         console.log(`Found ${linkedLoadsheets.length} linked loadsheet(s) for booking ${id}`);
 
         for (const loadsheet of linkedLoadsheets) {
-          console.log(`Clearing loadsheet ${loadsheet.id} (manifest: ${loadsheet.manifestNumber}, status: ${loadsheet.contractPowerStatus})`);
+          console.log(`Found loadsheet ${loadsheet.id} (manifest: ${loadsheet.manifestNumber}, status: ${loadsheet.contractPowerStatus})`);
+
+          // Only clear if there's a cancel request to clear
+          if (loadsheet.contractPowerStatus !== 'CANCEL_REQUESTED') {
+            console.log(`Skipping loadsheet ${loadsheet.id} - not a cancel request`);
+            continue;
+          }
+
+          console.log(`Clearing cancel request for loadsheet ${loadsheet.id}`);
           // Record history entry before clearing
           await prisma.loadsheetContractPowerHistory.create({
             data: {
