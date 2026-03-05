@@ -1,17 +1,19 @@
 import React, { useState } from 'react';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
-import { ChevronLeft, ChevronRight, ArrowRightLeft, Package } from 'lucide-react';
+import { ChevronLeft, ChevronRight, ArrowRightLeft, Package, Plus } from 'lucide-react';
 import toast from 'react-hot-toast';
 import { PageHeader } from '../components/common/PageHeader';
 import { manifestService } from '../services/manifestService';
+import { NewLoadsheetModal } from '../components/NewLoadsheetModal';
+import { Loadsheet } from '../types';
 
 export const TransferScans: React.FC = () => {
   const queryClient = useQueryClient();
   const [currentManifestIndex, setCurrentManifestIndex] = useState(0);
   const [selectedShipments, setSelectedShipments] = useState<number[]>([]);
   const [useExistingManifest, setUseExistingManifest] = useState(true);
-  const [newManifestNumber, setNewManifestNumber] = useState('');
   const [targetManifestId, setTargetManifestId] = useState<number | null>(null);
+  const [showNewLoadsheetModal, setShowNewLoadsheetModal] = useState(false);
 
   // Fetch all open manifests
   const { data: manifests, isLoading: loadingManifests } = useQuery({
@@ -81,20 +83,27 @@ export const TransferScans: React.FC = () => {
       return;
     }
 
-    if (!useExistingManifest && !newManifestNumber) {
-      toast.error('Please enter a new manifest number');
-      return;
+    if (useExistingManifest) {
+      if (!targetManifestId) {
+        toast.error('Please select a target manifest');
+        return;
+      }
+      transferMutation.mutate({
+        shipmentIds: selectedShipments,
+        targetManifestId: targetManifestId
+      });
+    } else {
+      // Open the new loadsheet modal
+      setShowNewLoadsheetModal(true);
     }
+  };
 
-    if (useExistingManifest && !targetManifestId) {
-      toast.error('Please select a target manifest');
-      return;
-    }
-
+  const handleNewLoadsheetCreated = (loadsheet: Loadsheet) => {
+    setShowNewLoadsheetModal(false);
+    // Transfer to the newly created loadsheet
     transferMutation.mutate({
       shipmentIds: selectedShipments,
-      targetManifestId: useExistingManifest ? targetManifestId! : undefined,
-      newManifestNumber: !useExistingManifest ? newManifestNumber : undefined
+      targetManifestId: loadsheet.id
     });
   };
 
@@ -177,13 +186,10 @@ export const TransferScans: React.FC = () => {
             </label>
 
             {!useExistingManifest && (
-              <input
-                type="text"
-                value={newManifestNumber}
-                onChange={(e) => setNewManifestNumber(e.target.value)}
-                placeholder="New manifest number..."
-                className="px-3 py-2 border border-gray-300 dark:border-gray-600 rounded-md bg-white dark:bg-gray-700 text-gray-900 dark:text-gray-100 text-sm"
-              />
+              <span className="text-sm text-gray-500 dark:text-gray-400 flex items-center gap-1">
+                <Plus className="h-4 w-4" />
+                Click Transfer to create new loadsheet
+              </span>
             )}
           </div>
         </div>
@@ -278,11 +284,27 @@ export const TransferScans: React.FC = () => {
             disabled={selectedShipments.length === 0 || transferMutation.isPending}
             className="inline-flex items-center px-4 py-2 border border-transparent text-sm font-medium rounded-md text-white bg-purple-600 hover:bg-purple-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-purple-500 disabled:opacity-50 disabled:cursor-not-allowed"
           >
-            <ArrowRightLeft className="h-4 w-4 mr-2" />
-            {transferMutation.isPending ? 'Transferring...' : `Transfer (${selectedShipments.length})`}
+            {!useExistingManifest ? (
+              <>
+                <Plus className="h-4 w-4 mr-2" />
+                {`Create & Transfer (${selectedShipments.length})`}
+              </>
+            ) : (
+              <>
+                <ArrowRightLeft className="h-4 w-4 mr-2" />
+                {transferMutation.isPending ? 'Transferring...' : `Transfer (${selectedShipments.length})`}
+              </>
+            )}
           </button>
         </div>
       </div>
+
+      {/* New Loadsheet Modal */}
+      <NewLoadsheetModal
+        isOpen={showNewLoadsheetModal}
+        onClose={() => setShowNewLoadsheetModal(false)}
+        onCreated={handleNewLoadsheetCreated}
+      />
     </div>
   );
 };
