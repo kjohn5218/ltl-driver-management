@@ -289,7 +289,7 @@ export class InvoiceController {
         sheet.addRow({
           sageVendorNumber: invoice.booking?.carrier?.sageVendorNumber || '',
           loadNumber: invoice.booking?.id?.toString() || '',
-          invoiceComment: invoice.notes || '',
+          invoiceComment: invoice.invoiceNumber || '',
           invoiceDate: format(invoice.createdAt, 'yyyy-MM-dd'),
           glAccount: DEFAULT_GL_ACCOUNT,
           invoiceAmount: Number(invoice.amount).toFixed(2)

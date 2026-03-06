@@ -143,9 +143,8 @@ export const Invoices: React.FC = () => {
     return invoicesData.invoices.filter((invoice: Invoice) => {
       const matchesSearch = searchTerm === '' ||
         invoice.invoiceNumber.toLowerCase().includes(searchTerm.toLowerCase()) ||
-        invoice.booking.carrier?.name.toLowerCase().includes(searchTerm.toLowerCase()) ||
-        invoice.booking.route?.name.toLowerCase().includes(searchTerm.toLowerCase());
-      
+        invoice.booking.carrier?.name.toLowerCase().includes(searchTerm.toLowerCase());
+
       return matchesSearch;
     });
   }, [invoicesData, searchTerm]);
@@ -197,7 +196,6 @@ export const Invoices: React.FC = () => {
       'City': invoice.carrierCity || '',
       'State': invoice.carrierState || '',
       'Zip Code': invoice.carrierZipCode || '',
-      'Route': invoice.booking.route?.name || 'N/A',
       'Manifest Number': invoice.booking.manifestNumber || '',
       'Booking Date': format(parseISO(invoice.booking.bookingDate), 'MM/dd/yyyy'),
       'Base Amount': Number(invoice.baseAmount),
@@ -325,7 +323,7 @@ export const Invoices: React.FC = () => {
               <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 text-gray-400 w-5 h-5" />
               <input
                 type="text"
-                placeholder="Search by invoice #, carrier, or route..."
+                placeholder="Search by invoice # or carrier..."
                 className="w-full pl-10 pr-4 py-2 border rounded-lg"
                 value={searchTerm}
                 onChange={(e) => setSearchTerm(e.target.value)}
@@ -426,9 +424,6 @@ export const Invoices: React.FC = () => {
                 Carrier
               </th>
               <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
-                Route
-              </th>
-              <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
                 Booking Date
               </th>
               <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
@@ -445,13 +440,13 @@ export const Invoices: React.FC = () => {
           <tbody className="bg-white divide-y divide-gray-200">
             {isLoading ? (
               <tr>
-                <td colSpan={9} className="text-center py-4 text-gray-500">
+                <td colSpan={8} className="text-center py-4 text-gray-500">
                   Loading invoices...
                 </td>
               </tr>
             ) : filteredInvoices.length === 0 ? (
               <tr>
-                <td colSpan={9} className="text-center py-4 text-gray-500">
+                <td colSpan={8} className="text-center py-4 text-gray-500">
                   No invoices found
                 </td>
               </tr>
@@ -474,9 +469,6 @@ export const Invoices: React.FC = () => {
                   </td>
                   <td className="px-4 py-3 text-sm text-gray-900">
                     {invoice.booking.carrier?.name || 'N/A'}
-                  </td>
-                  <td className="px-4 py-3 text-sm text-gray-900">
-                    {invoice.booking.route?.name || 'N/A'}
                   </td>
                   <td className="px-4 py-3 text-sm text-gray-900">
                     {format(parseISO(invoice.booking.bookingDate), 'MMM dd, yyyy')}
