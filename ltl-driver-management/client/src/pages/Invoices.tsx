@@ -59,6 +59,7 @@ export const Invoices: React.FC = () => {
   const [toDate, setToDate] = useState('');
   const [selectedInvoices, setSelectedInvoices] = useState<number[]>([]);
   const [showSendModal, setShowSendModal] = useState(false);
+  const [showSageExportModal, setShowSageExportModal] = useState(false);
   const [includeDocuments, setIncludeDocuments] = useState(true);
   const [viewingInvoice, setViewingInvoice] = useState<Invoice | null>(null);
   const [previewingInvoice, setPreviewingInvoice] = useState<Invoice | null>(null);
@@ -105,6 +106,23 @@ export const Invoices: React.FC = () => {
       setSelectedInvoices([]);
       setShowSendModal(false);
       alert('Invoices sent to AP successfully!');
+    }
+  });
+
+  // Export to SAGE CSV mutation
+  const exportToSageMutation = useMutation({
+    mutationFn: async (invoiceIds: number[]) => {
+      const response = await api.post('/invoices/export-to-sage', {
+        invoiceIds
+      }, { responseType: 'blob' });
+      return response.data;
+    },
+    onSuccess: (data) => {
+      // Download the CSV file
+      const blob = new Blob([data], { type: 'text/csv' });
+      saveAs(blob, `sage-export-${format(new Date(), 'yyyyMMdd-HHmmss')}.csv`);
+      setShowSageExportModal(false);
+      setSelectedInvoices([]);
     }
   });
 
@@ -365,6 +383,13 @@ export const Invoices: React.FC = () => {
                   <Mail className="w-4 h-4" />
                   Send to AP
                 </button>
+                <button
+                  onClick={() => setShowSageExportModal(true)}
+                  className="px-4 py-2 bg-purple-600 text-white rounded-lg hover:bg-purple-700 flex items-center gap-2"
+                >
+                  <Download className="w-4 h-4" />
+                  Export to SAGE
+                </button>
               </>
             )}
             <button
@@ -537,11 +562,11 @@ export const Invoices: React.FC = () => {
         <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50">
           <div className="bg-white rounded-lg p-6 w-full max-w-md">
             <h3 className="text-lg font-semibold mb-4">Send Invoices to AP</h3>
-            
+
             <p className="text-sm text-gray-600 mb-4">
               You are about to send {selectedInvoices.length} invoice(s) to ap@ccfs.com
             </p>
-            
+
             <div className="mb-4">
               <label className="flex items-center gap-2">
                 <input
@@ -553,7 +578,7 @@ export const Invoices: React.FC = () => {
                 <span className="text-sm">Include supporting documents</span>
               </label>
             </div>
-            
+
             <div className="flex justify-end gap-2">
               <button
                 onClick={() => setShowSendModal(false)}
@@ -570,6 +595,60 @@ export const Invoices: React.FC = () => {
                 className="px-4 py-2 bg-blue-600 text-white rounded hover:bg-blue-700 disabled:opacity-50"
               >
                 {sendToAPMutation.isPending ? 'Sending...' : 'Send to AP'}
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* Export to SAGE Modal */}
+      {showSageExportModal && (
+        <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50">
+          <div className="bg-white rounded-lg p-6 w-full max-w-lg">
+            <h3 className="text-lg font-semibold mb-4">Export to SAGE</h3>
+
+            <p className="text-sm text-gray-600 mb-4">
+              Export {selectedInvoices.length} invoice(s) to CSV format for SAGE AP import.
+            </p>
+
+            <div className="bg-gray-50 p-4 rounded-lg mb-4">
+              <h4 className="text-sm font-medium mb-2">CSV Fields:</h4>
+              <ul className="text-xs text-gray-600 space-y-1">
+                <li>- SAGE VENDOR NUMBER (from carrier)</li>
+                <li>- LOAD NUMBER (booking reference)</li>
+                <li>- INVOICE COMMENT (invoice notes)</li>
+                <li>- INVOICE DATE</li>
+                <li>- GL ACCOUNT (default: 512-LNHL-TCOR-OPSP-000000)</li>
+                <li>- INVOICE AMOUNT</li>
+              </ul>
+            </div>
+
+            <div className="bg-yellow-50 border border-yellow-200 p-3 rounded mb-4">
+              <p className="text-sm text-yellow-800">
+                Note: Carriers without a SAGE Vendor Number will have an empty value in the export.
+              </p>
+            </div>
+
+            <div className="flex justify-end gap-2">
+              <button
+                onClick={() => setShowSageExportModal(false)}
+                className="px-4 py-2 bg-gray-200 text-gray-700 rounded hover:bg-gray-300"
+              >
+                Cancel
+              </button>
+              <button
+                onClick={() => exportToSageMutation.mutate(selectedInvoices)}
+                disabled={exportToSageMutation.isPending}
+                className="px-4 py-2 bg-purple-600 text-white rounded hover:bg-purple-700 disabled:opacity-50 flex items-center gap-2"
+              >
+                {exportToSageMutation.isPending ? (
+                  'Exporting...'
+                ) : (
+                  <>
+                    <Download className="w-4 h-4" />
+                    Download CSV
+                  </>
+                )}
               </button>
             </div>
           </div>

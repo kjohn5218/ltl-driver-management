@@ -72,6 +72,7 @@ model Carrier {
   carrierType                String?
   city                       String?
   factoringCompany           String?
+  sageVendorNumber           String?
   remittanceContact          String?
   remittanceEmail            String?
   safetyRating               String?

@@ -519,6 +519,7 @@ const AddCarrierModal: React.FC<AddCarrierModalProps> = ({ onClose, onSave }) =>
     remittanceContact: '',
     remittanceEmail: '',
     factoringCompany: '',
+    sageVendorNumber: '',
     onboardingComplete: false
   });
   
@@ -703,9 +704,10 @@ const AddCarrierModal: React.FC<AddCarrierModalProps> = ({ onClose, onSave }) =>
         remittanceContact: formData.remittanceContact || undefined,
         remittanceEmail: formData.remittanceEmail || undefined,
         factoringCompany: formData.factoringCompany || undefined,
+        sageVendorNumber: formData.sageVendorNumber || undefined,
         onboardingComplete: formData.onboardingComplete
       };
-      
+
       await createCarrierMutation.mutateAsync(payload);
     } finally {
       setIsSubmitting(false);
@@ -1062,6 +1064,17 @@ const AddCarrierModal: React.FC<AddCarrierModalProps> = ({ onClose, onSave }) =>
                   className="w-full px-3 py-2 border border-gray-300 rounded-md focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
                 />
               </div>
+              <div>
+                <label className="block text-sm font-medium text-gray-700 mb-1">SAGE Vendor Number</label>
+                <input
+                  type="text"
+                  value={formData.sageVendorNumber}
+                  onChange={(e) => setFormData({ ...formData, sageVendorNumber: e.target.value })}
+                  className="w-full px-3 py-2 border border-gray-300 rounded-md focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
+                  placeholder="Enter SAGE vendor number"
+                />
+                <p className="text-xs text-gray-500 mt-1">Used for AP export integration</p>
+              </div>
             </div>
           </div>
 
@@ -1378,6 +1391,7 @@ const CarrierDetailsModal: React.FC<CarrierDetailsModalProps> = ({ carrier: init
     remittanceContact: carrier.remittanceContact || '',
     remittanceEmail: carrier.remittanceEmail || '',
     factoringCompany: carrier.factoringCompany || '',
+    sageVendorNumber: carrier.sageVendorNumber || '',
     onboardingComplete: carrier.onboardingComplete
   });
 
@@ -1429,6 +1443,7 @@ const CarrierDetailsModal: React.FC<CarrierDetailsModalProps> = ({ carrier: init
             remittanceContact: fullCarrier.remittanceContact || '',
             remittanceEmail: fullCarrier.remittanceEmail || '',
             factoringCompany: fullCarrier.factoringCompany || '',
+            sageVendorNumber: fullCarrier.sageVendorNumber || '',
             onboardingComplete: fullCarrier.onboardingComplete
           });
         }
@@ -1438,7 +1453,7 @@ const CarrierDetailsModal: React.FC<CarrierDetailsModalProps> = ({ carrier: init
         }
       }
     };
-    
+
     fetchCarrierDetails();
     
     // Cleanup function to cancel the effect if component unmounts
@@ -1668,8 +1683,9 @@ const CarrierDetailsModal: React.FC<CarrierDetailsModalProps> = ({ carrier: init
       if (formData.remittanceContact.trim()) payload.remittanceContact = formData.remittanceContact.trim();
       if (formData.remittanceEmail.trim()) payload.remittanceEmail = formData.remittanceEmail.trim();
       if (formData.factoringCompany.trim()) payload.factoringCompany = formData.factoringCompany.trim();
-      
-      
+      if (formData.sageVendorNumber.trim()) payload.sageVendorNumber = formData.sageVendorNumber.trim();
+
+
       await api.put(`/carriers/${carrier.id}`, payload);
       
       // Update the carriers list
@@ -1712,6 +1728,7 @@ const CarrierDetailsModal: React.FC<CarrierDetailsModalProps> = ({ carrier: init
       remittanceContact: carrier.remittanceContact || '',
       remittanceEmail: carrier.remittanceEmail || '',
       factoringCompany: carrier.factoringCompany || '',
+      sageVendorNumber: carrier.sageVendorNumber || '',
       onboardingComplete: carrier.onboardingComplete
     });
     setIsEditMode(false);
@@ -2007,6 +2024,20 @@ const CarrierDetailsModal: React.FC<CarrierDetailsModalProps> = ({ carrier: init
                 />
               ) : (
                 <p className="text-sm text-gray-900">{carrier.factoringCompany || 'N/A'}</p>
+              )}
+            </div>
+            <div>
+              <label className="block text-sm font-medium text-gray-700 mb-1">SAGE Vendor Number</label>
+              {isEditMode ? (
+                <input
+                  type="text"
+                  value={formData.sageVendorNumber}
+                  onChange={(e) => setFormData({...formData, sageVendorNumber: e.target.value})}
+                  className="w-full p-2 border rounded focus:ring-blue-500 focus:border-blue-500"
+                  placeholder="SAGE vendor number"
+                />
+              ) : (
+                <p className="text-sm text-gray-900">{carrier.sageVendorNumber || 'N/A'}</p>
               )}
             </div>
           </div>

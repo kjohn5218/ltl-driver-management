@@ -89,7 +89,8 @@ export interface Carrier {
   remittanceContact?: string;
   remittanceEmail?: string;
   factoringCompany?: string;
-  
+  sageVendorNumber?: string;
+
   // MyCarrierPackets (MCP) fields
   mcpMonitored: boolean;
   mcpLastSync?: string;

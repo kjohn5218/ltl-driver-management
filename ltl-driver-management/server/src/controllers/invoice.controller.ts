@@ -1,9 +1,11 @@
 import { Request, Response } from 'express';
 import invoiceService from '../services/invoice.service';
 import { InvoiceStatus } from '@prisma/client';
-import { parseISO } from 'date-fns';
+import { parseISO, format } from 'date-fns';
 import { sendInvoicesToAP as emailInvoicesToAP } from '../services/notification.service';
 import { PDFService } from '../services/pdf.service';
+import ExcelJS from 'exceljs';
+import { prisma } from '../index';
 
 export class InvoiceController {
   // Generate invoice from completed booking
@@ -217,25 +219,94 @@ export class InvoiceController {
   async downloadInvoicePDF(req: Request, res: Response) {
     try {
       const id = parseInt(req.params.id);
-      
+
       const invoice = await invoiceService.getInvoice(id);
-      
+
       if (!invoice) {
         return res.status(404).json({ message: 'Invoice not found' });
       }
-      
+
       // Generate PDF
       const pdfBuffer = await PDFService.generateInvoicePDF(invoice);
-      
+
       // Set headers for PDF download
       res.setHeader('Content-Type', 'application/pdf');
       res.setHeader('Content-Disposition', `inline; filename="Invoice-${invoice.invoiceNumber}.pdf"`);
       res.setHeader('Content-Length', pdfBuffer.length);
-      
+
       return res.send(pdfBuffer);
     } catch (error: any) {
       console.error('Download invoice PDF error:', error);
       return res.status(500).json({ message: error.message || 'Failed to generate invoice PDF' });
+    }
+  }
+
+  // Export invoices to SAGE CSV format
+  async exportToSageCSV(req: Request, res: Response) {
+    try {
+      const { invoiceIds } = req.body;
+
+      if (!invoiceIds || !Array.isArray(invoiceIds) || invoiceIds.length === 0) {
+        return res.status(400).json({ message: 'Invoice IDs are required' });
+      }
+
+      // Get full invoice details with carrier info
+      const invoices = await prisma.invoice.findMany({
+        where: {
+          id: { in: invoiceIds }
+        },
+        include: {
+          booking: {
+            include: {
+              carrier: true,
+              route: true
+            }
+          }
+        }
+      });
+
+      if (invoices.length === 0) {
+        return res.status(404).json({ message: 'No invoices found' });
+      }
+
+      // Default GL Account
+      const DEFAULT_GL_ACCOUNT = '512-LNHL-TCOR-OPSP-000000';
+
+      // Create CSV using ExcelJS
+      const workbook = new ExcelJS.Workbook();
+      const sheet = workbook.addWorksheet('SAGE Import');
+
+      sheet.columns = [
+        { header: 'SAGE VENDOR NUMBER', key: 'sageVendorNumber', width: 20 },
+        { header: 'LOAD NUMBER', key: 'loadNumber', width: 20 },
+        { header: 'INVOICE COMMENT', key: 'invoiceComment', width: 40 },
+        { header: 'INVOICE DATE', key: 'invoiceDate', width: 15 },
+        { header: 'GL ACCOUNT', key: 'glAccount', width: 25 },
+        { header: 'INVOICE AMOUNT', key: 'invoiceAmount', width: 15 }
+      ];
+
+      for (const invoice of invoices) {
+        sheet.addRow({
+          sageVendorNumber: invoice.booking?.carrier?.sageVendorNumber || '',
+          loadNumber: invoice.booking?.id?.toString() || '',
+          invoiceComment: invoice.notes || '',
+          invoiceDate: format(invoice.createdAt, 'yyyy-MM-dd'),
+          glAccount: DEFAULT_GL_ACCOUNT,
+          invoiceAmount: Number(invoice.amount).toFixed(2)
+        });
+      }
+
+      // Generate CSV
+      const filename = `sage-export-${format(new Date(), 'yyyyMMdd-HHmmss')}.csv`;
+      res.setHeader('Content-Type', 'text/csv');
+      res.setHeader('Content-Disposition', `attachment; filename="${filename}"`);
+
+      // Write CSV to response
+      await workbook.csv.write(res);
+      return res.end();
+    } catch (error: any) {
+      console.error('Export to SAGE error:', error);
+      return res.status(500).json({ message: error.message || 'Failed to export to SAGE' });
     }
   }
 }
@@ -251,6 +322,7 @@ export const sendInvoicesToAP = invoiceController.sendInvoicesToAP.bind(invoiceC
 export const deleteInvoice = invoiceController.deleteInvoice.bind(invoiceController);
 export const getInvoiceSummary = invoiceController.getInvoiceSummary.bind(invoiceController);
 export const downloadInvoicePDF = invoiceController.downloadInvoicePDF.bind(invoiceController);
+export const exportToSageCSV = invoiceController.exportToSageCSV.bind(invoiceController);
 
 // Legacy exports for backward compatibility
 export const getInvoices = listInvoices;

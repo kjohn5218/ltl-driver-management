@@ -8,7 +8,8 @@ import {
   sendInvoicesToAP,
   deleteInvoice,
   getInvoiceSummary,
-  downloadInvoicePDF
+  downloadInvoicePDF,
+  exportToSageCSV
 } from '../controllers/invoice.controller';
 import { authenticate, authorize } from '../middleware/auth.middleware';
 import { validateRequest } from '../middleware/validation.middleware';
@@ -85,6 +86,18 @@ router.post(
   ],
   validateRequest,
   sendInvoicesToAP
+);
+
+// Export invoices to SAGE CSV format (Admin/Dispatcher only)
+router.post(
+  '/export-to-sage',
+  authorize(UserRole.ADMIN, UserRole.DISPATCHER),
+  [
+    body('invoiceIds').isArray().notEmpty(),
+    body('invoiceIds.*').isInt()
+  ],
+  validateRequest,
+  exportToSageCSV
 );
 
 // Delete invoice (Admin only)
