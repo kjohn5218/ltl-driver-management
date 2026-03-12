@@ -2,6 +2,7 @@ import { Request, Response } from 'express';
 import { prisma } from '../index';
 import { Prisma, BookingStatus } from '@prisma/client';
 import * as NotificationService from '../services/notification.service';
+import { smsService } from '../services/sms.service';
 import { v4 as uuidv4 } from 'uuid';
 import multer from 'multer';
 import { PDFService } from '../services/pdf.service';
@@ -907,8 +908,38 @@ export const sendRateConfirmation = async (req: Request, res: Response) => {
           confirmationUrl
         );
       } else if (sendMethod === 'sms') {
-        // TODO: Implement SMS sending
-        return res.status(501).json({ message: 'SMS functionality not yet implemented' });
+        // Get phone number from booking or carrier
+        const phoneNumber = booking.phoneNumber || booking.carrier?.phone;
+
+        if (!phoneNumber) {
+          return res.status(400).json({
+            message: 'No phone number available for SMS. Please provide a phone number or update carrier contact info.',
+            confirmationToken,
+            confirmationUrl
+          });
+        }
+
+        // Determine route for SMS message
+        const route = booking.route
+          ? `${booking.route.origin} to ${booking.route.destination}`
+          : `${booking.origin} to ${booking.destination}`;
+
+        // Send SMS with rate confirmation details
+        const smsResult = await smsService.sendBookingConfirmation(
+          phoneNumber,
+          booking.id,
+          route,
+          booking.bookingDate.toLocaleDateString(),
+          Number(booking.rate)
+        );
+
+        if (!smsResult.success) {
+          return res.status(500).json({
+            message: `Failed to send SMS: ${smsResult.error}`,
+            confirmationToken,
+            confirmationUrl
+          });
+        }
       }
 
       return res.json({ 

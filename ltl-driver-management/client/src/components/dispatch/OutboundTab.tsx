@@ -25,8 +25,10 @@ import {
   Percent,
   TrendingUp,
   ChevronUp,
-  ChevronDown
+  ChevronDown,
+  MessageSquare
 } from 'lucide-react';
+import { SMSMessageModal, SMSRecipient } from './SMSMessageModal';
 
 type SortDirection = 'asc' | 'desc' | null;
 type SortColumn = 'tripNumber' | 'driver' | 'powerUnit' | 'trailer' | 'manifests' | 'linehaul' | 'leg' | 'location' | 'pieces' | 'weight' | 'lf' | 'schedDepart' | 'dispatched' | 'status';
@@ -107,6 +109,17 @@ export const OutboundTab: React.FC<OutboundTabProps> = ({ selectedLocations = []
   // Edit trip modal state
   const [editModalOpen, setEditModalOpen] = useState(false);
   const [editTripId, setEditTripId] = useState<number | null>(null);
+
+  // SMS modal state
+  const [smsModalOpen, setSmsModalOpen] = useState(false);
+  const [smsRecipients, setSmsRecipients] = useState<SMSRecipient[]>([]);
+  const [smsTripInfo, setSmsTripInfo] = useState<{
+    tripNumber?: string;
+    origin?: string;
+    destination?: string;
+    departureDate?: string;
+    departureTime?: string;
+  } | undefined>(undefined);
 
   // Fetch locations for displaying selected filter names
   const { data: locationsData } = useQuery({
@@ -600,6 +613,49 @@ export const OutboundTab: React.FC<OutboundTabProps> = ({ selectedLocations = []
     await refetchTrips();
   };
 
+  // Open SMS modal for a trip
+  const openSMSModal = (row: OutboundTripRow) => {
+    const recipients: SMSRecipient[] = [];
+
+    // Add driver if they have a phone number
+    if (row.trip.driver?.phoneNumber) {
+      recipients.push({
+        name: row.trip.driver.name,
+        phoneNumber: row.trip.driver.phoneNumber,
+        type: 'driver',
+        referenceId: row.trip.id,
+        referenceType: 'trip'
+      });
+    }
+
+    // Add team driver if they have a phone number
+    if (row.trip.teamDriver?.phoneNumber) {
+      recipients.push({
+        name: row.trip.teamDriver.name,
+        phoneNumber: row.trip.teamDriver.phoneNumber,
+        type: 'driver',
+        referenceId: row.trip.id,
+        referenceType: 'trip'
+      });
+    }
+
+    // Get linehaul info for trip details
+    const linehaulInfo = getLinehaulInfo(row);
+
+    setSmsTripInfo({
+      tripNumber: row.trip.tripNumber,
+      origin: linehaulInfo.origin,
+      destination: linehaulInfo.destination,
+      departureDate: row.trip.dispatchDate,
+      departureTime: row.trip.plannedDeparture
+        ? format(parseISO(row.trip.plannedDeparture), 'h:mm a')
+        : undefined
+    });
+
+    setSmsRecipients(recipients);
+    setSmsModalOpen(true);
+  };
+
   return (
     <div className="space-y-4">
       {/* Filters and Actions */}
@@ -739,6 +795,9 @@ export const OutboundTab: React.FC<OutboundTabProps> = ({ selectedLocations = []
                   <SortableHeader column="schedDepart" label="Sched Depart" sortConfig={sortConfig} onSort={handleSort} />
                   <SortableHeader column="dispatched" label="Dispatched" sortConfig={sortConfig} onSort={handleSort} />
                   <SortableHeader column="status" label="Status" sortConfig={sortConfig} onSort={handleSort} />
+                  <th className="px-4 py-3 text-center text-xs font-medium text-gray-500 dark:text-gray-400 uppercase tracking-wider">
+                    Actions
+                  </th>
                 </tr>
               </thead>
               <tbody className="bg-white dark:bg-gray-800 divide-y divide-gray-200 dark:divide-gray-700">
@@ -904,6 +963,15 @@ export const OutboundTab: React.FC<OutboundTabProps> = ({ selectedLocations = []
                       <td className="px-4 py-3 whitespace-nowrap">
                         <TripStatusBadge status={row.trip.status} />
                       </td>
+                      <td className="px-4 py-3 whitespace-nowrap text-center">
+                        <button
+                          onClick={() => openSMSModal(row)}
+                          className="p-1.5 text-teal-600 bg-teal-50 hover:bg-teal-100 dark:bg-teal-900/30 dark:text-teal-400 dark:hover:bg-teal-900/50 rounded transition-colors"
+                          title="Send SMS"
+                        >
+                          <MessageSquare className="w-4 h-4" />
+                        </button>
+                      </td>
                     </tr>
                   );
                 })}
@@ -980,6 +1048,19 @@ export const OutboundTab: React.FC<OutboundTabProps> = ({ selectedLocations = []
           onSaved={handleEditModalSaved}
         />
       )}
+
+      {/* SMS Message Modal */}
+      <SMSMessageModal
+        isOpen={smsModalOpen}
+        onClose={() => {
+          setSmsModalOpen(false);
+          setSmsRecipients([]);
+          setSmsTripInfo(undefined);
+        }}
+        recipients={smsRecipients}
+        tripInfo={smsTripInfo}
+        messageType="trip"
+      />
     </div>
   );
 };

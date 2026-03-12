@@ -26,9 +26,11 @@ import {
   Loader2,
   CheckCircle,
   ChevronUp,
-  ChevronDown
+  ChevronDown,
+  MessageSquare
 } from 'lucide-react';
 import { format, parseISO, addDays } from 'date-fns';
+import { SMSMessageModal, SMSRecipient } from './SMSMessageModal';
 
 type SortDirection = 'asc' | 'desc' | null;
 type SortColumn = 'tripNumber' | 'driver' | 'powerUnit' | 'trailer' | 'manifests' | 'linehaul' | 'leg' | 'location' | 'pieces' | 'weight' | 'schedArrival' | 'eta' | 'actualArrival' | 'status';
@@ -111,6 +113,17 @@ export const InboundTab: React.FC<InboundTabProps> = ({ selectedLocations = [] }
   // Arrival modal state
   const [arrivalModalOpen, setArrivalModalOpen] = useState(false);
   const [arrivalTrip, setArrivalTrip] = useState<LinehaulTrip | null>(null);
+
+  // SMS modal state
+  const [smsModalOpen, setSmsModalOpen] = useState(false);
+  const [smsRecipients, setSmsRecipients] = useState<SMSRecipient[]>([]);
+  const [smsTripInfo, setSmsTripInfo] = useState<{
+    tripNumber?: string;
+    origin?: string;
+    destination?: string;
+    departureDate?: string;
+    departureTime?: string;
+  } | undefined>(undefined);
 
   // Fetch locations for displaying selected filter names
   const { data: locationsData } = useQuery({
@@ -592,6 +605,49 @@ export const InboundTab: React.FC<InboundTabProps> = ({ selectedLocations = [] }
     setArrivalModalOpen(true);
   };
 
+  // Open SMS modal for a trip
+  const openSMSModal = (row: InboundTripRow) => {
+    const recipients: SMSRecipient[] = [];
+
+    // Add driver if they have a phone number
+    if (row.trip.driver?.phoneNumber) {
+      recipients.push({
+        name: row.trip.driver.name,
+        phoneNumber: row.trip.driver.phoneNumber,
+        type: 'driver',
+        referenceId: row.trip.id,
+        referenceType: 'trip'
+      });
+    }
+
+    // Add team driver if they have a phone number
+    if (row.trip.teamDriver?.phoneNumber) {
+      recipients.push({
+        name: row.trip.teamDriver.name,
+        phoneNumber: row.trip.teamDriver.phoneNumber,
+        type: 'driver',
+        referenceId: row.trip.id,
+        referenceType: 'trip'
+      });
+    }
+
+    // Get linehaul info for trip details
+    const linehaulInfo = getLinehaulInfo(row);
+
+    setSmsTripInfo({
+      tripNumber: row.trip.tripNumber,
+      origin: linehaulInfo.origin,
+      destination: linehaulInfo.destination,
+      departureDate: row.trip.dispatchDate,
+      departureTime: row.trip.plannedDeparture
+        ? format(parseISO(row.trip.plannedDeparture), 'h:mm a')
+        : undefined
+    });
+
+    setSmsRecipients(recipients);
+    setSmsModalOpen(true);
+  };
+
   // Handle arrival modal success
   const handleArrivalSuccess = async () => {
     setArrivalModalOpen(false);
@@ -911,16 +967,25 @@ export const InboundTab: React.FC<InboundTabProps> = ({ selectedLocations = [] }
                         <TripStatusBadge status={row.trip.status} />
                       </td>
                       <td className="px-4 py-3 whitespace-nowrap text-center">
-                        {(row.trip.status === 'IN_TRANSIT' || row.trip.status === 'DISPATCHED') && (
+                        <div className="flex items-center justify-center gap-1.5">
                           <button
-                            onClick={() => handleArriveClick(row.trip)}
-                            className="inline-flex items-center px-3 py-1.5 text-xs font-medium rounded-md text-white bg-orange-600 hover:bg-orange-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-orange-500"
-                            title="Arrive trip"
+                            onClick={() => openSMSModal(row)}
+                            className="p-1.5 text-teal-600 bg-teal-50 hover:bg-teal-100 dark:bg-teal-900/30 dark:text-teal-400 dark:hover:bg-teal-900/50 rounded transition-colors"
+                            title="Send SMS"
                           >
-                            <CheckCircle className="h-3.5 w-3.5 mr-1" />
-                            Arrive
+                            <MessageSquare className="w-4 h-4" />
                           </button>
-                        )}
+                          {(row.trip.status === 'IN_TRANSIT' || row.trip.status === 'DISPATCHED') && (
+                            <button
+                              onClick={() => handleArriveClick(row.trip)}
+                              className="inline-flex items-center px-3 py-1.5 text-xs font-medium rounded-md text-white bg-orange-600 hover:bg-orange-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-orange-500"
+                              title="Arrive trip"
+                            >
+                              <CheckCircle className="h-3.5 w-3.5 mr-1" />
+                              Arrive
+                            </button>
+                          )}
+                        </div>
                       </td>
                     </tr>
                   );
@@ -1094,6 +1159,19 @@ export const InboundTab: React.FC<InboundTabProps> = ({ selectedLocations = [] }
           onSuccess={handleArrivalSuccess}
         />
       )}
+
+      {/* SMS Message Modal */}
+      <SMSMessageModal
+        isOpen={smsModalOpen}
+        onClose={() => {
+          setSmsModalOpen(false);
+          setSmsRecipients([]);
+          setSmsTripInfo(undefined);
+        }}
+        recipients={smsRecipients}
+        tripInfo={smsTripInfo}
+        messageType="trip"
+      />
     </div>
   );
 };

@@ -31,11 +31,13 @@ import {
   XCircle,
   Play,
   Clock,
-  History
+  History,
+  MessageSquare
 } from 'lucide-react';
 import { RequestContractPowerModal } from './RequestContractPowerModal';
 import { DispatchTripModal } from './DispatchTripModal';
 import { BulkDispositionModal } from './BulkDispositionModal';
+import { SMSMessageModal, SMSRecipient } from './SMSMessageModal';
 
 // Load item type combining loadsheet data with additional load/unload info
 export interface LoadItem {
@@ -223,6 +225,17 @@ export const LoadsTab: React.FC<LoadsTabProps> = ({ loading: externalLoading = f
 
   // Contract Power History state
   const [showHistory, setShowHistory] = useState(false);
+
+  // SMS modal state
+  const [isSMSModalOpen, setIsSMSModalOpen] = useState(false);
+  const [smsRecipients, setSmsRecipients] = useState<SMSRecipient[]>([]);
+  const [smsTripInfo, setSmsTripInfo] = useState<{
+    tripNumber?: string;
+    origin?: string;
+    destination?: string;
+    departureDate?: string;
+    departureTime?: string;
+  } | undefined>(undefined);
 
   // Fetch contract power history when edit modal is open
   const { data: contractPowerHistory } = useQuery({
@@ -540,6 +553,54 @@ export const LoadsTab: React.FC<LoadsTabProps> = ({ loading: externalLoading = f
     setEditContractPowerDriverName(loadItem.contractPowerDriverName || '');
     setEditContractPowerCarrierName(loadItem.contractPowerCarrierName || '');
     setIsEditModalOpen(true);
+  };
+
+  // Open SMS modal for a load
+  const openSMSModal = (loadItem: LoadItem) => {
+    const recipients: SMSRecipient[] = [];
+
+    // Get driver from planning data if available
+    const planning = planningData[loadItem.id];
+    if (planning?.plannedDriverId) {
+      const driver = drivers.find(d => d.id === planning.plannedDriverId);
+      if (driver?.phoneNumber) {
+        recipients.push({
+          name: driver.name,
+          phoneNumber: driver.phoneNumber,
+          type: 'driver',
+          referenceId: loadItem.id,
+          referenceType: 'loadsheet'
+        });
+      }
+    }
+
+    // Also check if there's a contract power driver name with a matching driver
+    if (loadItem.contractPowerDriverName) {
+      const contractDriver = drivers.find(d =>
+        d.name.toLowerCase() === loadItem.contractPowerDriverName?.toLowerCase()
+      );
+      if (contractDriver?.phoneNumber && !recipients.some(r => r.phoneNumber === contractDriver.phoneNumber)) {
+        recipients.push({
+          name: contractDriver.name,
+          phoneNumber: contractDriver.phoneNumber,
+          type: 'driver',
+          referenceId: loadItem.id,
+          referenceType: 'loadsheet'
+        });
+      }
+    }
+
+    // Set trip info from load
+    setSmsTripInfo({
+      tripNumber: loadItem.tripNumber || loadItem.manifestNumber,
+      origin: loadItem.originTerminalCode,
+      destination: loadItem.destinationTerminalCode,
+      departureDate: loadItem.scheduledDepartDate,
+      departureTime: loadItem.scheduledDeparture
+    });
+
+    setSmsRecipients(recipients);
+    setIsSMSModalOpen(true);
   };
 
   // Handle edit save
@@ -940,6 +1001,13 @@ export const LoadsTab: React.FC<LoadsTabProps> = ({ loading: externalLoading = f
       cell: (load: LoadItem) => (
         <div className="flex items-center gap-1.5">
           <button
+            onClick={() => openSMSModal(load)}
+            className="p-1.5 text-teal-600 bg-teal-50 hover:bg-teal-100 dark:bg-teal-900/30 dark:text-teal-400 dark:hover:bg-teal-900/50 rounded transition-colors"
+            title="Send SMS"
+          >
+            <MessageSquare className="w-4 h-4" />
+          </button>
+          <button
             onClick={() => openEditModal(load)}
             className="p-1.5 text-blue-600 bg-blue-50 hover:bg-blue-100 dark:bg-blue-900/30 dark:text-blue-400 dark:hover:bg-blue-900/50 rounded transition-colors"
             title="Edit"
@@ -1276,6 +1344,13 @@ export const LoadsTab: React.FC<LoadsTabProps> = ({ loading: externalLoading = f
                         </td>
                         <td className="px-4 py-3 whitespace-nowrap">
                           <div className="flex items-center gap-1.5">
+                            <button
+                              onClick={() => openSMSModal(loadItem)}
+                              className="p-1.5 text-teal-600 bg-teal-50 hover:bg-teal-100 dark:bg-teal-900/30 dark:text-teal-400 dark:hover:bg-teal-900/50 rounded transition-colors"
+                              title="Send SMS"
+                            >
+                              <MessageSquare className="w-4 h-4" />
+                            </button>
                             <button
                               onClick={() => openEditModal(loadItem)}
                               className="p-1.5 text-blue-600 bg-blue-50 hover:bg-blue-100 dark:bg-blue-900/30 dark:text-blue-400 dark:hover:bg-blue-900/50 rounded transition-colors"
@@ -1825,6 +1900,19 @@ export const LoadsTab: React.FC<LoadsTabProps> = ({ loading: externalLoading = f
           </div>
         </div>
       </Modal>
+
+      {/* SMS Message Modal */}
+      <SMSMessageModal
+        isOpen={isSMSModalOpen}
+        onClose={() => {
+          setIsSMSModalOpen(false);
+          setSmsRecipients([]);
+          setSmsTripInfo(undefined);
+        }}
+        recipients={smsRecipients}
+        tripInfo={smsTripInfo}
+        messageType="loadsheet"
+      />
     </div>
   );
 };
