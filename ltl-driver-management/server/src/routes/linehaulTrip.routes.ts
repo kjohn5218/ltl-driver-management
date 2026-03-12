@@ -15,6 +15,8 @@ import {
   dispatchTrip,
   getTripEta,
   getTripEtaBatch,
+  getRoutingStatus,
+  clearRoutingCache,
   getVehicleLocation,
   arriveTrip,
   getDriverTripReport,
@@ -103,6 +105,19 @@ router.get(
   [param('id').isInt({ min: 1 })],
   validateRequest,
   getTripEta
+);
+
+// Get routing status for ETA calculations
+router.get(
+  '/routing/status',
+  getRoutingStatus
+);
+
+// Clear routing cache (Admin only)
+router.post(
+  '/routing/cache/clear',
+  authorize(UserRole.ADMIN),
+  clearRoutingCache
 );
 
 // Get vehicle location from GoMotive API

@@ -1298,6 +1298,34 @@ export const getTripEtaBatch = async (req: Request, res: Response): Promise<void
   }
 };
 
+// Get routing status for ETA calculations
+export const getRoutingStatus = async (_req: Request, res: Response): Promise<void> => {
+  try {
+    const status = etaService.getRoutingStatus();
+    res.json({
+      success: true,
+      routing: status
+    });
+  } catch (error) {
+    console.error('Error getting routing status:', error);
+    res.status(500).json({ message: 'Failed to get routing status' });
+  }
+};
+
+// Clear routing cache
+export const clearRoutingCache = async (_req: Request, res: Response): Promise<void> => {
+  try {
+    etaService.clearRoutingCache();
+    res.json({
+      success: true,
+      message: 'Routing cache cleared'
+    });
+  } catch (error) {
+    console.error('Error clearing routing cache:', error);
+    res.status(500).json({ message: 'Failed to clear routing cache' });
+  }
+};
+
 // Get vehicle location from Motive API
 export const getVehicleLocation = async (req: Request, res: Response): Promise<void> => {
   try {

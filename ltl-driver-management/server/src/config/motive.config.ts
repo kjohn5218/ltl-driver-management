@@ -6,6 +6,7 @@
 export interface MotiveConfig {
   apiKey: string;
   baseUrl: string;
+  syncIntervalMinutes: number;
 }
 
 class MotiveConfigError extends Error {
@@ -16,9 +17,12 @@ class MotiveConfigError extends Error {
 }
 
 export const getMotiveConfig = (): MotiveConfig => {
+  const syncInterval = parseInt(process.env.MOTIVE_SYNC_INTERVAL_MINUTES || '5', 10);
+
   const config: MotiveConfig = {
     apiKey: process.env.MOTIVE_API_KEY || '',
-    baseUrl: process.env.MOTIVE_API_URL || 'https://api.gomotive.com/v1'
+    baseUrl: process.env.MOTIVE_API_URL || 'https://api.gomotive.com/v1',
+    syncIntervalMinutes: isNaN(syncInterval) || syncInterval < 1 ? 5 : syncInterval
   };
 
   if (!config.apiKey) {

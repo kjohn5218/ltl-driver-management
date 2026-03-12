@@ -36,6 +36,11 @@ import {
   getVehicleLocations,
   getTruckLocation,
   getMotiveSyncStatus,
+  getWebSocketStatus,
+  // Geofence
+  getGeofenceStatus,
+  refreshGeofenceTerminals,
+  clearGeofenceCooldowns,
   // Allocation
   getAllocationSummary,
   getTerminalAllocations,
@@ -461,6 +466,36 @@ router.get(
   '/locations/sync/status',
   authorize(UserRole.ADMIN, UserRole.DISPATCHER),
   getMotiveSyncStatus
+);
+
+// Get WebSocket status for live GPS tracking
+router.get(
+  '/websocket/status',
+  authorize(UserRole.ADMIN, UserRole.DISPATCHER),
+  getWebSocketStatus
+);
+
+// ==================== GEOFENCE ALERTS ====================
+
+// Get geofence status
+router.get(
+  '/geofence/status',
+  authorize(UserRole.ADMIN, UserRole.DISPATCHER),
+  getGeofenceStatus
+);
+
+// Refresh terminal geofences (Admin only)
+router.post(
+  '/geofence/terminals/refresh',
+  authorize(UserRole.ADMIN),
+  refreshGeofenceTerminals
+);
+
+// Clear geofence alert cooldowns (Admin only)
+router.post(
+  '/geofence/cooldowns/clear',
+  authorize(UserRole.ADMIN),
+  clearGeofenceCooldowns
 );
 
 // ==================== EQUIPMENT ALLOCATION ====================

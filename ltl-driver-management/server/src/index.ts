@@ -1,4 +1,5 @@
 import express, { Application } from 'express';
+import { createServer } from 'http';
 import cors from 'cors';
 import helmet from 'helmet';
 import dotenv from 'dotenv';
@@ -57,7 +58,10 @@ import linehaulLaneRoutes from './routes/linehaulLane.routes';
 import hrIntegrationRoutes from './routes/hrIntegration.routes';
 
 // Schedulers
-import { startEquipmentSyncScheduler, startFuelPriceSyncScheduler } from './scheduler';
+import { startEquipmentSyncScheduler, startFuelPriceSyncScheduler, startMotiveGpsSyncScheduler } from './scheduler';
+
+// WebSocket service
+import { websocketService } from './services/websocket.service';
 
 // Public driver routes (no SSO auth required)
 import publicDriverRoutes from './routes/publicDriver.routes';
@@ -80,8 +84,9 @@ if (!validateAndLogEnv()) {
 // Initialize Prisma Client
 export const prisma = new PrismaClient();
 
-// Create Express app
+// Create Express app and HTTP server
 const app: Application = express();
+const httpServer = createServer(app);
 const PORT = process.env.PORT || 3001;
 
 // Request size limits
@@ -218,7 +223,11 @@ async function startServer() {
     // Initialize security tables
     await initializeSecurityTables();
 
-    app.listen(PORT, () => {
+    // Initialize WebSocket server
+    const allowedOrigins = (process.env.ALLOWED_ORIGINS || 'http://localhost:5173').split(',');
+    websocketService.initialize(httpServer, allowedOrigins);
+
+    httpServer.listen(PORT, () => {
       log.lifecycle('Server started', { port: PORT, env: process.env.NODE_ENV || 'development' });
 
       if (process.env.NODE_ENV !== 'production') {
@@ -230,6 +239,9 @@ async function startServer() {
 
       // Start fuel price sync scheduler (if Fuel Price API is configured)
       startFuelPriceSyncScheduler();
+
+      // Start Motive GPS sync scheduler (if Motive API is configured)
+      startMotiveGpsSyncScheduler();
     });
   } catch (error) {
     log.error('DATABASE', 'Failed to connect to database', error);

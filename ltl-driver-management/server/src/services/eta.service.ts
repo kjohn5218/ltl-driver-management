@@ -1,8 +1,7 @@
 import { prisma } from '../index';
-
-// GoMotive API configuration for GPS tracking
-const GOMOTIVE_API_URL = process.env.GOMOTIVE_API_URL || 'https://api.gomotive.com/v3';
-const GOMOTIVE_API_KEY = process.env.GOMOTIVE_API_KEY || '';
+import { getMotiveConfig, isMotiveConfigured } from '../config/motive.config';
+import { routingService } from './routing.service';
+import { isRoutingConfigured, getRoutingProvider } from '../config/routing.config';
 
 interface GpsLocation {
   latitude: number;
@@ -29,10 +28,18 @@ interface GpsApiResponse {
 interface EtaResult {
   estimatedArrival: Date | null;
   source: 'GPS' | 'PROFILE' | 'NONE';
-  distanceRemaining?: number; // miles
+  distanceRemaining?: number; // miles (road distance if routing enabled)
+  durationRemaining?: number; // minutes (from routing API)
   currentLocation?: {
     latitude: number;
     longitude: number;
+  };
+  routing?: {
+    provider: string;
+    roadDistance: number; // miles
+    straightLineDistance: number; // miles
+    cached: boolean;
+    durationInTraffic?: number; // minutes, if available
   };
 }
 
@@ -103,6 +110,7 @@ export const calculateEta = async (tripId: number): Promise<EtaResult> => {
 
 /**
  * Calculate ETA using GPS data from external API or mock data
+ * Uses routing API for accurate road-based distance and time when configured
  */
 async function calculateGpsBasedEta(trip: TripWithProfile): Promise<EtaResult> {
   if (!trip.truck) {
@@ -117,11 +125,11 @@ async function calculateGpsBasedEta(trip: TripWithProfile): Promise<EtaResult> {
   }
 
   try {
-    // Fetch current GPS location from GoMotive API or use mock data
+    // Fetch current GPS location from Motive API or use mock data
     let gpsLocation: GpsLocation | null = null;
 
-    if (trip.truck.externalFleetId && GOMOTIVE_API_KEY) {
-      gpsLocation = await fetchGpsLocationFromGoMotive(trip.truck.externalFleetId);
+    if (trip.truck.externalFleetId && isMotiveConfigured()) {
+      gpsLocation = await fetchGpsLocationFromMotive(trip.truck.externalFleetId);
     }
 
     // Use mock GPS data if no real data available (for development)
@@ -133,19 +141,61 @@ async function calculateGpsBasedEta(trip: TripWithProfile): Promise<EtaResult> {
       return { estimatedArrival: null, source: 'NONE' };
     }
 
-    // Calculate distance remaining
-    const distanceRemaining = calculateDistance(
-      gpsLocation.latitude,
-      gpsLocation.longitude,
-      Number(destinationLat),
-      Number(destinationLon)
+    const origin = { latitude: gpsLocation.latitude, longitude: gpsLocation.longitude };
+    const destination = { latitude: Number(destinationLat), longitude: Number(destinationLon) };
+
+    // Calculate straight-line distance for comparison
+    const straightLineDistance = calculateDistance(
+      origin.latitude,
+      origin.longitude,
+      destination.latitude,
+      destination.longitude
     );
 
-    // Calculate ETA based on current speed
-    // If speed is 0 or very low, use average highway speed of 55 mph
-    const effectiveSpeed = gpsLocation.speed > 5 ? gpsLocation.speed : 55;
-    const hoursRemaining = distanceRemaining / effectiveSpeed;
-    const minutesRemaining = hoursRemaining * 60;
+    let distanceRemaining: number;
+    let minutesRemaining: number;
+    let routingInfo: EtaResult['routing'] | undefined;
+
+    // Try routing API for accurate road-based calculation
+    if (isRoutingConfigured()) {
+      const routeResult = await routingService.calculateRoute(origin, destination);
+
+      if ('error' in routeResult) {
+        // Routing failed, use fallback result if available
+        if (routeResult.fallbackResult) {
+          distanceRemaining = routeResult.fallbackResult.distanceMiles;
+          minutesRemaining = routeResult.fallbackResult.durationMinutes;
+          routingInfo = {
+            provider: 'none (fallback)',
+            roadDistance: distanceRemaining,
+            straightLineDistance,
+            cached: false
+          };
+        } else {
+          // No fallback, use simple calculation
+          distanceRemaining = straightLineDistance;
+          const effectiveSpeed = gpsLocation.speed > 5 ? gpsLocation.speed : 55;
+          minutesRemaining = (distanceRemaining / effectiveSpeed) * 60;
+        }
+      } else {
+        // Routing succeeded
+        distanceRemaining = routeResult.distanceMiles;
+        minutesRemaining = routeResult.durationInTraffic || routeResult.durationMinutes;
+        routingInfo = {
+          provider: routeResult.provider,
+          roadDistance: routeResult.distanceMiles,
+          straightLineDistance,
+          cached: routeResult.cached,
+          durationInTraffic: routeResult.durationInTraffic
+        };
+      }
+    } else {
+      // No routing configured, use simple speed-based calculation
+      distanceRemaining = straightLineDistance;
+      // If speed is 0 or very low, use average highway speed of 55 mph
+      const effectiveSpeed = gpsLocation.speed > 5 ? gpsLocation.speed : 55;
+      minutesRemaining = (distanceRemaining / effectiveSpeed) * 60;
+    }
 
     const estimatedArrival = new Date();
     estimatedArrival.setMinutes(estimatedArrival.getMinutes() + minutesRemaining);
@@ -165,13 +215,15 @@ async function calculateGpsBasedEta(trip: TripWithProfile): Promise<EtaResult> {
       estimatedArrival,
       source: 'GPS',
       distanceRemaining,
+      durationRemaining: minutesRemaining,
       currentLocation: {
         latitude: gpsLocation.latitude,
         longitude: gpsLocation.longitude
-      }
+      },
+      routing: routingInfo
     };
   } catch (error) {
-    console.error('Error fetching GPS data:', error);
+    console.error('Error calculating GPS-based ETA:', error);
     return { estimatedArrival: null, source: 'NONE' };
   }
 }
@@ -208,31 +260,34 @@ function calculateProfileBasedEta(trip: TripWithProfile): EtaResult {
 }
 
 /**
- * Fetch GPS location from GoMotive API
- * Uses the same API endpoint pattern as the vehicle location controller
+ * Fetch GPS location from Motive API
+ * Uses the centralized Motive config for API credentials
  */
-async function fetchGpsLocationFromGoMotive(externalFleetId: string): Promise<GpsLocation | null> {
-  if (!GOMOTIVE_API_KEY || !GOMOTIVE_API_URL) {
+async function fetchGpsLocationFromMotive(externalFleetId: string): Promise<GpsLocation | null> {
+  if (!isMotiveConfigured()) {
     return null;
   }
 
   try {
+    const config = getMotiveConfig();
+
     // Calculate date range for API (last 24 hours)
     const endDate = new Date();
     const startDate = new Date(endDate.getTime() - 24 * 60 * 60 * 1000);
 
-    const apiUrl = `${GOMOTIVE_API_URL}/vehicle_locations/${externalFleetId}?start_date=${startDate.toISOString()}&end_date=${endDate.toISOString()}`;
+    const apiUrl = `${config.baseUrl}/vehicle_locations/${externalFleetId}?start_date=${startDate.toISOString()}&end_date=${endDate.toISOString()}`;
 
     const response = await fetch(apiUrl, {
       method: 'GET',
       headers: {
-        'Authorization': `Bearer ${GOMOTIVE_API_KEY}`,
+        'X-Api-Key': config.apiKey,
+        'Accept': 'application/json',
         'Content-Type': 'application/json'
       }
     });
 
     if (!response.ok) {
-      console.error(`GoMotive API returned status ${response.status}`);
+      console.error(`Motive API returned status ${response.status}`);
       return null;
     }
 
@@ -241,7 +296,7 @@ async function fetchGpsLocationFromGoMotive(externalFleetId: string): Promise<Gp
       locations?: GpsApiResponse[];
     };
 
-    // GoMotive API returns an array of location records - get the most recent
+    // Motive API returns an array of location records - get the most recent
     const locations = data.vehicle_locations || data.locations || [];
     const latestLocation = locations.length > 0 ? locations[locations.length - 1] : null;
 
@@ -257,7 +312,7 @@ async function fetchGpsLocationFromGoMotive(externalFleetId: string): Promise<Gp
       timestamp: new Date(latestLocation.timestamp ?? latestLocation.time ?? Date.now())
     };
   } catch (error) {
-    console.error('Error fetching GPS location from GoMotive:', error);
+    console.error('Error fetching GPS location from Motive:', error);
     return null;
   }
 }
@@ -375,7 +430,28 @@ export const calculateEtaBatch = async (tripIds: number[]): Promise<Map<number, 
   return results;
 };
 
+/**
+ * Get routing configuration status
+ */
+export const getRoutingStatus = () => {
+  const cacheStats = routingService.getCacheStats();
+  return {
+    configured: isRoutingConfigured(),
+    provider: getRoutingProvider(),
+    cacheSize: cacheStats.size
+  };
+};
+
+/**
+ * Clear the routing cache
+ */
+export const clearRoutingCache = () => {
+  routingService.clearCache();
+};
+
 export const etaService = {
   calculateEta,
-  calculateEtaBatch
+  calculateEtaBatch,
+  getRoutingStatus,
+  clearRoutingCache
 };

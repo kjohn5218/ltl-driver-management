@@ -1508,7 +1508,7 @@ export const getSyncStatus = async (_req: Request, res: Response): Promise<void>
 // ==================== MOTIVE GPS TRACKING ====================
 
 import { getMotiveService } from '../services/motive.service';
-import { isMotiveConfigured } from '../config/motive.config';
+import { isMotiveConfigured, getMotiveConfig } from '../config/motive.config';
 
 // Sync vehicle locations from Motive
 export const syncVehicleLocations = async (_req: Request, res: Response): Promise<void> => {
@@ -1627,6 +1627,81 @@ export const getMotiveSyncStatus = async (_req: Request, res: Response): Promise
   } catch (error) {
     console.error('Error getting Motive sync status:', error);
     res.status(500).json({ message: 'Failed to get sync status' });
+  }
+};
+
+// Get WebSocket status for GPS tracking
+import { websocketService } from '../services/websocket.service';
+
+export const getWebSocketStatus = async (_req: Request, res: Response): Promise<void> => {
+  try {
+    const stats = websocketService.getStats();
+    const motiveConfigured = isMotiveConfigured();
+
+    res.json({
+      success: true,
+      websocket: {
+        connectedClients: stats.connectedClients,
+        activeRooms: stats.rooms.length,
+        rooms: stats.rooms
+      },
+      gpsTracking: {
+        motiveConfigured,
+        syncIntervalMinutes: motiveConfigured ? getMotiveConfig().syncIntervalMinutes : null
+      }
+    });
+  } catch (error) {
+    console.error('Error getting WebSocket status:', error);
+    res.status(500).json({ message: 'Failed to get WebSocket status' });
+  }
+};
+
+// Get geofence status
+import { geofenceService } from '../services/geofence.service';
+
+export const getGeofenceStatus = async (_req: Request, res: Response): Promise<void> => {
+  try {
+    const stats = geofenceService.getStats();
+
+    res.json({
+      success: true,
+      geofence: stats
+    });
+  } catch (error) {
+    console.error('Error getting geofence status:', error);
+    res.status(500).json({ message: 'Failed to get geofence status' });
+  }
+};
+
+// Refresh terminal geofences
+export const refreshGeofenceTerminals = async (_req: Request, res: Response): Promise<void> => {
+  try {
+    await geofenceService.forceRefreshTerminals();
+    const stats = geofenceService.getStats();
+
+    res.json({
+      success: true,
+      message: 'Terminal geofences refreshed',
+      terminalsMonitored: stats.terminalsMonitored
+    });
+  } catch (error) {
+    console.error('Error refreshing geofence terminals:', error);
+    res.status(500).json({ message: 'Failed to refresh geofence terminals' });
+  }
+};
+
+// Clear geofence alert cooldowns
+export const clearGeofenceCooldowns = async (_req: Request, res: Response): Promise<void> => {
+  try {
+    geofenceService.clearCooldowns();
+
+    res.json({
+      success: true,
+      message: 'Geofence alert cooldowns cleared'
+    });
+  } catch (error) {
+    console.error('Error clearing geofence cooldowns:', error);
+    res.status(500).json({ message: 'Failed to clear geofence cooldowns' });
   }
 };
 
