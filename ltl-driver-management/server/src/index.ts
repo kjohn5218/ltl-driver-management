@@ -52,6 +52,7 @@ import interlineCarrierRoutes from './routes/interlineCarrier.routes';
 import expectedShipmentRoutes from './routes/expectedShipment.routes';
 import contractPowerRoutes from './routes/contractPower.routes';
 import tmsDispositionRoutes from './routes/tmsDisposition.routes';
+import tmsRoutes from './routes/tms.routes';
 import linehaulLaneRoutes from './routes/linehaulLane.routes';
 
 // External integrations
@@ -192,6 +193,7 @@ app.use('/api/interline-carriers', interlineCarrierRoutes);
 app.use('/api/expected-shipments', expectedShipmentRoutes);
 app.use('/api/contract-power', contractPowerRoutes);
 app.use('/api/tms-disposition', tmsDispositionRoutes);
+app.use('/api/tms', tmsRoutes);
 app.use('/api/linehaul-lanes', linehaulLaneRoutes);
 
 // External integrations (API key authenticated, no CSRF)

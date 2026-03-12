@@ -1,13 +1,19 @@
 /**
  * TMS Disposition Service
  *
- * This service provides stubbed methods for integrating with an external TMS system
- * to update loadsheet schedules, shipment delivery dates, and add delay notes.
+ * This service integrates with an external TMS system to:
+ * - Update loadsheet scheduled departure dates
+ * - Update shipment delivery dates
+ * - Add delay notes to orders
  *
- * In production, these methods will be replaced with actual TMS API calls.
+ * Uses tms.api.service.ts for API communication.
+ * Falls back to stub mode when TMS is not configured.
  */
 
 import { LateReasonType } from '@prisma/client';
+import { isTMSConfigured } from '../config/tms.config';
+import { tmsApiService } from './tms.api.service';
+import { log } from '../utils/logger';
 
 // Result interface for TMS operations
 export interface TMSDispositionResult {
@@ -60,8 +66,7 @@ const LATE_REASON_LABELS: Record<LateReasonType, string> = {
 /**
  * TMS Disposition Service
  *
- * All methods are currently stubbed and simulate TMS integration.
- * When connecting to actual TMS, replace the implementations with real API calls.
+ * Uses the TMS API when configured, otherwise falls back to stub mode.
  */
 export const tmsDispositionService = {
   /**
@@ -77,12 +82,38 @@ export const tmsDispositionService = {
     manifestNumber: string,
     newDate: string
   ): Promise<TMSDispositionResult> => {
-    // TODO: Replace with actual TMS API call
-    // Example: await tmsApi.put(`/loadsheets/${manifestNumber}/scheduled-departure`, { date: newDate });
+    // Use real API when configured
+    if (isTMSConfigured()) {
+      try {
+        const response = await tmsApiService.updateScheduledDeparture(manifestNumber, newDate);
 
-    console.log(`[TMS STUB] Updating scheduled departure for loadsheet ${loadsheetId} (${manifestNumber}) to ${newDate}`);
+        if (response.success) {
+          log.info('TMS', `Updated scheduled departure for ${manifestNumber} to ${newDate}`);
+          return {
+            success: true,
+            message: `Scheduled departure updated to ${newDate} for manifest ${manifestNumber}`
+          };
+        } else {
+          log.error('TMS', `Failed to update scheduled departure: ${response.error}`);
+          return {
+            success: false,
+            message: response.error || 'Failed to update scheduled departure',
+            errorCode: response.statusCode?.toString()
+          };
+        }
+      } catch (error) {
+        const message = error instanceof Error ? error.message : 'Unknown error';
+        log.error('TMS', `Exception updating scheduled departure: ${message}`);
+        return {
+          success: false,
+          message: `TMS API error: ${message}`,
+          errorCode: 'API_ERROR'
+        };
+      }
+    }
 
-    // Simulate API delay
+    // Fallback: stub mode when TMS is not configured
+    log.debug('TMS', `[STUB] Updating scheduled departure for loadsheet ${loadsheetId} (${manifestNumber}) to ${newDate}`);
     await new Promise(resolve => setTimeout(resolve, 50));
 
     return {
@@ -104,12 +135,39 @@ export const tmsDispositionService = {
     manifestNumber: string,
     newDeliveryDate: string
   ): Promise<TMSDispositionResult> => {
-    // TODO: Replace with actual TMS API call
-    // Example: await tmsApi.put(`/manifests/${manifestNumber}/shipments/delivery-dates`, { date: newDeliveryDate });
+    // Use real API when configured
+    if (isTMSConfigured()) {
+      try {
+        const response = await tmsApiService.updateDeliveryDates(manifestNumber, newDeliveryDate);
 
-    console.log(`[TMS STUB] Updating shipment delivery dates for loadsheet ${loadsheetId} (${manifestNumber}) to ${newDeliveryDate}`);
+        if (response.success) {
+          const count = response.data?.updated || 0;
+          log.info('TMS', `Updated delivery dates for ${count} shipments on ${manifestNumber}`);
+          return {
+            success: true,
+            message: `Delivery dates updated to ${newDeliveryDate} for ${count} shipments on manifest ${manifestNumber}`
+          };
+        } else {
+          log.error('TMS', `Failed to update delivery dates: ${response.error}`);
+          return {
+            success: false,
+            message: response.error || 'Failed to update delivery dates',
+            errorCode: response.statusCode?.toString()
+          };
+        }
+      } catch (error) {
+        const message = error instanceof Error ? error.message : 'Unknown error';
+        log.error('TMS', `Exception updating delivery dates: ${message}`);
+        return {
+          success: false,
+          message: `TMS API error: ${message}`,
+          errorCode: 'API_ERROR'
+        };
+      }
+    }
 
-    // Simulate API delay
+    // Fallback: stub mode when TMS is not configured
+    log.debug('TMS', `[STUB] Updating shipment delivery dates for loadsheet ${loadsheetId} (${manifestNumber}) to ${newDeliveryDate}`);
     await new Promise(resolve => setTimeout(resolve, 50));
 
     return {
@@ -137,12 +195,39 @@ export const tmsDispositionService = {
     const reasonLabel = LATE_REASON_LABELS[reason] || reason;
     const delayNote = `DELAY: Late departure due to ${reasonLabel}. New scheduled delivery: ${newDeliveryDate}`;
 
-    // TODO: Replace with actual TMS API call
-    // Example: await tmsApi.post(`/manifests/${manifestNumber}/orders/notes`, { note: delayNote, type: 'DELAY' });
+    // Use real API when configured
+    if (isTMSConfigured()) {
+      try {
+        const response = await tmsApiService.addDelayNotes(manifestNumber, delayNote, reason);
 
-    console.log(`[TMS STUB] Adding delay notes to orders for loadsheet ${loadsheetId} (${manifestNumber}): "${delayNote}"`);
+        if (response.success) {
+          const count = response.data?.added || 0;
+          log.info('TMS', `Added delay notes to ${count} orders on ${manifestNumber}`);
+          return {
+            success: true,
+            message: `Delay notes added to ${count} orders for manifest ${manifestNumber}`
+          };
+        } else {
+          log.error('TMS', `Failed to add delay notes: ${response.error}`);
+          return {
+            success: false,
+            message: response.error || 'Failed to add delay notes',
+            errorCode: response.statusCode?.toString()
+          };
+        }
+      } catch (error) {
+        const message = error instanceof Error ? error.message : 'Unknown error';
+        log.error('TMS', `Exception adding delay notes: ${message}`);
+        return {
+          success: false,
+          message: `TMS API error: ${message}`,
+          errorCode: 'API_ERROR'
+        };
+      }
+    }
 
-    // Simulate API delay
+    // Fallback: stub mode when TMS is not configured
+    log.debug('TMS', `[STUB] Adding delay notes to orders for loadsheet ${loadsheetId} (${manifestNumber}): "${delayNote}"`);
     await new Promise(resolve => setTimeout(resolve, 50));
 
     return {
