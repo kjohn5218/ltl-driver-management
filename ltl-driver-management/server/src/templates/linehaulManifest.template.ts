@@ -368,24 +368,24 @@ export const generateLinehaulManifestHTML = (data: ManifestData): string => {
       margin-top: 2px;
     }
 
-    .terminals-totals-section {
+    .locations-totals-section {
       display: flex;
       gap: 15px;
       margin-bottom: 10px;
     }
 
-    .terminals-section {
+    .locations-section {
       flex: 3;
       border: 1px solid #000;
       padding: 5px;
     }
 
-    .terminals-label {
+    .locations-label {
       font-size: 9px;
       margin-bottom: 5px;
     }
 
-    .terminals-box {
+    .locations-box {
       font-size: 14px;
       padding: 5px;
     }
@@ -445,7 +445,7 @@ export const generateLinehaulManifestHTML = (data: ManifestData): string => {
       width: 90px;
     }
 
-    .terminal-header, .terminal-cell {
+    .location-header, .location-cell {
       width: 70px;
     }
 
@@ -473,7 +473,7 @@ export const generateLinehaulManifestHTML = (data: ManifestData): string => {
       font-size: 10px;
     }
 
-    .terminal-sub {
+    .location-sub {
       font-size: 8px;
       color: #333;
     }

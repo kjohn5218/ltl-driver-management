@@ -27,7 +27,7 @@ interface LoadsheetData {
     roofCondition: string;
     trailerConditionComment: string | null;
     hazmatPlacards: string | null;
-    originTerminal: { code: string; name: string } | null;
+    originLocation: { code: string; name: string | null } | null;
     hazmatItems: Array<{
       itemNumber: number;
       proNumber: string | null;

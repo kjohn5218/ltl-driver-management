@@ -40,8 +40,8 @@ export interface ClientToServerEvents {
   // Subscribe to geofence alerts
   'subscribe:geofence-alerts': () => void;
   'unsubscribe:geofence-alerts': () => void;
-  'subscribe:terminal-alerts': (terminalId: number) => void;
-  'unsubscribe:terminal-alerts': (terminalId: number) => void;
+  'subscribe:terminal-alerts': (locationId: number) => void;
+  'unsubscribe:terminal-alerts': (locationId: number) => void;
 }
 
 export interface InterServerEvents {
@@ -102,9 +102,9 @@ export interface EtaUpdatePayload {
 export interface GeofenceAlertPayload {
   type: 'APPROACHING' | 'ARRIVED' | 'DEPARTED';
   vehicleUnitNumber: string;
-  terminalId: number;
+  locationId: number;
   terminalCode: string;
-  terminalName: string;
+  locationName: string;
   distanceMiles: number;
   timestamp: string;
   tripId?: number;
@@ -246,16 +246,16 @@ class WebSocketService {
       log.debug('WEBSOCKET', 'Unsubscribed from geofence alerts', { socketId: socket.id });
     });
 
-    socket.on('subscribe:terminal-alerts', (terminalId: number) => {
-      socket.data.subscribedTerminals.add(terminalId);
-      socket.join(`terminal:${terminalId}`);
-      log.debug('WEBSOCKET', 'Subscribed to terminal alerts', { socketId: socket.id, terminalId });
+    socket.on('subscribe:terminal-alerts', (locationId: number) => {
+      socket.data.subscribedTerminals.add(locationId);
+      socket.join(`terminal:${locationId}`);
+      log.debug('WEBSOCKET', 'Subscribed to terminal alerts', { socketId: socket.id, locationId });
     });
 
-    socket.on('unsubscribe:terminal-alerts', (terminalId: number) => {
-      socket.data.subscribedTerminals.delete(terminalId);
-      socket.leave(`terminal:${terminalId}`);
-      log.debug('WEBSOCKET', 'Unsubscribed from terminal alerts', { socketId: socket.id, terminalId });
+    socket.on('unsubscribe:terminal-alerts', (locationId: number) => {
+      socket.data.subscribedTerminals.delete(locationId);
+      socket.leave(`terminal:${locationId}`);
+      log.debug('WEBSOCKET', 'Unsubscribed from terminal alerts', { socketId: socket.id, locationId });
     });
 
     // Handle disconnect
@@ -383,9 +383,9 @@ class WebSocketService {
   broadcastGeofenceAlert(alert: {
     type: 'APPROACHING' | 'ARRIVED' | 'DEPARTED';
     vehicleUnitNumber: string;
-    terminalId: number;
+    locationId: number;
     terminalCode: string;
-    terminalName: string;
+    locationName: string;
     distanceMiles: number;
     timestamp: Date;
     tripId?: number;
@@ -397,9 +397,9 @@ class WebSocketService {
     const payload: GeofenceAlertPayload = {
       type: alert.type,
       vehicleUnitNumber: alert.vehicleUnitNumber,
-      terminalId: alert.terminalId,
+      locationId: alert.locationId,
       terminalCode: alert.terminalCode,
-      terminalName: alert.terminalName,
+      locationName: alert.locationName,
       distanceMiles: alert.distanceMiles,
       timestamp: alert.timestamp.toISOString(),
       tripId: alert.tripId,
@@ -411,7 +411,7 @@ class WebSocketService {
     this.io.to('geofence:all').emit('geofence:alert', payload);
 
     // Send to terminal-specific subscribers
-    this.io.to(`terminal:${alert.terminalId}`).emit('geofence:alert', payload);
+    this.io.to(`terminal:${alert.locationId}`).emit('geofence:alert', payload);
 
     // Send to vehicle subscribers
     this.io.to(`vehicle:${alert.vehicleUnitNumber}`).emit('geofence:alert', payload);

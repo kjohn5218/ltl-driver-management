@@ -147,7 +147,7 @@ export const createLinehaulLane = async (req: Request, res: Response): Promise<v
         routingSteps: {
           create: routingSteps.map((step: any, index: number) => ({
             sequence: step.sequence || index + 1,
-            terminalLocationId: step.terminalLocationId,
+            terminalLocationId: step.locationLocationId,
             transitDays: step.transitDays || 0,
             departDeadline: step.departDeadline || null
           }))
@@ -236,7 +236,7 @@ export const updateLinehaulLane = async (req: Request, res: Response): Promise<v
             routingSteps: {
               create: routingSteps.map((step: any, index: number) => ({
                 sequence: step.sequence || index + 1,
-                terminalLocationId: step.terminalLocationId,
+                terminalLocationId: step.locationLocationId,
                 transitDays: step.transitDays || 0,
                 departDeadline: step.departDeadline || null
               }))

@@ -123,10 +123,10 @@ export const getDriverTrips = async (req: Request, res: Response): Promise<void>
             name: true,
             transitTimeMinutes: true,
             distanceMiles: true,
-            originTerminal: {
+            originLocation: {
               select: { code: true, name: true, city: true, state: true }
             },
-            destinationTerminal: {
+            destinationLocation: {
               select: { code: true, name: true, city: true, state: true }
             }
           }
@@ -242,8 +242,8 @@ export const getLinehaulProfiles = async (_req: Request, res: Response): Promise
         id: true,
         profileCode: true,
         name: true,
-        originTerminal: { select: { code: true, name: true } },
-        destinationTerminal: { select: { code: true, name: true } }
+        originLocation: { select: { code: true, name: true } },
+        destinationLocation: { select: { code: true, name: true } }
       },
       orderBy: { profileCode: 'asc' }
     });
@@ -438,8 +438,8 @@ export const createAndDispatchTrip = async (req: Request, res: Response): Promis
           select: {
             profileCode: true,
             name: true,
-            originTerminal: { select: { code: true, name: true } },
-            destinationTerminal: { select: { code: true, name: true } }
+            originLocation: { select: { code: true, name: true } },
+            destinationLocation: { select: { code: true, name: true } }
           }
         },
         truck: { select: { id: true, unitNumber: true } },
@@ -577,8 +577,8 @@ export const dispatchTrip = async (req: Request, res: Response): Promise<void> =
               id: true,
               profileCode: true,
               name: true,
-              originTerminal: { select: { code: true, name: true } },
-              destinationTerminal: { select: { code: true, name: true } }
+              originLocation: { select: { code: true, name: true } },
+              destinationLocation: { select: { code: true, name: true } }
             }
           },
           truck: { select: { id: true, unitNumber: true } },
@@ -653,7 +653,7 @@ export const arriveTrip = async (req: Request, res: Response): Promise<void> => 
         dolly2: true,
         linehaulProfile: {
           include: {
-            destinationTerminal: { select: { code: true } }
+            destinationLocation: { select: { code: true } }
           }
         }
       }
@@ -750,18 +750,18 @@ export const arriveTrip = async (req: Request, res: Response): Promise<void> => 
       }
 
       // Process loadsheets with proper status handling (matching main application logic)
-      const destinationCode = trip.destinationTerminalCode || trip.linehaulProfile?.destinationTerminal?.code;
+      const destinationCode = trip.destinationTerminalCode || trip.linehaulProfile?.destinationLocation?.code;
 
       // Check if destination is a physical terminal and get its ID
       let isPhysicalTerminal = false;
-      let destinationTerminalId: number | null = null;
+      let destinationLocationId: number | null = null;
       if (destinationCode) {
         const destinationLocation = await tx.location.findUnique({
           where: { code: destinationCode },
           select: { id: true, isPhysicalTerminal: true }
         });
         isPhysicalTerminal = destinationLocation?.isPhysicalTerminal || false;
-        destinationTerminalId = destinationLocation?.id || null;
+        destinationLocationId = destinationLocation?.id || null;
       }
 
       // Get loadsheets assigned to this trip (include linehaulName to check individual final destinations)
@@ -867,7 +867,7 @@ export const arriveTrip = async (req: Request, res: Response): Promise<void> => 
             linehaulTripId: tripIdNum,
             // Only update origin for continuing loads (not at final destination)
             ...(!isLoadsheetAtFinalDestination && destinationCode && { originTerminalCode: destinationCode }),
-            ...(!isLoadsheetAtFinalDestination && destinationTerminalId && { originTerminalId: destinationTerminalId }),
+            ...(!isLoadsheetAtFinalDestination && destinationLocationId && { originLocationId: destinationLocationId }),
             // Set next destination for continuing loads, null for final destination
             destinationTerminalCode: isLoadsheetAtFinalDestination ? null : nextDestination,
             status: newStatus,
@@ -970,8 +970,8 @@ export const getTripDetails = async (req: Request, res: Response): Promise<void>
       include: {
         linehaulProfile: {
           include: {
-            originTerminal: true,
-            destinationTerminal: true
+            originLocation: true,
+            destinationLocation: true
           }
         },
         driver: {

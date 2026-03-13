@@ -98,7 +98,7 @@ export const generateLoadsheetPDF = async (loadsheetId: number): Promise<Buffer>
   const loadsheet = await prisma.loadsheet.findUnique({
     where: { id: loadsheetId },
     include: {
-      originTerminal: true,
+      originLocation: true,
       linehaulTrip: true,
       hazmatItems: { orderBy: { itemNumber: 'asc' } },
       dispatchEntries: { orderBy: { rowNumber: 'asc' } },

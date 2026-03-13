@@ -14,8 +14,8 @@ export const createPayrollLineItemFromTripPay = async (tripPayId: number): Promi
         include: {
           linehaulProfile: {
             include: {
-              originTerminal: { select: { code: true } },
-              destinationTerminal: { select: { code: true } }
+              originLocation: { select: { code: true } },
+              destinationLocation: { select: { code: true } }
             }
           },
           driverTripReport: {
@@ -101,8 +101,8 @@ export const createPayrollLineItemFromTripPay = async (tripPayId: number): Promi
       workdayEmployeeId: tripPay.driver?.workdayEmployeeId,
       employer: tripPay.driver?.carrier?.name,
       tripNumber: tripPay.trip?.tripNumber,
-      origin: tripPay.trip?.linehaulProfile?.originTerminal?.code,
-      destination: tripPay.trip?.linehaulProfile?.destinationTerminal?.code,
+      origin: tripPay.trip?.linehaulProfile?.originLocation?.code,
+      destination: tripPay.trip?.linehaulProfile?.destinationLocation?.code,
       // Use actualMileage if available, otherwise fall back to linehaulProfile.distanceMiles
       totalMiles: tripPay.trip?.actualMileage
         ? new Prisma.Decimal(tripPay.trip.actualMileage)
@@ -147,8 +147,8 @@ export const updatePayrollLineItemFromTripPay = async (tripPayId: number): Promi
         include: {
           linehaulProfile: {
             include: {
-              originTerminal: { select: { code: true } },
-              destinationTerminal: { select: { code: true } }
+              originLocation: { select: { code: true } },
+              destinationLocation: { select: { code: true } }
             }
           },
           driverTripReport: {
@@ -210,8 +210,8 @@ export const updatePayrollLineItemFromTripPay = async (tripPayId: number): Promi
       workdayEmployeeId: tripPay.driver?.workdayEmployeeId,
       employer: tripPay.driver?.carrier?.name,
       tripNumber: tripPay.trip?.tripNumber,
-      origin: tripPay.trip?.linehaulProfile?.originTerminal?.code,
-      destination: tripPay.trip?.linehaulProfile?.destinationTerminal?.code,
+      origin: tripPay.trip?.linehaulProfile?.originLocation?.code,
+      destination: tripPay.trip?.linehaulProfile?.destinationLocation?.code,
       totalMiles: miles ? new Prisma.Decimal(miles) : null,
       trailerConfig,
       dropHookCount: dropAndHook,
@@ -402,8 +402,8 @@ export const calculateAndCreateTripPay = async (tripId: number): Promise<{ succe
       include: {
         linehaulProfile: {
           include: {
-            originTerminal: true,
-            destinationTerminal: true
+            originLocation: true,
+            destinationLocation: true
           }
         },
         driver: true,
@@ -473,12 +473,12 @@ export const calculateAndCreateTripPay = async (tripId: number): Promise<{ succe
       });
     }
 
-    if (!rateCard && trip.linehaulProfile.originTerminalId && trip.linehaulProfile.destinationTerminalId) {
+    if (!rateCard && trip.linehaulProfile.originLocationId && trip.linehaulProfile.destinationLocationId) {
       rateCard = await prisma.rateCard.findFirst({
         where: {
           rateType: 'OD_PAIR',
-          originTerminalId: trip.linehaulProfile.originTerminalId,
-          destinationTerminalId: trip.linehaulProfile.destinationTerminalId,
+          originLocationId: trip.linehaulProfile.originLocationId,
+          destinationLocationId: trip.linehaulProfile.destinationLocationId,
           active: true,
           effectiveDate: { lte: today },
           OR: [{ expirationDate: null }, { expirationDate: { gte: today } }]

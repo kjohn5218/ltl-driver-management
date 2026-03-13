@@ -209,8 +209,8 @@ export const requestContractPowerCancellation = async (req: Request, res: Respon
           include: {
             linehaulProfile: {
               include: {
-                originTerminal: true,
-                destinationTerminal: true
+                originLocation: true,
+                destinationLocation: true
               }
             }
           }
@@ -232,9 +232,9 @@ export const requestContractPowerCancellation = async (req: Request, res: Respon
 
     const previousStatus = loadsheet.contractPowerStatus;
     const origin = loadsheet.originTerminalCode ||
-      loadsheet.linehaulTrip?.linehaulProfile?.originTerminal?.code || 'UNK';
+      loadsheet.linehaulTrip?.linehaulProfile?.originLocation?.code || 'UNK';
     const destination = loadsheet.destinationTerminalCode ||
-      loadsheet.linehaulTrip?.linehaulProfile?.destinationTerminal?.code || 'UNK';
+      loadsheet.linehaulTrip?.linehaulProfile?.destinationLocation?.code || 'UNK';
 
     // Get user ID
     const userId = (req as any).user?.id;

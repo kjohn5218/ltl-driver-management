@@ -655,8 +655,8 @@ export const getEnhancedLoadFactor = async (req: Request, res: Response) => {
             include: {
               linehaulProfile: {
                 include: {
-                  originTerminal: true,
-                  destinationTerminal: true,
+                  originLocation: true,
+                  destinationLocation: true,
                 },
               },
             },
@@ -667,7 +667,7 @@ export const getEnhancedLoadFactor = async (req: Request, res: Response) => {
       // Group by terminal and lane
       const terminalData: Record<string, {
         terminal: string;
-        terminalName: string;
+        locationName: string;
         totalWeight: number;
         totalCapacity: number;
         lanes: Record<string, {
@@ -693,20 +693,20 @@ export const getEnhancedLoadFactor = async (req: Request, res: Response) => {
         const profile = loadsheet.linehaulTrip?.linehaulProfile;
         if (!profile) continue;
 
-        const originTerminal = profile.originTerminal;
-        const destTerminal = profile.destinationTerminal;
+        const originTerminal = profile.originLocation;
+        const destTerminal = profile.destinationLocation;
 
         if (!originTerminal || !destTerminal) continue;
 
         const terminalCode = originTerminal.code;
-        const terminalName = originTerminal.name || terminalCode;
+        const locationName = originTerminal.name || terminalCode;
         const lane = `${originTerminal.code}${destTerminal.code}`;
 
         // Initialize terminal if not exists
         if (!terminalData[terminalCode]) {
           terminalData[terminalCode] = {
             terminal: terminalCode,
-            terminalName,
+            locationName,
             totalWeight: 0,
             totalCapacity: 0,
             lanes: {},
@@ -803,7 +803,7 @@ export const getEnhancedLoadFactor = async (req: Request, res: Response) => {
     const buildTerminalArray = (
       current: Record<string, {
         terminal: string;
-        terminalName: string;
+        locationName: string;
         totalWeight: number;
         totalCapacity: number;
         lanes: Record<string, {
@@ -849,7 +849,7 @@ export const getEnhancedLoadFactor = async (req: Request, res: Response) => {
 
           return {
             terminal: terminal.terminal,
-            terminalName: terminal.terminalName,
+            locationName: terminal.locationName,
             weight: terminal.totalWeight,
             capacity: terminal.totalCapacity,
             loadFactorPercent,

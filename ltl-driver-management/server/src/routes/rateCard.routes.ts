@@ -63,8 +63,8 @@ router.get(
     query('driverId').optional().isInt({ min: 1 }),
     query('carrierId').optional().isInt({ min: 1 }),
     query('profileId').optional().isInt({ min: 1 }),
-    query('originTerminalId').optional().isInt({ min: 1 }),
-    query('destinationTerminalId').optional().isInt({ min: 1 })
+    query('originLocationId').optional().isInt({ min: 1 }),
+    query('destinationLocationId').optional().isInt({ min: 1 })
   ],
   validateRequest,
   getApplicableRate
@@ -191,8 +191,8 @@ router.post(
     body('rateType').notEmpty().isIn(['DRIVER', 'CARRIER', 'LINEHAUL', 'OD_PAIR', 'DEFAULT']),
     body('entityId').optional().isInt({ min: 1 }),
     body('linehaulProfileId').optional().isInt({ min: 1 }),
-    body('originTerminalId').optional().isInt({ min: 1 }),
-    body('destinationTerminalId').optional().isInt({ min: 1 }),
+    body('originLocationId').optional().isInt({ min: 1 }),
+    body('destinationLocationId').optional().isInt({ min: 1 }),
     body('rateMethod').notEmpty().isIn(['PER_MILE', 'FLAT_RATE', 'HOURLY', 'PERCENTAGE']),
     body('rateAmount').notEmpty().isDecimal(),
     body('minimumAmount').optional().isDecimal(),

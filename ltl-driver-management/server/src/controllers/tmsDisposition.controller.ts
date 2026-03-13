@@ -7,7 +7,7 @@ interface BulkDispositionRequestBody {
   loadsheetIds: number[];
   lateReason: LateReasonType;
   willCauseServiceFailure: boolean;
-  accountableTerminalId?: number;
+  accountableLocationId?: number;
   accountableTerminalCode?: string;
   notes?: string;
   newScheduledDepartDate: string;
@@ -16,7 +16,7 @@ interface BulkDispositionRequestBody {
 interface SingleDispositionRequestBody {
   lateReason: LateReasonType;
   willCauseServiceFailure: boolean;
-  accountableTerminalId?: number;
+  accountableLocationId?: number;
   accountableTerminalCode?: string;
   notes?: string;
   newScheduledDepartDate: string;
@@ -35,7 +35,7 @@ export const bulkDisposition = async (req: Request, res: Response): Promise<void
       loadsheetIds,
       lateReason,
       willCauseServiceFailure,
-      accountableTerminalId,
+      accountableLocationId,
       accountableTerminalCode,
       notes,
       newScheduledDepartDate
@@ -58,7 +58,7 @@ export const bulkDisposition = async (req: Request, res: Response): Promise<void
     }
 
     // Validate accountable terminal when service failure is true
-    if (willCauseServiceFailure && !accountableTerminalId) {
+    if (willCauseServiceFailure && !accountableLocationId) {
       res.status(400).json({ message: 'Accountable terminal is required when this will cause a service failure' });
       return;
     }
@@ -110,7 +110,7 @@ export const bulkDisposition = async (req: Request, res: Response): Promise<void
                 tripId: loadsheet.linehaulTripId,
                 reason: lateReason,
                 willCauseServiceFailure,
-                accountableTerminalId: accountableTerminalId || null,
+                accountableLocationId: accountableLocationId || null,
                 accountableTerminalCode: accountableTerminalCode || null,
                 notes: notes || null,
                 scheduledDepartTime: loadsheet.targetDispatchTime || null,
@@ -136,7 +136,7 @@ export const bulkDisposition = async (req: Request, res: Response): Promise<void
         const dispositionData: BulkDispositionData = {
           lateReason,
           willCauseServiceFailure,
-          accountableTerminalId,
+          accountableLocationId,
           accountableTerminalCode,
           notes,
           newScheduledDepartDate
@@ -193,7 +193,7 @@ export const singleDisposition = async (req: Request, res: Response): Promise<vo
     const {
       lateReason,
       willCauseServiceFailure,
-      accountableTerminalId,
+      accountableLocationId,
       accountableTerminalCode,
       notes,
       newScheduledDepartDate,
@@ -214,7 +214,7 @@ export const singleDisposition = async (req: Request, res: Response): Promise<vo
     }
 
     // Validate accountable terminal when service failure is true
-    if (willCauseServiceFailure && !accountableTerminalId) {
+    if (willCauseServiceFailure && !accountableLocationId) {
       res.status(400).json({ message: 'Accountable terminal is required when this will cause a service failure' });
       return;
     }
@@ -263,7 +263,7 @@ export const singleDisposition = async (req: Request, res: Response): Promise<vo
             tripId: tripIdNum,
             reason: lateReason,
             willCauseServiceFailure,
-            accountableTerminalId: accountableTerminalId || null,
+            accountableLocationId: accountableLocationId || null,
             accountableTerminalCode: accountableTerminalCode || null,
             notes: notes || null,
             scheduledDepartTime: scheduledDepartTime || null,
@@ -289,7 +289,7 @@ export const singleDisposition = async (req: Request, res: Response): Promise<vo
         const dispositionData: BulkDispositionData = {
           lateReason,
           willCauseServiceFailure,
-          accountableTerminalId,
+          accountableLocationId,
           accountableTerminalCode,
           notes,
           newScheduledDepartDate

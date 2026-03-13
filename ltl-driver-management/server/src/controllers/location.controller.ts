@@ -355,8 +355,8 @@ export const lookupMileage = async (req: Request, res: Response) => {
       where: {
         active: true,
         distanceMiles: { not: null },
-        originTerminal: { code: originCode },
-        destinationTerminal: { code: destinationCode }
+        originLocation: { code: originCode },
+        destinationLocation: { code: destinationCode }
       },
       select: {
         distanceMiles: true,
@@ -379,8 +379,8 @@ export const lookupMileage = async (req: Request, res: Response) => {
       where: {
         active: true,
         distanceMiles: { not: null },
-        originTerminal: { code: destinationCode },
-        destinationTerminal: { code: originCode }
+        originLocation: { code: destinationCode },
+        destinationLocation: { code: originCode }
       },
       select: {
         distanceMiles: true,

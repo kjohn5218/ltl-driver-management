@@ -8,8 +8,8 @@ export const getLinehaulProfiles = async (req: Request, res: Response): Promise<
     const {
       search,
       active,
-      originTerminalId,
-      destinationTerminalId,
+      originLocationId,
+      destinationLocationId,
       page = '1',
       limit = '50'
     } = req.query;
@@ -31,12 +31,12 @@ export const getLinehaulProfiles = async (req: Request, res: Response): Promise<
       where.active = active === 'true';
     }
 
-    if (originTerminalId) {
-      where.originTerminalId = parseInt(originTerminalId as string, 10);
+    if (originLocationId) {
+      where.originLocationId = parseInt(originLocationId as string, 10);
     }
 
-    if (destinationTerminalId) {
-      where.destinationTerminalId = parseInt(destinationTerminalId as string, 10);
+    if (destinationLocationId) {
+      where.destinationLocationId = parseInt(destinationLocationId as string, 10);
     }
 
     const [profiles, total] = await Promise.all([
@@ -46,10 +46,10 @@ export const getLinehaulProfiles = async (req: Request, res: Response): Promise<
         take: limitNum,
         orderBy: { name: 'asc' },
         include: {
-          originTerminal: {
+          originLocation: {
             select: { id: true, code: true, name: true, city: true, state: true }
           },
-          destinationTerminal: {
+          destinationLocation: {
             select: { id: true, code: true, name: true, city: true, state: true }
           },
           interlineCarrier: {
@@ -86,8 +86,8 @@ export const getLinehaulProfileById = async (req: Request, res: Response): Promi
     const profile = await prisma.linehaulProfile.findUnique({
       where: { id: parseInt(id, 10) },
       include: {
-        originTerminal: true,
-        destinationTerminal: true,
+        originLocation: true,
+        destinationLocation: true,
         interlineCarrier: true,
         trips: {
           take: 10,
@@ -127,10 +127,10 @@ export const getLinehaulProfileByCode = async (req: Request, res: Response): Pro
     const profile = await prisma.linehaulProfile.findUnique({
       where: { profileCode: code.toUpperCase() },
       include: {
-        originTerminal: {
+        originLocation: {
           select: { id: true, code: true, name: true, city: true, state: true }
         },
-        destinationTerminal: {
+        destinationLocation: {
           select: { id: true, code: true, name: true, city: true, state: true }
         },
         interlineCarrier: {
@@ -157,8 +157,8 @@ export const createLinehaulProfile = async (req: Request, res: Response): Promis
     const {
       profileCode,
       name,
-      originTerminalId,
-      destinationTerminalId,
+      originLocationId,
+      destinationLocationId,
       standardDepartureTime,
       standardArrivalTime,
       distanceMiles,
@@ -187,8 +187,8 @@ export const createLinehaulProfile = async (req: Request, res: Response): Promis
 
     // Verify terminals exist
     const [originTerminal, destTerminal] = await Promise.all([
-      prisma.terminal.findUnique({ where: { id: parseInt(originTerminalId, 10) } }),
-      prisma.terminal.findUnique({ where: { id: parseInt(destinationTerminalId, 10) } })
+      prisma.location.findUnique({ where: { id: parseInt(originLocationId, 10) } }),
+      prisma.location.findUnique({ where: { id: parseInt(destinationLocationId, 10) } })
     ]);
 
     if (!originTerminal) {
@@ -205,8 +205,8 @@ export const createLinehaulProfile = async (req: Request, res: Response): Promis
       data: {
         profileCode: profileCode.toUpperCase(),
         name,
-        originTerminalId: parseInt(originTerminalId, 10),
-        destinationTerminalId: parseInt(destinationTerminalId, 10),
+        originLocationId: parseInt(originLocationId, 10),
+        destinationLocationId: parseInt(destinationLocationId, 10),
         standardDepartureTime,
         standardArrivalTime,
         distanceMiles: distanceMiles ? parseInt(distanceMiles, 10) : null,
@@ -223,10 +223,10 @@ export const createLinehaulProfile = async (req: Request, res: Response): Promis
         active: active !== undefined ? active : true
       },
       include: {
-        originTerminal: {
+        originLocation: {
           select: { id: true, code: true, name: true }
         },
-        destinationTerminal: {
+        destinationLocation: {
           select: { id: true, code: true, name: true }
         },
         interlineCarrier: {
@@ -260,8 +260,8 @@ export const updateLinehaulProfile = async (req: Request, res: Response): Promis
     const {
       profileCode,
       name,
-      originTerminalId,
-      destinationTerminalId,
+      originLocationId,
+      destinationLocationId,
       standardDepartureTime,
       standardArrivalTime,
       distanceMiles,
@@ -290,9 +290,9 @@ export const updateLinehaulProfile = async (req: Request, res: Response): Promis
     }
 
     // Verify terminals if being updated
-    if (originTerminalId) {
-      const originTerminal = await prisma.terminal.findUnique({
-        where: { id: parseInt(originTerminalId, 10) }
+    if (originLocationId) {
+      const originTerminal = await prisma.location.findUnique({
+        where: { id: parseInt(originLocationId, 10) }
       });
       if (!originTerminal) {
         res.status(400).json({ message: 'Origin terminal not found' });
@@ -300,9 +300,9 @@ export const updateLinehaulProfile = async (req: Request, res: Response): Promis
       }
     }
 
-    if (destinationTerminalId) {
-      const destTerminal = await prisma.terminal.findUnique({
-        where: { id: parseInt(destinationTerminalId, 10) }
+    if (destinationLocationId) {
+      const destTerminal = await prisma.location.findUnique({
+        where: { id: parseInt(destinationLocationId, 10) }
       });
       if (!destTerminal) {
         res.status(400).json({ message: 'Destination terminal not found' });
@@ -315,8 +315,8 @@ export const updateLinehaulProfile = async (req: Request, res: Response): Promis
       data: {
         ...(profileCode && { profileCode: profileCode.toUpperCase() }),
         ...(name && { name }),
-        ...(originTerminalId && { originTerminalId: parseInt(originTerminalId, 10) }),
-        ...(destinationTerminalId && { destinationTerminalId: parseInt(destinationTerminalId, 10) }),
+        ...(originLocationId && { originLocationId: parseInt(originLocationId, 10) }),
+        ...(destinationLocationId && { destinationLocationId: parseInt(destinationLocationId, 10) }),
         ...(standardDepartureTime !== undefined && { standardDepartureTime }),
         ...(standardArrivalTime !== undefined && { standardArrivalTime }),
         ...(distanceMiles !== undefined && { distanceMiles: distanceMiles ? parseInt(distanceMiles, 10) : null }),
@@ -333,10 +333,10 @@ export const updateLinehaulProfile = async (req: Request, res: Response): Promis
         ...(active !== undefined && { active })
       },
       include: {
-        originTerminal: {
+        originLocation: {
           select: { id: true, code: true, name: true }
         },
-        destinationTerminal: {
+        destinationLocation: {
           select: { id: true, code: true, name: true }
         },
         interlineCarrier: {
@@ -407,12 +407,12 @@ export const getLinehaulProfilesList = async (_req: Request, res: Response): Pro
         headhaul: true,
         interlineTrailer: true,
         interlineCarrierId: true,
-        originTerminalId: true,
-        destinationTerminalId: true,
-        originTerminal: {
+        originLocationId: true,
+        destinationLocationId: true,
+        originLocation: {
           select: { id: true, code: true, name: true, city: true, state: true, latitude: true, longitude: true }
         },
-        destinationTerminal: {
+        destinationLocation: {
           select: { id: true, code: true, name: true, city: true, state: true, latitude: true, longitude: true }
         },
         interlineCarrier: {
@@ -439,23 +439,23 @@ export const getProfilesByTerminal = async (req: Request, res: Response): Promis
     let where: Prisma.LinehaulProfileWhereInput = { active: true };
 
     if (direction === 'origin') {
-      where.originTerminalId = termId;
+      where.originLocationId = termId;
     } else if (direction === 'destination') {
-      where.destinationTerminalId = termId;
+      where.destinationLocationId = termId;
     } else {
       where.OR = [
-        { originTerminalId: termId },
-        { destinationTerminalId: termId }
+        { originLocationId: termId },
+        { destinationLocationId: termId }
       ];
     }
 
     const profiles = await prisma.linehaulProfile.findMany({
       where,
       include: {
-        originTerminal: {
+        originLocation: {
           select: { id: true, code: true, name: true, city: true, state: true }
         },
-        destinationTerminal: {
+        destinationLocation: {
           select: { id: true, code: true, name: true, city: true, state: true }
         },
         interlineCarrier: {
@@ -529,8 +529,8 @@ export const duplicateProfile = async (req: Request, res: Response): Promise<voi
       data: {
         profileCode: newCode.toUpperCase(),
         name: newName || `${existingProfile.name} (Copy)`,
-        originTerminalId: existingProfile.originTerminalId,
-        destinationTerminalId: existingProfile.destinationTerminalId,
+        originLocationId: existingProfile.originLocationId,
+        destinationLocationId: existingProfile.destinationLocationId,
         standardDepartureTime: existingProfile.standardDepartureTime,
         standardArrivalTime: existingProfile.standardArrivalTime,
         distanceMiles: existingProfile.distanceMiles,
@@ -547,10 +547,10 @@ export const duplicateProfile = async (req: Request, res: Response): Promise<voi
         active: false // Start as inactive
       },
       include: {
-        originTerminal: {
+        originLocation: {
           select: { id: true, code: true, name: true }
         },
-        destinationTerminal: {
+        destinationLocation: {
           select: { id: true, code: true, name: true }
         },
         interlineCarrier: {
@@ -578,12 +578,12 @@ export const getOkayToLoadTerminals = async (req: Request, res: Response): Promi
         id: true,
         profileCode: true,
         name: true,
-        originTerminal: {
+        originLocation: {
           select: { id: true, code: true, name: true, city: true, state: true }
         },
-        okayToLoadTerminals: {
+        okayToLoadLocations: {
           include: {
-            terminal: {
+            location: {
               select: { id: true, code: true, name: true, city: true, state: true, active: true }
             }
           }
@@ -600,8 +600,8 @@ export const getOkayToLoadTerminals = async (req: Request, res: Response): Promi
       profileId: profile.id,
       profileCode: profile.profileCode,
       profileName: profile.name,
-      originTerminal: profile.originTerminal,
-      okayToLoadTerminals: profile.okayToLoadTerminals.map(otl => otl.terminal)
+      originTerminal: profile.originLocation,
+      okayToLoadLocations: profile.okayToLoadLocations.map(otl => otl.location)
     });
   } catch (error) {
     console.error('Error fetching okay-to-load terminals:', error);
@@ -609,11 +609,11 @@ export const getOkayToLoadTerminals = async (req: Request, res: Response): Promi
   }
 };
 
-// Update okay-to-load terminals for a profile
+// Update okay-to-load locations for a profile
 export const updateOkayToLoadTerminals = async (req: Request, res: Response): Promise<void> => {
   try {
     const { id } = req.params;
-    const { terminalIds } = req.body;
+    const { terminalIds, locationIds } = req.body;
     const profileId = parseInt(id, 10);
 
     const profile = await prisma.linehaulProfile.findUnique({
@@ -625,8 +625,10 @@ export const updateOkayToLoadTerminals = async (req: Request, res: Response): Pr
       return;
     }
 
-    if (!Array.isArray(terminalIds)) {
-      res.status(400).json({ message: 'terminalIds must be an array' });
+    // Accept either terminalIds (legacy) or locationIds
+    const ids = terminalIds || locationIds;
+    if (!Array.isArray(ids)) {
+      res.status(400).json({ message: 'locationIds must be an array' });
       return;
     }
 
@@ -636,9 +638,9 @@ export const updateOkayToLoadTerminals = async (req: Request, res: Response): Pr
         where: { linehaulProfileId: profileId }
       }),
       prisma.profileOkayToLoad.createMany({
-        data: terminalIds.map((terminalId: number) => ({
+        data: ids.map((locationId: number) => ({
           linehaulProfileId: profileId,
-          terminalId
+          locationId
         }))
       })
     ]);
@@ -649,9 +651,9 @@ export const updateOkayToLoadTerminals = async (req: Request, res: Response): Pr
       select: {
         id: true,
         profileCode: true,
-        okayToLoadTerminals: {
+        okayToLoadLocations: {
           include: {
-            terminal: {
+            location: {
               select: { id: true, code: true, name: true, city: true, state: true }
             }
           }
@@ -662,7 +664,7 @@ export const updateOkayToLoadTerminals = async (req: Request, res: Response): Pr
     res.json({
       profileId: updatedProfile!.id,
       profileCode: updatedProfile!.profileCode,
-      okayToLoadTerminals: updatedProfile!.okayToLoadTerminals.map(otl => otl.terminal)
+      okayToLoadLocations: updatedProfile!.okayToLoadLocations.map(otl => otl.location)
     });
   } catch (error) {
     console.error('Error updating okay-to-load terminals:', error);
@@ -682,12 +684,12 @@ export const getOkayToDispatchTerminals = async (req: Request, res: Response): P
         id: true,
         profileCode: true,
         name: true,
-        originTerminal: {
+        originLocation: {
           select: { id: true, code: true, name: true, city: true, state: true, latitude: true, longitude: true }
         },
-        okayToDispatchTerminals: {
+        okayToDispatchLocations: {
           include: {
-            terminal: {
+            location: {
               select: { id: true, code: true, name: true, city: true, state: true, active: true, latitude: true, longitude: true }
             }
           }
@@ -704,9 +706,9 @@ export const getOkayToDispatchTerminals = async (req: Request, res: Response): P
       profileId: profile.id,
       profileCode: profile.profileCode,
       profileName: profile.name,
-      originTerminal: profile.originTerminal,
-      okayToDispatchTerminals: profile.okayToDispatchTerminals
-        .map(otd => otd.terminal)
+      originTerminal: profile.originLocation,
+      okayToDispatchLocations: profile.okayToDispatchLocations
+        .map(otd => otd.location)
         .filter(terminal => terminal !== null && terminal !== undefined)
     });
   } catch (error) {
@@ -715,11 +717,11 @@ export const getOkayToDispatchTerminals = async (req: Request, res: Response): P
   }
 };
 
-// Update okay-to-dispatch terminals for a profile
+// Update okay-to-dispatch locations for a profile
 export const updateOkayToDispatchTerminals = async (req: Request, res: Response): Promise<void> => {
   try {
     const { id } = req.params;
-    const { terminalIds } = req.body;
+    const { terminalIds, locationIds } = req.body;
     const profileId = parseInt(id, 10);
 
     const profile = await prisma.linehaulProfile.findUnique({
@@ -731,8 +733,10 @@ export const updateOkayToDispatchTerminals = async (req: Request, res: Response)
       return;
     }
 
-    if (!Array.isArray(terminalIds)) {
-      res.status(400).json({ message: 'terminalIds must be an array' });
+    // Accept either terminalIds (legacy) or locationIds
+    const ids = terminalIds || locationIds;
+    if (!Array.isArray(ids)) {
+      res.status(400).json({ message: 'locationIds must be an array' });
       return;
     }
 
@@ -742,9 +746,9 @@ export const updateOkayToDispatchTerminals = async (req: Request, res: Response)
         where: { linehaulProfileId: profileId }
       }),
       prisma.profileOkayToDispatch.createMany({
-        data: terminalIds.map((terminalId: number) => ({
+        data: ids.map((locationId: number) => ({
           linehaulProfileId: profileId,
-          terminalId
+          locationId
         }))
       })
     ]);
@@ -755,9 +759,9 @@ export const updateOkayToDispatchTerminals = async (req: Request, res: Response)
       select: {
         id: true,
         profileCode: true,
-        okayToDispatchTerminals: {
+        okayToDispatchLocations: {
           include: {
-            terminal: {
+            location: {
               select: { id: true, code: true, name: true, city: true, state: true }
             }
           }
@@ -768,7 +772,7 @@ export const updateOkayToDispatchTerminals = async (req: Request, res: Response)
     res.json({
       profileId: updatedProfile!.id,
       profileCode: updatedProfile!.profileCode,
-      okayToDispatchTerminals: updatedProfile!.okayToDispatchTerminals.map(otd => otd.terminal)
+      okayToDispatchLocations: updatedProfile!.okayToDispatchLocations.map(otd => otd.location)
     });
   } catch (error) {
     console.error('Error updating okay-to-dispatch terminals:', error);

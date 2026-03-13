@@ -10,7 +10,7 @@ export const getLoadsheets = async (req: Request, res: Response): Promise<void> 
       search,
       status,
       linehaulTripId,
-      originTerminalId,
+      originLocationId,
       originTerminalCode,
       startDate,
       endDate,
@@ -53,8 +53,8 @@ export const getLoadsheets = async (req: Request, res: Response): Promise<void> 
 
     // Filter by origin terminal - support both ID and code
     // This filter now works for both originating loadsheets and arrived/continuing loadsheets
-    if (originTerminalId) {
-      where.originTerminalId = parseInt(originTerminalId as string, 10);
+    if (originLocationId) {
+      where.originLocationId = parseInt(originLocationId as string, 10);
     } else if (originTerminalCode) {
       where.originTerminalCode = { equals: originTerminalCode as string, mode: 'insensitive' };
     }
@@ -80,7 +80,7 @@ export const getLoadsheets = async (req: Request, res: Response): Promise<void> 
       take: limitNum,
       orderBy: { createdAt: 'desc' },
       include: {
-        originTerminal: {
+        originLocation: {
           select: { id: true, code: true, name: true }
         },
         linehaulTrip: {
@@ -190,7 +190,7 @@ export const getLoadsheetById = async (req: Request, res: Response): Promise<voi
     const loadsheet = await prisma.loadsheet.findUnique({
       where: { id: parseInt(id, 10) },
       include: {
-        originTerminal: true,
+        originLocation: true,
         linehaulTrip: {
           include: {
             linehaulProfile: true,
@@ -225,7 +225,7 @@ export const getLoadsheetByManifest = async (req: Request, res: Response): Promi
     const loadsheet = await prisma.loadsheet.findUnique({
       where: { manifestNumber },
       include: {
-        originTerminal: true,
+        originLocation: true,
         linehaulTrip: true,
         hazmatItems: { orderBy: { itemNumber: 'asc' } },
         dispatchEntries: { orderBy: { rowNumber: 'asc' } },
@@ -256,7 +256,7 @@ export const createLoadsheet = async (req: Request, res: Response): Promise<void
       targetDispatchTime,
       scheduledDepartDate,
       preloadManifest,
-      originTerminalId,
+      originLocationId,
       originTerminalCode,
       linehaulTripId,
       doorNumber,
@@ -290,9 +290,9 @@ export const createLoadsheet = async (req: Request, res: Response): Promise<void
     let validTerminalId: number | null = null;
     let terminalCode = originTerminalCode;
 
-    if (originTerminalId) {
-      const terminal = await prisma.terminal.findUnique({
-        where: { id: originTerminalId },
+    if (originLocationId) {
+      const terminal = await prisma.location.findUnique({
+        where: { id: originLocationId },
         select: { id: true, code: true }
       });
       if (terminal) {
@@ -301,7 +301,7 @@ export const createLoadsheet = async (req: Request, res: Response): Promise<void
           terminalCode = terminal.code;
         }
       } else {
-        console.log(`Terminal ID ${originTerminalId} not found in database, using code only: ${terminalCode}`);
+        console.log(`Terminal ID ${originLocationId} not found in database, using code only: ${terminalCode}`);
       }
     }
 
@@ -338,7 +338,7 @@ export const createLoadsheet = async (req: Request, res: Response): Promise<void
         targetDispatchTime,
         scheduledDepartDate,
         preloadManifest,
-        originTerminalId: validTerminalId,
+        originLocationId: validTerminalId,
         originTerminalCode: terminalCode,
         destinationTerminalCode,
         routeId,
@@ -393,7 +393,7 @@ export const createLoadsheet = async (req: Request, res: Response): Promise<void
         } : undefined
       },
       include: {
-        originTerminal: true,
+        originLocation: true,
         linehaulTrip: true,
         hazmatItems: { orderBy: { itemNumber: 'asc' } },
         dispatchEntries: { orderBy: { rowNumber: 'asc' } },
@@ -431,7 +431,7 @@ export const updateLoadsheet = async (req: Request, res: Response): Promise<void
       targetDispatchTime,
       scheduledDepartDate,
       preloadManifest,
-      originTerminalId,
+      originLocationId,
       originTerminalCode,
       destinationTerminalCode,
       linehaulTripId,
@@ -474,12 +474,12 @@ export const updateLoadsheet = async (req: Request, res: Response): Promise<void
     let validTerminalId: number | null | undefined = undefined;
     let terminalCode = originTerminalCode;
 
-    if (originTerminalId !== undefined) {
-      if (originTerminalId === null) {
+    if (originLocationId !== undefined) {
+      if (originLocationId === null) {
         validTerminalId = null;
       } else {
-        const terminal = await prisma.terminal.findUnique({
-          where: { id: originTerminalId },
+        const terminal = await prisma.location.findUnique({
+          where: { id: originLocationId },
           select: { id: true, code: true }
         });
         if (terminal) {
@@ -489,7 +489,7 @@ export const updateLoadsheet = async (req: Request, res: Response): Promise<void
           }
         } else {
           // Terminal doesn't exist, don't update the ID but update the code
-          console.log(`Terminal ID ${originTerminalId} not found in database, using code only: ${terminalCode}`);
+          console.log(`Terminal ID ${originLocationId} not found in database, using code only: ${terminalCode}`);
         }
       }
     }
@@ -523,7 +523,7 @@ export const updateLoadsheet = async (req: Request, res: Response): Promise<void
           ...(targetDispatchTime !== undefined && { targetDispatchTime }),
           ...(scheduledDepartDate !== undefined && { scheduledDepartDate }),
           ...(preloadManifest !== undefined && { preloadManifest }),
-          ...(validTerminalId !== undefined && { originTerminalId: validTerminalId }),
+          ...(validTerminalId !== undefined && { originLocationId: validTerminalId }),
           ...(terminalCode !== undefined && { originTerminalCode: terminalCode }),
           ...(destinationTerminalCode !== undefined && { destinationTerminalCode }),
           ...(linehaulTripId !== undefined && { linehaulTripId }),
@@ -577,7 +577,7 @@ export const updateLoadsheet = async (req: Request, res: Response): Promise<void
           } : undefined
         },
         include: {
-          originTerminal: true,
+          originLocation: true,
           linehaulTrip: true,
           hazmatItems: { orderBy: { itemNumber: 'asc' } },
           dispatchEntries: { orderBy: { rowNumber: 'asc' } },
@@ -606,7 +606,7 @@ export const closeLoadsheet = async (req: Request, res: Response): Promise<void>
         ...(sealNumber && { sealNumber })
       },
       include: {
-        originTerminal: true,
+        originLocation: true,
         linehaulTrip: true,
         hazmatItems: { orderBy: { itemNumber: 'asc' } },
         dispatchEntries: { orderBy: { rowNumber: 'asc' } },

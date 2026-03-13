@@ -114,14 +114,14 @@ export const getRateCards = async (req: Request, res: Response): Promise<void> =
       where,
       orderBy: [{ rateType: 'asc' }, { priority: 'asc' }],
       include: {
-        originTerminal: {
+        originLocation: {
           select: { id: true, code: true, name: true }
         },
-        destinationTerminal: {
+        destinationLocation: {
           select: { id: true, code: true, name: true }
         },
         linehaulProfile: {
-          select: { id: true, profileCode: true, name: true, originTerminal: { select: { code: true } }, destinationTerminal: { select: { code: true } } }
+          select: { id: true, profileCode: true, name: true, originLocation: { select: { code: true } }, destinationLocation: { select: { code: true } } }
         },
         _count: {
           select: { accessorialRates: true }
@@ -267,18 +267,18 @@ export const getRateCardById = async (req: Request, res: Response): Promise<void
     const rateCard = await prisma.rateCard.findUnique({
       where: { id: parseInt(id, 10) },
       include: {
-        originTerminal: {
+        originLocation: {
           select: { id: true, code: true, name: true }
         },
-        destinationTerminal: {
+        destinationLocation: {
           select: { id: true, code: true, name: true }
         },
         linehaulProfile: {
           include: {
-            originTerminal: {
+            originLocation: {
               select: { code: true, name: true }
             },
-            destinationTerminal: {
+            destinationLocation: {
               select: { code: true, name: true }
             }
           }
@@ -308,8 +308,8 @@ export const createRateCard = async (req: Request, res: Response): Promise<void>
       rateType,
       entityId,
       linehaulProfileId,
-      originTerminalId,
-      destinationTerminalId,
+      originLocationId,
+      destinationLocationId,
       rateMethod,
       rateAmount,
       minimumAmount,
@@ -351,7 +351,7 @@ export const createRateCard = async (req: Request, res: Response): Promise<void>
       res.status(400).json({ message: 'Linehaul Profile ID required for LINEHAUL rate card type' });
       return;
     }
-    if (rateType === 'OD_PAIR' && (!originTerminalId || !destinationTerminalId)) {
+    if (rateType === 'OD_PAIR' && (!originLocationId || !destinationLocationId)) {
       res.status(400).json({ message: 'Origin and Destination terminal IDs required for OD_PAIR rate card type' });
       return;
     }
@@ -361,8 +361,8 @@ export const createRateCard = async (req: Request, res: Response): Promise<void>
         rateType: rateType as RateCardType,
         entityId: entityId ? parseInt(entityId, 10) : null,
         linehaulProfileId: linehaulProfileId ? parseInt(linehaulProfileId, 10) : null,
-        originTerminalId: originTerminalId ? parseInt(originTerminalId, 10) : null,
-        destinationTerminalId: destinationTerminalId ? parseInt(destinationTerminalId, 10) : null,
+        originLocationId: originLocationId ? parseInt(originLocationId, 10) : null,
+        destinationLocationId: destinationLocationId ? parseInt(destinationLocationId, 10) : null,
         rateMethod: rateMethod as RateMethod,
         rateAmount: new Prisma.Decimal(rateAmount),
         minimumAmount: minimumAmount ? new Prisma.Decimal(minimumAmount) : null,
@@ -391,10 +391,10 @@ export const createRateCard = async (req: Request, res: Response): Promise<void>
         fuelSurcharge: fuelSurcharge ? new Prisma.Decimal(fuelSurcharge) : null
       },
       include: {
-        originTerminal: {
+        originLocation: {
           select: { id: true, code: true, name: true }
         },
-        destinationTerminal: {
+        destinationLocation: {
           select: { id: true, code: true, name: true }
         },
         linehaulProfile: {
@@ -485,10 +485,10 @@ export const updateRateCard = async (req: Request, res: Response): Promise<void>
         ...(fuelSurcharge !== undefined && { fuelSurcharge: fuelSurcharge ? new Prisma.Decimal(fuelSurcharge) : null })
       },
       include: {
-        originTerminal: {
+        originLocation: {
           select: { id: true, code: true, name: true }
         },
-        destinationTerminal: {
+        destinationLocation: {
           select: { id: true, code: true, name: true }
         },
         linehaulProfile: {
@@ -538,7 +538,7 @@ export const deleteRateCard = async (req: Request, res: Response): Promise<void>
 // Get applicable rate for a trip/driver combination
 export const getApplicableRate = async (req: Request, res: Response): Promise<void> => {
   try {
-    const { driverId, carrierId, profileId, originTerminalId, destinationTerminalId } = req.query;
+    const { driverId, carrierId, profileId, originLocationId, destinationLocationId } = req.query;
 
     const today = new Date();
 
@@ -600,12 +600,12 @@ export const getApplicableRate = async (req: Request, res: Response): Promise<vo
     }
 
     // 4. Check for O/D pair rate
-    if (!rateCard && originTerminalId && destinationTerminalId) {
+    if (!rateCard && originLocationId && destinationLocationId) {
       rateCard = await prisma.rateCard.findFirst({
         where: {
           rateType: 'OD_PAIR',
-          originTerminalId: parseInt(originTerminalId as string, 10),
-          destinationTerminalId: parseInt(destinationTerminalId as string, 10),
+          originLocationId: parseInt(originLocationId as string, 10),
+          destinationLocationId: parseInt(destinationLocationId as string, 10),
           active: true,
           effectiveDate: { lte: today },
           OR: [
@@ -858,8 +858,8 @@ export const importRateCards = async (req: Request, res: Response): Promise<void
           rateType: rc.rateType as RateCardType,
           entityId: rc.entityId ? parseInt(rc.entityId, 10) : null,
           linehaulProfileId: rc.linehaulProfileId ? parseInt(rc.linehaulProfileId, 10) : null,
-          originTerminalId: rc.originTerminalId ? parseInt(rc.originTerminalId, 10) : null,
-          destinationTerminalId: rc.destinationTerminalId ? parseInt(rc.destinationTerminalId, 10) : null,
+          originLocationId: rc.originLocationId ? parseInt(rc.originLocationId, 10) : null,
+          destinationLocationId: rc.destinationLocationId ? parseInt(rc.destinationLocationId, 10) : null,
           rateMethod: (rc.rateMethod as RateMethod) || 'PER_MILE',
           rateAmount: new Prisma.Decimal(rc.rateAmount),
           minimumAmount: rc.minimumAmount ? new Prisma.Decimal(rc.minimumAmount) : null,
@@ -961,8 +961,8 @@ export const importRateCardsExternal = async (req: Request, res: Response): Prom
             rateType: rc.rateType as RateCardType,
             entityId: rc.entityId ? parseInt(rc.entityId, 10) : null,
             linehaulProfileId: rc.linehaulProfileId ? parseInt(rc.linehaulProfileId, 10) : null,
-            originTerminalId: rc.originTerminalId ? parseInt(rc.originTerminalId, 10) : null,
-            destinationTerminalId: rc.destinationTerminalId ? parseInt(rc.destinationTerminalId, 10) : null,
+            originLocationId: rc.originLocationId ? parseInt(rc.originLocationId, 10) : null,
+            destinationLocationId: rc.destinationLocationId ? parseInt(rc.destinationLocationId, 10) : null,
             rateMethod: (rc.rateMethod as RateMethod) || 'PER_MILE',
             rateAmount: new Prisma.Decimal(rc.rateAmount),
             minimumAmount: rc.minimumAmount ? new Prisma.Decimal(rc.minimumAmount) : null,
@@ -1491,8 +1491,8 @@ export const getProfilesWithRates = async (req: Request, res: Response): Promise
         take: limitNum,
         orderBy: { profileCode: 'asc' },
         include: {
-          originTerminal: { select: { code: true, name: true } },
-          destinationTerminal: { select: { code: true, name: true } }
+          originLocation: { select: { code: true, name: true } },
+          destinationLocation: { select: { code: true, name: true } }
         }
       }),
       prisma.linehaulProfile.count({ where })

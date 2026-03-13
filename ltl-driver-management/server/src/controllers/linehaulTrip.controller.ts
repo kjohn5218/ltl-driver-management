@@ -13,8 +13,8 @@ export const getTrips = async (req: Request, res: Response): Promise<void> => {
       statuses,
       profileId,
       driverId,
-      originTerminalId,
-      destinationTerminalId,
+      originLocationId,
+      destinationLocationId,
       startDate,
       endDate,
       page = '1',
@@ -64,23 +64,23 @@ export const getTrips = async (req: Request, res: Response): Promise<void> => {
       ];
     }
 
-    if (originTerminalId) {
+    if (originLocationId) {
       where.linehaulProfile = {
         ...where.linehaulProfile as object,
-        originTerminalId: parseInt(originTerminalId as string, 10)
+        originLocationId: parseInt(originLocationId as string, 10)
       };
     }
 
-    if (destinationTerminalId) {
+    if (destinationLocationId) {
       // Look up the terminal code for this ID to support filtering by code
-      const terminal = await prisma.terminal.findUnique({
-        where: { id: parseInt(destinationTerminalId as string, 10) },
+      const terminal = await prisma.location.findUnique({
+        where: { id: parseInt(destinationLocationId as string, 10) },
         select: { code: true }
       });
 
       if (terminal) {
         // Match trips where the destination matches via:
-        // 1. The linehaulProfile's destinationTerminalId, OR
+        // 1. The linehaulProfile's destinationLocationId, OR
         // 2. The trip's direct destinationTerminalCode, OR
         // 3. Any associated loadsheet's destinationTerminalCode
         // 4. LinehaulName contains the destination code (for multi-leg routes)
@@ -88,7 +88,7 @@ export const getTrips = async (req: Request, res: Response): Promise<void> => {
           ...(Array.isArray(where.AND) ? where.AND : []),
           {
             OR: [
-              { linehaulProfile: { destinationTerminalId: parseInt(destinationTerminalId as string, 10) } },
+              { linehaulProfile: { destinationLocationId: parseInt(destinationLocationId as string, 10) } },
               { destinationTerminalCode: terminal.code },
               { loadsheets: { some: { destinationTerminalCode: terminal.code } } },
               // Match linehaulName containing the destination code (handles multi-leg like "DENVIL..." or "DEN-VIL-...")
@@ -100,7 +100,7 @@ export const getTrips = async (req: Request, res: Response): Promise<void> => {
         // Fallback to just profile-based filtering if terminal not found
         where.linehaulProfile = {
           ...where.linehaulProfile as object,
-          destinationTerminalId: parseInt(destinationTerminalId as string, 10)
+          destinationLocationId: parseInt(destinationLocationId as string, 10)
         };
       }
     }
@@ -137,12 +137,12 @@ export const getTrips = async (req: Request, res: Response): Promise<void> => {
               transitTimeMinutes: true,
               standardArrivalTime: true,
               headhaul: true,
-              originTerminalId: true,
-              destinationTerminalId: true,
-              originTerminal: {
+              originLocationId: true,
+              destinationLocationId: true,
+              originLocation: {
                 select: { id: true, code: true, name: true }
               },
-              destinationTerminal: {
+              destinationLocation: {
                 select: { id: true, code: true, name: true }
               }
             }
@@ -236,8 +236,8 @@ export const getTripById = async (req: Request, res: Response): Promise<void> =>
       include: {
         linehaulProfile: {
           include: {
-            originTerminal: true,
-            destinationTerminal: true
+            originLocation: true,
+            destinationLocation: true
           }
         },
         driver: true,
@@ -300,8 +300,8 @@ export const getTripByNumber = async (req: Request, res: Response): Promise<void
       include: {
         linehaulProfile: {
           include: {
-            originTerminal: true,
-            destinationTerminal: true
+            originLocation: true,
+            destinationLocation: true
           }
         },
         driver: {
@@ -551,13 +551,13 @@ export const updateTrip = async (req: Request, res: Response): Promise<void> => 
           include: {
             linehaulProfile: {
               include: {
-                destinationTerminal: { select: { code: true } }
+                destinationLocation: { select: { code: true } }
               }
             }
           }
         });
 
-        const destinationCode = tripWithProfile?.linehaulProfile?.destinationTerminal?.code;
+        const destinationCode = tripWithProfile?.linehaulProfile?.destinationLocation?.code;
         const today = new Date().toISOString().split('T')[0]; // YYYY-MM-DD format
 
         // Update loadsheets: keep trip assignment for continuing loads, update origin to current location
@@ -734,14 +734,14 @@ export const updateTripStatus = async (req: Request, res: Response): Promise<voi
           include: {
             linehaulProfile: {
               include: {
-                destinationTerminal: { select: { id: true, code: true } }
+                destinationLocation: { select: { id: true, code: true } }
               }
             }
           }
         });
 
-        const destinationCode = tripWithProfile?.linehaulProfile?.destinationTerminal?.code;
-        const destinationTerminalId = tripWithProfile?.linehaulProfile?.destinationTerminal?.id;
+        const destinationCode = tripWithProfile?.linehaulProfile?.destinationLocation?.code;
+        const destinationLocationId = tripWithProfile?.linehaulProfile?.destinationLocation?.id;
         const today = new Date().toISOString().split('T')[0]; // YYYY-MM-DD format
 
         // Update loadsheets: keep trip assignment for continuing loads, update origin to current location
@@ -751,9 +751,9 @@ export const updateTripStatus = async (req: Request, res: Response): Promise<voi
           data: {
             // Keep linehaulTripId so loadsheets show in Continuing Trips section
             // Update origin to where the freight now is (the arrival terminal)
-            // Update BOTH originTerminalCode AND originTerminalId so loadsheets appear in dispatch modal
+            // Update BOTH originTerminalCode AND originLocationId so loadsheets appear in dispatch modal
             ...(destinationCode && { originTerminalCode: destinationCode }),
-            ...(destinationTerminalId && { originTerminalId: destinationTerminalId }),
+            ...(destinationLocationId && { originLocationId: destinationLocationId }),
             // Clear destination since it's no longer assigned to a specific leg
             destinationTerminalCode: null,
             // Reset status to OPEN so loadsheet is available for next leg pickup
@@ -979,10 +979,10 @@ export const getDispatchBoard = async (req: Request, res: Response) => {
       include: {
         linehaulProfile: {
           include: {
-            originTerminal: {
+            originLocation: {
               select: { code: true, name: true, city: true, state: true }
             },
-            destinationTerminal: {
+            destinationLocation: {
               select: { code: true, name: true, city: true, state: true }
             }
           }
@@ -1224,10 +1224,10 @@ export const getDriverTrips = async (req: Request, res: Response) => {
         include: {
           linehaulProfile: {
             include: {
-              originTerminal: {
+              originLocation: {
                 select: { code: true, city: true, state: true }
               },
-              destinationTerminal: {
+              destinationLocation: {
                 select: { code: true, city: true, state: true }
               }
             }
@@ -1433,7 +1433,7 @@ export const arriveTrip = async (req: Request, res: Response): Promise<void> => 
         dolly2: true,
         linehaulProfile: {
           include: {
-            destinationTerminal: { select: { code: true } }
+            destinationLocation: { select: { code: true } }
           }
         }
       }
@@ -1523,7 +1523,7 @@ export const arriveTrip = async (req: Request, res: Response): Promise<void> => 
 
       // Release loadsheets for next leg at physical terminal arrivals
       // Use trip's destinationTerminalCode override if set, otherwise use profile destination
-      const destinationCode = trip.destinationTerminalCode || trip.linehaulProfile?.destinationTerminal?.code;
+      const destinationCode = trip.destinationTerminalCode || trip.linehaulProfile?.destinationLocation?.code;
 
       // Helper to extract final destination from profile/linehaul name
       // Names like "DENWAMSLC1" encode the route: DEN -> WAM -> SLC
@@ -1542,14 +1542,14 @@ export const arriveTrip = async (req: Request, res: Response): Promise<void> => 
 
       // Check if destination is a physical terminal and get its ID
       let isPhysicalTerminal = false;
-      let destinationTerminalId: number | null = null;
+      let destinationLocationId: number | null = null;
       if (destinationCode) {
         const destinationLocation = await tx.location.findUnique({
           where: { code: destinationCode },
           select: { id: true, isPhysicalTerminal: true }
         });
         isPhysicalTerminal = destinationLocation?.isPhysicalTerminal || false;
-        destinationTerminalId = destinationLocation?.id || null;
+        destinationLocationId = destinationLocation?.id || null;
       }
 
       // Get loadsheets assigned to this trip (include linehaulName to check individual final destinations)
@@ -1669,9 +1669,9 @@ export const arriveTrip = async (req: Request, res: Response): Promise<void> => 
             // Keep linehaulTripId for all loadsheets so they display on Inbound tab
             linehaulTripId: tripId,
             // Only update origin for continuing loads (not at final destination)
-            // Update BOTH originTerminalCode AND originTerminalId so loadsheets appear in dispatch modal
+            // Update BOTH originTerminalCode AND originLocationId so loadsheets appear in dispatch modal
             ...(!isLoadsheetAtFinalDestination && destinationCode && { originTerminalCode: destinationCode }),
-            ...(!isLoadsheetAtFinalDestination && destinationTerminalId && { originTerminalId: destinationTerminalId }),
+            ...(!isLoadsheetAtFinalDestination && destinationLocationId && { originLocationId: destinationLocationId }),
             // Set next destination for continuing loads, null for final destination
             destinationTerminalCode: isLoadsheetAtFinalDestination ? null : nextDestination,
             status: newStatus,
@@ -1922,8 +1922,8 @@ export const getMoraleReport = async (req: Request, res: Response): Promise<void
               tripNumber: true,
               linehaulProfile: {
                 select: {
-                  originTerminal: { select: { code: true } },
-                  destinationTerminal: { select: { code: true } }
+                  originLocation: { select: { code: true } },
+                  destinationLocation: { select: { code: true } }
                 }
               }
             }

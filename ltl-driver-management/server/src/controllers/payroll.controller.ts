@@ -320,8 +320,8 @@ export const getTripPayById = async (req: Request, res: Response): Promise<void>
           include: {
             linehaulProfile: {
               include: {
-                originTerminal: true,
-                destinationTerminal: true
+                originLocation: true,
+                destinationLocation: true
               }
             },
             driver: true,
@@ -363,8 +363,8 @@ export const calculateTripPay = async (req: Request, res: Response): Promise<voi
       include: {
         linehaulProfile: {
           include: {
-            originTerminal: true,
-            destinationTerminal: true
+            originLocation: true,
+            destinationLocation: true
           }
         },
         driver: true,
@@ -419,12 +419,12 @@ export const calculateTripPay = async (req: Request, res: Response): Promise<voi
       });
     }
 
-    if (!rateCard && trip.linehaulProfile.originTerminalId && trip.linehaulProfile.destinationTerminalId) {
+    if (!rateCard && trip.linehaulProfile.originLocationId && trip.linehaulProfile.destinationLocationId) {
       rateCard = await prisma.rateCard.findFirst({
         where: {
           rateType: 'OD_PAIR',
-          originTerminalId: trip.linehaulProfile.originTerminalId,
-          destinationTerminalId: trip.linehaulProfile.destinationTerminalId,
+          originLocationId: trip.linehaulProfile.originLocationId,
+          destinationLocationId: trip.linehaulProfile.destinationLocationId,
           active: true,
           effectiveDate: { lte: today },
           OR: [{ expirationDate: null }, { expirationDate: { gte: today } }]

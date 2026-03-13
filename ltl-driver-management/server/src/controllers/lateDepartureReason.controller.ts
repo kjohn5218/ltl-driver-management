@@ -8,7 +8,7 @@ export const getLateDepartureReasons = async (req: Request, res: Response): Prom
     const {
       reason,
       willCauseServiceFailure,
-      accountableTerminalId,
+      accountableLocationId,
       startDate,
       endDate,
       page = '1',
@@ -29,8 +29,8 @@ export const getLateDepartureReasons = async (req: Request, res: Response): Prom
       where.willCauseServiceFailure = willCauseServiceFailure === 'true';
     }
 
-    if (accountableTerminalId) {
-      where.accountableTerminalId = parseInt(accountableTerminalId as string, 10);
+    if (accountableLocationId) {
+      where.accountableLocationId = parseInt(accountableLocationId as string, 10);
     }
 
     if (startDate) {
@@ -66,14 +66,14 @@ export const getLateDepartureReasons = async (req: Request, res: Response): Prom
                 select: {
                   profileCode: true,
                   name: true,
-                  originTerminal: { select: { code: true } },
-                  destinationTerminal: { select: { code: true } }
+                  originLocation: { select: { code: true } },
+                  destinationLocation: { select: { code: true } }
                 }
               },
               driver: { select: { name: true } }
             }
           },
-          accountableTerminal: {
+          accountableLocation: {
             select: { id: true, code: true, name: true }
           },
           creator: {
@@ -115,7 +115,7 @@ export const getLateDepartureReasonByTripId = async (req: Request, res: Response
             status: true
           }
         },
-        accountableTerminal: {
+        accountableLocation: {
           select: { id: true, code: true, name: true }
         },
         creator: {
@@ -143,7 +143,7 @@ export const createLateDepartureReason = async (req: Request, res: Response): Pr
       tripId,
       reason,
       willCauseServiceFailure,
-      accountableTerminalId,
+      accountableLocationId,
       accountableTerminalCode,
       notes,
       scheduledDepartTime,
@@ -162,7 +162,7 @@ export const createLateDepartureReason = async (req: Request, res: Response): Pr
     }
 
     // Validate accountable terminal is provided when service failure is true
-    if (willCauseServiceFailure && !accountableTerminalId) {
+    if (willCauseServiceFailure && !accountableLocationId) {
       res.status(400).json({ message: 'Accountable terminal is required when this will cause a service failure' });
       return;
     }
@@ -172,7 +172,7 @@ export const createLateDepartureReason = async (req: Request, res: Response): Pr
         tripId,
         reason,
         willCauseServiceFailure,
-        accountableTerminalId: accountableTerminalId || null,
+        accountableLocationId: accountableLocationId || null,
         accountableTerminalCode: accountableTerminalCode || null,
         notes: notes || null,
         scheduledDepartTime: scheduledDepartTime || null,
@@ -189,7 +189,7 @@ export const createLateDepartureReason = async (req: Request, res: Response): Pr
             status: true
           }
         },
-        accountableTerminal: {
+        accountableLocation: {
           select: { id: true, code: true, name: true }
         }
       }
@@ -209,13 +209,13 @@ export const updateLateDepartureReason = async (req: Request, res: Response): Pr
     const {
       reason,
       willCauseServiceFailure,
-      accountableTerminalId,
+      accountableLocationId,
       accountableTerminalCode,
       notes
     } = req.body;
 
     // Validate accountable terminal is provided when service failure is true
-    if (willCauseServiceFailure && !accountableTerminalId) {
+    if (willCauseServiceFailure && !accountableLocationId) {
       res.status(400).json({ message: 'Accountable terminal is required when this will cause a service failure' });
       return;
     }
@@ -225,7 +225,7 @@ export const updateLateDepartureReason = async (req: Request, res: Response): Pr
       data: {
         ...(reason !== undefined && { reason }),
         ...(willCauseServiceFailure !== undefined && { willCauseServiceFailure }),
-        ...(accountableTerminalId !== undefined && { accountableTerminalId }),
+        ...(accountableLocationId !== undefined && { accountableLocationId }),
         ...(accountableTerminalCode !== undefined && { accountableTerminalCode }),
         ...(notes !== undefined && { notes })
       },
@@ -238,7 +238,7 @@ export const updateLateDepartureReason = async (req: Request, res: Response): Pr
             status: true
           }
         },
-        accountableTerminal: {
+        accountableLocation: {
           select: { id: true, code: true, name: true }
         }
       }
@@ -306,7 +306,7 @@ export const getLateDepartureReasonStats = async (req: Request, res: Response): 
 
     // Get counts by accountable terminal
     const terminalCounts = await prisma.lateDepartureReason.groupBy({
-      by: ['accountableTerminalId', 'accountableTerminalCode'],
+      by: ['accountableLocationId', 'accountableTerminalCode'],
       where,
       _count: { _all: true }
     });
@@ -331,9 +331,9 @@ export const getLateDepartureReasonStats = async (req: Request, res: Response): 
         count: s._count._all
       })),
       byTerminal: terminalCounts
-        .filter(t => t.accountableTerminalId)
+        .filter(t => t.accountableLocationId)
         .map(t => ({
-          terminalId: t.accountableTerminalId,
+          locationId: t.accountableLocationId,
           terminalCode: t.accountableTerminalCode,
           count: t._count._all
         })),

@@ -34,8 +34,8 @@ router.get(
   [
     query('search').optional().trim(),
     query('active').optional().isBoolean(),
-    query('originTerminalId').optional().isInt({ min: 1 }),
-    query('destinationTerminalId').optional().isInt({ min: 1 }),
+    query('originLocationId').optional().isInt({ min: 1 }),
+    query('destinationLocationId').optional().isInt({ min: 1 }),
     query('page').optional().isInt({ min: 1 }),
     query('limit').optional().isInt({ min: 1, max: 500 })
   ],
@@ -77,8 +77,8 @@ router.post(
   [
     body('code').notEmpty().trim().isLength({ min: 2, max: 20 }),
     body('name').notEmpty().trim(),
-    body('originTerminalId').notEmpty().isInt({ min: 1 }),
-    body('destinationTerminalId').notEmpty().isInt({ min: 1 }),
+    body('originLocationId').notEmpty().isInt({ min: 1 }),
+    body('destinationLocationId').notEmpty().isInt({ min: 1 }),
     body('scheduledDeparture').optional().matches(/^([01]?[0-9]|2[0-3]):[0-5][0-9]$/),
     body('scheduledArrival').optional().matches(/^([01]?[0-9]|2[0-3]):[0-5][0-9]$/),
     body('estimatedMiles').optional().isDecimal(),
@@ -103,8 +103,8 @@ router.put(
     param('id').isInt({ min: 1 }),
     body('code').optional().trim().isLength({ min: 2, max: 20 }),
     body('name').optional().notEmpty().trim(),
-    body('originTerminalId').optional().isInt({ min: 1 }),
-    body('destinationTerminalId').optional().isInt({ min: 1 }),
+    body('originLocationId').optional().isInt({ min: 1 }),
+    body('destinationLocationId').optional().isInt({ min: 1 }),
     body('scheduledDeparture').optional().matches(/^([01]?[0-9]|2[0-3]):[0-5][0-9]$/),
     body('scheduledArrival').optional().matches(/^([01]?[0-9]|2[0-3]):[0-5][0-9]$/),
     body('estimatedMiles').optional().isDecimal(),

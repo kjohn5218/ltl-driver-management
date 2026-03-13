@@ -173,8 +173,8 @@ export const bulkAddTripShipments = async (req: Request, res: Response): Promise
       data: shipments.map((s: any) => ({
         tripId: parseInt(tripId, 10),
         proNumber: s.proNumber,
-        originTerminal: s.originTerminal,
-        destinationTerminal: s.destinationTerminal,
+        originTerminal: s.originLocation,
+        destinationTerminal: s.destinationLocation,
         pieces: s.pieces ? parseInt(s.pieces, 10) : null,
         weight: s.weight ? parseInt(s.weight, 10) : null,
         handlingUnits: s.handlingUnits ? parseInt(s.handlingUnits, 10) : null,
@@ -238,8 +238,8 @@ export const getTripLoadManifest = async (req: Request, res: Response): Promise<
       include: {
         linehaulProfile: {
           include: {
-            originTerminal: true,
-            destinationTerminal: true
+            originLocation: true,
+            destinationLocation: true
           }
         },
         driver: {
@@ -281,18 +281,18 @@ export const getTripLoadManifest = async (req: Request, res: Response): Promise<
         status: trip.status
       },
       route: trip.linehaulProfile ? {
-        origin: {
-          code: trip.linehaulProfile.originTerminal.code,
-          name: trip.linehaulProfile.originTerminal.name,
-          city: trip.linehaulProfile.originTerminal.city,
-          state: trip.linehaulProfile.originTerminal.state
-        },
-        destination: {
-          code: trip.linehaulProfile.destinationTerminal.code,
-          name: trip.linehaulProfile.destinationTerminal.name,
-          city: trip.linehaulProfile.destinationTerminal.city,
-          state: trip.linehaulProfile.destinationTerminal.state
-        }
+        origin: trip.linehaulProfile.originLocation ? {
+          code: trip.linehaulProfile.originLocation.code,
+          name: trip.linehaulProfile.originLocation.name,
+          city: trip.linehaulProfile.originLocation.city,
+          state: trip.linehaulProfile.originLocation.state
+        } : null,
+        destination: trip.linehaulProfile.destinationLocation ? {
+          code: trip.linehaulProfile.destinationLocation.code,
+          name: trip.linehaulProfile.destinationLocation.name,
+          city: trip.linehaulProfile.destinationLocation.city,
+          state: trip.linehaulProfile.destinationLocation.state
+        } : null
       } : null,
       driver: trip.driver,
       equipment: {

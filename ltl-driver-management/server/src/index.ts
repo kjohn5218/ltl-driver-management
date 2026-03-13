@@ -36,7 +36,6 @@ import driverRoutes from './routes/driver.routes';
 import bookingDocumentRoutes from './routes/bookingDocument.routes';
 
 // Dispatch & Fleet Management routes
-import terminalRoutes from './routes/terminal.routes';
 import equipmentRoutes from './routes/equipment.routes';
 import linehaulProfileRoutes from './routes/linehaulProfile.routes';
 import linehaulTripRoutes from './routes/linehaulTrip.routes';
@@ -178,7 +177,6 @@ app.use('/api/drivers', driverRoutes);
 app.use('/api/documents', bookingDocumentRoutes);
 
 // Dispatch & Fleet Management routes
-app.use('/api/terminals', terminalRoutes);
 app.use('/api/equipment', equipmentRoutes);
 app.use('/api/linehaul-profiles', linehaulProfileRoutes);
 app.use('/api/linehaul-trips', linehaulTripRoutes);

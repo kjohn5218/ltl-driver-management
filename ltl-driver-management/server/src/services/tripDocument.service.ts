@@ -92,8 +92,8 @@ export const tripDocumentService = {
           trailer: true,
           linehaulProfile: {
             include: {
-              originTerminal: true,
-              destinationTerminal: true,
+              originLocation: true,
+              destinationLocation: true,
             },
           },
         },
@@ -135,8 +135,8 @@ export const tripDocumentService = {
         trailer2: true,
         linehaulProfile: {
           include: {
-            originTerminal: true,
-            destinationTerminal: true,
+            originLocation: true,
+            destinationLocation: true,
           },
         },
       },
@@ -182,8 +182,8 @@ export const tripDocumentService = {
       const documentNumber = await generateDocumentNumber('LINEHAUL_MANIFEST');
 
       // Build trip display string
-      const originCode = trip.originTerminalCode || trip.linehaulProfile?.originTerminal?.code || 'DEN';
-      const destCode = trip.destinationTerminalCode || trip.linehaulProfile?.destinationTerminal?.code || 'GJT';
+      const originCode = trip.originTerminalCode || trip.linehaulProfile?.originLocation?.code || 'DEN';
+      const destCode = trip.destinationTerminalCode || trip.linehaulProfile?.destinationLocation?.code || 'GJT';
       const tripDisplay = `${tmsData.manifestNumber} - ${originCode} to ${destCode} - TRIP ${trip.tripNumber}`;
 
       // Create document in database
@@ -276,8 +276,8 @@ export const tripDocumentService = {
       const documentNumber = await generateDocumentNumber('LINEHAUL_MANIFEST');
 
       // Build trip display string for this manifest
-      const originCode = loadsheet.originTerminalCode || trip.originTerminalCode || trip.linehaulProfile?.originTerminal?.code || 'DEN';
-      const destCode = loadsheet.destinationTerminalCode || trip.destinationTerminalCode || trip.linehaulProfile?.destinationTerminal?.code || 'GJT';
+      const originCode = loadsheet.originTerminalCode || trip.originTerminalCode || trip.linehaulProfile?.originLocation?.code || 'DEN';
+      const destCode = loadsheet.destinationTerminalCode || trip.destinationTerminalCode || trip.linehaulProfile?.destinationLocation?.code || 'GJT';
       const tripDisplay = `${loadsheet.manifestNumber} - ${originCode} to ${destCode} - TRIP ${trip.tripNumber}`;
 
       // Create document in database for this manifest
@@ -347,8 +347,8 @@ export const tripDocumentService = {
         trailer: true,
         linehaulProfile: {
           include: {
-            originTerminal: true,
-            destinationTerminal: true,
+            originLocation: true,
+            destinationLocation: true,
           },
         },
       },
@@ -405,8 +405,8 @@ export const tripDocumentService = {
     const documentNumber = await generateDocumentNumber('PLACARD_SHEET');
 
     // Build trip display string
-    const originCode = trip.originTerminalCode || trip.linehaulProfile?.originTerminal?.code || 'DEN';
-    const destCode = trip.destinationTerminalCode || trip.linehaulProfile?.destinationTerminal?.code || 'GJT';
+    const originCode = trip.originTerminalCode || trip.linehaulProfile?.originLocation?.code || 'DEN';
+    const destCode = trip.destinationTerminalCode || trip.linehaulProfile?.destinationLocation?.code || 'GJT';
     const tripDisplay = `${tmsData.manifestNumber} - ${originCode} to ${destCode} - TRIP ${trip.tripNumber}`;
 
     // Create document in database

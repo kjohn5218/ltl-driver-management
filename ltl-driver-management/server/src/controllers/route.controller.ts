@@ -79,13 +79,13 @@ export const getRoutes = async (req: Request, res: Response) => {
         name: true,
         headhaul: true,
         trailerLoad: true,
-        originTerminal: { select: { code: true } }
+        originLocation: { select: { code: true } }
       }
     });
 
     // Create a map keyed by "name|origin" to handle duplicate profile names
     const profileMap = new Map(matchingProfiles.map(p => [
-      `${p.name}|${p.originTerminal?.code?.toUpperCase() || ''}`,
+      `${p.name}|${p.originLocation?.code?.toUpperCase() || ''}`,
       p
     ]));
 
@@ -153,7 +153,7 @@ export const getRouteById = async (req: Request, res: Response) => {
     const matchingProfile = await prisma.linehaulProfile.findFirst({
       where: {
         name: route.name,
-        originTerminal: { code: route.origin }
+        originLocation: { code: route.origin }
       },
       select: { id: true, headhaul: true, trailerLoad: true }
     });
@@ -314,7 +314,7 @@ export const updateRoute = async (req: Request, res: Response) => {
       const matchingProfile = await prisma.linehaulProfile.findFirst({
         where: {
           name: route.name,
-          originTerminal: { code: route.origin }
+          originLocation: { code: route.origin }
         }
       });
 
@@ -548,7 +548,7 @@ export const getDispatchableLoadsheets = async (req: Request, res: Response) => 
       take: parseInt(limit as string),
       orderBy: { loadDate: 'desc' },
       include: {
-        originTerminal: true,
+        originLocation: true,
         route: true
       }
     });

@@ -55,7 +55,7 @@ interface TripWithProfile {
     id: number;
     transitTimeMinutes: number | null;
     distanceMiles: number | null;
-    destinationTerminal: {
+    destinationLocation: {
       latitude: number | null;
       longitude: number | null;
     } | null;
@@ -78,7 +78,7 @@ export const calculateEta = async (tripId: number): Promise<EtaResult> => {
     include: {
       linehaulProfile: {
         include: {
-          destinationTerminal: {
+          destinationLocation: {
             select: { latitude: true, longitude: true }
           }
         }
@@ -117,8 +117,8 @@ async function calculateGpsBasedEta(trip: TripWithProfile): Promise<EtaResult> {
     return { estimatedArrival: null, source: 'NONE' };
   }
 
-  const destinationLat = trip.linehaulProfile?.destinationTerminal?.latitude;
-  const destinationLon = trip.linehaulProfile?.destinationTerminal?.longitude;
+  const destinationLat = trip.linehaulProfile?.destinationLocation?.latitude;
+  const destinationLon = trip.linehaulProfile?.destinationLocation?.longitude;
 
   if (!destinationLat || !destinationLon) {
     return { estimatedArrival: null, source: 'NONE' };
@@ -356,8 +356,8 @@ function generateMockGpsLocation(trip: TripWithProfile): GpsLocation | null {
 
   const transitTimeMinutes = trip.linehaulProfile.transitTimeMinutes;
   const distanceMiles = trip.linehaulProfile.distanceMiles;
-  const destLat = trip.linehaulProfile.destinationTerminal?.latitude;
-  const destLon = trip.linehaulProfile.destinationTerminal?.longitude;
+  const destLat = trip.linehaulProfile.destinationLocation?.latitude;
+  const destLon = trip.linehaulProfile.destinationLocation?.longitude;
 
   if (!transitTimeMinutes || !distanceMiles || !destLat || !destLon) {
     return null;

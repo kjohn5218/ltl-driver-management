@@ -14,9 +14,9 @@ export type GeofenceAlertType = 'APPROACHING' | 'ARRIVED' | 'DEPARTED';
 export interface GeofenceAlert {
   type: GeofenceAlertType;
   vehicleUnitNumber: string;
-  terminalId: number;
-  terminalCode: string;
-  terminalName: string;
+  locationId: number;
+  terminalCode: string;  // Keep for backwards compatibility
+  locationName: string;
   distanceMiles: number;
   timestamp: Date;
   tripId?: number;
@@ -129,9 +129,9 @@ class GeofenceService {
         alerts.push({
           type: 'ARRIVED',
           vehicleUnitNumber: location.unitNumber,
-          terminalId: closestTerminal.id,
+          locationId: closestTerminal.id,
           terminalCode: closestTerminal.code,
-          terminalName: closestTerminal.name,
+          locationName: closestTerminal.name,
           distanceMiles: closestDistance,
           timestamp: new Date(),
           ...tripInfo
@@ -145,9 +145,9 @@ class GeofenceService {
         alerts.push({
           type: 'APPROACHING',
           vehicleUnitNumber: location.unitNumber,
-          terminalId: closestTerminal.id,
+          locationId: closestTerminal.id,
           terminalCode: closestTerminal.code,
-          terminalName: closestTerminal.name,
+          locationName: closestTerminal.name,
           distanceMiles: closestDistance,
           timestamp: new Date(),
           ...tripInfo
@@ -161,9 +161,9 @@ class GeofenceService {
         alerts.push({
           type: 'DEPARTED',
           vehicleUnitNumber: location.unitNumber,
-          terminalId: closestTerminal.id,
+          locationId: closestTerminal.id,
           terminalCode: closestTerminal.code,
-          terminalName: closestTerminal.name,
+          locationName: closestTerminal.name,
           distanceMiles: closestDistance,
           timestamp: new Date(),
           ...tripInfo
@@ -244,7 +244,7 @@ class GeofenceService {
 
     try {
       // Get terminals with coordinates
-      const terminals = await prisma.terminal.findMany({
+      const terminals = await prisma.location.findMany({
         where: {
           active: true,
           latitude: { not: null },
@@ -266,7 +266,7 @@ class GeofenceService {
           this.terminalCache.set(terminal.id, {
             id: terminal.id,
             code: terminal.code,
-            name: terminal.name,
+            name: terminal.name || terminal.code, // Fallback to code if name is null
             latitude: Number(terminal.latitude),
             longitude: Number(terminal.longitude)
           });
@@ -294,8 +294,8 @@ class GeofenceService {
   /**
    * Check if alert is on cooldown
    */
-  private isOnCooldown(vehicleId: string, terminalId: number, type: GeofenceAlertType): boolean {
-    const key = `${vehicleId}:${terminalId}:${type}`;
+  private isOnCooldown(vehicleId: string, locationId: number, type: GeofenceAlertType): boolean {
+    const key = `${vehicleId}:${locationId}:${type}`;
     const expiry = this.alertCooldowns.get(key);
 
     if (!expiry) return false;
@@ -311,8 +311,8 @@ class GeofenceService {
   /**
    * Set alert cooldown
    */
-  private setCooldown(vehicleId: string, terminalId: number, type: GeofenceAlertType, minutes: number): void {
-    const key = `${vehicleId}:${terminalId}:${type}`;
+  private setCooldown(vehicleId: string, locationId: number, type: GeofenceAlertType, minutes: number): void {
+    const key = `${vehicleId}:${locationId}:${type}`;
     this.alertCooldowns.set(key, Date.now() + minutes * 60 * 1000);
   }
 
@@ -343,14 +343,14 @@ class GeofenceService {
    */
   getStats(): {
     enabled: boolean;
-    terminalsMonitored: number;
+    locationsMonitored: number;
     vehiclesTracked: number;
     activeCooldowns: number;
     config: ReturnType<typeof getGeofenceConfig>;
   } {
     return {
       enabled: isGeofenceEnabled(),
-      terminalsMonitored: this.terminalCache.size,
+      locationsMonitored: this.terminalCache.size,
       vehiclesTracked: this.vehicleStates.size,
       activeCooldowns: this.alertCooldowns.size,
       config: getGeofenceConfig()

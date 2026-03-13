@@ -27,7 +27,7 @@ router.get(
     query('search').optional().trim(),
     query('status').optional().isIn(['DRAFT', 'OPEN', 'LOADING', 'CLOSED', 'DISPATCHED', 'UNLOADED', 'TERMINATED']),
     query('linehaulTripId').optional().isInt({ min: 1 }),
-    query('originTerminalId').optional().isInt({ min: 1 }),
+    query('originLocationId').optional().isInt({ min: 1 }),
     query('originTerminalCode').optional().trim(),
     query('startDate').optional().isISO8601(),
     query('endDate').optional().isISO8601(),
@@ -88,7 +88,7 @@ router.post(
   [
     body('trailerNumber').notEmpty().trim().withMessage('Trailer number is required'),
     body('linehaulName').notEmpty().trim().withMessage('Linehaul name is required'),
-    body('originTerminalId').optional().isInt({ min: 1 }),
+    body('originLocationId').optional().isInt({ min: 1 }),
     body('linehaulTripId').optional().isInt({ min: 1 }),
     body('suggestedTrailerLength').optional().isInt({ min: 1 }),
     body('pintleHookRequired').optional().isBoolean(),

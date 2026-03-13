@@ -26,7 +26,7 @@ export interface TMSDispositionResult {
 export interface BulkDispositionData {
   lateReason: LateReasonType;
   willCauseServiceFailure: boolean;
-  accountableTerminalId?: number;
+  accountableLocationId?: number;
   accountableTerminalCode?: string;
   notes?: string;
   newScheduledDepartDate: string;
